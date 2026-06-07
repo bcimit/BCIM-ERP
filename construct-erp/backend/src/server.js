@@ -126,6 +126,7 @@ const isAllowedOrigin = (origin) => {
   if (/^https?:\/\/localhost(:\d+)?\/?$/.test(origin)) return true;
   if (/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(origin)) return true;
   if (origin.endsWith('.vercel.app')) return true;
+  if (origin.endsWith('.up.railway.app') || origin.endsWith('.railway.app')) return true;
   if (process.env.FRONTEND_URL && origin.startsWith(process.env.FRONTEND_URL)) return true;
   return false;
 };
@@ -161,6 +162,8 @@ app.use(cors({
     if (/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(origin)) return cb(null, true);
     // any Vercel preview or production deploy
     if (origin.endsWith('.vercel.app')) return cb(null, true);
+    // Railway deployments
+    if (origin.endsWith('.up.railway.app') || origin.endsWith('.railway.app')) return cb(null, true);
     // explicit production frontend URL
     if (process.env.FRONTEND_URL && origin.startsWith(process.env.FRONTEND_URL)) return cb(null, true);
     cb(new Error(`CORS: ${origin} not allowed`));
