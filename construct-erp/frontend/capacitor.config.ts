@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'BCIM ERP',
   webDir: 'build',
   server: {
-    url: 'https://app.bcim.in',
+    url: 'https://erp.bcim.in',
     cleartext: false
   }
 };
