@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "build": "npm install --prefix ../frontend && npm run build --prefix ../frontend",
     "backup": "node scripts/run-backup.js",
     "migrate": "node src/config/migrate.js",
     "seed": "node src/config/seed.js",
