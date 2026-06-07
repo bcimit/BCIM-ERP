@@ -1,0 +1,931 @@
+// src/pages/qs/VendorQSCertificationDetailPage.jsx
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { vendorQSCertificationAPI } from '../../api/client';
+import { ArrowLeft, Pencil, Printer, RefreshCw, X, IndianRupee, CheckCircle2, FileText, Trash2 } from 'lucide-react';
+import BCIM_LOGO from '../../assets/bcim-logo.png';
+
+// ── Tinos font (Times New Roman equivalent) ───────────────────────────────────
+if (typeof document !== 'undefined') {
+  const _l = document.createElement('link');
+  _l.rel  = 'stylesheet';
+  _l.href = 'https://fonts.googleapis.com/css2?family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap';
+  if (!document.querySelector('link[href*="Tinos"]')) document.head.appendChild(_l);
+}
+
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const navy   = '#0B2E59';
+const rust   = '#C0392B';
+const gold   = '#B8860B';
+const lightBg = '#F4F7FC';
+const dedBg  = '#FFFBF0';
+const netBg  = '#EAF1FB';
+
+const T = {
+  page:     { fontFamily: "'Tinos','Times New Roman',Times,serif", fontSize: '12px', color: '#0A0A0A', fontWeight: '500' },
+  sheet:    { width: '100%', background: '#fff', padding: '2mm 8mm 10mm 8mm', boxSizing: 'border-box', pageBreakAfter: 'always' },
+  masthead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `3px double ${navy}`, paddingBottom: '10px', marginBottom: '12px' },
+  logoArea: { display: 'flex', alignItems: 'center', gap: '12px' },
+  coName:   { fontSize: '16px', fontWeight: 'bold', color: navy, letterSpacing: '0.6px', lineHeight: 1.2 },
+  coSub:    { fontSize: '10px', color: '#222', marginTop: '3px', fontStyle: 'italic', fontWeight: '600' },
+  docTitle: { fontSize: '14px', fontWeight: 'bold', color: rust, textAlign: 'right', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '4px' },
+  badge:    { display: 'inline-block', background: navy, color: '#fff', fontSize: '10px', fontWeight: 'bold', padding: '3px 10px', borderRadius: '2px', letterSpacing: '0.5px' },
+  certDt:   { fontSize: '10px', color: '#222', marginTop: '4px', textAlign: 'right', fontStyle: 'italic', fontWeight: '600' },
+  infoPanel:{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 32px', marginBottom: '12px', background: lightBg, border: `1px solid #C8D8EE`, padding: '8px 12px', fontSize: '11px' },
+  infoRow:  { display: 'flex', alignItems: 'baseline', gap: '4px', paddingBottom: '2px', borderBottom: '1px dotted #D0DCF0' },
+  infoLbl:  { fontWeight: 'bold', color: navy, minWidth: '160px', flexShrink: 0, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.3px' },
+  infoVal:  { color: '#0A0A0A', fontSize: '11px', fontWeight: '600' },
+  secHead:  { background: navy, color: '#fff', fontWeight: 'bold', fontSize: '11px', padding: '5px 10px', marginTop: '12px', marginBottom: '4px', letterSpacing: '0.8px', textTransform: 'uppercase' },
+  tbl:      { width: '100%', borderCollapse: 'collapse', fontSize: '10px' },
+  th:       { background: navy, color: '#fff', padding: '5px 4px', textAlign: 'center', border: `1px solid #8AAAD0`, fontWeight: 'bold', verticalAlign: 'middle', letterSpacing: '0.3px', fontSize: '10px' },
+  td:       { padding: '4px 5px', border: '1px solid #9AB0CC', verticalAlign: 'top', lineHeight: '1.5', fontWeight: '500', color: '#0A0A0A' },
+  tdC:      { padding: '4px 5px', border: '1px solid #9AB0CC', textAlign: 'center', verticalAlign: 'middle', fontWeight: '500', color: '#0A0A0A' },
+  tdR:      { padding: '4px 5px', border: '1px solid #9AB0CC', textAlign: 'right', verticalAlign: 'middle', fontFamily: "'Courier New',monospace", fontSize: '10px', fontWeight: '600', color: '#0A0A0A' },
+  totRow:   { background: '#D6E6F8', fontWeight: 'bold' },
+  netRow:   { background: navy, color: '#fff', fontWeight: 'bold' },
+  dedRow:   { background: dedBg },
+  claimTbl: { width: '65%', margin: '0 auto', borderCollapse: 'collapse', fontSize: '11px' },
+  amtBox:   { marginTop: '10px', border: `1px solid ${navy}`, borderLeft: `4px solid ${navy}`, padding: '7px 14px', fontSize: '11.5px', background: netBg, lineHeight: 1.6, fontWeight: '600' },
+  remarks:  { fontSize: '10px', color: '#111', marginTop: '10px', borderTop: `1px solid #C8D6E8`, paddingTop: '6px', fontWeight: '500' },
+  sigGrid:  { display: 'flex', gap: '8px', marginTop: '20px' },
+  sigBox:   { flex: 1, border: `1px solid #BCC8DC`, padding: '8px 6px', textAlign: 'center', fontSize: '9.5px', background: '#FAFCFF' },
+  stamp:    { width: '56px', height: '48px', border: '1px dashed #AAB8CC', margin: '0 auto 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: '#666', letterSpacing: '0.4px', fontWeight: 'bold' },
+  sigRole:  { fontWeight: 'bold', color: navy, fontSize: '10px', marginBottom: '3px' },
+  sigDate:  { marginTop: '6px', fontSize: '9px', color: '#111', borderTop: '1px solid #C0C8D8', paddingTop: '4px', fontWeight: '500' },
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const INR   = (v) => v == null ? '—' : '₹ ' + Math.abs(Number(v)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const raw   = (v) => v == null ? '—' : Math.abs(Number(v)).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+const inr   = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const n     = (v) => Number(v || 0);
+const fmt   = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+const fmtSh = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
+
+function numberToWords(num) {
+  const a = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const b = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const two   = (x) => x < 20 ? a[x] : `${b[Math.floor(x/10)]}${x%10 ? ' '+a[x%10] : ''}`;
+  const three = (x) => `${x>99 ? a[Math.floor(x/100)]+' Hundred ' : ''}${x%100 ? two(x%100) : ''}`.trim();
+  let value = Math.round(Number(num || 0));
+  if (!value) return 'Zero';
+  const parts = [];
+  const crore    = Math.floor(value / 10000000); value %= 10000000;
+  const lakh     = Math.floor(value / 100000);   value %= 100000;
+  const thousand = Math.floor(value / 1000);     value %= 1000;
+  if (crore)    parts.push(`${three(crore)} Crore`);
+  if (lakh)     parts.push(`${three(lakh)} Lakh`);
+  if (thousand) parts.push(`${three(thousand)} Thousand`);
+  if (value)    parts.push(three(value));
+  return parts.join(' ') + ' Only';
+}
+
+// ── Masthead ──────────────────────────────────────────────────────────────────
+function Masthead({ docTitle, badge, dateLabel }) {
+  return (
+    <div style={T.masthead}>
+      <div style={T.logoArea}>
+        <img src={BCIM_LOGO} alt="BCIM" style={{ height: '52px', width: 'auto', objectFit: 'contain' }}
+          onError={e => { e.target.style.display = 'none'; }} />
+        <div>
+          <div style={T.coName}>BCIM Engineering Private Limited</div>
+          <div style={T.coSub}>Infrastructure &amp; Construction Management</div>
+        </div>
+      </div>
+      <div>
+        <div style={T.docTitle}>{docTitle}</div>
+        <div style={{ textAlign: 'right' }}>
+          <span style={T.badge}>{badge}</span>
+        </div>
+        <div style={T.certDt}>{dateLabel}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Info row ──────────────────────────────────────────────────────────────────
+function InfoRow({ label, value }) {
+  return (
+    <div style={T.infoRow}>
+      <span style={T.infoLbl}>{label}</span>
+      <span style={{ color: '#111', marginRight: '4px', fontWeight: 'bold' }}>:</span>
+      <span style={T.infoVal}>{value || '—'}</span>
+    </div>
+  );
+}
+
+// ── Derive grouped items (same logic as before) ───────────────────────────────
+function deriveItems(cert) {
+  const rawItems = cert.items || [];
+  const linkedRefs = [...new Set(rawItems.map(it => it.item_ref_id).filter(Boolean))];
+  const singleLinkedRef = linkedRefs.length === 1 ? linkedRefs[0] : null;
+  const singleLinkedItem = singleLinkedRef ? rawItems.find(it => it.item_ref_id === singleLinkedRef) : null;
+  return Array.from(rawItems.reduce((map, item) => {
+    const effective = singleLinkedRef && !item.item_ref_id
+      ? { ...item, item_ref_id: singleLinkedRef, description: singleLinkedItem?.description || item.description, unit: singleLinkedItem?.unit || item.unit, order_qty: singleLinkedItem?.order_qty || item.order_qty, order_rate: singleLinkedItem?.order_rate || item.order_rate }
+      : item;
+    const key = effective.item_ref_id || `${String(effective.description||'').trim().toLowerCase()}|${effective.unit}|${effective.order_rate}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.source_inv_number = [...new Set([existing.source_inv_number, effective.source_inv_number].filter(Boolean).join(', ').split(', ').filter(Boolean))].join(', ');
+      existing.inv_prev_qty  = n(existing.inv_prev_qty)  + n(effective.inv_prev_qty);
+      existing.inv_pres_qty  = n(existing.inv_pres_qty)  + n(effective.inv_pres_qty);
+      existing.qs_prev_qty   = Math.max(n(existing.qs_prev_qty), n(effective.qs_prev_qty));
+      existing.qs_pres_qty   = n(existing.qs_pres_qty)   + n(effective.qs_pres_qty);
+      existing.amount        = n(existing.amount)         + n(effective.amount);
+      return map;
+    }
+    map.set(key, { ...effective });
+    return map;
+  }, new Map()).values());
+}
+
+// ── PAGE 1 — Abstract of Measurement ─────────────────────────────────────────
+function AbstractSheet({ cert }) {
+  const items      = deriveItems(cert);
+  const invoiceNos = (cert.bills || []).map(b => b.inv_number).filter(Boolean).join(', ');
+  const invDates   = (cert.bills || []).map(b => fmtSh(b.inv_date)).filter(Boolean).join(', ');
+  const raBillNo   = cert.ra_bill_number || `RA-${cert.ra_sequence || '01'}`;
+
+  const gross     = n(cert.gross_amount);
+  const tax       = n(cert.tax_amount);
+  const totalGross = gross + tax;
+  const advance   = n(cert.advance_recovered);
+  const retention = n(cert.retention_amount);
+  const tds       = n(cert.tds_amount);
+  const other     = n(cert.other_deductions);
+  const totalDed  = advance + retention + tds + other;
+  const netCert   = n(cert.net_payable);
+
+  const tdsRate   = n(cert.tds_rate);
+  const tdsLabel  = tdsRate > 0
+    ? `TDS Deduction @ ${tdsRate}% (Sec 194C)`
+    : 'TDS Deduction';
+
+  const deductionLines = [
+    { label: 'Mobilisation Advance Recovery', amt: advance },
+    { label: 'Retention Money',               amt: retention },
+    { label: tdsLabel,                        amt: tds },
+    { label: 'Any Other Deductions',          amt: other },
+  ];
+
+  const abstractSignatories = [
+    'Quantity Surveyor — Site',
+    'Project Manager',
+    'Project Director',
+    'Quantity Surveyor — HO',
+    'DGM — Finance & Accounts',
+    'Director',
+    'Managing Director',
+  ];
+
+  return (
+    <section className="print-sheet print-abstract" style={{ ...T.page, ...T.sheet }}>
+      <Masthead
+        docTitle="Abstract of Measurement"
+        badge={`RA Bill No: ${raBillNo}`}
+        dateLabel={`Certification Date: ${fmt(cert.created_at || cert.updated_at)}`}
+      />
+
+      <div style={T.secHead}>Project &amp; Contract Information</div>
+      <div style={T.infoPanel}>
+        <InfoRow label="Project Name"            value={cert.project_name} />
+        <InfoRow label="Vendor / Contractor"     value={cert.vendor_name} />
+        <InfoRow label="Package Description"     value={cert.remarks || `${cert.order_type?.toUpperCase() || 'WO'} Certification`} />
+        <InfoRow label="RA Bill No."             value={raBillNo} />
+        <InfoRow label="Work / Purchase Order"   value={cert.order_number} />
+        <InfoRow label="Date of Invoice"         value={invDates || '—'} />
+        <InfoRow label="Order Value"             value={INR(cert.order_total_value ?? cert.gross_amount)} />
+        <InfoRow label="Invoice Numbers"         value={invoiceNos || '—'} />
+      </div>
+
+      <div style={T.secHead}>Bill of Quantities — Abstract</div>
+      <table style={T.tbl}>
+        <thead>
+          <tr>
+            <th style={{...T.th, width:'24px'}}  rowSpan={2}>Sl.</th>
+            <th style={{...T.th, width:'18px'}}  rowSpan={2}>RA</th>
+            <th style={{...T.th, width:'180px'}} rowSpan={2}>Description of Work</th>
+            <th style={{...T.th, width:'34px'}}  rowSpan={2}>Unit</th>
+            <th style={T.th} colSpan={3}>As Per Work / Purchase Order</th>
+            <th style={T.th} colSpan={3}>As Per Invoice</th>
+            <th style={T.th} colSpan={3}>As Per QS Certified</th>
+            <th style={T.th} colSpan={2}>Balance</th>
+          </tr>
+          <tr>
+            {['Qty','Rate (₹)','Amount (₹)','Prev Qty','Pres Qty','Amount (₹)','Prev Qty','Pres Qty','Amount (₹)','Qty','Amount (₹)'].map((h,i) => (
+              <th key={i} style={T.th}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it, idx) => {
+            const orderAmt  = n(it.order_qty)   * n(it.order_rate);
+            const invAmt    = n(it.inv_pres_qty) * n(it.order_rate);
+            const qsAmt     = n(it.qs_pres_qty)  * n(it.order_rate);
+            const cumQty    = n(it.qs_prev_qty) + n(it.qs_pres_qty);
+            const balQty    = Math.max(0, n(it.order_qty) - cumQty);
+            const balAmt    = balQty * n(it.order_rate);
+            return (
+              <tr key={it.id || idx} style={{ background: idx % 2 === 0 ? '#fff' : lightBg }}>
+                <td style={T.tdC}>{idx + 1}</td>
+                <td style={T.tdC}>{raBillNo}</td>
+                <td style={{...T.td, whiteSpace:'pre-wrap', lineHeight:'1.5'}}>{it.description}</td>
+                <td style={T.tdC}>{it.unit}</td>
+                <td style={T.tdR}>{n(it.order_qty) || '—'}</td>
+                <td style={T.tdR}>{raw(it.order_rate)}</td>
+                <td style={T.tdR}>{raw(orderAmt)}</td>
+                <td style={T.tdR}>{n(it.inv_prev_qty) || '—'}</td>
+                <td style={T.tdR}>{n(it.inv_pres_qty) || '—'}</td>
+                <td style={T.tdR}>{raw(invAmt)}</td>
+                <td style={T.tdR}>{n(it.qs_prev_qty) || '—'}</td>
+                <td style={T.tdR}>{n(it.qs_pres_qty) || '—'}</td>
+                <td style={T.tdR}>{raw(qsAmt)}</td>
+                <td style={T.tdR}>{balQty || '—'}</td>
+                <td style={T.tdR}>{raw(balAmt)}</td>
+              </tr>
+            );
+          })}
+
+          {/* GST / Tax */}
+          {tax > 0 && (
+            <tr style={{ background: '#FAFAFA' }}>
+              <td style={T.tdC}>—</td>
+              <td style={T.tdC}>—</td>
+              <td style={{...T.td, fontStyle:'italic', color:'#111', fontWeight:'600'}}>GST / Tax</td>
+              <td style={T.tdC}>—</td>
+              <td colSpan={11} style={{...T.tdC, color:'#444', fontSize:'10px', fontWeight:'500'}}>Applicable</td>
+              <td style={{...T.tdR, fontWeight:'bold'}}>{raw(tax)}</td>
+            </tr>
+          )}
+
+          {/* Total Gross Certified */}
+          <tr style={T.totRow}>
+            <td colSpan={4} style={{...T.tdC, fontWeight:'bold', fontSize:'9.5px', color: navy}}>Total Gross Certified</td>
+            <td colSpan={8} style={T.tdC}></td>
+            <td colSpan={3} style={{...T.tdR, fontWeight:'bold', fontSize:'10px'}}>{raw(totalGross)}</td>
+          </tr>
+
+          {/* Deductions header */}
+          <tr>
+            <td colSpan={15} style={{...T.td, background:'#FFF5CC', fontWeight:'bold', fontSize:'9.5px', color: gold, letterSpacing:'0.5px', textTransform:'uppercase', padding:'4px 10px'}}>
+              Deductions
+            </td>
+          </tr>
+
+          {deductionLines.map((d, i) => (
+            <tr key={i} style={T.dedRow}>
+              <td style={T.tdC}></td>
+              <td style={T.tdC}></td>
+              <td style={{...T.td, fontStyle: d.amt === 0 ? 'italic' : 'normal', color: d.amt === 0 ? '#555' : '#0A0A0A', fontWeight: d.amt ? 'bold' : '500'}} colSpan={2}>{d.label}</td>
+              <td colSpan={10} style={T.tdC}></td>
+              <td style={{...T.tdR, fontWeight: 'bold', color: d.amt ? rust : '#555'}}>{raw(d.amt)}</td>
+            </tr>
+          ))}
+
+          {/* Total Deductions */}
+          <tr style={T.totRow}>
+            <td colSpan={14} style={{...T.tdC, fontWeight:'bold', color: navy}}>Total Deductions</td>
+            <td style={{...T.tdR, fontWeight:'bold', color: rust}}>{raw(totalDed)}</td>
+          </tr>
+
+          {/* Total Net Certified */}
+          <tr style={T.netRow}>
+            <td colSpan={14} style={{...T.tdC, color:'#fff', fontWeight:'bold', fontSize:'10px', letterSpacing:'0.5px'}}>
+              Total Net Certified (Current RA)
+            </td>
+            <td style={{...T.tdR, color:'#fff', fontWeight:'bold', fontSize:'11px'}}>{raw(netCert)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style={T.sigGrid}>
+        {abstractSignatories.map(s => (
+          <div key={s} style={T.sigBox}>
+            <div style={T.stamp}>STAMP</div>
+            <div style={T.sigRole}>{s}</div>
+            <div style={T.sigDate}>Signature: ___________<br/>Date: ___________</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={T.remarks}>
+        <strong>Note:</strong>&nbsp; (a) All statutory deductions not listed above shall be effected at the Accounts Department.&nbsp;
+        (b) All payments are to be verified for correctness prior to disbursement.&nbsp;
+        (c) All transactions are denominated in Indian Rupees (INR).
+      </div>
+    </section>
+  );
+}
+
+// ── PAGE 2 — Payment Certificate ──────────────────────────────────────────────
+function PaymentCertificate({ cert }) {
+  const invoiceNos = (cert.bills || []).map(b => b.inv_number).filter(Boolean).join(', ');
+  const invDates   = (cert.bills || []).map(b => fmtSh(b.inv_date)).filter(Boolean).join(', ');
+  const raBillNo   = cert.ra_bill_number || `RA-${cert.ra_sequence || '01'}`;
+
+  // ── Contract value: use actual PO/WO value from backend; fall back to gross+tax if missing
+  const orderValue     = n(cert.order_total_value);
+  const grossPlusTax   = n(cert.gross_amount) + n(cert.tax_amount);
+  // If order_total_value is missing/zero, derive it from gross+tax (cert itself is the reference)
+  const finalContract  = orderValue > 0 ? orderValue : grossPlusTax;
+
+  const prev           = n(cert.previous_certified_amount);
+  const grossTillDate  = grossPlusTax + prev; // Cumulative incl. tax
+  const advance        = n(cert.advance_recovered);
+  const retention      = n(cert.retention_amount);
+  const tds            = n(cert.tds_amount);
+  const other          = n(cert.other_deductions);
+  const totalNetTillDate = grossTillDate - advance - retention - tds - other;
+  // Balance to Finish = Contract Value − Gross Certified Till Date (both incl. tax, cumulative)
+  // Positive = remaining work; near-zero or small negative = fully certified
+  const balanceToFinish = finalContract - grossTillDate;
+  const currentDue     = n(cert.net_payable);
+
+  const payTdsRate  = n(cert.tds_rate);
+  const payTdsLabel = payTdsRate > 0
+    ? `Deduction — TDS @ ${payTdsRate}% (Sec 194C)`
+    : 'Deduction — TDS';
+
+  const claimRows = [
+    { no:  1, label: 'Original Contract Value',                   value: finalContract,       isDed: false },
+    { no:  2, label: 'Net Change by Variation Orders',            value: null,                isDed: false },
+    { no:  3, label: 'Final Contract Value to Date',              value: finalContract,       isDed: false },
+    { no:  4, label: 'Advance Certified',                         value: advance || null,     isDed: false },
+    { no:  5, label: 'Gross Certified Till Date',                 value: grossTillDate,       isDed: false },
+    { no:  6, label: 'Deduction — Mobilisation Advance',         value: advance,             isDed: true },
+    { no:  7, label: 'Deduction — Retention Amount',             value: retention,           isDed: true },
+    { no:  8, label: payTdsLabel,                                 value: tds,                 isDed: true },
+    { no:  9, label: 'Deduction — Any Other',                    value: other,               isDed: true },
+    { no: 10, label: 'Total Net Certified Till Date',            value: totalNetTillDate,    bold: true },
+    { no: 11, label: 'Less: Previous Certificates for Payment',  value: prev,                isDed: false },
+    { no: 12, label: 'Balance to Finish',                        value: balanceToFinish,     isDed: false },
+    { no: 13, label: 'Current Net Payment Due',                  value: currentDue,          highlight: true },
+  ];
+
+  const pcSignatories = [
+    { role: 'Recommended for Payment', name: 'Prepared By (QS)' },
+    { role: 'Approved for Payment',    name: 'Director' },
+    { role: 'Approved for Payment',    name: 'Managing Director' },
+  ];
+
+  return (
+    <section className="print-sheet print-payment" style={{ ...T.page, ...T.sheet, padding: '2mm 8mm 10mm 8mm' }}>
+      <Masthead
+        docTitle="Payment Certificate"
+        badge={`PC No: ${cert.cert_number || '—'}`}
+        dateLabel={`Recommendation Date: ${fmt(cert.created_at)}`}
+      />
+
+      <div style={T.secHead}>Contract &amp; Invoice Details</div>
+      <div style={T.infoPanel}>
+        <InfoRow label="Company Name"        value="BCIM Engineering Private Limited" />
+        <InfoRow label="Vendor / Contractor" value={cert.vendor_name} />
+        <InfoRow label="Project / Site"      value={cert.project_name} />
+        <InfoRow label="RA Bill No."         value={raBillNo} />
+        <InfoRow label="Work / Purchase Order" value={cert.order_number} />
+        <InfoRow label="Date of Invoice"     value={invDates || '—'} />
+        <InfoRow label="Order Value"         value={INR(cert.order_total_value ?? cert.gross_amount)} />
+        <InfoRow label="Invoice Numbers"     value={invoiceNos || '—'} />
+      </div>
+
+      <div style={T.secHead}>Claim Summary</div>
+      <table style={{ ...T.claimTbl, width: '80%' }}>
+        <thead>
+          <tr>
+            <th style={{...T.th, width:'28px'}}>No.</th>
+            <th style={{...T.th, textAlign:'left', width:'260px', padding:'4px 10px'}}>Particulars</th>
+            <th style={{...T.th, width:'110px'}}>Amount (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {claimRows.map(row => {
+            const bg  = row.highlight ? navy : row.isDed ? dedBg : row.no % 2 === 0 ? lightBg : '#fff';
+            const col = row.highlight ? '#fff' : row.isDed ? '#5C3D00' : '#0A0A0A';
+            const fw  = (row.highlight || row.bold) ? 'bold' : '500';
+            const isNeg = row.value != null && row.value < 0;
+            return (
+              <tr key={row.no}>
+                <td style={{...T.tdC, background: bg, color: col, fontWeight: fw}}>{row.no}</td>
+                <td style={{...T.td, background: bg, color: col, fontWeight: fw, padding:'4px 10px'}}>
+                  {row.isDed && <span style={{color: rust, marginRight:'4px'}}>▸</span>}
+                  {row.label}
+                </td>
+                <td style={{...T.tdR, background: bg, color: isNeg ? rust : col, fontWeight: fw}}>
+                  {row.value == null ? '—' : (isNeg ? `(${raw(Math.abs(row.value))})` : raw(row.value))}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <div style={{...T.amtBox, marginLeft:'auto', marginRight:'auto', width:'80%', boxSizing:'border-box'}}>
+        <div style={{fontSize:'10px', color:'#111', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'3px', fontWeight:'bold'}}>Amount Certified in Words</div>
+        <div style={{fontWeight:'bold', color: navy, fontSize:'12px'}}>Rupees {numberToWords(currentDue)}</div>
+        <div style={{fontSize:'10px', color:'#111', marginTop:'2px', fontWeight:'600'}}>( ₹ {inr(currentDue)}.00 )</div>
+      </div>
+
+      <div style={{...T.remarks, marginTop:'14px'}}>
+        <div style={{fontWeight:'bold', color: navy, marginBottom:'4px', fontSize:'10px', textTransform:'uppercase', letterSpacing:'0.5px'}}>Remarks &amp; Conditions</div>
+        <ol style={{margin:'0 0 0 18px', padding:0, lineHeight:'1.7'}}>
+          <li>Any statutory deductions not listed above shall be effected by the Accounts Department at the time of payment processing.</li>
+          <li>All payments made are subject to verification for correctness and completeness of supporting documentation.</li>
+          <li>All transactions are denominated exclusively in Indian Rupees (INR).</li>
+        </ol>
+        {cert.remarks && (
+          <div style={{marginTop:'6px', borderTop:'1px dotted #BCC8DC', paddingTop:'4px'}}>
+            <strong>Remarks:</strong> {cert.remarks}
+          </div>
+        )}
+      </div>
+
+      <div style={T.sigGrid}>
+        {pcSignatories.map((s, i) => (
+          <div key={i} style={{...T.sigBox, flex: 1}}>
+            <div style={T.stamp}>STAMP</div>
+            <div style={T.sigRole}>{s.role}</div>
+            <div style={T.sigDate}>Signature: ___________</div>
+            <div style={{...T.sigRole, marginTop:'8px', fontWeight:'normal', fontSize:'8.5px'}}>{s.name}</div>
+            <div style={T.sigDate}>Date: ___________</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Edit Deductions Modal ─────────────────────────────────────────────────────
+function AmountCorrectionModal({ cert, onClose }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    tds_rate:          cert.tds_rate          || 0,
+    tds_amount:        cert.tds_amount        || 0,
+    advance_recovered: cert.advance_recovered || 0,
+    retention_amount:  cert.retention_amount  || 0,
+    other_deductions:  cert.other_deductions  || 0,
+    remarks:           cert.remarks           || '',
+  });
+  useEffect(() => {
+    setForm({
+      tds_rate:          cert.tds_rate          || 0,
+      tds_amount:        cert.tds_amount        || 0,
+      advance_recovered: cert.advance_recovered || 0,
+      retention_amount:  cert.retention_amount  || 0,
+      other_deductions:  cert.other_deductions  || 0,
+      remarks:           cert.remarks           || '',
+    });
+  }, [cert]);
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  // When tds_rate changes, auto-recalculate tds_amount
+  const handleTdsRateChange = (rate) => {
+    const gross = n(cert.gross_amount);
+    const newAmt = rate ? Math.round(gross * Number(rate) / 100) : 0;
+    setForm(p => ({ ...p, tds_rate: rate, tds_amount: newAmt }));
+  };
+  const totalDed  = n(form.tds_amount) + n(form.advance_recovered) + n(form.retention_amount) + n(form.other_deductions);
+  const revisedNet = n(cert.gross_amount) + n(cert.tax_amount) - totalDed;
+  const mut = useMutation({
+    mutationFn: () => vendorQSCertificationAPI.updateAmounts(cert.id, form),
+    onSuccess: () => {
+      toast.success('Certification amounts corrected');
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certification', cert.id] });
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
+      onClose();
+    },
+    onError: err => toast.error(err?.response?.data?.error || 'Failed to update amounts'),
+  });
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 no-print">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-medium text-slate-900">Edit Certification Deductions</h2>
+            <p className="text-xs text-slate-500">Correct TDS and deductions. Linked bills will be updated.</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg border border-slate-200"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 grid grid-cols-2 gap-3">
+          {/* TDS Rate selector */}
+          <div>
+            <label className="text-[11px] font-medium text-slate-900 uppercase">TDS Rate</label>
+            <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={form.tds_rate} onChange={e => handleTdsRateChange(e.target.value)}>
+              <option value="0">No TDS (0%)</option>
+              <option value="1">1% — Individual / Labour Contractor</option>
+              <option value="2">2% — Company / Subcontractor</option>
+              <option value="10">10% — Professional Services</option>
+            </select>
+          </div>
+          {/* TDS Amount — auto-filled or manual */}
+          <div>
+            <label className="text-[11px] font-medium text-slate-900 uppercase flex items-center gap-1">
+              TDS Amount
+              {Number(form.tds_rate) > 0 && (
+                <span className="text-[10px] text-emerald-600 font-normal normal-case">({form.tds_rate}% of gross)</span>
+              )}
+            </label>
+            <input type="number" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              value={form.tds_amount} onChange={e => set('tds_amount', e.target.value)} />
+          </div>
+          {[
+            ['advance_recovered', 'Advance Recovery'],
+            ['retention_amount',  'Retention'],
+            ['other_deductions',  'Other Deductions'],
+          ].map(([key, label]) => (
+            <div key={key}>
+              <label className="text-[11px] font-medium text-slate-900 font-medium uppercase">{label}</label>
+              <input type="number" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                value={form[key]} onChange={e => set(key, e.target.value)} />
+            </div>
+          ))}
+          <div className="col-span-2">
+            <label className="text-[11px] font-medium text-slate-900 font-medium uppercase">Remarks</label>
+            <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" rows={2}
+              value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          </div>
+          <div className="col-span-2 bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] uppercase font-medium text-slate-500">Revised Net Payable</p>
+              <p className="text-xl font-medium text-emerald-700">₹{inr(revisedNet)}</p>
+            </div>
+            <p className="text-xs text-slate-500">Gross ₹{inr(cert.gross_amount)} + Tax ₹{inr(cert.tax_amount)} − Ded ₹{inr(totalDed)}</p>
+          </div>
+        </div>
+        <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold">Cancel</button>
+          <button onClick={() => mut.mutate()} disabled={mut.isPending}
+            className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50">
+            {mut.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+            Save Correction
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Payment Modal ─────────────────────────────────────────────────────────────
+function PaymentModal({ cert, onClose }) {
+  const qc = useQueryClient();
+  const netPayable    = Number(cert.net_payable    || 0);
+  const alreadyPaid   = Number(cert.paid_amount    || 0);
+  const remainingDue  = Math.max(0, netPayable - alreadyPaid);
+
+  const [form, setForm] = useState({
+    paid_amount:      String(remainingDue.toFixed(2)),
+    payment_date:     new Date().toISOString().slice(0, 10),
+    payment_mode:     'RTGS',
+    reference_number: '',
+    bank_name:        '',
+    remarks:          '',
+  });
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const mut = useMutation({
+    mutationFn: () => vendorQSCertificationAPI.recordPayment(cert.id, {
+      paid_amount:      Number(form.paid_amount || 0),
+      payment_date:     form.payment_date,
+      payment_mode:     form.payment_mode,
+      reference_number: form.reference_number || null,
+      bank_name:        form.bank_name || null,
+      remarks:          form.remarks || null,
+    }),
+    onSuccess: (res) => {
+      const data = res.data?.data;
+      const billsCount = data?.bills_paid?.length || 0;
+      toast.success(
+        data?.cert_fully_paid
+          ? `Payment recorded · ${billsCount} bill(s) marked Paid · Cert closed`
+          : `Partial payment recorded · ${billsCount} bill(s) updated`
+      );
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certification', cert.id] });
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
+      qc.invalidateQueries({ queryKey: ['tqs-bills'] });
+      qc.invalidateQueries({ queryKey: ['liability-summary'] });
+      qc.invalidateQueries({ queryKey: ['liability-ledger'] });
+      onClose();
+    },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Payment failed'),
+  });
+
+  const payAmt = Number(form.paid_amount || 0);
+  const canSave = payAmt > 0 && payAmt <= remainingDue + 0.5 && !!form.payment_date && !mut.isPending;
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-black/45 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl w-full max-w-xl shadow-2xl overflow-hidden">
+        <div className="bg-emerald-700 text-white px-5 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider opacity-80">Record Payment</p>
+            <p className="text-sm font-bold">{cert.cert_number} · {cert.vendor_name}</p>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white"><X className="w-5 h-5"/></button>
+        </div>
+
+        <div className="px-5 py-4 grid grid-cols-3 gap-3 bg-slate-50 border-b border-slate-200">
+          <div>
+            <p className="text-[10px] uppercase font-bold text-slate-500">Net Payable</p>
+            <p className="text-base font-extrabold text-slate-900">₹{inr(netPayable)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-slate-500">Already Paid</p>
+            <p className="text-base font-extrabold text-slate-600">₹{inr(alreadyPaid)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-slate-500">Remaining Due</p>
+            <p className="text-base font-extrabold text-emerald-700">₹{inr(remainingDue)}</p>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase font-bold text-slate-500">Paid Amount *</label>
+            <input type="number" min="0" step="0.01" value={form.paid_amount}
+              onChange={e => set('paid_amount', e.target.value)}
+              className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-base font-bold focus:border-emerald-500 outline-none"/>
+            {payAmt > remainingDue + 0.5 && (
+              <p className="text-[10px] text-red-600 mt-1">Exceeds remaining due (₹{inr(remainingDue)})</p>
+            )}
+          </div>
+          <div>
+            <label className="text-[10px] uppercase font-bold text-slate-500">Payment Date *</label>
+            <input type="date" value={form.payment_date}
+              onChange={e => set('payment_date', e.target.value)}
+              className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:border-emerald-500 outline-none"/>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase font-bold text-slate-500">Payment Mode</label>
+            <select value={form.payment_mode}
+              onChange={e => set('payment_mode', e.target.value)}
+              className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:border-emerald-500 outline-none">
+              <option>RTGS</option><option>NEFT</option><option>IMPS</option>
+              <option>Cheque</option><option>DD</option><option>Cash</option>
+              <option>bank_transfer</option>
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase font-bold text-slate-500">UTR / Reference Number</label>
+            <input type="text" value={form.reference_number}
+              onChange={e => set('reference_number', e.target.value)}
+              placeholder="UTR / Cheque No / Txn Ref"
+              className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:border-emerald-500 outline-none"/>
+          </div>
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase font-bold text-slate-500">Bank Name</label>
+            <input type="text" value={form.bank_name}
+              onChange={e => set('bank_name', e.target.value)}
+              placeholder="e.g. HDFC Bank — Cur A/c"
+              className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:border-emerald-500 outline-none"/>
+          </div>
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase font-bold text-slate-500">Remarks</label>
+            <textarea value={form.remarks} rows={2}
+              onChange={e => set('remarks', e.target.value)}
+              className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:border-emerald-500 outline-none"/>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-bold">Cancel</button>
+          <button onClick={() => mut.mutate()} disabled={!canSave}
+            className="px-5 py-2 bg-emerald-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+            {mut.isPending ? <RefreshCw className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-4 h-4"/>}
+            Pay ₹{inr(payAmt)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function VendorQSCertificationDetailPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const qc = useQueryClient();
+  // Work from both /qs and /tqs paths
+  const backPath = location.pathname.startsWith('/tqs') ? '/tqs/vendor-certifications' : '/qs/vendor-certifications';
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [printMode, setPrintMode] = useState(null); // 'abstract' | 'payment'
+  const autoPrintDone = useRef(false);
+
+  const handlePrint = (mode) => {
+    setPrintMode(mode);
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => setPrintMode(null), 500);
+    }, 80);
+  };
+
+  const { data: cert, isLoading } = useQuery({
+    queryKey: ['vendor-qs-certification', id],
+    queryFn:  () => vendorQSCertificationAPI.get(id).then(r => r.data?.data ?? r.data),
+    staleTime: 0,
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: () => vendorQSCertificationAPI.delete(id),
+    onSuccess: () => {
+      toast.success('Certification deleted');
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
+      navigate(backPath);
+    },
+    onError: err => toast.error(err?.response?.data?.error || 'Failed to delete certification'),
+  });
+
+  const handleDelete = () => {
+    if (cert.status === 'paid') {
+      toast.error('Cannot delete a paid certification.');
+      return;
+    }
+    if (!window.confirm(`Delete certification ${cert.cert_number}?\n\nThis cannot be undone.`)) return;
+    deleteMut.mutate();
+  };
+
+  const refreshMut = useMutation({
+    mutationFn: () => vendorQSCertificationAPI.refreshFromBills(id),
+    onSuccess: (res) => {
+      const count = res.data?.data?.refreshed_items ?? 0;
+      toast.success(`Refreshed from latest bill values (${count} item${count === 1 ? '' : 's'})`);
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certification', id] });
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
+    },
+    onError: err => toast.error(err?.response?.data?.error || 'Failed to refresh from bills'),
+  });
+
+  // Auto-print when arriving with ?print=abstract or ?print=payment (from buttons that open in new tab)
+  useEffect(() => {
+    if (autoPrintDone.current) return;
+    const mode = searchParams.get('print');
+    if (!mode) return;
+    if (!cert) return;          // wait for data to load
+    autoPrintDone.current = true;
+    setPrintMode(mode);
+    const t = setTimeout(() => {
+      window.print();
+      // After print, restore mode so the on-screen view is normal.
+      // Do NOT close the tab — user may want to re-print or review.
+      setTimeout(() => setPrintMode(null), 600);
+    }, 250);                     // give layout time to apply print mode
+    return () => clearTimeout(t);
+  }, [cert, searchParams]);
+
+  if (isLoading) return <div className="p-8 text-slate-500">Loading certification...</div>;
+  if (!cert)    return <div className="p-8 text-slate-500">Certification not found.</div>;
+
+  return (
+    <div className="bg-slate-200 min-h-full p-4">
+      {/* ── Dynamic print styles ── */}
+      <style>{`
+        @media print {
+          /* ── 1. Unlock Layout overflow so content flows across pages ── */
+          /* The root Layout div uses inline overflow:hidden + height:100vh
+             which clips everything to one screen. Override ALL ancestors. */
+          html, body {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          /* Target the Layout root (.erp-layout-enter) and its children */
+          .erp-layout-enter,
+          .erp-layout-enter > *,
+          .erp-layout-enter > * > * {
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
+          /* Also target #root and any direct body children */
+          #root, body > div {
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          /* ── 2. Color accuracy ── */
+          *, *::before, *::after {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          /* ── 3. Hide everything, show only print-area ── */
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .no-print { display: none !important; }
+
+          /* ── 4. Print sheet resets ── */
+          .print-sheet {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 !important;
+            background: #fff !important;
+            page-break-after: auto;
+          }
+
+          /* ── 5. Table pagination ── */
+          tr, .avoid-break { page-break-inside: avoid; }
+          thead { display: table-header-group; }
+          tfoot { display: table-footer-group; }
+
+          ${printMode === 'abstract'
+            ? `.print-payment { display: none !important; }
+               @page { size: A4 landscape; margin: 2mm 4mm 4mm 4mm; }`
+            : printMode === 'payment'
+            ? `.print-abstract { display: none !important; }
+               @page { size: A4 portrait; margin: 2mm 5mm 5mm 5mm; }`
+            : `@page { size: A4 landscape; margin: 2mm 4mm 4mm 4mm; }`
+          }
+        }
+      `}</style>
+
+      {/* ── Toolbar ── */}
+      <div className="no-print flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate(backPath)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-slate-50">
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleteMut.isPending || cert.status === 'paid'}
+            className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-red-50 disabled:opacity-40"
+            title={cert.status === 'paid' ? 'Paid certifications cannot be deleted' : 'Delete this certification'}
+          >
+            {deleteMut.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Delete
+          </button>
+          {/* Navigate to the linked invoice(s) */}
+          {cert.bills?.length === 1 ? (
+            <button
+              onClick={() => navigate(`/tqs/bills/${cert.bills[0].bill_id}`)}
+              className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm text-white"
+              style={{ background: '#1a3a6b' }}
+              title="Open the invoice linked to this certification"
+            >
+              <FileText className="w-4 h-4" />
+              View Invoice — {cert.bills[0].inv_number || cert.bills[0].sl_number}
+            </button>
+          ) : cert.bills?.length > 1 ? (
+            <button
+              onClick={() => navigate(`/tqs/bills?vendor_name=${encodeURIComponent(cert.vendor_name)}`)}
+              className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm text-white"
+              style={{ background: '#1a3a6b' }}
+              title={`${cert.bills.length} invoices linked — open bills list for this vendor`}
+            >
+              <FileText className="w-4 h-4" />
+              View Invoices ({cert.bills.length})
+            </button>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refreshMut.mutate()}
+            disabled={refreshMut.isPending || cert.status === 'paid' || cert.status === 'cancelled'}
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 shadow-sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshMut.isPending ? 'animate-spin' : ''}`} /> Refresh from Bills
+          </button>
+          <button
+            onClick={() => setShowCorrection(true)}
+            disabled={cert.status === 'paid' || cert.status === 'cancelled'}
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 shadow-sm"
+          >
+            <Pencil className="w-4 h-4" /> Edit Deductions
+          </button>
+          {/* ── Print Abstract (Landscape A4) ── */}
+          <button
+            onClick={() => handlePrint('abstract')}
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm text-white"
+            style={{ background: '#1a5276' }}
+          >
+            <Printer className="w-4 h-4" /> Print Abstract
+          </button>
+          {/* ── Print Payment Certificate (Portrait A4) ── */}
+          <button
+            onClick={() => handlePrint('payment')}
+            className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm text-white"
+            style={{ background: '#145a32' }}
+          >
+            <Printer className="w-4 h-4" /> Print Payment Cert
+          </button>
+        </div>
+      </div>
+
+      {/* ── Print area ── */}
+      <div className="print-area space-y-6">
+        <AbstractSheet cert={cert} />
+        <PaymentCertificate cert={cert} />
+      </div>
+
+      {showCorrection && <AmountCorrectionModal cert={cert} onClose={() => setShowCorrection(false)} />}
+    </div>
+  );
+}

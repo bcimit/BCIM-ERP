@@ -1,0 +1,13 @@
+.claude/
+logs/
+*.log
+*.err
+tmp_*.png
+ecosystem.config.js
+
+# Large binary files — exceed GitHub 100MB limit
+*.rar
+*.exe
+*.zip
+construct-erp/archive/
+construct-erp/mobile-app.rar

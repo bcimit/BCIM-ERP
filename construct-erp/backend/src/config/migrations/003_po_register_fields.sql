@@ -1,0 +1,3 @@
+ALTER TABLE purchase_orders
+  ADD COLUMN IF NOT EXISTS payment_terms VARCHAR(200),
+  ADD COLUMN IF NOT EXISTS tcs_amount NUMERIC(15,2) DEFAULT 0;

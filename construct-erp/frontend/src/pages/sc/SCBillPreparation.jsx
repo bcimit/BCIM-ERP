@@ -1,0 +1,1251 @@
+// src/pages/sc/SCBillPreparation.jsx — Subcontractor Bill Preparation
+import React, { useState, useMemo, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useReactToPrint } from 'react-to-print';
+import { scAPI, projectAPI } from '../../api/client';
+import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
+import {
+  Plus, Search, RefreshCw, Receipt, Eye, X, ChevronRight,
+  CheckCircle2, Clock, AlertTriangle, IndianRupee, FileText,
+  ArrowRight, Building2, CalendarDays, Layers, Send,
+  BarChart3, Info, HardHat, Printer,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { clsx } from 'clsx';
+import dayjs from 'dayjs';
+import RABillPrintTemplate from '../qs/RABillPrintTemplate';
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+const fmt  = (n) => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`;
+const fmt2 = (n) => `₹${Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+const num  = (v) => parseFloat(v||0);
+
+const STATUS_META = {
+  draft:        { bg:'bg-slate-100',   text:'text-slate-600',   label:'Draft' },
+  submitted:    { bg:'bg-blue-100',    text:'text-blue-700',    label:'Submitted' },
+  under_review: { bg:'bg-amber-100',   text:'text-amber-700',   label:'Under Review' },
+  approved:     { bg:'bg-emerald-100', text:'text-emerald-700', label:'Approved' },
+  rejected:     { bg:'bg-red-100',     text:'text-red-700',     label:'Rejected' },
+  paid:         { bg:'bg-teal-100',    text:'text-teal-700',    label:'Paid' },
+};
+
+const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition';
+const Field = ({ label, children, required }) => (
+  <div>
+    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+      {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+    </label>
+    {children}
+  </div>
+);
+
+// ─── Bill computation helper ──────────────────────────────────────────────────
+function calcBill(items, f) {
+  const gross = items.reduce((s,it) => s + num(it.curr_qty) * num(it.rate), 0);
+  const gstAmt  = gross * num(f.gst_pct) / 100;
+  const tdsAmt  = gross * num(f.tds_pct) / 100;
+  const retAmt  = gross * num(f.retention_pct) / 100;
+  const advRec  = num(f.advance_recovery);
+  const matRec  = num(f.material_recovery);
+  const pen     = num(f.penalty_amount);
+  const oth     = num(f.other_deductions);
+  const net     = gross + gstAmt - tdsAmt - retAmt - advRec - matRec - pen - oth;
+  return { gross, gstAmt, tdsAmt, retAmt, advRec, matRec, pen, oth, net };
+}
+
+function toQSPrintBill(b) {
+  const items = (b.items || []).map((it, index) => {
+    const currentQty = num(it.curr_qty ?? it.current_qty);
+    const rate = num(it.rate);
+    return {
+      ...it,
+      id: it.id || `${b.id || b.bill_number}-${index}`,
+      sr_no: it.sequence_no || index + 1,
+      item_no: it.sequence_no || index + 1,
+      chapter_no: it.chapter_no || '1',
+      chapter_name: it.chapter_name || 'Subcontractor Work',
+      description: it.description || it.wo_item_desc || 'Subcontractor work item',
+      unit: it.unit || 'Nos',
+      boq_qty: num(it.wo_qty ?? it.qty),
+      prev_certified_qty: num(it.prev_qty ?? it.prev_certified_qty),
+      current_qty: currentQty,
+      qs_qty: currentQty,
+      con_qty: currentQty,
+      con_current_qty: currentQty,
+      rate,
+      qs_amount: num(it.amount || currentQty * rate),
+      con_amount: num(it.amount || currentQty * rate),
+    };
+  });
+
+  const gross = num(b.gross_amount);
+  const gst = num(b.gst_amount);
+  const materialRecovery = num(b.material_recovery);
+  const penalty = num(b.penalty_amount);
+  const otherDeductions = num(b.other_deductions);
+
+  return {
+    ...b,
+    contract_number: b.wo_number,
+    contractor_name: b.sc_name,
+    invoice_number: b.invoice_number || b.bill_number,
+    bill_period_from: b.period_from,
+    bill_period_to: b.period_to,
+    gst_rate: num(b.gst_pct || b.wo_gst_pct || 18),
+    gross_with_gst: gross + gst,
+    total_contract_value: num(b.contract_amount),
+    retention_percent: num(b.retention_pct || b.wo_ret_pct),
+    retention_amount: num(b.retention_amount),
+    mobilization_advance_recovery: num(b.advance_recovery),
+    material_recovery_steel: materialRecovery,
+    material_recovery_cement: 0,
+    tds_amount: num(b.tds_amount),
+    other_deductions: penalty + otherDeductions,
+    total_deductions:
+      num(b.tds_amount) +
+      num(b.retention_amount) +
+      num(b.advance_recovery) +
+      materialRecovery +
+      penalty +
+      otherDeductions,
+    items,
+  };
+}
+
+// ─── Step indicator ───────────────────────────────────────────────────────────
+function StepBar({ step }) {
+  const steps = ['Select Work Order', 'Enter Quantities', 'Review & Submit'];
+  return (
+    <div className="flex items-center gap-0 border-b border-slate-100 bg-slate-50/60">
+      {steps.map((label, i) => {
+        const idx = i + 1;
+        const done = step > idx;
+        const active = step === idx;
+        return (
+          <div key={i} className={clsx('flex-1 flex items-center gap-2.5 px-5 py-3.5 border-b-2 transition-colors',
+            active ? 'border-indigo-600 bg-white' : done ? 'border-emerald-400 bg-emerald-50/30' : 'border-transparent')}>
+            <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
+              active ? 'bg-indigo-600 text-white' : done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500')}>
+              {done ? '✓' : idx}
+            </div>
+            <span className={clsx('text-xs font-semibold hidden sm:block',
+              active ? 'text-indigo-700' : done ? 'text-emerald-700' : 'text-slate-400')}>
+              {label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── NMR-Based Bill Raiser (Labour Contractors) ──────────────────────────────
+function NMRBillModal({ wo, onClose }) {
+  const qc = useQueryClient();
+  const [selectedNmrId, setSelectedNmrId] = useState('');
+  const fmt2 = (n) => `₹${Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  const { data: nmrs=[], isLoading } = useQuery({
+    queryKey: ['sc-nmr-for-wo', wo.id],
+    queryFn: () => scAPI.listNMR({ wo_id: wo.id, status: 'approved' }).then(r=>r.data?.data||[]),
+    staleTime: 0,
+  });
+
+  const raiseMut = useMutation({
+    mutationFn: () => scAPI.raiseBillNMR(selectedNmrId),
+    onSuccess: (r) => {
+      const bill = r.data.data.bill;
+      toast.success(`Labour Bill ${bill.bill_number} created — ${fmt2(bill.gross_amount)}`);
+      qc.invalidateQueries({ queryKey: ['sc-bills'] });
+      qc.invalidateQueries({ queryKey: ['sc-dashboard'] });
+      onClose();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed to raise bill'),
+  });
+
+  const selected = nmrs.find(n => n.id === selectedNmrId);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4"
+        style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+        <div>
+          <h2 className="font-bold text-white text-base">Raise Labour Bill from NMR</h2>
+          <p className="text-xs mt-0.5" style={{ color:'rgba(255,255,255,0.65)' }}>
+            {wo.wo_number} · {wo.sc_name} — Select an approved Muster Roll
+          </p>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+          style={{ background:'rgba(255,255,255,0.10)', border:'1px solid rgba(255,255,255,0.20)' }}>
+          <X className="w-4 h-4"/>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
+        {/* Info banner */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800 flex items-start gap-2">
+          <Info className="w-4 h-4 flex-shrink-0 mt-0.5"/>
+          <span>
+            <strong>Labour Contractor billing</strong> is based on the <strong>NMR (Nominal Muster Roll)</strong> — daily attendance × daily rate.
+            Select an approved NMR below. The bill gross amount equals the total wages recorded in the NMR.
+          </span>
+        </div>
+
+        {isLoading && <div className="text-center py-8 text-slate-400">Loading approved NMRs…</div>}
+
+        {!isLoading && nmrs.length === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+            <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3"/>
+            <p className="font-semibold text-amber-800">No approved NMRs found for this Work Order</p>
+            <p className="text-xs text-amber-700 mt-1">
+              Go to <strong>Labour / Muster Roll tab</strong> → Create NMR for a billing period → Get it checked and approved → come back here to raise the bill.
+            </p>
+          </div>
+        )}
+
+        {nmrs.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Select NMR to bill from</p>
+            {nmrs.map(n => (
+              <button key={n.id} type="button" onClick={() => setSelectedNmrId(n.id)}
+                className={clsx('w-full text-left rounded-xl border-2 p-4 transition-all',
+                  selectedNmrId === n.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300')}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-indigo-700 font-mono text-sm">{n.nmr_number}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Period: {dayjs(n.period_from).format('DD MMM')} – {dayjs(n.period_to).format('DD MMM YYYY')}
+                      &nbsp;· {n.total_workers} workers · {n.total_mandays} man-days
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-emerald-700">{fmt2(n.total_wages)}</p>
+                    <p className="text-[10px] text-slate-400">Total wages (= Gross Amount)</p>
+                  </div>
+                </div>
+                {selectedNmrId === n.id && (
+                  <div className="mt-3 pt-3 border-t border-indigo-200 grid grid-cols-3 gap-3">
+                    {[['Skilled Wages', n.skilled_wages],['Unskilled Wages', n.unskilled_wages],['Total Wages', n.total_wages]].map(([l,v])=>(
+                      <div key={l} className="bg-white border border-indigo-100 rounded-xl p-2.5">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">{l}</p>
+                        <p className="text-sm font-bold text-indigo-800">{fmt2(v)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selected && (
+          <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4">
+            <p className="text-sm font-bold text-emerald-800">Bill Preview</p>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              {[
+                ['Bill Type', 'RA Bill (Labour)'],
+                ['Gross Amount', fmt2(selected.total_wages)],
+                ['Period', `${dayjs(selected.period_from).format('DD MMM')} – ${dayjs(selected.period_to).format('DD MMM YYYY')}`],
+                ['Description', `Labour charges as per ${selected.nmr_number}`],
+              ].map(([l,v])=>(
+                <div key={l} className="bg-white border border-emerald-100 rounded-xl p-2.5">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase">{l}</p>
+                  <p className="text-xs font-semibold text-slate-800">{v}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-emerald-700 mt-2">
+              After creation, bill will be in <strong>Draft</strong> status. Submit it for the 5-stage approval workflow.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-shrink-0 flex justify-end gap-3 px-6 py-4 border-t bg-slate-50/60">
+        <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600">Cancel</button>
+        <button onClick={() => raiseMut.mutate()} disabled={!selectedNmrId || raiseMut.isPending}
+          className="flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-lg disabled:opacity-40"
+          style={{ background:'linear-gradient(135deg,#059669 0%,#047857 100%)' }}>
+          <Receipt className="w-4 h-4"/> {raiseMut.isPending ? 'Creating…' : 'Raise Labour Bill'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Raise Bill Wizard ────────────────────────────────────────────────────────
+function RaiseBillModal({ wos, onClose }) {
+  const qc = useQueryClient();
+  const [step, setStep]       = useState(1);
+  const [woId, setWoId]       = useState('');
+  const [woDetail, setWoDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [items, setItems]     = useState([]);
+  const [showNMRModal, setShowNMRModal] = useState(false);   // for labour WOs
+  const [form, setForm] = useState({
+    bill_date: dayjs().format('YYYY-MM-DD'),
+    bill_type: 'ra',
+    period_from: '', period_to: '',
+    description: '',
+    gst_pct: 18, tds_pct: 2, retention_pct: 5,
+    advance_recovery: 0, material_recovery: 0,
+    penalty_amount: 0, other_deductions: 0,
+  });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Detect if selected WO belongs to a Labour Contractor
+  const isLabourWO = woDetail?.contractor_type === 'labour_contractor' ||
+                     wos.find(w => w.id === woId)?.contractor_type === 'labour_contractor';
+
+  const loadWO = async (id) => {
+    if (!id) { setWoDetail(null); setItems([]); return; }
+    setLoading(true);
+    try {
+      const r = await scAPI.getWO(id);
+      const wo = r.data?.data;
+      setWoDetail(wo);
+      setItems((wo.items || []).map(it => ({
+        ...it,
+        wo_item_id:  it.id,
+        prev_qty:    num(it.billed_qty),
+        // Use server-computed live_balance so it's always accurate
+        balance_qty: num(it.live_balance ?? Math.max(0, num(it.qty) - num(it.billed_qty))),
+        billed_pct:  num(it.billed_pct || 0),
+        curr_qty:    0,
+      })));
+      set('gst_pct', wo.gst_pct || 18);
+      set('tds_pct', wo.tds_pct || 2);
+      set('retention_pct', wo.retention_pct || 5);
+    } catch { toast.error('Failed to load work order details'); }
+    finally { setLoading(false); }
+  };
+
+  const calc = useMemo(() => calcBill(items, form), [items, form]);
+
+  // Hard overbilling checks
+  const overbilledItems = useMemo(() =>
+    items.filter(it => num(it.curr_qty) > num(it.balance_qty) + 0.001), [items]);
+  const hasOverbilled = overbilledItems.length > 0;
+
+  // WO contract amount check
+  const woContractAmt    = num(woDetail?.contract_amount || 0);
+  const woAlreadyBilled  = num(woDetail?.total_billed || 0);
+  const woRemainingValue = Math.max(0, woContractAmt - woAlreadyBilled);
+  const exceedsContract  = woContractAmt > 0 && calc.gross > woRemainingValue + 0.5;
+
+  const createMut = useMutation({
+    mutationFn: () => scAPI.createBill({
+      wo_id: woId, ...form,
+      gross_amount: calc.gross,
+      items: items.filter(it => num(it.curr_qty) > 0),
+    }),
+    onSuccess: () => {
+      toast.success('Bill created successfully');
+      qc.invalidateQueries({ queryKey: ['sc-bills'] });
+      qc.invalidateQueries({ queryKey: ['sc-dashboard'] });
+      onClose();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed to create bill'),
+  });
+
+  const activeWOs      = wos.filter(w => ['active', 'approved'].includes(w.status));
+  const subConWOs      = activeWOs.filter(w => w.contractor_type !== 'labour_contractor');
+  const labourWOs      = activeWOs.filter(w => w.contractor_type === 'labour_contractor');
+  const canNext1  = !!woId && !!woDetail && !isLabourWO;
+  const canNext2  = calc.gross > 0 && !hasOverbilled && !exceedsContract;
+
+  // Labour Contractor WO selected → show NMR modal directly
+  if (showNMRModal && woDetail) {
+    return <NMRBillModal wo={{ ...woDetail, id: woId }} onClose={() => { setShowNMRModal(false); onClose(); }} />;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4"
+          style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+          <div>
+            <h2 className="font-bold text-white text-base">Raise Subcontractor Bill</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              {woDetail ? `${woDetail.wo_number} — ${woDetail.sc_name}` : 'Select a work order to start billing'}
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+            style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)' }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <StepBar step={step} />
+
+        <div className="flex-1 overflow-y-auto p-6 md:p-8">
+
+          {/* ── Step 1: Select Work Order ── */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <Field label="Work Order" required>
+                <select value={woId} onChange={e => { setWoId(e.target.value); loadWO(e.target.value); }} className={inp}>
+                  <option value="">— Choose an active / approved work order —</option>
+                  {subConWOs.length > 0 && (
+                    <optgroup label="── Sub-Contractors (BOQ-based billing) ──">
+                      {subConWOs.map(w => (
+                        <option key={w.id} value={w.id}>
+                          {w.wo_number} · {w.sc_name} · {w.project_name} · {fmt(w.contract_amount)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {labourWOs.length > 0 && (
+                    <optgroup label="── Labour Contractors (NMR-based billing) ──">
+                      {labourWOs.map(w => (
+                        <option key={w.id} value={w.id}>
+                          [LC] {w.wo_number} · {w.sc_name} · {w.project_name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                {activeWOs.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> No active work orders. Create and approve a work order first.
+                  </p>
+                )}
+              </Field>
+
+              {/* Labour Contractor redirect notice */}
+              {isLabourWO && woDetail && (
+                <div className="bg-blue-50 border-2 border-blue-400 rounded-xl p-4 flex items-start gap-3">
+                  <HardHat className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"/>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-blue-800">Labour Contractor — NMR-Based Billing</p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      This work order belongs to a <strong>Labour Contractor</strong>. Billing is based on the
+                      <strong> Nominal Muster Roll (NMR)</strong> — daily attendance × daily rate.
+                      You cannot use BOQ quantities for this contractor type.
+                    </p>
+                    <button onClick={() => setShowNMRModal(true)}
+                      className="mt-3 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+                      <Receipt className="w-4 h-4"/> Raise Labour Bill from NMR →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {loading && <div className="text-center py-8 text-slate-400 text-sm">Loading work order details…</div>}
+
+              {woDetail && !loading && (
+                <>
+                  {/* WO summary card */}
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 overflow-hidden">
+                    <div className="px-4 py-2.5 flex items-center gap-2"
+                      style={{ background: `linear-gradient(90deg, ${Theme.navy}dd 0%, ${Theme.navyDark}dd 100%)` }}>
+                      <Building2 className="w-3.5 h-3.5 text-white/80" />
+                      <span className="text-xs font-bold text-white">{woDetail.wo_number} — {woDetail.subject}</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
+                      {[
+                        { l: 'Subcontractor',  v: woDetail.sc_name },
+                        { l: 'Project',        v: woDetail.project_name },
+                        { l: 'Contract Value', v: fmt(woDetail.contract_amount), bold: true },
+                        { l: 'Already Billed', v: fmt(woDetail.total_billed), warn: true },
+                        { l: 'GST Rate',       v: `${woDetail.gst_pct}%` },
+                        { l: 'Retention',      v: `${woDetail.retention_pct}%` },
+                        { l: 'TDS Rate',       v: `${woDetail.tds_pct}%` },
+                        { l: 'Advance Paid',   v: fmt(woDetail.advance_paid) },
+                        { l: 'BOQ Items',      v: woDetail.items?.length || 0 },
+                      ].map(({ l, v, bold, warn }) => (
+                        <div key={l}>
+                          <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">{l}</p>
+                          <p className={clsx('text-sm font-bold mt-0.5', bold ? 'text-indigo-900' : warn ? 'text-orange-600' : 'text-slate-700')}>{v}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Balance progress */}
+                    <div className="px-4 pb-4">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                        <span>Billing Progress</span>
+                        <span>{num(woDetail.contract_amount) > 0 ? Math.round((num(woDetail.total_billed)/num(woDetail.contract_amount))*100) : 0}% billed</span>
+                      </div>
+                      <div className="h-2 bg-indigo-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-400 rounded-full"
+                          style={{ width: `${num(woDetail.contract_amount) > 0 ? Math.min(100,(num(woDetail.total_billed)/num(woDetail.contract_amount))*100) : 0}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bill type + dates */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Field label="Bill Type">
+                      <select value={form.bill_type} onChange={e => set('bill_type', e.target.value)} className={inp}>
+                        <option value="ra">RA Bill (Running Account)</option>
+                        <option value="final">Final Bill</option>
+                        <option value="advance">Advance Bill</option>
+                        <option value="extra_item">Extra Item Bill</option>
+                      </select>
+                    </Field>
+                    <Field label="Bill Date">
+                      <input type="date" value={form.bill_date} onChange={e => set('bill_date', e.target.value)} className={inp} />
+                    </Field>
+                    <Field label="Period From">
+                      <input type="date" value={form.period_from} onChange={e => set('period_from', e.target.value)} className={inp} />
+                    </Field>
+                    <Field label="Period To">
+                      <input type="date" value={form.period_to} onChange={e => set('period_to', e.target.value)} className={inp} />
+                    </Field>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Step 2: Enter Quantities + Deductions ── */}
+          {step === 2 && woDetail && (
+            <div className="space-y-5">
+
+              {/* ── Overbilling guard banner ── */}
+              {hasOverbilled && (
+                <div className="bg-red-50 border-2 border-red-400 rounded-xl px-4 py-3 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800">Overbilling Detected — Cannot Proceed</p>
+                    <p className="text-xs text-red-700 mt-0.5">
+                      The following items exceed their Work Order balance. Reduce the quantity to the balance or less:
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {overbilledItems.map((it, i) => (
+                        <li key={i} className="text-xs font-semibold text-red-700">
+                          • {it.description}: entered {num(it.curr_qty).toFixed(3)} {it.unit} — max allowed {num(it.balance_qty).toFixed(3)} {it.unit}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* ── WO contract ceiling warning ── */}
+              {exceedsContract && !hasOverbilled && (
+                <div className="bg-red-50 border-2 border-red-400 rounded-xl px-4 py-3 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800">Exceeds WO Contract Value</p>
+                    <p className="text-xs text-red-700 mt-0.5">
+                      This bill's gross amount ({fmt(calc.gross)}) exceeds the remaining billable value
+                      of {fmt(woRemainingValue)} (Contract: {fmt(woContractAmt)}, Already billed: {fmt(woAlreadyBilled)}).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── WO balance summary bar ── */}
+              {woDetail && woContractAmt > 0 && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-indigo-700">WO Contract Utilisation</span>
+                    <span className="text-xs font-bold text-indigo-800">
+                      {fmt(woAlreadyBilled + calc.gross)} / {fmt(woContractAmt)}
+                      &nbsp;({Math.min(100, Math.round(((woAlreadyBilled + calc.gross) / woContractAmt) * 100))}%)
+                    </span>
+                  </div>
+                  <div className="h-3 bg-indigo-100 rounded-full overflow-hidden">
+                    {/* Already billed segment */}
+                    <div className="h-full flex">
+                      <div className="h-full bg-indigo-400 transition-all"
+                        style={{ width: `${Math.min(100,(woAlreadyBilled/woContractAmt)*100)}%` }} />
+                      <div className={clsx('h-full transition-all', exceedsContract ? 'bg-red-500' : 'bg-emerald-400')}
+                        style={{ width: `${Math.min(100 - Math.min(100,(woAlreadyBilled/woContractAmt)*100), (calc.gross/woContractAmt)*100)}%` }} />
+                    </div>
+                  </div>
+                  <div className="flex justify-between mt-1 text-[9px] text-indigo-500">
+                    <span>Previously billed: {fmt(woAlreadyBilled)}</span>
+                    <span className={exceedsContract ? 'text-red-600 font-bold' : 'text-emerald-600'}>
+                      This bill: {fmt(calc.gross)}
+                    </span>
+                    <span>Remaining after: {fmt(Math.max(0, woRemainingValue - calc.gross))}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* BOQ items table */}
+              {items.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-slate-700">
+                      BOQ Items — Enter Current Bill Quantity
+                      {hasOverbilled && <span className="ml-2 text-red-600 text-xs font-bold">({overbilledItems.length} item{overbilledItems.length>1?'s':''} exceed balance)</span>}
+                    </h3>
+                    <span className="text-xs text-slate-400">{items.filter(it => num(it.curr_qty) > 0).length} of {items.length} items filled</span>
+                  </div>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead style={{ background: `linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+                        <tr>
+                          {['#','Description','Unit','WO Qty','Prev Billed','Balance Qty','Billing Progress','Current Bill Qty','Rate','Amount'].map(h => (
+                            <th key={h} className="px-3 py-2.5 text-left font-bold text-white/80 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map((it, i) => {
+                          const amt      = num(it.curr_qty) * num(it.rate);
+                          const balance  = num(it.balance_qty);
+                          const overBill = num(it.curr_qty) > balance + 0.001;
+                          const atLimit  = num(it.curr_qty) > 0 && num(it.curr_qty) >= balance - 0.001 && !overBill;
+                          const billedSoFar = num(it.prev_qty);
+                          const woQty    = num(it.qty);
+                          const usedPct  = woQty > 0 ? Math.min(100, ((billedSoFar + num(it.curr_qty)) / woQty) * 100) : 0;
+                          const prevPct  = woQty > 0 ? Math.min(100, (billedSoFar / woQty) * 100) : 0;
+
+                          return (
+                            <tr key={i} className={clsx('border-t border-slate-100',
+                              overBill ? 'bg-red-50' : atLimit ? 'bg-amber-50' : i%2===0 ? 'bg-white' : 'bg-slate-50/30')}>
+                              <td className="px-3 py-3 text-slate-400 font-semibold">{i+1}</td>
+                              <td className="px-3 py-3 max-w-[180px]">
+                                <p className="font-semibold text-slate-800 leading-tight">{it.description}</p>
+                                {it.item_code && <p className="text-slate-400 text-[9px] mt-0.5 font-mono">{it.item_code}</p>}
+                              </td>
+                              <td className="px-3 py-3 text-slate-500 whitespace-nowrap">{it.unit || '—'}</td>
+                              <td className="px-3 py-3 text-right text-slate-600 font-medium">{woQty}</td>
+                              <td className="px-3 py-3 text-right font-semibold text-orange-600">{billedSoFar}</td>
+                              <td className="px-3 py-3 text-right">
+                                <span className={clsx('font-bold text-sm',
+                                  balance <= 0 ? 'text-red-500' : balance < woQty * 0.1 ? 'text-amber-600' : 'text-blue-600')}>
+                                  {balance <= 0 ? '0 — FULLY BILLED' : balance}
+                                </span>
+                              </td>
+
+                              {/* Progress bar column */}
+                              <td className="px-3 py-3 min-w-[110px]">
+                                <div className="h-2 bg-slate-200 rounded-full overflow-hidden w-24">
+                                  <div className="h-full flex">
+                                    <div className="bg-orange-400 h-full transition-all" style={{ width:`${prevPct}%` }} />
+                                    <div className={clsx('h-full transition-all', overBill ? 'bg-red-500' : 'bg-emerald-400')}
+                                      style={{ width:`${Math.min(100 - prevPct, (num(it.curr_qty)/Math.max(woQty,0.001))*100)}%` }} />
+                                  </div>
+                                </div>
+                                <p className={clsx('text-[9px] mt-0.5 font-semibold',
+                                  overBill ? 'text-red-600' : usedPct >= 100 ? 'text-amber-600' : 'text-slate-400')}>
+                                  {Math.round(usedPct)}% of WO
+                                </p>
+                              </td>
+
+                              {/* Input — hard-clamped at balance */}
+                              <td className="px-3 py-3">
+                                {balance <= 0 ? (
+                                  <div className="w-28 bg-slate-100 border border-slate-200 rounded px-2 py-1.5 text-center text-[10px] font-bold text-slate-400">
+                                    Fully Billed
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <input type="number" value={it.curr_qty} min={0}
+                                      onChange={e => {
+                                        // Allow typing but show error; do NOT hard-clamp so user sees the red state
+                                        const v = Math.max(0, parseFloat(e.target.value || 0));
+                                        setItems(prev => prev.map((bi, idx) => idx === i ? { ...bi, curr_qty: v } : bi));
+                                      }}
+                                      className={clsx('w-28 border rounded px-2 py-1.5 text-xs text-right font-bold outline-none focus:ring-2 transition',
+                                        overBill
+                                          ? 'border-red-500 bg-red-50 text-red-700 focus:ring-red-300'
+                                          : atLimit
+                                          ? 'border-amber-400 bg-amber-50 focus:ring-amber-300'
+                                          : 'border-indigo-300 bg-white focus:ring-indigo-300')} />
+                                    {overBill ? (
+                                      <p className="text-[9px] text-red-600 font-bold mt-0.5">
+                                        ❌ Max: {balance}
+                                      </p>
+                                    ) : atLimit ? (
+                                      <p className="text-[9px] text-amber-600 font-bold mt-0.5">
+                                        ⚠ At limit
+                                      </p>
+                                    ) : (
+                                      <p className="text-[9px] text-slate-400 mt-0.5">
+                                        Max: {balance}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-right text-slate-600">{fmt(it.rate)}</td>
+                              <td className={clsx('px-3 py-3 text-right font-bold text-sm',
+                                overBill ? 'text-red-600' : amt > 0 ? 'text-indigo-700' : 'text-slate-300')}>
+                                {fmt(amt)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {/* Gross total row */}
+                        <tr className="border-t-2 border-slate-300 bg-slate-50">
+                          <td colSpan={9} className="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase tracking-wider">Gross Work Amount</td>
+                          <td className={clsx('px-3 py-2.5 text-right font-bold text-sm', exceedsContract ? 'text-red-600' : 'text-indigo-700')}>{fmt(calc.gross)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {calc.gross === 0 && (
+                    <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                      <Info className="w-3 h-3" /> Enter quantity for at least one item to compute the bill amount.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
+                  This work order has no BOQ items. Please add BOQ items to the work order before billing.
+                </div>
+              )}
+
+              {/* Rates section */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">Tax & Deduction Rates</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {[
+                    { k:'gst_pct',          l:'GST %',             color:'text-indigo-600' },
+                    { k:'tds_pct',          l:'TDS %',             color:'text-red-600' },
+                    { k:'retention_pct',    l:'Retention %',       color:'text-orange-600' },
+                    { k:'advance_recovery', l:'Advance Recovery ₹',color:'text-slate-600' },
+                    { k:'material_recovery',l:'Material Recovery ₹',color:'text-slate-600' },
+                    { k:'penalty_amount',   l:'Penalty ₹',         color:'text-red-600' },
+                    { k:'other_deductions', l:'Other Deductions ₹', color:'text-slate-600' },
+                  ].map(({ k, l, color }) => (
+                    <Field key={k} label={l}>
+                      <div className="relative">
+                        <input type="number" value={form[k]} min={0}
+                          onChange={e => set(k, parseFloat(e.target.value || 0))}
+                          className={inp + ' pr-8'} />
+                        <span className={clsx('absolute right-3 top-2.5 text-xs font-bold', color)}>
+                          {['gst_pct','tds_pct','retention_pct'].includes(k) ? '%' : '₹'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        = {['gst_pct','tds_pct','retention_pct'].includes(k)
+                          ? fmt2(calc.gross * num(form[k]) / 100)
+                          : fmt2(num(form[k]))}
+                      </p>
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: Review & Submit ── */}
+          {step === 3 && (
+            <div className="space-y-5">
+              {/* Bill abstract */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                {/* Header */}
+                <div className="px-5 py-3 flex items-center justify-between"
+                  style={{ background: `linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+                  <div>
+                    <p className="text-xs font-bold text-white">{woDetail?.sc_name}</p>
+                    <p className="text-[10px] text-white/60">{woDetail?.wo_number} · {woDetail?.project_name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/50">Bill Type</p>
+                    <p className="text-xs font-bold text-white capitalize">{form.bill_type.replace('_',' ')} Bill</p>
+                  </div>
+                </div>
+
+                {/* Bill breakdown */}
+                <div className="p-5 space-y-0">
+                  {[
+                    { label: 'Gross Work Amount',                    value: calc.gross,  highlight: false },
+                    { label: `+ GST (${form.gst_pct}%)`,            value: calc.gstAmt,  add: true },
+                    { label: 'Total (Gross + GST)',                  value: calc.gross + calc.gstAmt, bold: true, border: true },
+                    { label: `− TDS (${form.tds_pct}%)`,            value: calc.tdsAmt,  deduct: true },
+                    { label: `− Retention (${form.retention_pct}%)`,value: calc.retAmt,  deduct: true },
+                    calc.advRec > 0 && { label: '− Advance Recovery',value: calc.advRec,  deduct: true },
+                    calc.matRec > 0 && { label: '− Material Recovery',value: calc.matRec, deduct: true },
+                    calc.pen > 0    && { label: '− Penalty',          value: calc.pen,    deduct: true },
+                    calc.oth > 0    && { label: '− Other Deductions',  value: calc.oth,    deduct: true },
+                  ].filter(Boolean).map(({ label, value, bold, border, deduct, add }) => (
+                    <div key={label} className={clsx('flex justify-between items-center py-2',
+                      border ? 'border-y border-slate-200 my-1 font-bold' : 'border-b border-slate-50')}>
+                      <span className={clsx('text-sm', bold ? 'font-bold text-slate-800' : deduct ? 'text-red-600' : add ? 'text-indigo-600' : 'text-slate-600')}>{label}</span>
+                      <span className={clsx('text-sm font-semibold tabular-nums', bold ? 'text-slate-900' : deduct ? 'text-red-600' : add ? 'text-indigo-600' : 'text-slate-700')}>
+                        {fmt2(value)}
+                      </span>
+                    </div>
+                  ))}
+                  {/* Net payable */}
+                  <div className="flex justify-between items-center py-3 mt-1 rounded-xl px-3"
+                    style={{ background: `linear-gradient(135deg, ${Theme.navyLight}22 0%, ${Theme.navy}11 100%)`, border: `1px solid ${Theme.navy}33` }}>
+                    <span className="text-base font-bold text-slate-900">NET PAYABLE</span>
+                    <span className="text-xl font-bold" style={{ color: Theme.navy }}>{fmt2(calc.net)}</span>
+                  </div>
+                </div>
+
+                {/* Items summary */}
+                {items.filter(it => num(it.curr_qty) > 0).length > 0 && (
+                  <div className="border-t border-slate-100 bg-slate-50/50 px-5 py-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                      Items in this bill ({items.filter(it => num(it.curr_qty) > 0).length})
+                    </p>
+                    <div className="space-y-1">
+                      {items.filter(it => num(it.curr_qty) > 0).map((it, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-slate-600 truncate max-w-[60%]">{it.description}</span>
+                          <span className="text-slate-700 font-semibold tabular-nums">
+                            {num(it.curr_qty)} {it.unit} × {fmt(it.rate)} = {fmt(num(it.curr_qty)*num(it.rate))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <Field label="Bill Narration / Description">
+                <textarea value={form.description} onChange={e => set('description', e.target.value)}
+                  rows={2} className={inp + ' resize-none'}
+                  placeholder="Describe the work covered in this bill e.g. 'RA Bill No.1 for RCC work at Block A, Ground Floor'" />
+              </Field>
+
+              {/* Info note */}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs text-blue-700">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">After creating:</span> This bill will be saved as a <strong>Draft</strong>.
+                  Click <strong>Submit for Approval</strong> in the bill list to send it through the approval workflow.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t bg-slate-50/60">
+          <button onClick={() => setStep(s => Math.max(1, s-1))} disabled={step === 1}
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-30">
+            ← Back
+          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+            {step < 3 ? (
+              <div className="flex flex-col items-end gap-1">
+                {step === 2 && hasOverbilled && (
+                  <p className="text-xs text-red-600 font-semibold">Fix overbilled items before proceeding</p>
+                )}
+                {step === 2 && exceedsContract && !hasOverbilled && (
+                  <p className="text-xs text-red-600 font-semibold">Bill exceeds WO contract value</p>
+                )}
+                {step === 2 && calc.gross === 0 && !hasOverbilled && (
+                  <p className="text-xs text-amber-600 font-semibold">Enter at least one quantity</p>
+                )}
+                <button onClick={() => setStep(s => s+1)}
+                  disabled={step === 1 ? !canNext1 : !canNext2}
+                  className={clsx('flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-lg transition',
+                    (step === 2 && (hasOverbilled || exceedsContract)) ? 'opacity-40 cursor-not-allowed bg-red-500' : 'disabled:opacity-40')}
+                  style={(step === 2 && (hasOverbilled || exceedsContract)) ? {} : { background: `linear-gradient(135deg, ${Theme.navyLight} 0%, ${Theme.navyDark} 100%)` }}>
+                  Next Step <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => createMut.mutate()}
+                disabled={createMut.isPending || calc.gross <= 0}
+                className="flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-lg disabled:opacity-40 transition"
+                style={{ background: `linear-gradient(135deg, #059669 0%, #047857 100%)` }}>
+                <Receipt className="w-4 h-4" />
+                {createMut.isPending ? 'Creating Bill…' : 'Create Bill'}
+              </button>
+            )}
+          </div>
+        </div>
+    </div>
+  );
+}
+
+// ─── Bill Detail Drawer ───────────────────────────────────────────────────────
+function BillDetailDrawer({ billId, onClose }) {
+  const qc = useQueryClient();
+  const printRef = useRef(null);
+  const { data: raw, isLoading } = useQuery({
+    queryKey: ['sc-bill-detail', billId],
+    queryFn: () => scAPI.getBill(billId).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    staleTime: 0, enabled: !!billId,
+  });
+
+  const submitMut = useMutation({
+    mutationFn: () => scAPI.submitBill(billId, {}),
+    onSuccess: () => {
+      toast.success('Bill submitted for approval');
+      qc.invalidateQueries({ queryKey: ['sc-bills'] });
+      qc.invalidateQueries({ queryKey: ['sc-bill-detail', billId] });
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+
+  const b    = raw || {};
+  const sm   = STATUS_META[b.status] || STATUS_META.draft;
+  const items = b.items || [];
+  const approvals = b.approvals || [];
+  const payments = b.payments || [];
+  const printData = useMemo(() => toQSPrintBill(b), [b]);
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `SC_RA_Bill_${b?.bill_number || 'print'}`,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/40" onClick={onClose} />
+      <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col overflow-hidden">
+        {/* Drawer header */}
+        <div className="px-5 py-4 flex items-center justify-between"
+          style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+          <div>
+            <p className="font-bold text-white text-sm">{b.bill_number || '…'}</p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>{b.sc_name} · {b.project_name}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isLoading && b?.id && (
+              <button onClick={() => handlePrint()}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition"
+                style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
+                <Printer className="w-3 h-3" /> Print RA Bill
+              </button>
+            )}
+            {b.status === 'draft' && (
+              <button onClick={() => submitMut.mutate()}
+                disabled={submitMut.isPending}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition"
+                style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
+                <Send className="w-3 h-3" /> {submitMut.isPending ? '…' : 'Submit'}
+              </button>
+            )}
+            <button onClick={onClose}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
+              style={{ background: 'rgba(255,255,255,0.10)' }}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {isLoading ? (
+            <div className="space-y-3">{[1,2,3].map(n => <div key={n} className="h-20 bg-slate-100 rounded-xl animate-pulse" />)}</div>
+          ) : (
+            <>
+              {/* Status + dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                  <span className={clsx('text-xs px-2 py-0.5 rounded-full font-bold', sm.bg, sm.text)}>{sm.label}</span>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Bill Date</p>
+                  <p className="text-xs font-bold text-slate-800">{b.bill_date ? dayjs(b.bill_date).format('DD MMM YYYY') : '—'}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">WO Number</p>
+                  <p className="text-xs font-bold text-indigo-700 font-mono">{b.wo_number}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Bill Type</p>
+                  <p className="text-xs font-bold text-slate-800 capitalize">{(b.bill_type||'ra').replace('_',' ')}</p>
+                </div>
+              </div>
+
+              {/* Amount breakdown */}
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Bill Abstract</p>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  {[
+                    { l:'Gross Work Amount',     v: b.gross_amount,      c:'text-slate-800' },
+                    { l:`GST (${b.gst_pct}%)`,   v: b.gst_amount,        c:'text-indigo-600', sub:true },
+                    { l:`TDS (${b.tds_pct}%)`,   v:-b.tds_amount,        c:'text-red-600', sub:true },
+                    { l:`Retention (${b.retention_pct}%)`, v:-b.retention_amount, c:'text-orange-600', sub:true },
+                    num(b.advance_recovery)>0 && { l:'Advance Recovery', v:-b.advance_recovery, c:'text-red-600', sub:true },
+                    num(b.material_recovery)>0 && { l:'Material Recovery',v:-b.material_recovery, c:'text-red-600', sub:true },
+                    num(b.penalty_amount)>0    && { l:'Penalty',          v:-b.penalty_amount,   c:'text-red-600', sub:true },
+                  ].filter(Boolean).map(({ l, v, c, sub }) => (
+                    <div key={l} className={clsx('flex justify-between px-4 py-2 border-b border-slate-50 text-xs', sub && 'bg-slate-50/50')}>
+                      <span className={clsx(sub && 'pl-2', 'text-slate-600')}>{l}</span>
+                      <span className={clsx('font-semibold tabular-nums', c)}>{fmt2(Math.abs(num(v)))}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between px-4 py-3 font-bold">
+                    <span className="text-sm text-slate-800">Net Payable</span>
+                    <span className="text-base" style={{ color: Theme.navy }}>{fmt2(b.net_payable)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* BOQ items */}
+              {items.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">BOQ Items ({items.length})</p>
+                  <div className="space-y-2">
+                    {items.map((it, i) => (
+                      <div key={i} className="bg-white border border-slate-100 rounded-xl px-4 py-3 flex justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 truncate">{it.description}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Curr: <span className="font-bold text-indigo-600">{it.curr_qty} {it.unit}</span>
+                            &nbsp;· Prev: {it.prev_qty} · WO: {it.wo_qty}
+                          </p>
+                        </div>
+                        <span className="text-xs font-bold text-indigo-700 ml-3 flex-shrink-0">{fmt(num(it.curr_qty)*num(it.rate))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Approval trail */}
+              {approvals.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Approval Trail</p>
+                  <div className="space-y-2">
+                    {approvals.map((a, i) => (
+                      <div key={i} className="flex gap-3">
+                        <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold',
+                          a.action==='approved' ? 'bg-emerald-500' : a.action==='rejected' ? 'bg-red-500' : 'bg-blue-500')}>
+                          {a.action==='approved' ? '✓' : a.action==='rejected' ? '✗' : '→'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-700 capitalize">{a.action}</span>
+                            <span className="text-[10px] text-slate-400">· {a.actor_name || 'System'}</span>
+                            <span className="text-[10px] text-slate-400 ml-auto">{dayjs(a.created_at).format('DD MMM · HH:mm')}</span>
+                          </div>
+                          {a.comments && <p className="text-[11px] text-slate-500 mt-0.5 italic">"{a.comments}"</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Payments */}
+              {payments.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Payments ({payments.length})</p>
+                  <div className="space-y-2">
+                    {payments.map((p, i) => (
+                      <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-bold text-emerald-800">{fmt2(p.amount)}</p>
+                          <p className="text-[10px] text-emerald-600">{dayjs(p.payment_date).format('DD MMM YYYY')} · {p.payment_mode?.replace('_',' ')}</p>
+                          {p.reference_no && <p className="text-[10px] text-slate-500">Ref: {p.reference_no}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        {!isLoading && b?.id && (
+          <div className="hidden print:block">
+            <RABillPrintTemplate ref={printRef} data={printData} variations={[]} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function SCBillPreparation() {
+  const qc = useQueryClient();
+  const [search,        setSearch]      = useState('');
+  const [projectFilter, setProject]     = useState('');
+  const [statusFilter,  setStatus]      = useState('');
+  const [showForm,      setShowForm]    = useState(false);
+  const [drawerBillId,  setDrawerBill]  = useState(null);
+
+  const { data: projects = [] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });
+  const { data: wos = [] }      = useQuery({ queryKey:['sc-wo-all'], queryFn:()=>scAPI.listWO().then(r=>r.data?.data||[]), staleTime:0 });
+  const { data: bills = [], isLoading, refetch } = useQuery({
+    queryKey: ['sc-bills', projectFilter, statusFilter],
+    queryFn:  () => scAPI.listBills({ project_id:projectFilter||undefined, status:statusFilter||undefined }).then(r=>r.data?.data||[]),
+    staleTime: 0, gcTime: 0, refetchOnMount: 'always',
+  });
+
+  const submitMut = useMutation({
+    mutationFn: id => scAPI.submitBill(id, {}),
+    onSuccess: () => { toast.success('Submitted for approval'); qc.invalidateQueries({ queryKey:['sc-bills'] }); },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+
+  const filtered = useMemo(() => {
+    if (!search) return bills;
+    const q = search.toLowerCase();
+    return bills.filter(b => [b.bill_number,b.sc_name,b.wo_number,b.project_name].some(v=>v?.toLowerCase().includes(q)));
+  }, [bills, search]);
+
+  // KPI counts
+  const kpi = useMemo(() => ({
+    total:    bills.length,
+    draft:    bills.filter(b=>b.status==='draft').length,
+    pending:  bills.filter(b=>['submitted','under_review'].includes(b.status)).length,
+    approved: bills.filter(b=>b.status==='approved').length,
+    totalNet: bills.reduce((s,b)=>s+num(b.net_payable),0),
+  }), [bills]);
+
+  return (
+    <div style={{ background: Theme.pageBg, minHeight:'100vh' }}>
+
+      <PageHeader
+        title="Bill Preparation"
+        subtitle="Raise, manage and submit subcontractor bills for approval"
+        breadcrumbs={[{ label:'Subcontractors' }, { label:'Bill Preparation' }]}
+        actions={
+          <button onClick={() => setShowForm(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition shadow-sm"
+            style={{ background:'#fff', color: Theme.navyDark }}>
+            <Plus className="w-3.5 h-3.5" /> Raise Bill
+          </button>
+        }
+      />
+
+      <div className="p-5 md:p-6 max-w-[1400px] mx-auto space-y-5">
+
+        {/* Workflow hint */}
+        <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 shadow-sm">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Billing Workflow</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {[
+              { icon: Layers,      label:'1. Create WO',       desc:'Approve a work order',   color:'bg-blue-100 text-blue-700' },
+              { icon: Receipt,     label:'2. Raise Bill',      desc:'Enter BOQ quantities',   color:'bg-indigo-100 text-indigo-700' },
+              { icon: Send,        label:'3. Submit',          desc:'Send for approval',       color:'bg-amber-100 text-amber-700' },
+              { icon: CheckCircle2,label:'4. Approve',         desc:'Stage-wise approval',     color:'bg-emerald-100 text-emerald-700' },
+              { icon: IndianRupee, label:'5. Payment',         desc:'Record payment',          color:'bg-teal-100 text-teal-700' },
+            ].map(({ icon: Icon, label, desc, color }, i, arr) => (
+              <React.Fragment key={label}>
+                <div className={clsx('flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold', color)}>
+                  <Icon className="w-3.5 h-3.5" /> <div><div>{label}</div><div className="font-normal opacity-70">{desc}</div></div>
+                </div>
+                {i < arr.length - 1 && <ArrowRight className="w-4 h-4 text-slate-300 flex-shrink-0" />}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <ThemeKpiCard icon={FileText}     label="Total Bills"     value={kpi.total}    color="blue"    sub="All bills" />
+          <ThemeKpiCard icon={FileText}     label="Drafts"          value={kpi.draft}    color="slate"   sub="Not submitted" />
+          <ThemeKpiCard icon={Clock}        label="Pending Approval"value={kpi.pending}  color="amber"   sub="Under review" />
+          <ThemeKpiCard icon={CheckCircle2} label="Approved"        value={kpi.approved} color="emerald" sub="Ready to pay" />
+          <ThemeKpiCard icon={IndianRupee}  label="Total Net Value" value={fmt(kpi.totalNet)} color="orange" sub="All bills" />
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-52">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search bill no., subcontractor, WO…"
+              className="pl-9 pr-3 py-2 border border-slate-200 bg-white rounded-xl text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-300 shadow-sm" />
+          </div>
+          <select value={projectFilter} onChange={e => setProject(e.target.value)}
+            className="border border-slate-200 bg-white rounded-xl px-3 py-2 text-sm shadow-sm focus:outline-none min-w-40">
+            <option value="">All Projects</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e => setStatus(e.target.value)}
+            className="border border-slate-200 bg-white rounded-xl px-3 py-2 text-sm shadow-sm focus:outline-none">
+            <option value="">All Status</option>
+            {Object.entries(STATUS_META).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <button onClick={() => refetch()} className="p-2 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 shadow-sm">
+            <RefreshCw className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        {/* Bills table */}
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+          {isLoading ? (
+            <div className="p-5 space-y-2">{[1,2,3,4,5].map(n=><div key={n} className="h-10 bg-slate-100 rounded-xl animate-pulse"/>)}</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-20 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Receipt className="w-8 h-8 text-slate-300" />
+              </div>
+              <p className="text-slate-500 font-semibold">No bills found</p>
+              <p className="text-xs text-slate-400 mt-1">{search||projectFilter||statusFilter ? 'Try adjusting filters' : 'Raise your first subcontractor bill'}</p>
+              {!search && !projectFilter && !statusFilter && (
+                <button onClick={()=>setShowForm(true)}
+                  className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-xl mx-auto"
+                  style={{ background:`linear-gradient(135deg, ${Theme.navyLight} 0%, ${Theme.navyDark} 100%)` }}>
+                  <Plus className="w-4 h-4" /> Raise First Bill
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background:`linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+                    {['Bill No.','Date','WO Number','Subcontractor','Project','Gross Amt','Net Payable','Status','Actions'].map(h=>(
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-white/80 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((b, i) => {
+                    const sm = STATUS_META[b.status] || STATUS_META.draft;
+                    return (
+                      <tr key={b.id}
+                        className={clsx('border-b border-slate-50 hover:bg-indigo-50/30 transition-colors cursor-pointer', i%2===0?'bg-white':'bg-slate-50/30')}
+                        onClick={() => setDrawerBill(b.id)}>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">{b.bill_number}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                          {b.bill_date ? dayjs(b.bill_date).format('DD MMM YY') : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs text-slate-600">{b.wo_number}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-xs font-semibold text-slate-800">{b.sc_name}</p>
+                          <p className="text-[10px] text-slate-400">{b.sc_code}</p>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500 max-w-[130px] truncate">{b.project_name}</td>
+                        <td className="px-4 py-3 text-right">
+                          <p className="text-xs font-semibold text-slate-800">{fmt(b.gross_amount)}</p>
+                          <p className="text-[10px] text-slate-400">GST: {fmt(b.gst_amount)}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <p className="text-sm font-bold" style={{ color: Theme.navy }}>{fmt(b.net_payable)}</p>
+                          <p className="text-[10px] text-red-500">TDS: -{fmt(b.tds_amount)}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={clsx('inline-block text-[10px] px-2 py-0.5 rounded-full font-bold', sm.bg, sm.text)}>
+                            {sm.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setDrawerBill(b.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" title="View">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {b.status === 'draft' && (
+                              <button onClick={() => submitMut.mutate(b.id)}
+                                disabled={submitMut.isPending}
+                                className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
+                                <Send className="w-3 h-3" /> Submit
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showForm    && <RaiseBillModal wos={wos} onClose={() => setShowForm(false)} />}
+      {drawerBillId && <BillDetailDrawer billId={drawerBillId} onClose={() => setDrawerBill(null)} />}
+    </div>
+  );
+}

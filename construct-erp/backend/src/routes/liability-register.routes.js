@@ -1,0 +1,362 @@
+// src/routes/liability-register.routes.js
+// Vendor-wise Liability Register - Tally-style payables ledger
+const express = require('express');
+const { authenticate, authorize } = require('../middleware/auth');
+const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
+const { query } = require('../config/database');
+const { runSchemaInit } = require('../utils/schemaInit');
+const { runLiabilityAutomation } = require('../utils/liability-automation.service');
+const {
+  advanceSourceSql,
+  billCreditSql,
+  billSourceSql,
+  getVendorLiabilitySummary,
+  normalizeAccountType,
+} = require('../services/tqsLiability.service');
+
+const router = express.Router();
+router.use(authenticate);
+router.use(loadProjectScope);
+
+// ── Migration gate: ensure tds_amount exists on tqs_advances before any query
+let _tdsMigrationDone = false;
+let _tdsMigrationPromise = null;
+async function ensureTdsColumn() {
+  if (_tdsMigrationDone) return;
+  if (!_tdsMigrationPromise) {
+    _tdsMigrationPromise = query(
+      `ALTER TABLE tqs_advances ADD COLUMN IF NOT EXISTS tds_amount NUMERIC(15,2) DEFAULT 0`
+    ).then(() => { _tdsMigrationDone = true; })
+     .catch(e => { console.warn('[liability-register] tds_amount migration:', e.message); _tdsMigrationDone = true; });
+  }
+  return _tdsMigrationPromise;
+}
+runSchemaInit('liability_register_tds', ensureTdsColumn);
+router.use(async (_req, _res, next) => { await ensureTdsColumn(); next(); });
+
+// POST /tqs/liability-register/automation/run - manual liability alert trigger
+router.post(
+  '/automation/run',
+  authorize('super_admin', 'admin', 'accounts_manager', 'finance_manager', 'procurement_manager'),
+  async (_req, res) => {
+    try {
+      const result = await runLiabilityAutomation({ manual: true });
+      res.json(result);
+    } catch (err) {
+      console.error('[liability-register] automation/run:', err.message, err.stack);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// GET /tqs/liability-register - centralized vendor payable summary
+router.get('/', async (req, res) => {
+  try {
+    const { project_id, from_date, to_date, search, source_type, bill_type } = req.query;
+    if (project_id && project_id.trim() && !userCanAccessProject(req, project_id)) {
+      return res.status(403).json({ error: 'Access denied for this project.' });
+    }
+    const rows = await getVendorLiabilitySummary({
+      companyId: req.user.company_id,
+      projectId: project_id,
+      projectIds: !project_id && !req.isGlobalRole ? (req.allowedProjectIds || []) : undefined,
+      fromDate: from_date,
+      toDate: to_date,
+      search,
+      sourceType: source_type,
+      billType: bill_type,
+    });
+    res.json(rows);
+  } catch (err) {
+    console.error('[liability-register] GET /:', err.message, err.stack);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /tqs/liability-register/ledger - chronological debit/credit ledger
+router.get('/ledger', async (req, res) => {
+  try {
+    const { vendor_name, project_id, from_date, to_date, source_type, bill_type } = req.query;
+    const accountType = normalizeAccountType(source_type || bill_type);
+    if (!vendor_name) return res.status(400).json({ error: 'vendor_name is required' });
+    if (project_id && project_id.trim() && !userCanAccessProject(req, project_id)) {
+      return res.status(403).json({ error: 'Access denied for this project.' });
+    }
+
+    const params = [req.user.company_id, vendor_name];
+
+    let billProjectFilter = '';
+    let advProjectFilter = '';
+    if (project_id && project_id.trim()) {
+      params.push(project_id);
+      billProjectFilter = `AND b.project_id = $${params.length}`;
+      advProjectFilter = `AND a.project_id = $${params.length}`;
+    } else if (!req.isGlobalRole) {
+      const allowed = req.allowedProjectIds || [];
+      if (allowed.length === 0) {
+        billProjectFilter = 'AND FALSE';
+        advProjectFilter = 'AND FALSE';
+      } else {
+        params.push(allowed);
+        billProjectFilter = `AND b.project_id = ANY($${params.length}::uuid[])`;
+        advProjectFilter = `AND a.project_id = ANY($${params.length}::uuid[])`;
+      }
+    }
+
+    let billTypeFilter = '';
+    let advSourceFilter = '';
+    if (accountType === 'po' || accountType === 'wo') {
+      billTypeFilter = `AND ${billSourceSql(accountType, 'b')}`;
+      advSourceFilter = `AND ${advanceSourceSql(accountType, 'a')}`;
+    }
+
+    const advanceCreditSql = `
+      CASE WHEN EXISTS (
+        SELECT 1
+        FROM tqs_advances a
+        WHERE a.company_id = $1
+          AND LOWER(TRIM(a.vendor_name)) = LOWER(TRIM($2))
+          ${advProjectFilter}
+          ${advSourceFilter}
+      )
+      THEN COALESCE(u.advance_recovered, 0)
+      ELSE 0
+      END
+    `;
+
+    let dateWhere = '';
+    if (from_date && to_date) {
+      params.push(from_date, to_date);
+      dateWhere = `WHERE (txn_date IS NULL OR txn_date BETWEEN $${params.length - 1} AND $${params.length})`;
+    } else if (from_date) {
+      params.push(from_date);
+      dateWhere = `WHERE (txn_date IS NULL OR txn_date >= $${params.length})`;
+    } else if (to_date) {
+      params.push(to_date);
+      dateWhere = `WHERE (txn_date IS NULL OR txn_date <= $${params.length})`;
+    }
+
+    const { rows } = await query(`
+      SELECT * FROM (
+        SELECT
+          b.inv_date AS txn_date,
+          'Invoice' AS entry_type,
+          b.sl_number AS vch_number,
+          b.inv_number AS invoice_ref,
+          'Bill Received: ' || b.sl_number
+            || CASE WHEN b.po_number IS NOT NULL THEN ' | PO: ' || b.po_number ELSE '' END
+            || CASE WHEN b.work_desc IS NOT NULL THEN ' - ' || LEFT(b.work_desc, 60) ELSE '' END AS narration,
+          p.name AS project_name,
+          NULL::numeric AS debit_amount,
+          ${billCreditSql('b', 'u', advanceCreditSql)} AS credit_amount,
+          b.workflow_status,
+          b.id::text AS source_id,
+          b.bill_type,
+          ${billCreditSql('b', 'u', advanceCreditSql)} AS invoice_gross
+        FROM tqs_bills b
+        LEFT JOIN tqs_bill_updates u ON u.bill_id = b.id
+        LEFT JOIN projects p ON p.id = b.project_id
+        WHERE (b.company_id = $1 OR b.company_id IS NULL)
+          AND LOWER(TRIM(b.vendor_name)) = LOWER(TRIM($2))
+          AND b.is_deleted = FALSE
+          ${billProjectFilter}
+          ${billTypeFilter}
+
+        UNION ALL
+
+        SELECT
+          COALESCE(u.qs_certified_date, u.handed_over_accounts_date, b.updated_at::date),
+          'TDS Deduction',
+          COALESCE(u.pc_number, '-'),
+          b.inv_number,
+          'TDS Deducted on: ' || b.inv_number
+            || CASE WHEN u.pc_number IS NOT NULL THEN ' (PC: ' || u.pc_number || ')' ELSE '' END,
+          p.name,
+          u.tds_deduction,
+          NULL::numeric,
+          b.workflow_status,
+          b.id::text,
+          b.bill_type,
+          NULL::numeric
+        FROM tqs_bills b
+        JOIN tqs_bill_updates u ON u.bill_id = b.id
+        LEFT JOIN projects p ON p.id = b.project_id
+        WHERE (b.company_id = $1 OR b.company_id IS NULL)
+          AND LOWER(TRIM(b.vendor_name)) = LOWER(TRIM($2))
+          AND b.is_deleted = FALSE
+          AND COALESCE(u.tds_deduction, 0) > 0
+          ${billProjectFilter}
+          ${billTypeFilter}
+
+        UNION ALL
+
+        SELECT
+          COALESCE(u.qs_certified_date, u.handed_over_accounts_date, b.updated_at::date),
+          'Other Deduction',
+          COALESCE(u.pc_number, '-'),
+          b.inv_number,
+          'Deductions on: ' || b.inv_number,
+          p.name,
+          u.other_deductions,
+          NULL::numeric,
+          b.workflow_status,
+          b.id::text,
+          b.bill_type,
+          NULL::numeric
+        FROM tqs_bills b
+        JOIN tqs_bill_updates u ON u.bill_id = b.id
+        LEFT JOIN projects p ON p.id = b.project_id
+        WHERE (b.company_id = $1 OR b.company_id IS NULL)
+          AND LOWER(TRIM(b.vendor_name)) = LOWER(TRIM($2))
+          AND b.is_deleted = FALSE
+          AND COALESCE(u.other_deductions, 0) > 0
+          ${billProjectFilter}
+          ${billTypeFilter}
+
+        UNION ALL
+
+        -- ⚠️ Advance Recovery row REMOVED — recoveries are not separate Dr entries
+        -- in the vendor ledger; they simply reduce the payment line below.
+        -- The original advance (tqs_advances) is already debited via "Advance Given".
+
+        SELECT
+          u.payment_date,
+          'Payment',
+          COALESCE(u.reference_number, u.pc_number, '-'),
+          b.inv_number,
+          'Payment for Invoice: ' || b.inv_number
+            || CASE WHEN u.reference_number IS NOT NULL THEN ' (UTR: ' || u.reference_number || ')' ELSE '' END
+            || CASE WHEN u.bank_name IS NOT NULL THEN ' | ' || u.bank_name ELSE '' END
+            || CASE WHEN u.payment_mode IS NOT NULL THEN ' / ' || u.payment_mode ELSE '' END,
+          p.name,
+          u.paid_amount,
+          NULL::numeric,
+          b.workflow_status,
+          b.id::text,
+          b.bill_type,
+          NULL::numeric
+        FROM tqs_bills b
+        JOIN tqs_bill_updates u ON u.bill_id = b.id
+        LEFT JOIN projects p ON p.id = b.project_id
+        WHERE (b.company_id = $1 OR b.company_id IS NULL)
+          AND LOWER(TRIM(b.vendor_name)) = LOWER(TRIM($2))
+          AND b.is_deleted = FALSE
+          AND COALESCE(u.paid_amount, 0) > 0
+          ${billProjectFilter}
+          ${billTypeFilter}
+
+        UNION ALL
+
+        SELECT
+          a.payment_date,
+          'Advance Given',
+          COALESCE(a.reference_number, '-'),
+          COALESCE(a.po_number, a.wo_number, '-'),
+          'Advance Payment'
+            || CASE WHEN a.wo_number IS NOT NULL THEN ' - WO: ' || a.wo_number
+                    WHEN a.po_number IS NOT NULL THEN ' - PO: ' || a.po_number
+                    ELSE '' END
+            || CASE WHEN a.reference_number IS NOT NULL THEN ' (UTR: ' || a.reference_number || ')' ELSE '' END
+            || CASE WHEN a.bank_name IS NOT NULL THEN ' | ' || a.bank_name ELSE '' END
+            || CASE WHEN a.payment_mode IS NOT NULL THEN ' / ' || a.payment_mode ELSE '' END,
+          p.name,
+          a.amount,
+          NULL::numeric,
+          'advance',
+          a.id::text,
+          'advance',
+          NULL::numeric
+        FROM tqs_advances a
+        LEFT JOIN projects p ON p.id = a.project_id
+        WHERE a.company_id = $1
+          AND LOWER(TRIM(a.vendor_name)) = LOWER(TRIM($2))
+          ${advProjectFilter}
+          ${advSourceFilter}
+
+        -- ⚠️ TDS on advance is NOT a vendor-ledger entry — it's between
+        -- the company and the tax department. The advance gross is already
+        -- shown as Dr above; net cash out (gross - tds) is what actually went
+        -- to the vendor. We don't post a separate TDS row here.
+      ) ledger
+      ${dateWhere}
+      ORDER BY txn_date ASC NULLS FIRST, entry_type ASC
+    `, params);
+
+    const round2 = (v) => Math.round(parseFloat(v) * 100) / 100;
+    let balance = 0;
+    const ledger = rows.map(r => {
+      const cr = round2(r.credit_amount || 0);
+      const dr = round2(r.debit_amount || 0);
+      balance = Math.round((balance + cr - dr) * 100) / 100;
+      return {
+        ...r,
+        credit_amount: r.credit_amount == null ? null : cr,
+        debit_amount: r.debit_amount == null ? null : dr,
+        invoice_gross: r.invoice_gross == null ? null : round2(r.invoice_gross),
+        running_balance: balance,
+      };
+    });
+
+    const totalCr = ledger.reduce((s, r) => s + (r.credit_amount || 0), 0);
+    const totalDr = ledger.reduce((s, r) => s + (r.debit_amount || 0), 0);
+    const closingBalance = totalCr - totalDr;
+
+    res.json({
+      vendor_name,
+      ledger,
+      totals: {
+        total_credit: totalCr,
+        total_debit: totalDr,
+        closing_balance: Math.abs(closingBalance) <= 5 ? 0 : closingBalance,
+      },
+    });
+  } catch (err) {
+    console.error('[liability-register] GET /ledger:', err.message, '\n', err.stack);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /tqs/liability-register/advance/:id — edit advance amount + TDS
+router.patch('/advance/:id', async (req, res) => {
+  try {
+    const { amount, tds_amount, payment_date, reference_number, remarks } = req.body;
+    const existing = await query(
+      `SELECT id, project_id
+       FROM tqs_advances
+       WHERE id = $1 AND company_id = $2`,
+      [req.params.id, req.user.company_id]
+    );
+    if (!existing.rows.length) return res.status(404).json({ error: 'Advance not found' });
+    if (!userCanAccessProject(req, existing.rows[0].project_id)) {
+      return res.status(403).json({ error: 'Access denied for this project.' });
+    }
+
+    const { rows } = await query(
+      `UPDATE tqs_advances
+       SET amount            = COALESCE($1, amount),
+           tds_amount        = COALESCE($2, tds_amount),
+           payment_date      = COALESCE($3, payment_date),
+           reference_number  = COALESCE($4, reference_number),
+           remarks           = COALESCE($5, remarks),
+           updated_at        = NOW()
+       WHERE id = $6 AND company_id = $7
+       RETURNING *`,
+      [
+        amount     != null ? parseFloat(amount)     : null,
+        tds_amount != null ? parseFloat(tds_amount) : null,
+        payment_date      || null,
+        reference_number  || null,
+        remarks           != null ? remarks : null,
+        req.params.id,
+        req.user.company_id,
+      ]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Advance not found' });
+    res.json({ data: rows[0] });
+  } catch (err) {
+    console.error('[liability-register] PATCH /advance:', err.message, err.stack);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;

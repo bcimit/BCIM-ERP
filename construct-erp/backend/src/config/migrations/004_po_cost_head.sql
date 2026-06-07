@@ -1,0 +1,5 @@
+ALTER TABLE purchase_orders
+  ADD COLUMN IF NOT EXISTS cost_head VARCHAR(100);
+
+ALTER TABLE work_orders
+  ADD COLUMN IF NOT EXISTS cost_head VARCHAR(100);
