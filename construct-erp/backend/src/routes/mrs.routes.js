@@ -149,6 +149,93 @@ function notifyProcurementForNewMRS({ companyId, mrs }) {
   });
 }
 
+// ── Notify MD (stephen) with full item details when a new MRS is created ──
+const DEFAULT_MD_NOTIFY_EMAILS = 'stephen@bcim.in';
+
+async function notifyMDForNewMRS({ mrs }) {
+  try {
+    const mdEmails = parseEmails(process.env.MRS_MD_NOTIFY_EMAILS, DEFAULT_MD_NOTIFY_EMAILS);
+    if (!mdEmails.length) return;
+
+    const appUrl = getPublicFrontendUrl();
+    const ref     = esc(mrsRef(mrs));
+    const project = esc(mrs.project_name || mrs.head_office_project_name || '-');
+    const raisedBy = esc(mrs.raised_by_name || mrs.raised_by_email || '-');
+    const dept     = esc(mrs.department || '-');
+    const reqBy    = mrs.required_by ? new Date(mrs.required_by).toLocaleDateString('en-IN') : '-';
+    const priority = esc((mrs.priority || 'normal').toUpperCase());
+    const items    = Array.isArray(mrs.items) ? mrs.items : [];
+
+    const itemRows = items.map((it, i) => `
+      <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f8fafc'}">
+        <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:13px">${i + 1}</td>
+        <td style="padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;font-size:13px">${esc(it.material_name || it.material || '-')}</td>
+        <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:700;color:#0a2057;font-size:13px">${it.quantity || it.qty || '-'}</td>
+        <td style="padding:8px 10px;border:1px solid #e2e8f0;text-align:center;font-size:13px">${esc(it.unit || '-')}</td>
+        <td style="padding:8px 10px;border:1px solid #e2e8f0;color:#475569;font-size:12px">${esc(it.purpose || '-')}</td>
+      </tr>`).join('');
+
+    const subject = `New MR Raised: ${mrsRef(mrs)} — ${project}`;
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;color:#0f172a">
+        <div style="background:#0a2057;color:#fff;padding:20px 28px;border-radius:8px 8px 0 0">
+          <p style="margin:0 0 4px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8">BCIM ENGINEERING — NEW MATERIAL REQUISITION</p>
+          <h2 style="margin:0;font-size:20px;font-weight:700">${ref}</h2>
+        </div>
+        <div style="border:1px solid #dbe4f0;border-top:none;padding:24px 28px;background:#f8fafc;border-radius:0 0 8px 8px">
+          <table style="border-collapse:collapse;width:100%;font-size:14px;background:#fff;margin-bottom:20px">
+            <tr><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;width:160px;background:#f1f5f9">Project</td><td style="padding:9px 12px;border:1px solid #e2e8f0">${project}</td></tr>
+            <tr><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;background:#f1f5f9">Department</td><td style="padding:9px 12px;border:1px solid #e2e8f0">${dept}</td></tr>
+            <tr><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;background:#f1f5f9">Raised By</td><td style="padding:9px 12px;border:1px solid #e2e8f0">${raisedBy}</td></tr>
+            <tr><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;background:#f1f5f9">Required By</td><td style="padding:9px 12px;border:1px solid #e2e8f0">${reqBy}</td></tr>
+            <tr><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;background:#f1f5f9">Priority</td><td style="padding:9px 12px;border:1px solid #e2e8f0"><span style="padding:2px 8px;border-radius:4px;background:${mrs.priority === 'urgent' ? '#fef2f2' : '#f0fdf4'};color:${mrs.priority === 'urgent' ? '#dc2626' : '#16a34a'};font-weight:700">${priority}</span></td></tr>
+            <tr><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;background:#f1f5f9">Total Items</td><td style="padding:9px 12px;border:1px solid #e2e8f0;font-weight:700;color:#0a2057">${items.length}</td></tr>
+          </table>
+
+          <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;color:#0f172a;border-bottom:2px solid #0a2057;padding-bottom:6px">Material Items Requested</h3>
+          <table style="border-collapse:collapse;width:100%;font-size:13px">
+            <thead>
+              <tr style="background:#0a2057;color:#fff">
+                <th style="padding:9px 10px;border:1px solid #1e3a8a;width:36px">#</th>
+                <th style="padding:9px 10px;border:1px solid #1e3a8a;text-align:left">Material Name</th>
+                <th style="padding:9px 10px;border:1px solid #1e3a8a;width:60px">Qty</th>
+                <th style="padding:9px 10px;border:1px solid #1e3a8a;width:60px">Unit</th>
+                <th style="padding:9px 10px;border:1px solid #1e3a8a;text-align:left">Purpose</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows || '<tr><td colspan="5" style="padding:12px;text-align:center;color:#94a3b8">No items</td></tr>'}</tbody>
+          </table>
+
+          <p style="margin:22px 0 0;text-align:center">
+            <a href="${appUrl}/stores/mrs" style="display:inline-block;background:#0a2057;color:#fff;text-decoration:none;padding:11px 28px;border-radius:6px;font-weight:700;font-size:14px">Open MRS in ERP</a>
+          </p>
+          <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;text-align:center">Automated notification from BCIM ConstructERP</p>
+        </div>
+      </div>`;
+
+    const text = [
+      subject, '',
+      `Project   : ${project}`,
+      `Department: ${dept}`,
+      `Raised By : ${raisedBy}`,
+      `Required  : ${reqBy}`,
+      `Priority  : ${priority}`,
+      '',
+      'Items:',
+      ...items.map((it, i) => `  ${i+1}. ${it.material_name || it.material} — ${it.quantity || it.qty} ${it.unit}${it.purpose ? ` (${it.purpose})` : ''}`),
+      '',
+      `Open ERP: ${appUrl}/stores/mrs`,
+    ].join('\n');
+
+    const { sendMail } = require('../services/mail.service');
+    const result = await sendMail({ to: mdEmails, subject, html, text });
+    console.log(`[mrs-mail] MD notification for ${ref} → ${result.sent ? 'sent' : result.reason}`);
+  } catch (err) {
+    console.error('[mrs-mail] MD notification failed:', err.message);
+  }
+}
+
 // Notify procurement team + stephen when MRS is fully approved (approved_md)
 function notifyProcurementAfterMDApproval({ companyId, mrs }) {
   const procEmails  = parseEmails(process.env.MRS_PROCUREMENT_NOTIFY_EMAILS, DEFAULT_PROCUREMENT_MRS_EMAILS);
@@ -460,6 +547,7 @@ router.post('/', async (req, res) => {
 
     notifyStoresForNewMRS({ companyId: req.user.company_id, mrs: result });
     notifyProcurementForNewMRS({ companyId: req.user.company_id, mrs: result });
+    notifyMDForNewMRS({ mrs: result }); // Full item-detail email to MD (stephen)
 
     // Push notification to stores team
     const storesEmails = parseEmails(process.env.MRS_STORES_NOTIFY_EMAILS, DEFAULT_STORES_MRS_EMAILS);
@@ -716,6 +804,7 @@ router.post('/:id/resend-notify', async (req, res) => {
     const mrsData = mrs.rows[0];
     notifyStoresForNewMRS({ companyId: req.user.company_id, mrs: mrsData });
     notifyProcurementForNewMRS({ companyId: req.user.company_id, mrs: mrsData });
+    notifyMDForNewMRS({ mrs: mrsData });
     res.json({ message: `Notifications resent for ${mrsRef(mrsData)}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
