@@ -327,8 +327,8 @@ router.use(loadProjectScope);
 ─────────────────────────────────────────────────────────────────────────── */
 const ALL_STAGES = [
   { id: 'stores-approve', nextStatus: 'stores_verified', colBy: 'stores_approved_by', colAt: 'stores_approved_at', sigCol: 'stores_sig_img', label: 'Store Manager',      allowedRoles: ['stores_manager', 'store_keeper'] },
-  { id: 'approve-pm',     nextStatus: 'approved_pm',     colBy: 'approved_pm_by',     colAt: 'approved_pm_at',     sigCol: 'pm_sig_img',     label: 'Project Manager',    allowedRoles: ['project_manager', 'pm'], legacyPrev: ['verified_tower'] },
-  { id: 'approve-mgmt',   nextStatus: 'approved_mgmt',   colBy: 'approved_mgmt_by',   colAt: 'approved_mgmt_at',   sigCol: 'mgmt_sig_img',   label: 'Project Director',   allowedRoles: ['director', 'project_director', 'management', 'management_director'], legacyPrev: ['approved_srpm'] },
+  { id: 'approve-pm',     nextStatus: 'approved_pm',     colBy: 'approved_pm_by',     colAt: 'approved_pm_at',     sigCol: 'pm_sig_img',     label: 'Project Manager',    allowedRoles: ['project_manager', 'pm', 'project_head'], legacyPrev: ['verified_tower'] },
+  { id: 'approve-mgmt',   nextStatus: 'approved_mgmt',   colBy: 'approved_mgmt_by',   colAt: 'approved_mgmt_at',   sigCol: 'mgmt_sig_img',   label: 'Project Director',   allowedRoles: ['project_head', 'director', 'project_director', 'management', 'management_director'], legacyPrev: ['approved_srpm'] },
   { id: 'approve-md',     nextStatus: 'approved_md',     colBy: 'approved_md_by',     colAt: 'approved_md_at',     sigCol: 'md_sig_img',     label: 'Managing Director',  allowedRoles: ['managing_director', 'md', 'ceo'] },
 ];
 
