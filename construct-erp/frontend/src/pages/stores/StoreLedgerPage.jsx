@@ -19,7 +19,7 @@ import toast from 'react-hot-toast';
 const GST_RATE = 0.18;
 const STORE_UNITS = [
   'Nos', 'Bags', 'Kgs', 'MT', 'Ton', 'Cum', 'Sqm', 'Rmt', 'Ltr', 'Box',
-  'Packet', 'Roll', 'Set', 'Pair', 'Coils', 'LS',
+  'Packet', 'Roll', 'Set', 'Pair', 'Pairs', 'Coils', 'LS',
 ];
 
 /* ── helpers ─────────────────────────────────────────────────── */
