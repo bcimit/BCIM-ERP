@@ -79,14 +79,28 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
 
         @media print {
           html, body {
+            margin: 0 !important;
+            padding: 0 !important;
             background: #fff !important;
+            width: 297mm !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+          }
+          .mrs-print-doc {
+            width: 281mm !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .mrs-sheet {
+            width: 100% !important;
+            min-height: 178mm !important;
           }
         }
 
         .mrs-print-doc {
-          width: 100%;
+          width: 281mm;
+          max-width: none;
           color: #111827;
           background: #fff;
           font-family: Arial, Helvetica, sans-serif;
@@ -97,6 +111,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
         .mrs-sheet {
           border: 1.4px solid #111827;
           background: #fff;
+          width: 100%;
         }
 
         .mrs-header {
