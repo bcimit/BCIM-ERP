@@ -236,11 +236,33 @@ const sendPasswordResetMail = async ({ to, name, resetUrl }) => {
       return { sent: true, provider: 'graph' };
     } catch (err) {
       console.error('[mail] Graph API failed:', err.message);
-      // fall through to SMTP
+      // fall through to SMTP, but remember the error
+      const graphErr = err.message;
+
+      // ── 2. Try SMTP ─────────────────────────────────────────────────────
+      if (isSmtpConfigured()) {
+        try {
+          const transporter = getTransport();
+          await transporter.sendMail({
+            from:    process.env.SMTP_FROM || process.env.SMTP_USER,
+            to,
+            subject,
+            text,
+            html,
+          });
+          console.log(`[mail] SMTP → sent to ${to}`);
+          return { sent: true, provider: 'smtp' };
+        } catch (smtpErr) {
+          console.error('[mail] SMTP failed:', smtpErr.message);
+          return { sent: false, reason: `Graph failed: ${graphErr} | SMTP failed: ${smtpErr.message}` };
+        }
+      }
+
+      return { sent: false, reason: `Graph API error: ${graphErr}` };
     }
   }
 
-  // ── 2. Try SMTP ───────────────────────────────────────────────────────────
+  // ── 2. Try SMTP (Graph not configured) ───────────────────────────────────
   if (isSmtpConfigured()) {
     try {
       const transporter = getTransport();
@@ -260,8 +282,16 @@ const sendPasswordResetMail = async ({ to, name, resetUrl }) => {
   }
 
   // ── 3. Neither configured ─────────────────────────────────────────────────
-  console.warn(`[mail] No provider configured. Reset link for ${to}: ${resetUrl}`);
-  return { sent: false, reason: 'No mail provider configured (Graph or SMTP)' };
+  const missing = [];
+  if (!process.env.ONEDRIVE_CLIENT_ID && !process.env.AZURE_CLIENT_ID) missing.push('ONEDRIVE_CLIENT_ID');
+  if (!process.env.ONEDRIVE_CLIENT_SECRET && !process.env.AZURE_CLIENT_SECRET) missing.push('ONEDRIVE_CLIENT_SECRET');
+  if (!process.env.ONEDRIVE_TENANT_ID && !process.env.AZURE_TENANT_ID) missing.push('ONEDRIVE_TENANT_ID');
+  if (!process.env.ONEDRIVE_USER_EMAIL && !process.env.MAIL_FROM) missing.push('ONEDRIVE_USER_EMAIL');
+  const reason = missing.length
+    ? `Graph not configured — missing Railway variables: ${missing.join(', ')}`
+    : 'No mail provider configured (Graph or SMTP)';
+  console.warn(`[mail] ${reason}. Reset link for ${to}: ${resetUrl}`);
+  return { sent: false, reason };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
