@@ -796,9 +796,9 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
               <button
                 onClick={onToggle}
                 title={collapsed ? 'Pin sidebar open' : 'Switch to auto-hide'}
-                style={{ width: 22, height: 22, borderRadius: 6, border: '1px solid #E2E8F0', background: collapsed ? '#F1F5F9' : '#EFF6FF', color: collapsed ? '#94A3B8' : '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: collapsed ? 'linear-gradient(135deg,#F59E0B,#F97316)' : 'linear-gradient(135deg,#2563EB,#4F46E5)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: collapsed ? '0 2px 8px rgba(245,158,11,0.55)' : '0 2px 8px rgba(37,99,235,0.55)', transition: 'all 0.18s ease' }}
               >
-                {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+                {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
               </button>
             </div>
             {navGroups.map(group => {
