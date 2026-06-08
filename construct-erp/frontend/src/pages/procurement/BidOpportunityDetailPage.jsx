@@ -117,14 +117,16 @@ export default function BidOpportunityDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-800 border border-slate-700 rounded-xl p-1">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-              ${tab === t.key ? 'bg-emerald-600 text-white' : 'text-slate-900 font-medium hover:text-white'}`}>
-            <t.icon className="w-3.5 h-3.5" />{t.label}
-          </button>
-        ))}
+      <div className="w-full overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex gap-1 bg-slate-800 border border-slate-700 rounded-xl p-1 min-w-max">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap
+                ${tab === t.key ? 'bg-emerald-600 text-white' : 'text-slate-900 font-medium hover:text-white'}`}>
+              <t.icon className="w-3.5 h-3.5" />{t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Overview Tab ── */}

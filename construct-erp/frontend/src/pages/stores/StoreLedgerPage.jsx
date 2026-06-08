@@ -84,20 +84,22 @@ function MetricCard({ icon: Icon, label, value, sub, tone = 'navy' }) {
 
 function SegmentTabs({ value, onChange, tabs }) {
   return (
-    <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-      {tabs.map(({ key, label, icon: Icon }) => (
-        <button
-          key={key}
-          onClick={() => onChange(key)}
-          className={clsx(
-            'flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold transition',
-            value === key ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-          )}
-        >
-          {Icon && <Icon size={15} />}
-          {label}
-        </button>
-      ))}
+    <div className="w-full overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+      <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm min-w-max">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            className={clsx(
+              'flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold transition whitespace-nowrap',
+              value === key ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+            )}
+          >
+            {Icon && <Icon size={15} />}
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

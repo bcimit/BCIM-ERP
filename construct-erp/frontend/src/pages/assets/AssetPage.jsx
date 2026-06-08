@@ -106,13 +106,15 @@ function AssetFormModal({ editAsset, projects, categories, onClose }) {
           </button>
         </div>
         {/* Tab bar */}
-        <div className="flex border-b">
-          {TABS.map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${tab===k?'border-indigo-600 text-indigo-700 bg-indigo-50/50':'border-transparent text-slate-500 hover:text-slate-700'}`}>
-              {l}
-            </button>
-          ))}
+        <div className="overflow-x-auto border-b" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex min-w-max">
+            {TABS.map(([k,l])=>(
+              <button key={k} onClick={()=>setTab(k)}
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${tab===k?'border-indigo-600 text-indigo-700 bg-indigo-50/50':'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
         </div>
         {/* Body */}
         <div className="p-6">
@@ -265,13 +267,15 @@ function AssetDetailPanel({ asset: a, onClose, onEdit, qc }) {
             </button>
           </div>
           {/* Detail tabs */}
-          <div className="flex border-t border-white/10">
-            {[['overview','Overview'],['financial','Financial'],['compliance','Compliance'],['qr','QR Code']].map(([k,l])=>(
-              <button key={k} onClick={()=>setDetailTab(k)}
-                className={`flex-1 py-2.5 text-xs font-medium transition-colors ${detailTab===k?'bg-white/15 text-white border-b-2 border-indigo-400':'text-white/50 hover:text-white/80'}`}>
-                {l}
-              </button>
-            ))}
+          <div className="overflow-x-auto border-t border-white/10" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex min-w-max">
+              {[['overview','Overview'],['financial','Financial'],['compliance','Compliance'],['qr','QR Code']].map(([k,l])=>(
+                <button key={k} onClick={()=>setDetailTab(k)}
+                  className={`flex-1 py-2.5 text-xs font-medium transition-colors whitespace-nowrap px-4 ${detailTab===k?'bg-white/15 text-white border-b-2 border-indigo-400':'text-white/50 hover:text-white/80'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

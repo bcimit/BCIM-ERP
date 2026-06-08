@@ -319,12 +319,14 @@ export default function ProfilePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 flex-wrap">
-        <TabBtn active={tab === 'profile'}  icon={User}      label="Personal Info"     onClick={() => setTab('profile')}  />
-        <TabBtn active={tab === 'password'} icon={Key}       label="Change Password"   onClick={() => setTab('password')} />
-        <TabBtn active={tab === 'company'}  icon={Building2} label="Company Details"   onClick={() => setTab('company')}  />
-        <TabBtn active={tab === 'signature'} icon={FileText}  label="Digital Signature" onClick={() => setTab('signature')} />
-        <TabBtn active={tab === 'security'} icon={Shield}    label="Security"          onClick={() => setTab('security')} />
+      <div className="w-full overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex gap-1.5 min-w-max">
+          <TabBtn active={tab === 'profile'}  icon={User}      label="Personal Info"     onClick={() => setTab('profile')}  />
+          <TabBtn active={tab === 'password'} icon={Key}       label="Change Password"   onClick={() => setTab('password')} />
+          <TabBtn active={tab === 'company'}  icon={Building2} label="Company Details"   onClick={() => setTab('company')}  />
+          <TabBtn active={tab === 'signature'} icon={FileText}  label="Digital Signature" onClick={() => setTab('signature')} />
+          <TabBtn active={tab === 'security'} icon={Shield}    label="Security"          onClick={() => setTab('security')} />
+        </div>
       </div>
 
       {/* ── PROFILE TAB ── */}

@@ -334,7 +334,8 @@ export function SearchInput({ value, onChange, placeholder = 'Search…', classN
 // ═══════════════════════════════════════════════════════════
 export function Tabs({ tabs, active, onChange, className = '' }) {
   return (
-    <div className={clsx('flex gap-0.5 bg-slate-100/80 p-1 rounded-xl w-fit', className)}>
+    <div className="w-full overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+    <div className={clsx('flex gap-0.5 bg-slate-100/80 p-1 rounded-xl w-fit min-w-max', className)}>
       {tabs.map(t => (
         <button key={t.key} onClick={() => onChange(t.key)}
           className={clsx('px-4 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
@@ -350,6 +351,7 @@ export function Tabs({ tabs, active, onChange, className = '' }) {
           )}
         </button>
       ))}
+    </div>
     </div>
   );
 }
