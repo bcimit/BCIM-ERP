@@ -128,7 +128,7 @@ async function getFreshDownloadUrl(onedriveId) {
   if (!isConfigured()) throw new Error('OneDrive not configured');
   const token = await getAccessToken();
   return new Promise((resolve, reject) => {
-    const req = require('https').request({
+    const req = https.request({
       hostname: GRAPH,
       path: `/v1.0/users/${encodeURIComponent(USER())}/drive/items/${encodeURIComponent(onedriveId)}?select=id,name,%40microsoft.graph.downloadUrl,webUrl`,
       method: 'GET',
