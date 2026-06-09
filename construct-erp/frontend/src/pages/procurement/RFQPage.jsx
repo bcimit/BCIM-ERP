@@ -229,7 +229,7 @@ export default function RFQPage() {
           <Info label="MRS No." value={indent.serial_no_formatted || indent.mrs_number || '-'} />
           <Info label="Project" value={indent.project_name || '-'} />
           <Info label="Required By" value={indent.required_by ? dayjs(indent.required_by).format('D MMM YYYY') : '-'} />
-          <Info label="Items" value={`${indent.items?.length || 0} materials`} />
+          <Info label="Items" value={`${(indent.items || []).filter(it => it.effective_included !== false && it.md_included !== false).length} materials`} />
         </div>
       </div>
 
@@ -299,17 +299,24 @@ export default function RFQPage() {
               <h2 className="text-sm font-medium text-slate-800">MRS Materials</h2>
             </div>
             <div className="space-y-2 max-h-72 overflow-auto pr-1">
-              {(indent.items || []).map((item, index) => (
-                <div key={item.id || index} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-medium flex items-center justify-center shrink-0">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-slate-900 font-medium truncate">{item.material_name}</p>
-                    <p className="text-[11px] text-slate-400">{item.quantity} {item.unit}</p>
+              {(indent.items || [])
+                .filter(item => item.effective_included !== false && item.md_included !== false)
+                .map((item, index) => (
+                  <div key={item.id || index} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-medium flex items-center justify-center shrink-0">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-900 truncate">{item.material_name}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {item.effective_qty ?? item.md_approved_qty ?? item.quantity} {item.unit}
+                        {(item.md_approved_qty && item.md_approved_qty !== item.quantity) && (
+                          <span className="ml-1 text-amber-600 font-medium">(MD: {item.md_approved_qty})</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </section>
         </div>

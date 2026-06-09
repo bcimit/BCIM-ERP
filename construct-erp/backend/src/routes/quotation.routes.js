@@ -297,8 +297,11 @@ router.get('/vendor-rfq/:token', async (req, res) => {
     await query('UPDATE rfq_vendors SET opened_at = COALESCE(opened_at, NOW()), status = CASE WHEN status = $2 THEN $3 ELSE status END WHERE id = $1', [row.id, 'sent', 'opened']);
 
     const items = await query(
-      `SELECT id AS mrs_item_id, material_name, quantity, unit
-       FROM mrs_items WHERE mrs_id = $1 ORDER BY sort_order`,
+      `SELECT id AS mrs_item_id, material_name,
+              COALESCE(md_approved_qty, quantity) AS quantity, unit
+       FROM mrs_items
+       WHERE mrs_id = $1 AND (md_included IS NULL OR md_included = TRUE)
+       ORDER BY sort_order`,
       [row.mrs_id]
     );
     const existing = await query(
@@ -709,7 +712,10 @@ router.post('/rfqs', async (req, res) => {
     if (send_email) {
       const settings = await getRFQSettings(req.user.company_id);
       const itemsRes = await query(
-        `SELECT material_name, quantity, unit FROM mrs_items WHERE mrs_id = $1 ORDER BY sort_order`,
+        `SELECT material_name, COALESCE(md_approved_qty, quantity) AS quantity, unit
+         FROM mrs_items
+         WHERE mrs_id = $1 AND (md_included IS NULL OR md_included = TRUE)
+         ORDER BY sort_order`,
         [mrs_id]
       );
       const ccEmails = parseEmails(settings.cc_emails);
@@ -825,9 +831,13 @@ router.get('/comparison/:mrsId', async (req, res) => {
       return res.status(403).json({ error: 'Access denied for this project.' });
     }
 
-    // 2. Get MRS items
+    // 2. Get MRS items — use MD-approved qty/inclusion if set
     const itemsR = await query(
-      `SELECT * FROM mrs_items WHERE mrs_id = $1 ORDER BY sort_order`,
+      `SELECT *,
+              COALESCE(md_approved_qty, quantity) AS effective_qty
+       FROM mrs_items
+       WHERE mrs_id = $1 AND (md_included IS NULL OR md_included = TRUE)
+       ORDER BY sort_order`,
       [mrsId]
     );
     const items = itemsR.rows;
@@ -856,7 +866,7 @@ router.get('/comparison/:mrsId', async (req, res) => {
       matrix.push(q);
     }
 
-    const qtyByItem = new Map(items.map(it => [it.id, parseFloat(it.quantity || 0)]));
+    const qtyByItem = new Map(items.map(it => [it.id, parseFloat(it.effective_qty ?? it.quantity ?? 0)]));
     const vendorSummary = matrix.map(q => {
       let basic_total = 0;
       let discount_total = 0;
