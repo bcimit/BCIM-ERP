@@ -20,30 +20,29 @@ async function tableExists(tableName) {
 async function ensureAssetWorkflowTables() {
   if (assetSchemaReady) return;
 
-  await query(`
-    ALTER TABLE assets
-      ADD COLUMN IF NOT EXISTS po_number TEXT,
-      ADD COLUMN IF NOT EXISTS invoice_number TEXT,
-      ADD COLUMN IF NOT EXISTS department TEXT
-  `);
-
-  await query(`
-    ALTER TABLE assets
-    DROP CONSTRAINT IF EXISTS assets_asset_type_check
-  `);
-
-  await query(`
-    ALTER TABLE assets
-    ADD CONSTRAINT assets_asset_type_check CHECK (asset_type IN (
-      'heavy_machinery','vehicle','tool','equipment','it_asset',
-      'office_equipment','furniture','appliance','electrical',
-      'security_equipment','housekeeping_equipment','other_admin',
-      'Excavator','Crane','Concrete Mixer','Generator','Compactor',
-      'Tipper Truck','JCB','Water Tanker','Scaffolding Set',
-      'Bar Bending Machine','Concrete Pump','Tower Crane',
-      'Survey Equipment','Power Tools','Other'
-    )) NOT VALID
-  `);
+  // Each DDL wrapped individually — a single failure must NOT block the main query
+  const ddl = [
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS po_number TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS invoice_number TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS department TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS category_id UUID`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS sub_category TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS photo_url TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS fitness_expiry DATE`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS pollution_expiry DATE`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS road_tax_expiry DATE`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS disposal_type TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS disposal_approved_by UUID`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS disposal_approved_at TIMESTAMPTZ`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS assigned_employee TEXT`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS assigned_date DATE`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS expected_return_date DATE`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS condition_rating SMALLINT`,
+    `ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_asset_type_check`,
+  ];
+  for (const sql of ddl) {
+    try { await query(sql); } catch (_) { /* ignore — column/constraint may already exist */ }
+  }
 
   await query(`
     CREATE TABLE IF NOT EXISTS asset_movements (

@@ -121,7 +121,8 @@ function AssetFormModal({ editAsset, projects, categories, onClose }) {
           {tab==='basic' && (
             <div className="grid grid-cols-2 gap-4">
               <div><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Asset Tag / Code *</label>
-                <input value={form.asset_code} onChange={e=>set('asset_code',e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" placeholder="EQ-001" /></div>
+                <input value={form.asset_code} onChange={e=>set('asset_code',e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none" placeholder="e.g. EQ-GEN-001, TL-JCB-001" />
+                {!isEdit && <p className="text-[11px] text-slate-400 mt-1">Format: <span className="font-mono">TYPE-SEQUENCE</span> e.g. EQ-AC-001, TL-JCB-002, IT-LAP-005</p>}</div>
               <div className="col-span-1"><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Asset Name *</label>
                 <input value={form.asset_name} onChange={e=>set('asset_name',e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 outline-none" /></div>
               <div><label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Asset Type</label>
@@ -399,11 +400,12 @@ export default function AssetPage() {
   const [selectedIds, setIds]     = useState(new Set());
   const importRef = useRef();
 
-  const { data: assets = [], isLoading } = useQuery({
+  const { data: assets = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['assets-all'],
     queryFn: () => assetAPI.list().then(r=>r.data?.data||[]),
+    retry: 2,
   });
-  const { data: projects = [] } = useQuery({ queryKey:['projects'], queryFn:()=> import('../../api/client').then(m=>m.projectAPI.list()).then(r=>r.data?.data??[]) });
+  const { data: projects = [] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });
   const { data: categories = [] } = useQuery({ queryKey:['asset-categories'], queryFn:()=>assetMgmtAPI.listCategories().then(r=>r.data?.data||[]) });
 
   const deleteMut = useMutation({
@@ -467,10 +469,29 @@ export default function AssetPage() {
             <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={async e=>{
               const file=e.target.files?.[0]; if(!file) return;
               const text=await file.text();
-              const lines=text.trim().split('\n'); const headers=lines[0].split(',').map(h=>h.replace(/"/g,'').trim());
-              const rows=lines.slice(1).map(l=>{ const vals=l.split(',').map(v=>v.replace(/"/g,'').trim()); const o={}; headers.forEach((h,i)=>o[h]=vals[i]||''); return o; }).filter(r=>r.asset_code&&r.asset_name);
-              if(!rows.length){ toast.error('No valid rows'); return; }
-              try { await assetAPI.bulkImport(rows); toast.success(`Imported ${rows.length} assets`); qc.invalidateQueries({queryKey:['assets-all']}); } catch(err){ toast.error(err?.response?.data?.error||'Import failed'); }
+              // Proper CSV parser — handles quoted fields with commas inside
+              const parseCSVLine=(line)=>{
+                const result=[]; let cur=''; let inQ=false;
+                for(let i=0;i<line.length;i++){
+                  if(line[i]==='"'){ inQ=!inQ; }
+                  else if(line[i]===','&&!inQ){ result.push(cur.trim()); cur=''; }
+                  else { cur+=line[i]; }
+                }
+                result.push(cur.trim());
+                return result;
+              };
+              const lines=text.trim().split(/\r?\n/);
+              const headers=parseCSVLine(lines[0]).map(h=>h.replace(/^"|"$/g,'').trim().toLowerCase().replace(/\s+/g,'_'));
+              const rows=lines.slice(1).filter(l=>l.trim()).map(l=>{
+                const vals=parseCSVLine(l).map(v=>v.replace(/^"|"$/g,'').trim());
+                const o={}; headers.forEach((h,i)=>o[h]=vals[i]||''); return o;
+              }).filter(r=>r.asset_code&&r.asset_name&&r.asset_type);
+              if(!rows.length){ toast.error('No valid rows — ensure columns: asset_code, asset_name, asset_type'); return; }
+              try {
+                const res=await assetAPI.bulkImport(rows);
+                toast.success(res.data?.message||`Imported ${rows.length} assets`);
+                qc.invalidateQueries({queryKey:['assets-all']});
+              } catch(err){ toast.error(err?.response?.data?.error||'Import failed'); }
               e.target.value='';
             }} />
             <button onClick={()=>importRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 text-sm font-medium">
@@ -520,6 +541,17 @@ export default function AssetPage() {
               <span className="text-sm text-slate-400">Loading assets…</span>
             </div>
           </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <AlertCircle className="w-10 h-10 text-red-400" />
+              <p className="text-slate-600 font-medium">Could not load assets</p>
+              <p className="text-xs text-slate-400 mb-2">The server returned an error. Please try again.</p>
+              <button onClick={()=>refetch()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
+                <RefreshCw className="w-3.5 h-3.5" /> Retry
+              </button>
+            </div>
+          </div>
         ) : (
           <table className="w-full" style={{borderCollapse:'separate', borderSpacing:0}}>
             <thead className="sticky top-0 z-10">
@@ -527,14 +559,14 @@ export default function AssetPage() {
                 <th className="w-10 px-4 py-3 border-b border-slate-200">
                   <input type="checkbox" checked={allSelected} onChange={()=>{ if(allSelected) setIds(new Set()); else setIds(new Set(filtered.map(a=>a.id))); }} className="rounded" />
                 </th>
-                {['Asset Tag','Asset Name / Model','Category','Location','Status','Purchase Value','Actions'].map(h=>(
+                {['Asset Tag','Asset Name / Model','Category','Department','Location','Status','Purchase Value','Actions'].map(h=>(
                   <th key={h} className="px-4 py-3 text-left border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-white">
               {filtered.length===0 ? (
-                <tr><td colSpan={8} className="py-20 text-center">
+                <tr><td colSpan={9} className="py-20 text-center">
                   <Package className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                   <p className="text-slate-400 font-medium">No assets found</p>
                   <p className="text-xs text-slate-300 mt-1">Try adjusting your filters or search terms</p>
@@ -559,6 +591,9 @@ export default function AssetPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{a.category_name||a.asset_type}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-xs text-slate-500">{a.department||'—'}</span>
                   </td>
                   <td className="px-4 py-3">
                     {a.current_project_name ? (
