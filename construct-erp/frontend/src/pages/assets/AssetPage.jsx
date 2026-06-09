@@ -11,6 +11,7 @@ import {
 import { assetAPI, assetMgmtAPI, projectAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
+import bcimLogo from '../../assets/bcim-logo.png';
 
 // ─── QR Print Preview ─────────────────────────────────────────────
 function QRPrintPreview({ assets, onClose }) {
@@ -62,37 +63,48 @@ function QRPrintPreview({ assets, onClose }) {
         <div id="qr-print-zone" className="p-6">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {assets.map(a => (
-              <div key={a.id} className="qr-label border-2 border-slate-300 rounded-xl p-4 flex flex-col items-center gap-1.5 text-center bg-white">
+              <div key={a.id} className="qr-label bg-white flex flex-col items-center text-center"
+                style={{border:'2px solid #334155', borderRadius:'10px', padding:'12px 10px', gap:'6px'}}>
+
+                {/* ── Company header ── */}
+                <div style={{width:'100%', borderBottom:'1.5px solid #334155', paddingBottom:'8px', marginBottom:'2px',
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:'4px'}}>
+                  <img src={bcimLogo} alt="BCIM" style={{height:'32px', width:'auto', objectFit:'contain'}} />
+                  <div style={{fontSize:'9px', fontWeight:700, color:'#1e293b', letterSpacing:'0.8px', textTransform:'uppercase', lineHeight:'1.2'}}>
+                    BCIM Engineering Pvt. Ltd.
+                  </div>
+                </div>
+
+                {/* ── QR Code ── */}
                 <QRCodeSVG
                   value={`BCIM|${a.asset_code}|${a.asset_name}|${a.serial_number||'N/A'}`}
-                  size={120} level="H"
+                  size={110} level="H"
                   style={{display:'block'}}
                 />
-                {/* Asset code — prominent */}
+
+                {/* ── Asset code ── */}
                 <div style={{fontFamily:'monospace', fontWeight:800, fontSize:'13px', color:'#1e1b4b', letterSpacing:'0.5px'}}>
                   {a.asset_code}
                 </div>
-                {/* Asset name */}
-                <div style={{fontSize:'11px', fontWeight:600, color:'#1e293b', lineHeight:'1.3', maxWidth:'140px'}}>
+
+                {/* ── Asset name ── */}
+                <div style={{fontSize:'11px', fontWeight:600, color:'#1e293b', lineHeight:'1.3', maxWidth:'150px'}}>
                   {a.asset_name}
                 </div>
-                {/* Brand · Model */}
+
+                {/* ── Brand · Model ── */}
                 {a.brand && (
                   <div style={{fontSize:'10px', color:'#475569', fontWeight:500}}>
                     {a.brand}{a.model ? ` · ${a.model}` : ''}
                   </div>
                 )}
-                {/* Serial */}
+
+                {/* ── Serial ── */}
                 {a.serial_number && (
                   <div style={{fontSize:'10px', color:'#334155', fontFamily:'monospace', fontWeight:600}}>
                     S/N: {a.serial_number}
                   </div>
                 )}
-                {/* Footer rule */}
-                <div style={{width:'100%', borderTop:'1px solid #cbd5e1', marginTop:'4px', paddingTop:'4px',
-                  fontSize:'9px', color:'#334155', fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase'}}>
-                  BCIM Engineering
-                </div>
               </div>
             ))}
           </div>
