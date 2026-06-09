@@ -181,6 +181,10 @@ app.use(morgan('combined', {
   stream: { write: msg => logger.info(msg.trim()) }
 }));
 
+// Trust Railway/Nginx reverse proxy — required for express-rate-limit to
+// correctly read the client IP from X-Forwarded-For
+app.set('trust proxy', 1);
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
