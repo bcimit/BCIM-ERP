@@ -1123,6 +1123,7 @@ export const tqsBillsAPI = {
   linkOneDrive: (id, data) => api.post(`/tqs/bills/${id}/files/link`, data),
   syncFileToOneDrive: (id, fid) => api.post(`/tqs/bills/${id}/files/${fid}/sync-onedrive`),
   getFilePreviewUrl: (id, fid) => api.get(`/tqs/bills/${id}/files/${fid}/preview-url`),
+  serveFile: (id, fid) => api.get(`/tqs/bills/${id}/files/${fid}/serve`, { responseType: 'blob' }),
   deleteFile:   (id, fid)  => api.delete(`/tqs/bills/${id}/files/${fid}`),
   delete:       (id)       => api.delete(`/tqs/bills/${id}`),
   repairCertifiedNet: ()  => api.post('/tqs/bills/repair-certified-net'),

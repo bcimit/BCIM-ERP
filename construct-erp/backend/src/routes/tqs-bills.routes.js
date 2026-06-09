@@ -3466,6 +3466,61 @@ router.post('/:id/files/:fid/sync-onedrive', async (req, res) => {
   }
 });
 
+// ── GET /tqs/bills/:id/files/:fid/serve ──────────────────────────────────
+// Streams the file to the browser. Local files served directly; OneDrive
+// files proxied through the backend — no Microsoft login required.
+router.get('/:id/files/:fid/serve', async (req, res) => {
+  try {
+    await getAccessibleBill(req, req.params.id);
+    const r = await query(
+      `SELECT * FROM tqs_bill_files WHERE id=$1 AND bill_id=$2`,
+      [req.params.fid, req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'File not found' });
+    const f = r.rows[0];
+
+    const contentType = (f.file_type && f.file_type !== 'link')
+      ? f.file_type : 'application/octet-stream';
+    const safeFileName = encodeURIComponent(f.file_name || 'file');
+
+    // 1. Local file still on disk — stream directly
+    if (f.local_url) {
+      const fullPath = path.join(__dirname, '../../', f.local_url);
+      if (fs.existsSync(fullPath)) {
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${safeFileName}`);
+        return fs.createReadStream(fullPath).pipe(res);
+      }
+    }
+
+    // 2. File is on OneDrive — fetch a fresh pre-signed URL and proxy it
+    if (f.onedrive_id) {
+      const downloadUrl = await getFreshDownloadUrl(f.onedrive_id);
+      const https = require('https');
+      const makeRequest = (url) => new Promise((resolve, reject) => {
+        https.get(url, (odRes) => {
+          // Follow up to one redirect (Graph CDN sometimes 302s)
+          if (odRes.statusCode >= 300 && odRes.statusCode < 400 && odRes.headers.location) {
+            return makeRequest(odRes.headers.location).then(resolve).catch(reject);
+          }
+          resolve(odRes);
+        }).on('error', reject);
+      });
+      const odRes = await makeRequest(downloadUrl);
+      res.setHeader('Content-Type', odRes.headers['content-type'] || contentType);
+      res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${safeFileName}`);
+      if (odRes.headers['content-length']) {
+        res.setHeader('Content-Length', odRes.headers['content-length']);
+      }
+      return odRes.pipe(res);
+    }
+
+    return res.status(404).json({ error: 'File is no longer available in local storage or OneDrive' });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // ── GET /tqs/bills/:id/files/:fid/preview-url ─────────────────────────────
 // Returns a usable preview/download URL for the file.
 // Priority: local file (if still on disk) → fresh OneDrive download URL → webUrl

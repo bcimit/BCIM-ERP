@@ -10,7 +10,7 @@ import {
   ArrowLeft, FileText, Warehouse, CreditCard,
   Upload, Trash2, ExternalLink, Clock, CheckCircle2, AlertCircle,
   IndianRupee, X, Download, Printer, ListOrdered, Award, PenLine, RefreshCw,
-  Inbox,
+  Inbox, Eye,
   Cloud, CloudOff, ChevronRight
 } from 'lucide-react';
 
@@ -1084,52 +1084,29 @@ function FilesPanel({ bill, billId }) {
               </div>
 
               <div className="flex items-center justify-between mt-0.5 pt-1 border-t border-slate-200/60">
-                <div className="flex items-center gap-2">
-                  {f.onedrive_id || f.onedrive_web_url ? (
-                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-                      <Cloud className="w-3 h-3" /> OneDrive
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => syncMutation.mutate(f.id)}
-                      disabled={syncMutation.isPending}
-                      className="flex items-center gap-1 text-[10px] text-slate-900 font-medium transition hover:text-blue-600 disabled:opacity-50"
-                    >
-                      {syncMutation.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CloudOff className="w-3 h-3" />}
-                      {syncMutation.isPending ? 'Syncing…' : 'Local only'}
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                  {f.onedrive_id ? <><Cloud className="w-3 h-3 text-emerald-500" /> OneDrive</> : <><CloudOff className="w-3 h-3" /> Local</>}
+                </span>
+                <div className="flex items-center gap-1">
                   {f.file_type !== 'link' && (
                     <button
-                      title="Preview / Download"
+                      title="Preview"
                       onClick={async () => {
                         try {
-                          // Ask backend for the best available URL (local → OneDrive fresh link → webUrl)
-                          const res = await tqsBillsAPI.getFilePreviewUrl(billId, f.id);
-                          const { url, type } = res.data;
-                          if (type === 'local') {
-                            // Local file: fetch with auth header, open as blob
-                            const blob = await api.get(url, { responseType: 'blob' });
-                            const blobUrl = URL.createObjectURL(blob.data);
-                            window.open(blobUrl, '_blank');
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
-                          } else {
-                            // OneDrive pre-signed URL or webUrl: open directly (no auth needed)
-                            window.open(url, '_blank');
-                          }
+                          const res = await tqsBillsAPI.serveFile(billId, f.id);
+                          const blobUrl = URL.createObjectURL(res.data);
+                          window.open(blobUrl, '_blank');
+                          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
                         } catch {
-                          toast.error('Could not open file — it may have been removed from storage');
+                          toast.error('Could not open file');
                         }
                       }}
-                      className="text-slate-900 font-medium hover:text-blue-600 p-1"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      <Eye className="w-3 h-3" /> Preview
                     </button>
                   )}
-                  <button onClick={() => deleteMutation.mutate(f.id)} className="text-slate-900 font-medium hover:text-red-500 p-1">
+                  <button onClick={() => deleteMutation.mutate(f.id)} className="text-slate-400 hover:text-red-500 p-1">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
