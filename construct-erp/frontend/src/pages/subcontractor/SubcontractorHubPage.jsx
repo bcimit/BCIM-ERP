@@ -572,77 +572,60 @@ function WorkOrdersTab({ projectId, projects, vendors }) {
 // ─── TAB 3: Measurement Book ──────────────────────────────────────────────────
 function MeasurementsTab({ projectId, projects, vendors }) {
   const qc = useQueryClient();
-  const [search, setSearch] = useState('');
+  const [search, setSearch]       = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ work_order_id: '', item_description: '', unit: '', measured_qty: '', rate: '', measurement_date: '', remarks: '', photo_urls: [], geo_lat: '', geo_lng: '', geo_address: '' });
-  const [err, setErr] = useState({});
-  const [woFilter, setWoFilter] = useState('');
-  const [capturingGeo, setCapturingGeo] = useState(false);
-
-  function captureLocation() {
-    if (!navigator.geolocation) return alert('Geolocation not supported by this browser.');
-    setCapturingGeo(true);
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setForm(f => ({ ...f, geo_lat: coords.latitude.toFixed(7), geo_lng: coords.longitude.toFixed(7) }));
-        setCapturingGeo(false);
-      },
-      (err) => { alert(`Could not get location: ${err.message}`); setCapturingGeo(false); },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  }
-
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  async function handlePhotoUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingPhoto(true);
-    try {
-      const res = await uploadAPI.uploadSingle(file);
-      const url = res.data?.url;
-      if (url) setForm(f => ({ ...f, photo_urls: [...(f.photo_urls || []), url] }));
-    } catch (err) {
-      alert('Upload failed: ' + (err?.response?.data?.error || err.message));
-    } finally {
-      setUploadingPhoto(false);
-      e.target.value = '';
-    }
-  }
+  const [woFilter, setWoFilter]   = useState('');
+  const [woDetail, setWoDetail]   = useState(null); // items of selected WO
+  const EMPTY_MB = { wo_id: '', wo_item_id: '', mb_date: new Date().toISOString().slice(0,10), tower_block: '', floor_number: '', location_detail: '', drawing_ref: '', description: '', unit: '', executed_qty: '', remarks: '' };
+  const [form, setForm] = useState(EMPTY_MB);
+  const [err,  setErr]  = useState({});
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const { data: woData } = useQuery({
-    queryKey: ['sub-wo-list', projectId],
-    queryFn: () => subcontractorAPI.listWorkOrders({ project_id: projectId || undefined }).then(r => r.data),
+    queryKey: ['sc-wo-list-mb', projectId],
+    queryFn: () => scAPI.listWO({ project_id: projectId || undefined }).then(r => r.data?.data ?? []),
   });
-  const workOrders = (woData?.data || woData?.work_orders || (Array.isArray(woData) ? woData : []))
+  const workOrders = (Array.isArray(woData) ? woData : [])
     .filter(r => ['active','approved','draft'].includes(r.status?.toLowerCase()));
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['sub-mb', projectId, woFilter],
-    queryFn: () => subcontractorAPI.getMeasurements({
-      project_id: projectId || undefined,
-      wo_id: woFilter || undefined,
-    }).then(r => r.data),
+  // When WO is selected in form, load its items
+  const loadWOItems = async (woId) => {
+    set('wo_id', woId); set('wo_item_id', ''); setWoDetail(null);
+    if (!woId) return;
+    try { const r = await scAPI.getWO(woId); setWoDetail(r.data?.data); }
+    catch { toast.error('Could not load WO items'); }
+  };
+
+  const { data: mbData, isLoading } = useQuery({
+    queryKey: ['sc-mb', projectId, woFilter],
+    queryFn: () => scAPI.listMB({ project_id: projectId || undefined, wo_id: woFilter || undefined }).then(r => r.data?.data ?? []),
   });
+  const allRows = Array.isArray(mbData) ? mbData : [];
 
   const createMut = useMutation({
-    mutationFn: (d) => subcontractorAPI.recordMeasurement(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sub-mb'] }); setShowCreate(false); setForm({ work_order_id: '', item_description: '', unit: '', measured_qty: '', rate: '', measurement_date: '', remarks: '', photo_urls: [], geo_lat: '', geo_lng: '', geo_address: '' }); },
+    mutationFn: (d) => scAPI.createMB(d),
+    onSuccess: () => {
+      toast.success('MB entry recorded');
+      qc.invalidateQueries({ queryKey: ['sc-mb'] });
+      setShowCreate(false); setForm(EMPTY_MB); setWoDetail(null);
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
   });
 
   const rows = useMemo(() => {
-    const list = data?.data || data?.measurements || (Array.isArray(data) ? data : []);
-    if (!search) return list;
+    if (!search) return allRows;
     const q = search.toLowerCase();
-    return list.filter(r => r.item_description?.toLowerCase().includes(q) || r.vendor_name?.toLowerCase().includes(q) || r.wo_number?.toLowerCase().includes(q));
-  }, [data, search]);
+    return allRows.filter(r => r.description?.toLowerCase().includes(q) || r.sc_name?.toLowerCase().includes(q) || r.wo_number?.toLowerCase().includes(q));
+  }, [allRows, search]);
 
-  function validateCreate() {
+  function handleCreate() {
     const e = {};
-    if (!form.work_order_id) e.work_order_id = 'Required';
-    if (!form.item_description) e.item_description = 'Required';
-    if (!form.measured_qty || isNaN(form.measured_qty)) e.measured_qty = 'Enter valid qty';
+    if (!form.wo_id)       e.wo_id       = 'Required';
+    if (!form.wo_item_id)  e.wo_item_id  = 'Select a BOQ item';
+    if (!form.executed_qty || isNaN(form.executed_qty)) e.executed_qty = 'Enter valid qty';
     setErr(e);
-    return Object.keys(e).length === 0;
+    if (Object.keys(e).length) return;
+    createMut.mutate({ ...form, executed_qty: parseFloat(form.executed_qty) });
   }
 
   return (
@@ -665,19 +648,19 @@ function MeasurementsTab({ projectId, projects, vendors }) {
         {isLoading ? (
           <div className="py-16 flex justify-center"><RefreshCw className="w-6 h-6 text-slate-300 animate-spin" /></div>
         ) : rows.length === 0 ? (
-          <div className="py-16 text-center text-slate-900 font-medium text-sm">No measurements recorded</div>
+          <div className="py-16 text-center text-slate-400 text-sm">No MB entries recorded</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-xs font-medium text-slate-900 font-medium uppercase tracking-wide">
-                  <th className="px-5 py-3 text-left">WO No.</th>
+                <tr className="bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  <th className="px-5 py-3 text-left">MB No.</th>
+                  <th className="px-4 py-3 text-left">WO No.</th>
                   <th className="px-4 py-3 text-left">Subcontractor</th>
-                  <th className="px-4 py-3 text-left">Item Description</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
+                  <th className="px-4 py-3 text-left">Description</th>
+                  <th className="px-4 py-3 text-right">Exec Qty</th>
                   <th className="px-4 py-3 text-left">Unit</th>
-                  <th className="px-4 py-3 text-right">Rate (₹)</th>
-                  <th className="px-4 py-3 text-right">Amount (₹)</th>
+                  <th className="px-4 py-3 text-left">Location</th>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-center">Status</th>
                 </tr>
@@ -685,15 +668,15 @@ function MeasurementsTab({ projectId, projects, vendors }) {
               <tbody className="divide-y divide-slate-50">
                 {rows.map((m) => (
                   <tr key={m.id} className="hover:bg-slate-50">
-                    <td className="px-5 py-3 font-mono text-xs text-slate-600">{m.wo_number}</td>
-                    <td className="px-4 py-3 text-slate-700">{m.vendor_name}</td>
-                    <td className="px-4 py-3 text-slate-900 font-medium max-w-xs truncate">{m.item_description}</td>
-                    <td className="px-4 py-3 text-right text-slate-700">{Number(m.measured_qty).toLocaleString()}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-600">{m.mb_number || '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{m.wo_number}</td>
+                    <td className="px-4 py-3 text-slate-700">{m.sc_name}</td>
+                    <td className="px-4 py-3 text-slate-900 font-medium max-w-xs truncate">{m.description || m.item_description}</td>
+                    <td className="px-4 py-3 text-right text-slate-700 font-mono">{Number(m.executed_qty || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 text-slate-500">{m.unit || '—'}</td>
-                    <td className="px-4 py-3 text-right text-slate-600">{m.rate ? fmt(m.rate) : '—'}</td>
-                    <td className="px-4 py-3 text-right font-medium text-blue-700">{m.amount ? fmt(m.amount) : (m.rate && m.measured_qty ? fmt(parseFloat(m.rate) * parseFloat(m.measured_qty)) : '—')}</td>
-                    <td className="px-4 py-3 text-slate-900 font-medium text-xs">{m.measurement_date ? new Date(m.measurement_date).toLocaleDateString('en-IN') : '—'}</td>
-                    <td className="px-4 py-3 text-center"><StatusBadge status={m.approval_status || m.status || 'pending'} /></td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{[m.tower_block, m.floor_number, m.location_detail].filter(Boolean).join(' / ') || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{m.mb_date ? new Date(m.mb_date).toLocaleDateString('en-IN') : '—'}</td>
+                    <td className="px-4 py-3 text-center"><StatusBadge status={m.status || 'draft'} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -702,91 +685,76 @@ function MeasurementsTab({ projectId, projects, vendors }) {
         )}
       </div>
 
-      {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Record Measurement" width="max-w-xl">
+      {/* Create MB Modal */}
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setForm(EMPTY_MB); setWoDetail(null); }} title="New Measurement Book Entry" width="max-w-2xl">
         <div className="grid grid-cols-2 gap-4">
+          {/* WO selection */}
           <div className="col-span-2">
-            <FormField label="Work Order *" error={err.work_order_id}>
-              <select value={form.work_order_id} onChange={e => setForm(f => ({ ...f, work_order_id: e.target.value }))} className={inputCls}>
+            <FormField label="Work Order *" error={err.wo_id}>
+              <select value={form.wo_id} onChange={e => loadWOItems(e.target.value)} className={inputCls}>
                 <option value="">Select Work Order…</option>
-                {workOrders.filter(wo => ['active', 'draft'].includes(wo.status)).map(wo => (
-                  <option key={wo.id} value={wo.id}>{wo.wo_number} — {wo.vendor_name} ({wo.project_name})</option>
+                {workOrders.map(wo => (
+                  <option key={wo.id} value={wo.id}>{wo.wo_number} — {wo.sc_name} ({wo.project_name})</option>
                 ))}
               </select>
             </FormField>
           </div>
+          {/* BOQ item selection */}
           <div className="col-span-2">
-            <FormField label="Item Description *" error={err.item_description}>
-              <input value={form.item_description} onChange={e => setForm(f => ({ ...f, item_description: e.target.value }))} className={inputCls} placeholder="e.g. PCC 1:4:8 – Foundation" />
+            <FormField label="BOQ Item *" error={err.wo_item_id}>
+              <select value={form.wo_item_id} onChange={e => {
+                const item = (woDetail?.items || []).find(i => i.id === e.target.value);
+                set('wo_item_id', e.target.value);
+                if (item) { set('description', item.description || ''); set('unit', item.unit || ''); }
+              }} className={inputCls} disabled={!form.wo_id}>
+                <option value="">{form.wo_id ? 'Select BOQ item…' : 'Select WO first'}</option>
+                {(woDetail?.items || []).map(it => (
+                  <option key={it.id} value={it.id}>
+                    {it.description} — {it.unit} (WO: {Number(it.qty||0).toLocaleString()}, Billed: {Number(it.billed_qty||0).toLocaleString()})
+                  </option>
+                ))}
+              </select>
             </FormField>
           </div>
-          <FormField label="Quantity *" error={err.measured_qty}>
-            <input type="number" value={form.measured_qty} onChange={e => setForm(f => ({ ...f, measured_qty: e.target.value }))} className={inputCls} placeholder="0" />
+          {/* Description auto-filled from item, editable */}
+          <div className="col-span-2">
+            <FormField label="Description">
+              <input value={form.description} onChange={e => set('description', e.target.value)} className={inputCls} placeholder="Work description…" />
+            </FormField>
+          </div>
+          <FormField label="Executed Qty *" error={err.executed_qty}>
+            <input type="number" min="0" step="0.01" value={form.executed_qty} onChange={e => set('executed_qty', e.target.value)} className={inputCls} placeholder="0.00" />
           </FormField>
           <FormField label="Unit">
-            <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} className={inputCls}>
-              <option value="">Select…</option>
-              {['Sqm', 'Sqft', 'Cum', 'Cft', 'Rmt', 'Rft', 'Nos', 'MT', 'Kg', 'Liter', 'LS'].map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
+            <input value={form.unit} onChange={e => set('unit', e.target.value)} className={inputCls} placeholder="Sqm / Cum / Nos…" />
           </FormField>
-          <FormField label="Rate per Unit (₹)">
-            <input type="number" value={form.rate} onChange={e => setForm(f => ({ ...f, rate: e.target.value }))} className={inputCls} placeholder="0" />
+          <FormField label="MB Date">
+            <input type="date" value={form.mb_date} onChange={e => set('mb_date', e.target.value)} className={inputCls} />
           </FormField>
-          <FormField label="Measurement Date">
-            <input type="date" value={form.measurement_date} onChange={e => setForm(f => ({ ...f, measurement_date: e.target.value }))} className={inputCls} />
+          <FormField label="Drawing Ref">
+            <input value={form.drawing_ref} onChange={e => set('drawing_ref', e.target.value)} className={inputCls} placeholder="DWG-001" />
           </FormField>
-
-          {/* Geo + Photos */}
-          <div className="col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Site Evidence (Optional)</span>
-              <button type="button" onClick={captureLocation} disabled={capturingGeo}
-                className="text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50">
-                📍 {capturingGeo ? 'Capturing…' : (form.geo_lat ? 'Re-capture GPS' : 'Capture GPS')}
-              </button>
-            </div>
-            {form.geo_lat && (
-              <p className="text-[11px] text-emerald-700 mb-2">
-                ✓ Location: {form.geo_lat}, {form.geo_lng}
-              </p>
-            )}
-            <input value={form.geo_address} onChange={e => setForm(f => ({ ...f, geo_address: e.target.value }))}
-              className={inputCls} placeholder="Site location/address (optional)" />
-            <div className="mt-2 flex flex-wrap gap-2 items-center">
-              {(form.photo_urls || []).map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noreferrer"
-                  className="relative block w-14 h-14 rounded-md overflow-hidden border border-slate-200 bg-white">
-                  <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                  <button type="button"
-                    onClick={(e) => { e.preventDefault(); setForm(f => ({ ...f, photo_urls: f.photo_urls.filter((_, j) => j !== i) })); }}
-                    className="absolute top-0 right-0 bg-red-500 text-white text-[10px] leading-none w-4 h-4 flex items-center justify-center rounded-bl">×</button>
-                </a>
-              ))}
-              <label className="cursor-pointer text-xs font-semibold text-blue-600 hover:underline px-2 py-1 border border-dashed border-blue-300 rounded-md">
-                {uploadingPhoto ? '⏳ Uploading…' : '📷 Add Photo'}
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
-              </label>
-            </div>
+          <FormField label="Tower / Block">
+            <input value={form.tower_block} onChange={e => set('tower_block', e.target.value)} className={inputCls} placeholder="Tower A / Block 1" />
+          </FormField>
+          <FormField label="Floor / Level">
+            <input value={form.floor_number} onChange={e => set('floor_number', e.target.value)} className={inputCls} placeholder="Ground / 3rd Floor" />
+          </FormField>
+          <div className="col-span-2">
+            <FormField label="Location Detail">
+              <input value={form.location_detail} onChange={e => set('location_detail', e.target.value)} className={inputCls} placeholder="Grid A1-A4, Col C3…" />
+            </FormField>
           </div>
-
           <div className="col-span-2">
             <FormField label="Remarks">
-              <textarea rows={2} value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} className={inputCls} placeholder="Optional notes…" />
+              <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} className={inputCls} placeholder="Optional site notes…" />
             </FormField>
           </div>
         </div>
-        {form.measured_qty && form.rate && (
-          <div className="mt-3 p-3 bg-blue-50 rounded-xl text-sm text-blue-700 font-semibold">
-            Calculated Amount: {fmt(parseFloat(form.measured_qty || 0) * parseFloat(form.rate || 0))}
-          </div>
-        )}
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100 rounded-xl">Cancel</button>
-          <button
-            disabled={createMut.isPending}
-            onClick={() => { if (validateCreate()) createMut.mutate({ ...form, measured_qty: parseFloat(form.measured_qty), rate: form.rate ? parseFloat(form.rate) : undefined }); }}
-            className="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-60"
-          >
+          <button onClick={() => { setShowCreate(false); setForm(EMPTY_MB); setWoDetail(null); }} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button disabled={createMut.isPending} onClick={handleCreate}
+            className="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-60">
             {createMut.isPending ? 'Saving…' : 'Record Measurement'}
           </button>
         </div>
@@ -1443,46 +1411,47 @@ function AdvancesTab({ projectId, projects, vendors }) {
   const [err, setErr] = useState({});
 
   const { data: woData } = useQuery({
-    queryKey: ['sub-wo-list-adv', projectId],
-    queryFn: () => subcontractorAPI.listWorkOrders({ project_id: projectId || undefined }).then(r => r.data),
+    queryKey: ['sc-wo-list-adv', projectId],
+    queryFn: () => scAPI.listWO({ project_id: projectId || undefined }).then(r => r.data?.data ?? []),
     staleTime: 0, gcTime: 0, refetchOnMount: 'always',
   });
-  const workOrders = (woData?.data || woData?.work_orders || (Array.isArray(woData) ? woData : []))
+  const workOrders = (Array.isArray(woData) ? woData : [])
     .filter(r => ['active', 'approved', 'draft'].includes(r.status?.toLowerCase()));
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['sc-advances', projectId],
-    queryFn: () => subcontractorAPI.listAdvances({ project_id: projectId || undefined }).then(r => r.data),
+    queryFn: () => scAPI.listAdvances({ project_id: projectId || undefined }).then(r => r.data?.data ?? []),
     staleTime: 0, gcTime: 0, refetchOnMount: 'always',
   });
-  const advances = data?.data || [];
+  const advances = Array.isArray(data) ? data : [];
 
-  const totalGranted   = advances.reduce((s, a) => s + parseFloat(a.amount || 0), 0);
-  const totalRecovered = advances.reduce((s, a) => s + parseFloat(a.recovered_amount || 0), 0);
-  const totalOutstanding = totalGranted - totalRecovered;
+  const totalGranted     = advances.reduce((s, a) => s + parseFloat(a.amount || 0), 0);
+  const totalRecovered   = advances.reduce((s, a) => s + parseFloat(a.recovered_amount || 0), 0);
+  const totalOutstanding = advances.reduce((s, a) => s + parseFloat(a.balance_amount || 0), 0);
 
   const createMut = useMutation({
-    mutationFn: (d) => subcontractorAPI.createAdvance(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sc-advances'] }); setShowCreate(false); setForm(EMPTY); },
-  });
-
-  const recoverMut = useMutation({
-    mutationFn: ({ id, ...d }) => subcontractorAPI.recoverAdvance(id, d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sc-advances'] }); setShowRecover(null); setRecAmt(''); },
+    mutationFn: (d) => scAPI.createAdvance(d),
+    onSuccess: () => {
+      toast.success('Advance recorded');
+      qc.invalidateQueries({ queryKey: ['sc-advances'] });
+      setShowCreate(false); setForm(EMPTY);
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed to record advance'),
   });
 
   function handleCreate() {
     const e = {};
     if (!form.wo_id)    e.wo_id   = 'Required';
-    if (!form.project_id) e.project_id = 'Required';
     if (!form.amount || isNaN(form.amount)) e.amount = 'Enter valid amount';
     setErr(e);
     if (Object.keys(e).length) return;
-    const wo = workOrders.find(w => w.id === form.wo_id);
     createMut.mutate({
-      ...form,
-      vendor_id: form.vendor_id || wo?.vendor_id,
-      amount: parseFloat(form.amount),
+      wo_id:        form.wo_id,
+      advance_date: form.advance_date,
+      amount:       parseFloat(form.amount),
+      payment_mode: form.payment_mode,
+      reference_no: form.payment_ref,
+      remarks:      form.notes || form.advance_type,
     });
   }
 
@@ -1525,28 +1494,24 @@ function AdvancesTab({ projectId, projects, vendors }) {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {advances.map(a => {
-                  const outstanding = parseFloat(a.outstanding || 0);
+                  const balance = parseFloat(a.balance_amount || 0);
                   return (
                     <tr key={a.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{a.wo_number}</td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{a.vendor_name}</td>
-                      <td className="px-4 py-3 text-slate-600 capitalize">{(a.advance_type || '').replace('_', ' ')}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800">{a.sc_name}</td>
+                      <td className="px-4 py-3 text-slate-600 capitalize">{a.remarks || '—'}</td>
                       <td className="px-4 py-3 text-right font-medium text-slate-800">{fmt(a.amount)}</td>
                       <td className="px-4 py-3 text-right text-emerald-600">{fmt(a.recovered_amount)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-amber-600">{fmt(outstanding)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-amber-600">{fmt(balance)}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{a.advance_date ? new Date(a.advance_date).toLocaleDateString('en-IN') : '—'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500 font-mono">{a.payment_ref || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500 font-mono">{a.reference_no || '—'}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-full', ADVANCE_STATUS_COLOR[a.recovery_status] || 'bg-slate-100 text-slate-600')}>
                           {a.recovery_status === 'fully_recovered' ? 'Recovered' : a.recovery_status === 'partially_recovered' ? 'Partial' : 'Open'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {a.recovery_status !== 'fully_recovered' && outstanding > 0 && (
-                          <button onClick={() => { setShowRecover(a); setRecAmt(''); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200">
-                            Recover
-                          </button>
-                        )}
+                        <span className="text-[10px] text-slate-400">via RA Bill</span>
                       </td>
                     </tr>
                   );
@@ -1608,28 +1573,21 @@ function AdvancesTab({ projectId, projects, vendors }) {
         </div>
       </Modal>
 
-      {/* Record Recovery Modal */}
-      <Modal open={!!showRecover} onClose={() => setShowRecover(null)} title="Record Recovery" width="max-w-sm">
+      {/* Recovery info — recovery is auto-tracked via RA Bill advance_recovery deductions */}
+      <Modal open={!!showRecover} onClose={() => setShowRecover(null)} title="Advance Recovery" width="max-w-sm">
         {showRecover && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="rounded-xl bg-slate-50 p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-slate-500">Subcontractor</span><strong>{showRecover.vendor_name}</strong></div>
+              <div className="flex justify-between"><span className="text-slate-500">Subcontractor</span><strong>{showRecover.sc_name}</strong></div>
               <div className="flex justify-between"><span className="text-slate-500">Advance Granted</span><strong>{fmt(showRecover.amount)}</strong></div>
-              <div className="flex justify-between"><span className="text-slate-500">Already Recovered</span><strong className="text-emerald-600">{fmt(showRecover.recovered_amount)}</strong></div>
-              <div className="flex justify-between border-t border-slate-200 pt-1 mt-1"><span className="text-slate-500">Outstanding</span><strong className="text-amber-600">{fmt(showRecover.outstanding)}</strong></div>
+              <div className="flex justify-between"><span className="text-slate-500">Recovered via Bills</span><strong className="text-emerald-600">{fmt(showRecover.recovered_amount)}</strong></div>
+              <div className="flex justify-between border-t border-slate-200 pt-1 mt-1"><span className="text-slate-500">Balance</span><strong className="text-amber-600">{fmt(showRecover.balance_amount)}</strong></div>
             </div>
-            <FormField label="Recovery Amount (₹) *">
-              <input type="number" value={recAmt} onChange={e => setRecAmt(e.target.value)} className={inputCls} placeholder="0.00" min="0" max={showRecover.outstanding} />
-            </FormField>
-            <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => setShowRecover(null)} className="px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100 rounded-xl">Cancel</button>
-              <button
-                disabled={recoverMut.isPending || !recAmt || isNaN(recAmt)}
-                onClick={() => recoverMut.mutate({ id: showRecover.id, recovery_amount: parseFloat(recAmt) })}
-                className="px-5 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-60"
-              >
-                {recoverMut.isPending ? 'Saving…' : 'Record Recovery'}
-              </button>
+            <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700">
+              ℹ️ Advance recovery is auto-calculated from the <strong>Advance Recovery (₹)</strong> deduction field on each RA Bill. No manual entry needed here.
+            </div>
+            <div className="flex justify-end mt-2">
+              <button onClick={() => setShowRecover(null)} className="px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100 rounded-xl">Close</button>
             </div>
           </div>
         )}
@@ -2256,22 +2214,23 @@ function LabourAttendanceTab({ projectId, projects, vendors }) {
 function PaymentTrackingTab({ projectId, vendors }) {
   const qc = useQueryClient();
   const [selected, setSelected] = useState(null);
-  const [payForm, setPayForm] = useState({ payment_date: new Date().toISOString().slice(0, 10), payment_mode: 'bank_transfer', payment_ref: '' });
+  const [payForm, setPayForm] = useState({ payment_date: new Date().toISOString().slice(0, 10), payment_mode: 'bank_transfer', payment_ref: '', amount: '' });
   const { data, isLoading } = useQuery({
-    queryKey: ['sub-payment-bills', projectId],
-    queryFn: () => subcontractorAPI.listBills({ project_id: projectId || undefined }).then(r => r.data),
+    queryKey: ['sc-payment-bills', projectId],
+    queryFn: () => scAPI.listBills({ project_id: projectId || undefined }).then(r => r.data?.data ?? []),
   });
-  const bills = data?.data || [];
+  const bills   = Array.isArray(data) ? data : [];
   const payable = bills.filter(b => b.status === 'approved');
   const paid    = bills.filter(b => b.status === 'paid');
-  const updateMut = useMutation({
-    mutationFn: ({ id, ...d }) => subcontractorAPI.updateBill(id, d),
+  const recordMut = useMutation({
+    mutationFn: (d) => scAPI.recordPayment(d),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sub-payment-bills'] });
-      qc.invalidateQueries({ queryKey: ['sub-bills'] });
-      qc.invalidateQueries({ queryKey: ['sub-dashboard'] });
+      toast.success('Payment recorded');
+      qc.invalidateQueries({ queryKey: ['sc-payment-bills'] });
+      qc.invalidateQueries({ queryKey: ['sc-bills'] });
       setSelected(null);
     },
+    onError: e => toast.error(e?.response?.data?.error || 'Payment failed'),
   });
   return (
     <div className="space-y-5">
@@ -2290,14 +2249,17 @@ function PaymentTrackingTab({ projectId, vendors }) {
               <tbody className="divide-y divide-slate-100">
                 {[...payable, ...paid].map(b => (
                   <tr key={b.id} className={b.status === 'paid' ? 'opacity-60' : ''}>
-                    <td className="px-4 py-3 font-mono text-xs">{b.bill_number || '-'}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">{b.vendor_name || '-'}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{b.wo_number || '-'}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{b.bill_number || '—'}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-950">{b.sc_name || b.vendor_name || '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{b.wo_number || '—'}</td>
                     <td className="px-4 py-3 text-right font-semibold text-blue-700">{fmt(b.net_payable || 0)}</td>
-                    <td className="px-4 py-3 text-xs">{b.payment_date ? `${new Date(b.payment_date).toLocaleDateString('en-IN')} / ${b.payment_ref || '-'}` : '-'}</td>
+                    <td className="px-4 py-3 text-xs">{b.payment_date ? `${new Date(b.payment_date).toLocaleDateString('en-IN')} / ${b.payment_ref || '—'}` : '—'}</td>
                     <td className="px-4 py-3 text-center"><StatusBadge status={b.status} /></td>
                     <td className="px-4 py-3 text-center">
-                      {b.status === 'approved' && <button onClick={() => setSelected(b)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Pay</button>}
+                      {b.status === 'approved' && (
+                        <button onClick={() => { setSelected(b); setPayForm({ payment_date: new Date().toISOString().slice(0,10), payment_mode: 'bank_transfer', payment_ref: '', amount: String(b.net_payable || '') }); }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Pay</button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -2307,19 +2269,41 @@ function PaymentTrackingTab({ projectId, vendors }) {
           </div>
         )}
       </div>
-      <Modal open={!!selected} onClose={() => setSelected(null)} title={`Record Payment - ${selected?.bill_number || ''}`} width="max-w-md">
+      <Modal open={!!selected} onClose={() => setSelected(null)} title={`Record Payment — ${selected?.bill_number || ''}`} width="max-w-md">
         <div className="space-y-4">
-          <div className="rounded-xl bg-slate-50 p-3 text-sm">
-            <div className="flex justify-between"><span>Vendor</span><strong>{selected?.vendor_name}</strong></div>
-            <div className="flex justify-between mt-1"><span>Net Payable</span><strong>{fmt(selected?.net_payable || 0)}</strong></div>
+          <div className="rounded-xl bg-slate-50 p-3 text-sm space-y-1">
+            <div className="flex justify-between"><span className="text-slate-500">Subcontractor</span><strong>{selected?.sc_name || selected?.vendor_name}</strong></div>
+            <div className="flex justify-between"><span className="text-slate-500">WO No.</span><strong>{selected?.wo_number}</strong></div>
+            <div className="flex justify-between"><span className="text-slate-500">Net Payable</span><strong className="text-blue-700">{fmt(selected?.net_payable || 0)}</strong></div>
+            {selected?.paid_amount > 0 && <div className="flex justify-between"><span className="text-slate-500">Already Paid</span><strong className="text-emerald-600">{fmt(selected.paid_amount)}</strong></div>}
           </div>
-          <FormField label="Payment Date"><input type="date" className={inputCls} value={payForm.payment_date} onChange={e => setPayForm(f => ({ ...f, payment_date: e.target.value }))} /></FormField>
-          <FormField label="Payment Mode"><select className={inputCls} value={payForm.payment_mode} onChange={e => setPayForm(f => ({ ...f, payment_mode: e.target.value }))}><option value="bank_transfer">Bank Transfer</option><option value="neft">NEFT</option><option value="rtgs">RTGS</option><option value="cheque">Cheque</option><option value="cash">Cash</option></select></FormField>
-          <FormField label="Bank Ref / UTR"><input className={inputCls} value={payForm.payment_ref} onChange={e => setPayForm(f => ({ ...f, payment_ref: e.target.value }))} /></FormField>
+          <FormField label="Amount (₹) *">
+            <input type="number" min="0" step="0.01" className={inputCls} value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} placeholder={String(selected?.net_payable || '')} />
+          </FormField>
+          <FormField label="Payment Date">
+            <input type="date" className={inputCls} value={payForm.payment_date} onChange={e => setPayForm(f => ({ ...f, payment_date: e.target.value }))} />
+          </FormField>
+          <FormField label="Payment Mode">
+            <select className={inputCls} value={payForm.payment_mode} onChange={e => setPayForm(f => ({ ...f, payment_mode: e.target.value }))}>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="neft">NEFT</option>
+              <option value="rtgs">RTGS</option>
+              <option value="cheque">Cheque</option>
+              <option value="cash">Cash</option>
+            </select>
+          </FormField>
+          <FormField label="UTR / Bank Ref / Cheque No. *">
+            <input className={inputCls} value={payForm.payment_ref} onChange={e => setPayForm(f => ({ ...f, payment_ref: e.target.value }))} placeholder="UTR number or reference" />
+          </FormField>
         </div>
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100 rounded-xl">Cancel</button>
-          <button disabled={updateMut.isPending || !payForm.payment_date} onClick={() => updateMut.mutate({ id: selected.id, status: 'paid', ...payForm })} className="px-5 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-60">Mark Paid</button>
+          <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-xl">Cancel</button>
+          <button
+            disabled={recordMut.isPending || !payForm.payment_date || !payForm.amount}
+            onClick={() => recordMut.mutate({ bill_id: selected.id, payment_date: payForm.payment_date, amount: parseFloat(payForm.amount), payment_mode: payForm.payment_mode, reference_no: payForm.payment_ref })}
+            className="px-5 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-60">
+            {recordMut.isPending ? 'Saving…' : 'Record Payment'}
+          </button>
         </div>
       </Modal>
     </div>
@@ -2334,11 +2318,11 @@ function DeductionsTab({ projectId }) {
 
   const { data, isLoading } = useQuery({
     queryKey: ['sub-deduction-summary', projectId],
-    queryFn: () => subcontractorAPI.reportDeductionSummary({ project_id: projectId || undefined }).then(r => r.data),
+    queryFn: () => scAPI.reportSummary({ project_id: projectId || undefined }).then(r => r.data),
   });
   const { data: retData } = useQuery({
     queryKey: ['sub-retention-summary', projectId],
-    queryFn: () => subcontractorAPI.retentionSummary({ project_id: projectId || undefined }).then(r => r.data),
+    queryFn: () => scAPI.retentionSummary({ project_id: projectId || undefined }).then(r => r.data),
     staleTime: 0, gcTime: 0, refetchOnMount: 'always',
   });
 
@@ -2358,7 +2342,7 @@ function DeductionsTab({ projectId }) {
   const totalNetLocked   = retRows.reduce((s, r) => s + Number(r.net_locked || 0), 0);
 
   const releaseMut = useMutation({
-    mutationFn: (d) => subcontractorAPI.createRetentionRelease(d),
+    mutationFn: (d) => scAPI.createRetentionRel(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sub-retention-summary'] });
       setShowRelease(null);
@@ -2499,7 +2483,7 @@ function SubcontractorReportsTab({ projectId }) {
   });
   const { data: deduction } = useQuery({
     queryKey: ['sub-report-deductions', projectId],
-    queryFn: () => subcontractorAPI.reportDeductionSummary({ project_id: projectId || undefined }).then(r => r.data),
+    queryFn: () => scAPI.reportSummary({ project_id: projectId || undefined }).then(r => r.data),
     retry: 1,
   });
   const { data: utilization } = useQuery({
