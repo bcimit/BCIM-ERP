@@ -28,7 +28,9 @@ function QRPrintPreview({ assets, onClose }) {
           width: 100% !important; background: white !important;
           padding: 16px !important;
         }
-        .qr-label { page-break-inside: avoid; }
+        .qr-label { page-break-inside: avoid; break-inside: avoid; }
+        /* Force all text to print dark regardless of screen color */
+        #qr-print-zone * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
     `;
     document.head.appendChild(style);
@@ -60,17 +62,37 @@ function QRPrintPreview({ assets, onClose }) {
         <div id="qr-print-zone" className="p-6">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {assets.map(a => (
-              <div key={a.id} className="qr-label border border-slate-200 rounded-xl p-4 flex flex-col items-center gap-2 text-center">
+              <div key={a.id} className="qr-label border-2 border-slate-300 rounded-xl p-4 flex flex-col items-center gap-1.5 text-center bg-white">
                 <QRCodeSVG
                   value={`BCIM|${a.asset_code}|${a.asset_name}|${a.serial_number||'N/A'}`}
                   size={120} level="H"
                   style={{display:'block'}}
                 />
-                <div className="font-mono text-sm font-bold text-indigo-700">{a.asset_code}</div>
-                <div className="text-[11px] text-slate-600 leading-tight max-w-[140px]">{a.asset_name}</div>
-                {a.brand && <div className="text-[10px] text-slate-400">{a.brand}{a.model ? ` · ${a.model}`:''}</div>}
-                {a.serial_number && <div className="text-[10px] text-slate-400 font-mono">S/N: {a.serial_number}</div>}
-                <div className="text-[9px] text-slate-300 uppercase tracking-widest">BCIM Engineering</div>
+                {/* Asset code — prominent */}
+                <div style={{fontFamily:'monospace', fontWeight:800, fontSize:'13px', color:'#1e1b4b', letterSpacing:'0.5px'}}>
+                  {a.asset_code}
+                </div>
+                {/* Asset name */}
+                <div style={{fontSize:'11px', fontWeight:600, color:'#1e293b', lineHeight:'1.3', maxWidth:'140px'}}>
+                  {a.asset_name}
+                </div>
+                {/* Brand · Model */}
+                {a.brand && (
+                  <div style={{fontSize:'10px', color:'#475569', fontWeight:500}}>
+                    {a.brand}{a.model ? ` · ${a.model}` : ''}
+                  </div>
+                )}
+                {/* Serial */}
+                {a.serial_number && (
+                  <div style={{fontSize:'10px', color:'#334155', fontFamily:'monospace', fontWeight:600}}>
+                    S/N: {a.serial_number}
+                  </div>
+                )}
+                {/* Footer rule */}
+                <div style={{width:'100%', borderTop:'1px solid #cbd5e1', marginTop:'4px', paddingTop:'4px',
+                  fontSize:'9px', color:'#334155', fontWeight:700, letterSpacing:'1.5px', textTransform:'uppercase'}}>
+                  BCIM Engineering
+                </div>
               </div>
             ))}
           </div>
