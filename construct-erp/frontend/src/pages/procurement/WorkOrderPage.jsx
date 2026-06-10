@@ -8,6 +8,7 @@ import {
   Printer, Building2, Clock, CheckCircle2,
   ChevronRight, Upload, IndianRupee, Calendar,
   AlertCircle, RefreshCw, FileSpreadsheet,
+  MapPin, User, Briefcase, Package, Percent, ClipboardList, Phone, Mail, Hash,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -481,10 +482,38 @@ function PdfImportModal({ onClose, vendors, projects, onImported }) {
 }
 
 /* ── Create WO Modal ─────────────────────────────────────────────────────── */
-function CreateWOModal({ onClose, vendors, projects, onCreate }) {
+/* ── Section shell — consistent card with header + icon ─────────────────── */
+function FormSection({ icon: Icon, title, subtitle, right, children }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <Icon className="w-3.5 h-3.5 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">{title}</p>
+            {subtitle && <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>}
+          </div>
+        </div>
+        {right}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+const Lbl = ({ children, req }) => (
+  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+    {children}{req && <span className="text-red-500 ml-0.5">*</span>}
+  </label>
+);
+
+function CreateWOModal({ onClose, vendors, projects, onCreate, isPending }) {
   const [form, setForm] = useState({
     project_id: '', vendor_id: '',
     wo_number: '',
+    wo_date: dayjs().format('YYYY-MM-DD'),
     start_date: dayjs().format('YYYY-MM-DD'),
     end_date: '',
     subject: '',
@@ -498,132 +527,194 @@ function CreateWOModal({ onClose, vendors, projects, onCreate }) {
     advance_recovery_pct: 10,
     terms_conditions: DEFAULT_WO_TERMS,
   });
-  const [items, setItems] = useState([{ description:'', quantity:'', unit:'SQFT', rate:'', remarks:'' }]);
+  const [items, setItems] = useState([{ description:'', quantity:'', unit:'SQM', rate:'', remarks:'' }]);
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const formTotal = items.reduce((s, it) => s + parseFloat(it.quantity||0) * parseFloat(it.rate||0), 0);
+
+  const vendor = (vendors || []).find(v => String(v.id) === String(form.vendor_id));
+  const project = (projects || []).find(p => String(p.id) === String(form.project_id));
+
+  const formTotal  = items.reduce((s, it) => s + parseFloat(it.quantity||0) * parseFloat(it.rate||0), 0);
+  const gstAmt     = formTotal * (parseFloat(form.gst_pct||0) / 100);
+  const grandTotal = formTotal + gstAmt;
+  const retentionAmt = formTotal * (parseFloat(form.retention_pct||0) / 100);
+  const tdsAmt       = formTotal * (parseFloat(form.tds_pct||0) / 100);
+
+  const durationDays = form.start_date && form.end_date
+    ? Math.max(0, dayjs(form.end_date).diff(dayjs(form.start_date), 'day'))
+    : null;
+
+  const valid = form.project_id && form.vendor_id && form.subject;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-4xl rounded-2xl flex flex-col max-h-[92vh] shadow-2xl overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-slate-50 w-full max-w-5xl rounded-2xl flex flex-col max-h-[94vh] shadow-2xl overflow-hidden border border-slate-200">
 
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-              <Plus className="w-4 h-4 text-indigo-600" />
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
+              <Hammer className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-900">New Work Order</p>
-              <p className="text-xs text-slate-400">Issue a work order to a subcontractor or vendor</p>
+              <p className="text-base font-bold text-white">New Work Order</p>
+              <p className="text-xs text-white/60">Procurement · engage a contractor for works & services</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-slate-900 transition-all">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all">
+            <X className="w-4.5 h-4.5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
-          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-4">Work Order Details</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Project *</label>
+          {/* ── 1. Work Order Information ── */}
+          <FormSection icon={ClipboardList} title="Work Order Information" subtitle="Project, reference & contractor">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="col-span-2">
+                <Lbl req>Project</Lbl>
                 <select className={inp} value={form.project_id} onChange={e => f('project_id', e.target.value)}>
                   <option value="">Select project…</option>
                   {(projects||[]).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Vendor / Subcontractor *</label>
+                <Lbl>WO Number</Lbl>
+                <div className="relative">
+                  <Hash className="w-3.5 h-3.5 text-slate-300 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input className={`${inp} pl-8 bg-slate-100 font-mono text-indigo-700`} value={form.wo_number || 'Auto WO-###'} readOnly />
+                </div>
+              </div>
+              <div>
+                <Lbl>WO Date</Lbl>
+                <input type="date" className={inp} value={form.wo_date} onChange={e => f('wo_date', e.target.value)} />
+              </div>
+              <div className="col-span-2 md:col-span-2">
+                <Lbl req>Contractor / Vendor</Lbl>
                 <select className={inp} value={form.vendor_id} onChange={e => f('vendor_id', e.target.value)}>
-                  <option value="">Select vendor…</option>
-                  {(vendors||[]).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  <option value="">Select contractor…</option>
+                  {(vendors||[]).map(v => <option key={v.id} value={v.id}>{v.name}{v.vendor_type ? ` · ${v.vendor_type.replace(/_/g,' ')}` : ''}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">WO Number</label>
-                <input className={`${inp} bg-slate-100 font-mono text-indigo-700`} value={form.wo_number || 'Auto: WODQS###'} readOnly />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Start Date</label>
-                <input type="date" className={inp} value={form.start_date} onChange={e => f('start_date', e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">End Date</label>
-                <input type="date" className={inp} value={form.end_date} onChange={e => f('end_date', e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Work Category</label>
+                <Lbl>Work Category</Lbl>
                 <select className={inp} value={form.work_category} onChange={e => f('work_category', e.target.value)}>
                   <option value="">Select…</option>
                   {WORK_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Tower / Block</label>
-                <input className={inp} placeholder="e.g. Tower A / Block 1" value={form.tower_block} onChange={e => f('tower_block', e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Cost Head</label>
+                <Lbl>Cost Head</Lbl>
                 <input className={inp} placeholder="e.g. Civil Works" value={form.cost_head} onChange={e => f('cost_head', e.target.value)} />
               </div>
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Subject / Scope *</label>
-                <input className={inp} placeholder="e.g. External plaster work – Block B" value={form.subject} onChange={e => f('subject', e.target.value)} />
+            </div>
+
+            {/* Vendor auto-detail card */}
+            {vendor && (
+              <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  <p className="text-sm font-bold text-slate-800">{vendor.name}</p>
+                  {vendor.vendor_type && <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{vendor.vendor_type.replace(/_/g,' ')}</span>}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  {vendor.contact_person && <div className="flex items-center gap-1.5 text-slate-600"><User className="w-3.5 h-3.5 text-slate-400" /> {vendor.contact_person}</div>}
+                  {vendor.phone && <div className="flex items-center gap-1.5 text-slate-600"><Phone className="w-3.5 h-3.5 text-slate-400" /> {vendor.phone}</div>}
+                  {vendor.email && <div className="flex items-center gap-1.5 text-slate-600 truncate"><Mail className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> {vendor.email}</div>}
+                  {vendor.gstin && <div className="flex items-center gap-1.5 text-slate-600"><FileText className="w-3.5 h-3.5 text-slate-400" /> <span className="font-mono">{vendor.gstin}</span></div>}
+                  {(vendor.address || vendor.city) && <div className="col-span-2 md:col-span-4 flex items-start gap-1.5 text-slate-600"><MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" /> <span>{[vendor.address, vendor.city, vendor.state].filter(Boolean).join(', ')}</span></div>}
+                </div>
               </div>
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Scope of Work (detailed)</label>
-                <textarea rows={3} className={inp} placeholder="Detailed scope description…" value={form.scope_of_work} onChange={e => f('scope_of_work', e.target.value)} />
+            )}
+          </FormSection>
+
+          {/* ── 2. Scope & Location ── */}
+          <FormSection icon={MapPin} title="Scope & Location" subtitle="What work, where">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+              <div className="col-span-2 md:col-span-1">
+                <Lbl req>Subject / Title of Work</Lbl>
+                <input className={inp} placeholder="e.g. Supply & erection of structural steel – Tower A" value={form.subject} onChange={e => f('subject', e.target.value)} />
+              </div>
+              <div className="col-span-2 md:col-span-1">
+                <Lbl>Tower / Block / Location</Lbl>
+                <input className={inp} placeholder="e.g. Tower A / Block 1 / Basement" value={form.tower_block} onChange={e => f('tower_block', e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <Lbl>Detailed Scope of Work</Lbl>
+                <textarea rows={3} className={inp} placeholder="Describe the full scope, deliverables, specifications, materials in scope / out of scope…" value={form.scope_of_work} onChange={e => f('scope_of_work', e.target.value)} />
               </div>
             </div>
-          </div>
+          </FormSection>
 
-          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">Scope Items</p>
-              <button onClick={() => setItems(p => [...p, { description:'', quantity:'', unit:'SQFT', rate:'', remarks:'' }])}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all">
-                <Plus className="w-3 h-3" /> Add Row
+          {/* ── 3. Execution Timeline ── */}
+          <FormSection icon={Calendar} title="Execution Timeline"
+            right={durationDays != null && <span className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">{durationDays} days duration</span>}>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <Lbl>Start Date</Lbl>
+                <input type="date" className={inp} value={form.start_date} onChange={e => f('start_date', e.target.value)} />
+              </div>
+              <div>
+                <Lbl>Completion Date</Lbl>
+                <input type="date" className={inp} value={form.end_date} onChange={e => f('end_date', e.target.value)} />
+              </div>
+              <div className="flex items-end">
+                <div className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                  {durationDays != null ? <><span className="font-semibold text-slate-700">{durationDays}</span> calendar days</> : 'Set both dates to see duration'}
+                </div>
+              </div>
+            </div>
+          </FormSection>
+
+          {/* ── 4. Scope of Work / BOQ Items ── */}
+          <FormSection icon={Package} title="Scope of Work — Line Items" subtitle="Itemised work with quantities & rates"
+            right={
+              <button onClick={() => setItems(p => [...p, { description:'', quantity:'', unit:'SQM', rate:'', remarks:'' }])}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-sm">
+                <Plus className="w-3 h-3" /> Add Item
               </button>
-            </div>
-
-            <div className="overflow-x-auto">
+            }>
+            <div className="overflow-x-auto -mx-1">
               <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    {['Description', 'Unit', 'Qty', 'Rate (₹)', 'Amount', ''].map(h => (
-                      <th key={h} className="pb-2 text-left text-xs font-medium text-slate-900 font-medium pr-3">{h}</th>
-                    ))}
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-8">#</th>
+                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description of Work</th>
+                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Unit</th>
+                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Qty</th>
+                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32">Rate (₹)</th>
+                    <th className="pb-2 px-1 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32">Amount</th>
+                    <th className="pb-2 px-1 w-10"></th>
                   </tr>
                 </thead>
-                <tbody className="space-y-2">
+                <tbody>
                   {items.map((it, i) => (
-                    <tr key={i}>
-                      <td className="pr-3 py-1.5">
-                        <input className={inp} placeholder="Description of work" value={it.description}
+                    <tr key={i} className="border-b border-slate-50">
+                      <td className="px-1 py-1.5 text-xs text-slate-400 font-mono">{i + 1}</td>
+                      <td className="px-1 py-1.5">
+                        <input className={inp} placeholder="Description of work item" value={it.description}
                           onChange={e => setItems(p => p.map((x,j) => j===i?{...x,description:e.target.value}:x))} />
                       </td>
-                      <td className="pr-3 py-1.5 w-24">
+                      <td className="px-1 py-1.5">
                         <select className={inp} value={it.unit} onChange={e => setItems(p => p.map((x,j) => j===i?{...x,unit:e.target.value}:x))}>
                           {UNITS.map(u => <option key={u}>{u}</option>)}
                         </select>
                       </td>
-                      <td className="pr-3 py-1.5 w-24">
-                        <input type="number" min="0" className={inp} placeholder="0" value={it.quantity}
+                      <td className="px-1 py-1.5">
+                        <input type="number" min="0" className={`${inp} text-right`} placeholder="0" value={it.quantity}
                           onChange={e => setItems(p => p.map((x,j) => j===i?{...x,quantity:e.target.value}:x))} />
                       </td>
-                      <td className="pr-3 py-1.5 w-32">
-                        <input type="number" min="0" className={inp} placeholder="0.00" value={it.rate}
+                      <td className="px-1 py-1.5">
+                        <input type="number" min="0" className={`${inp} text-right`} placeholder="0.00" value={it.rate}
                           onChange={e => setItems(p => p.map((x,j) => j===i?{...x,rate:e.target.value}:x))} />
                       </td>
-                      <td className="pr-3 py-1.5 w-32">
-                        <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono text-slate-600">
-                          ₹{inr(parseFloat(it.quantity||0)*parseFloat(it.rate||0))}
+                      <td className="px-1 py-1.5">
+                        <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono text-right text-slate-700 font-semibold">
+                          {inr(parseFloat(it.quantity||0)*parseFloat(it.rate||0))}
                         </div>
                       </td>
-                      <td className="py-1.5">
+                      <td className="px-1 py-1.5">
                         <button onClick={() => setItems(p => p.filter((_,j) => j!==i))} disabled={items.length===1}
-                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-900 font-medium hover:text-red-500 hover:border-red-200 transition-all disabled:opacity-30">
+                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-all disabled:opacity-30">
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </td>
@@ -632,54 +723,76 @@ function CreateWOModal({ onClose, vendors, projects, onCreate }) {
                 </tbody>
               </table>
             </div>
+          </FormSection>
 
-            <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-end gap-6">
-              <span className="text-xs text-slate-400">Retention ({form.retention_pct || 0}%): <span className="font-mono text-slate-600">₹{inr(formTotal*(parseFloat(form.retention_pct||0)/100))}</span></span>
-              <span className="text-xs text-slate-400">TDS Est. ({form.tds_pct || 0}%): <span className="font-mono text-slate-600">₹{inr(formTotal*(parseFloat(form.tds_pct||0)/100))}</span></span>
-              <span className="text-sm font-medium text-slate-900">Total: <span className="font-mono text-indigo-700">₹{inr(formTotal)}</span></span>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-4">Financial Terms</p>
+          {/* ── 5. Commercial & Tax Terms ── */}
+          <FormSection icon={Percent} title="Commercial & Tax Terms">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">GST %</label>
+                <Lbl>GST %</Lbl>
                 <input type="number" min="0" max="100" className={inp} value={form.gst_pct} onChange={e => f('gst_pct', e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">TDS %</label>
+                <Lbl>TDS %</Lbl>
                 <input type="number" min="0" max="100" className={inp} value={form.tds_pct} onChange={e => f('tds_pct', e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Retention %</label>
+                <Lbl>Retention %</Lbl>
                 <input type="number" min="0" max="100" className={inp} value={form.retention_pct} onChange={e => f('retention_pct', e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Advance Recovery %</label>
+                <Lbl>Advance Recovery %</Lbl>
                 <input type="number" min="0" max="100" className={inp} value={form.advance_recovery_pct} onChange={e => f('advance_recovery_pct', e.target.value)} />
               </div>
             </div>
-          </div>
 
-          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-3">Terms &amp; Conditions</p>
+            {/* Commercial summary */}
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Work Value</p>
+                <p className="text-sm font-mono font-bold text-slate-800">₹{inr(formTotal)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">GST ({form.gst_pct||0}%)</p>
+                <p className="text-sm font-mono font-bold text-slate-800">₹{inr(gstAmt)}</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-1">Retention ({form.retention_pct||0}%)</p>
+                <p className="text-sm font-mono font-bold text-amber-700">₹{inr(retentionAmt)}</p>
+              </div>
+              <div className="rounded-xl border-2 border-indigo-300 bg-indigo-600 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-100 mb-1">Grand Total</p>
+                <p className="text-base font-mono font-bold text-white">₹{inr(grandTotal)}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">TDS deduction on payment ≈ <span className="font-mono">₹{inr(tdsAmt)}</span> ({form.tds_pct||0}% of work value).</p>
+          </FormSection>
+
+          {/* ── 6. Terms & Conditions ── */}
+          <FormSection icon={FileText} title="Terms & Conditions" subtitle="Edit per work order before issuing">
             <textarea
               rows={12}
               className={clsx(inp, 'h-auto py-3 font-mono text-xs leading-relaxed resize-y')}
               value={form.terms_conditions}
               onChange={e => f('terms_conditions', e.target.value)}
             />
-            <p className="mt-2 text-[11px] text-slate-500">Edit this block for each work order before issuing.</p>
-          </div>
+          </FormSection>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0 flex gap-3">
-          <button onClick={onClose} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-900 text-sm font-medium rounded-lg hover:bg-slate-50">Cancel</button>
-          <button onClick={() => onCreate({ ...form, items })} disabled={!form.project_id || !form.vendor_id || !form.subject}
-            className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-all">
-            Issue Work Order
-          </button>
+        {/* ── Footer ── */}
+        <div className="px-6 py-4 border-t border-slate-200 bg-white flex-shrink-0 flex items-center justify-between gap-3">
+          <div className="text-xs text-slate-500">
+            {project && <span className="font-medium text-slate-700">{project.name}</span>}
+            {vendor && <span> · {vendor.name}</span>}
+            <span className="ml-2 font-mono font-bold text-indigo-700">₹{inr(grandTotal)}</span>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+            <button onClick={() => onCreate({ ...form, items, total_value: formTotal })} disabled={!valid || isPending}
+              className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-all flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" /> {isPending ? 'Issuing…' : 'Issue Work Order'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1252,6 +1365,7 @@ export default function WorkOrderPage() {
           vendors={vendorsData}
           projects={projectsData}
           onCreate={data => createMutation.mutate(data)}
+          isPending={createMutation.isPending}
         />
       )}
 

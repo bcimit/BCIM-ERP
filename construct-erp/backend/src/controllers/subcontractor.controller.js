@@ -244,7 +244,7 @@ const createWorkOrder = async (req, res) => {
             terms_conditions, cost_head, work_category, tower_block,
             status, created_by,
             gst_pct, tds_pct, retention_pct, advance_recovery_pct)
-         VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$9,$10,$11,$12,$13,'active',$14,$15,$16,$17,$18)
+         VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$9,$10,$11,$12,$13,'pending',$14,$15,$16,$17,$18)
          RETURNING *`,
         [
           project_id, vendor_id, wo_number, wo_date,
