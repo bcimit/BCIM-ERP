@@ -40,6 +40,24 @@ function StatusBadge({ status }) {
 
 const inp = 'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-slate-400';
 
+const WORK_CATEGORIES = ['Civil', 'Structural', 'Waterproofing', 'Electrical', 'Plumbing', 'Painting', 'Carpentry', 'Tiles', 'Aluminium', 'Demolition', 'Earth Work', 'Fabrication', 'Interior', 'Landscaping', 'General'];
+
+const DEFAULT_WO_TERMS = `1. This Work Order is issued subject to the terms of the registered agreement / quotation, if any.
+2. All work shall be carried out as per approved drawings, specifications and instructions of the Site Engineer / Project Manager.
+3. Measurement of completed work shall be jointly recorded in the Measurement Book (MB) and certified before billing.
+4. Payment shall be released against certified RA bills, subject to Retention and TDS deductions as specified above.
+5. Retention shall be released only after successful completion of work and the Defect Liability Period (DLP).
+6. TDS and GST shall be deducted / charged as applicable under prevailing Income Tax and GST laws.
+7. The Contractor shall ensure adequate manpower, tools, tackles and safety equipment (PPE) at site at all times.
+8. The Contractor shall comply with all statutory, safety, health and environmental regulations during execution of work.
+9. Any variation in scope, quantity or specification must have prior written approval before execution.
+10. Time is of the essence. Delay in completion beyond the agreed schedule may attract penalty / liquidated damages as mutually agreed.
+11. Any damage to existing works or materials caused due to the Contractor's negligence shall be rectified at the Contractor's own cost.
+12. The Contractor shall maintain valid insurance, licenses and statutory registrations (PF / ESI / labour license) wherever applicable.
+13. This Work Order may be terminated by BCIM without liability for unsatisfactory performance, safety violations or non-compliance.
+14. Any dispute or difference shall be subject to the jurisdiction of courts at Bangalore.
+15. Acceptance of this Work Order (by signature, seal or commencement of work) shall be deemed as acceptance of all terms stated herein.`;
+
 /* ── Excel Import Modal ─────────────────────────────────────────────────── */
 function ExcelImportModal({ onClose, onImported }) {
   const [step, setStep]       = useState(1); // 1=upload 2=review 3=done
@@ -470,6 +488,14 @@ function CreateWOModal({ onClose, vendors, projects, onCreate }) {
     end_date: '',
     subject: '',
     scope_of_work: '',
+    work_category: '',
+    tower_block: '',
+    cost_head: '',
+    gst_pct: 18,
+    tds_pct: 2,
+    retention_pct: 5,
+    advance_recovery_pct: 10,
+    terms_conditions: DEFAULT_WO_TERMS,
   });
   const [items, setItems] = useState([{ description:'', quantity:'', unit:'SQFT', rate:'', remarks:'' }]);
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -524,6 +550,21 @@ function CreateWOModal({ onClose, vendors, projects, onCreate }) {
               <div>
                 <label className="block text-xs font-medium text-slate-900 font-medium mb-1">End Date</label>
                 <input type="date" className={inp} value={form.end_date} onChange={e => f('end_date', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Work Category</label>
+                <select className={inp} value={form.work_category} onChange={e => f('work_category', e.target.value)}>
+                  <option value="">Select…</option>
+                  {WORK_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Tower / Block</label>
+                <input className={inp} placeholder="e.g. Tower A / Block 1" value={form.tower_block} onChange={e => f('tower_block', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Cost Head</label>
+                <input className={inp} placeholder="e.g. Civil Works" value={form.cost_head} onChange={e => f('cost_head', e.target.value)} />
               </div>
               <div className="col-span-3">
                 <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Subject / Scope *</label>
@@ -592,10 +633,43 @@ function CreateWOModal({ onClose, vendors, projects, onCreate }) {
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-end gap-6">
-              <span className="text-xs text-slate-400">Retention (5%): <span className="font-mono text-slate-600">₹{inr(formTotal*0.05)}</span></span>
-              <span className="text-xs text-slate-400">TDS Est. (2%): <span className="font-mono text-slate-600">₹{inr(formTotal*0.02)}</span></span>
+              <span className="text-xs text-slate-400">Retention ({form.retention_pct || 0}%): <span className="font-mono text-slate-600">₹{inr(formTotal*(parseFloat(form.retention_pct||0)/100))}</span></span>
+              <span className="text-xs text-slate-400">TDS Est. ({form.tds_pct || 0}%): <span className="font-mono text-slate-600">₹{inr(formTotal*(parseFloat(form.tds_pct||0)/100))}</span></span>
               <span className="text-sm font-medium text-slate-900">Total: <span className="font-mono text-indigo-700">₹{inr(formTotal)}</span></span>
             </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-4">Financial Terms</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">GST %</label>
+                <input type="number" min="0" max="100" className={inp} value={form.gst_pct} onChange={e => f('gst_pct', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">TDS %</label>
+                <input type="number" min="0" max="100" className={inp} value={form.tds_pct} onChange={e => f('tds_pct', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Retention %</label>
+                <input type="number" min="0" max="100" className={inp} value={form.retention_pct} onChange={e => f('retention_pct', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-900 font-medium mb-1">Advance Recovery %</label>
+                <input type="number" min="0" max="100" className={inp} value={form.advance_recovery_pct} onChange={e => f('advance_recovery_pct', e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-3">Terms &amp; Conditions</p>
+            <textarea
+              rows={12}
+              className={clsx(inp, 'h-auto py-3 font-mono text-xs leading-relaxed resize-y')}
+              value={form.terms_conditions}
+              onChange={e => f('terms_conditions', e.target.value)}
+            />
+            <p className="mt-2 text-[11px] text-slate-500">Edit this block for each work order before issuing.</p>
           </div>
         </div>
 
