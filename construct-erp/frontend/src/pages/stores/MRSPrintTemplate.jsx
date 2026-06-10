@@ -151,7 +151,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
 
         .mrs-company-sub {
           margin-top: 4px;
-          color: #4b5563;
+          color: #111827;
           font-size: 8px;
           font-weight: 800;
           letter-spacing: .08em;
@@ -176,7 +176,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
           padding: 3px 10px;
           border: 1px solid #cbd5e1;
           border-radius: 999px;
-          color: #334155;
+          color: #111827;
           font-size: 8px;
           font-weight: 800;
           letter-spacing: .08em;
@@ -212,7 +212,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
 
         .mrs-doc-label {
           display: block;
-          color: #475569;
+          color: #111827;
           font-weight: 800;
           text-transform: uppercase;
           font-size: 7.5px;
@@ -261,7 +261,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
         }
 
         .mrs-doc-line span {
-          color: #475569;
+          color: #111827;
           font-weight: 800;
           text-transform: uppercase;
         }
@@ -304,7 +304,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
         }
 
         .mrs-info-line span {
-          color: #475569;
+          color: #111827;
           font-weight: 800;
         }
 
@@ -373,7 +373,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
         }
 
         .mrs-muted {
-          color: #64748b;
+          color: #374151;
           font-weight: 700;
         }
 
@@ -458,7 +458,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
         }
 
         .mrs-approval-row span {
-          color: #64748b;
+          color: #374151;
           font-weight: 900;
           text-transform: uppercase;
         }
@@ -472,7 +472,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
           margin-top: 5px;
           padding: 2px 4px;
           border: 1px solid #cbd5e1;
-          color: #64748b;
+          color: #374151;
           border-radius: 4px;
           text-align: center;
           font-size: 7px;
@@ -488,7 +488,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
 
         .mrs-workflow-note {
           padding: 5px 8px;
-          color: #64748b;
+          color: #374151;
           border-top: 1px solid #cbd5e1;
           font-size: 8px;
           font-weight: 700;
@@ -558,20 +558,22 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
 
         <table className="mrs-items">
           <colgroup>
-            <col style={{ width: 36 }} />
-            <col style={{ width: 74 }} />
+            <col style={{ width: 30 }} />
+            <col style={{ width: 64 }} />
             <col />
-            <col style={{ width: 52 }} />
-            <col style={{ width: 58 }} />
-            <col style={{ width: 82 }} />
-            <col style={{ width: 118 }} />
-            <col style={{ width: 110 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 44 }} />
+            <col style={{ width: 48 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 90 }} />
           </colgroup>
           <thead>
             <tr>
               <th>Sl</th>
               <th>Item Code</th>
               <th>Description</th>
+              <th>Model / Make</th>
               <th>Unit</th>
               <th>Qty</th>
               <th>Required</th>
@@ -587,6 +589,7 @@ const MRSPrintTemplate = React.forwardRef(({ data }, ref) => {
                   <td className="mrs-num">{item ? i + 1 : ''}</td>
                   <td className="mrs-muted">{item?.item_code || ''}</td>
                   <td className="mrs-desc">{item ? material(item) : ''}</td>
+                  <td style={{ fontWeight: 700 }}>{item?.make_model || item?.brand || item?.model_make || ''}</td>
                   <td className="mrs-unit">{item?.unit || ''}</td>
                   <td className="mrs-qty">{qty(item)}</td>
                   <td className="mrs-date">{item ? fmtDate(item.required_date || item.date_required, '') : ''}</td>

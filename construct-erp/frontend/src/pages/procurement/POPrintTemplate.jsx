@@ -72,7 +72,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           {/* Left: Logo + Company */}
           <div>
             <img src="/bcim-logo.png" alt="BCIM" style={{ height: '48px', objectFit: 'contain', marginBottom: '6px', display: 'block' }} />
-            <div style={{ fontSize: '9px', color: '#374151', lineHeight: '1.5' }}>
+            <div style={{ fontSize: '9px', color: '#000', lineHeight: '1.5' }}>
               <p style={{ fontWeight: 700, fontSize: '12px', color: '#000', margin: '0 0 2px' }}>BCIM ENGINEERING PRIVATE LIMITED</p>
               {isLanco ? (
                 <>
@@ -109,15 +109,17 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
           {/* Vendor */}
           <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px' }}>
-            <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '5px' }}>
+            <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#000', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '5px' }}>
               Vendor / Supplier
             </p>
-            <p style={{ fontWeight: 700, fontSize: '11px', margin: '0 0 3px' }}>{data.vendor_name || '—'}</p>
-            {data.vendor_address && <p style={{ color: '#475569', whiteSpace: 'pre-line', margin: '0 0 3px' }}>{data.vendor_address}</p>}
-            <p style={{ margin: '4px 0 0', fontWeight: 600 }}>
+            <p style={{ fontWeight: 700, fontSize: '11px', margin: '0 0 3px', color: '#000' }}>{data.vendor_name || '—'}</p>
+            {data.vendor_address && <p style={{ color: '#000', whiteSpace: 'pre-line', margin: '0 0 3px' }}>{data.vendor_address}</p>}
+            {data.vendor_phone && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Tel: {data.vendor_phone}</p>}
+            {data.vendor_email && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Email: {data.vendor_email}</p>}
+            <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#000' }}>
               GSTIN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_gstin || data.vendor_gst || '—'}</span>
             </p>
-            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 600 }}>PAN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_pan}</span></p>}
+            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 700, color: '#000' }}>PAN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_pan}</span></p>}
           </div>
 
           {/* PO Summary */}
@@ -133,7 +135,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
               ['Cost Head',       data.cost_head || '—'],
             ].map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted #cbd5e1', padding: '3px 0', gap: '8px' }}>
-                <span style={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', fontSize: '8px', letterSpacing: '0.04em', flexShrink: 0 }}>{label}</span>
+                <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '8px', letterSpacing: '0.04em', flexShrink: 0 }}>{label}</span>
                 <span style={{ fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>{value}</span>
               </div>
             ))}
@@ -143,8 +145,8 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
         {/* Delivery Address + Order Intro (stacked) */}
         <div style={{ marginBottom: '10px', fontSize: '9px' }}>
           <p style={{ fontWeight: 700, textDecoration: 'underline', marginBottom: '3px' }}>DELIVERY ADDRESS:</p>
-          <p style={{ color: '#374151', whiteSpace: 'pre-line', marginBottom: '6px' }}>{data.delivery_address || (isLanco ? LANCO_DELIVERY_ADDRESS : data.project_name) || '—'}</p>
-          <p style={{ color: '#374151', fontStyle: 'italic' }}>
+          <p style={{ color: '#000', whiteSpace: 'pre-line', marginBottom: '6px' }}>{data.delivery_address || (isLanco ? LANCO_DELIVERY_ADDRESS : data.project_name) || '—'}</p>
+          <p style={{ color: '#000', fontStyle: 'italic' }}>
             {data.order_intro || 'We hereby place an order on you for supply of the following materials / services as per the terms and conditions below.'}
           </p>
         </div>
@@ -157,6 +159,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
             <tr style={{ background: '#1e293b', color: '#fff' }}>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '22px', textAlign: 'center' }}>SL</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'left' }}>Material Description & HSN</th>
+              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '72px', textAlign: 'left' }}>Model / Make</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '36px', textAlign: 'center' }}>Unit</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '36px', textAlign: 'center' }}>Qty</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '70px', textAlign: 'right' }}>{isTaxIncl ? 'Rate (Incl.GST)' : 'Rate (Rs)'}</th>
@@ -179,13 +182,14 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
                 <tr key={it.id || i} style={{ background: rowBg, borderBottom: '1px solid #e2e8f0' }}>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 600 }}>{i + 1}</td>
                   <td style={{ border: '1px solid #000', padding: '4px' }}>
-                    <p style={{ fontWeight: 700, margin: '0 0 1px', color: '#0f172a' }}>{it.material_name}</p>
-                    {it.mix_design && <p style={{ color: '#475569', fontSize: '8px', margin: '0 0 1px' }}>{it.mix_design}</p>}
-                    <p style={{ color: '#64748b', fontSize: '8px', margin: 0, fontFamily: 'monospace' }}>
+                    <p style={{ fontWeight: 700, margin: '0 0 1px', color: '#000' }}>{it.material_name}</p>
+                    {it.mix_design && <p style={{ color: '#000', fontSize: '8px', margin: '0 0 1px' }}>{it.mix_design}</p>}
+                    <p style={{ color: '#000', fontSize: '8px', margin: 0, fontFamily: 'monospace' }}>
                       HSN: {it.hsn_code || '—'}
                     </p>
-                    {it.purpose && <p style={{ color: '#475569', fontSize: '8px', margin: '1px 0 0', fontStyle: 'italic' }}>{it.purpose}</p>}
+                    {it.purpose && <p style={{ color: '#000', fontSize: '8px', margin: '1px 0 0', fontStyle: 'italic' }}>{it.purpose}</p>}
                   </td>
+                  <td style={{ border: '1px solid #000', padding: '4px', color: '#000', fontWeight: 600 }}>{it.make_model || it.brand || it.model_make || '—'}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', textTransform: 'uppercase' }}>{it.unit || '—'}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 700 }}>{qty.toLocaleString('en-IN')}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'monospace' }}>{f2(rate)}</td>
@@ -202,7 +206,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
               /* Empty placeholder rows */
               [...Array(6)].map((_, i) => (
                 <tr key={i} style={{ height: '24px' }}>
-                  {[...Array(isTaxIncl ? 8 : 10)].map((__, j) => (
+                  {[...Array(isTaxIncl ? 9 : 11)].map((__, j) => (
                     <td key={j} style={{ border: '1px solid #94a3b8', padding: '4px' }}>&nbsp;</td>
                   ))}
                 </tr>
@@ -217,7 +221,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
         <div className="po-totals-block" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '16px' }}>
           {/* Amount in Words */}
           <div style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', background: '#f8fafc' }}>
-            <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em', marginBottom: '4px' }}>Amount in Words</p>
+            <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#000', letterSpacing: '0.05em', marginBottom: '4px' }}>Amount in Words</p>
             <p style={{ fontWeight: 700, fontStyle: 'italic', color: '#0f172a', fontSize: '10px', lineHeight: '1.5' }}>
               {amountInWords(grandTotal)}
             </p>
@@ -226,16 +230,16 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           {/* Totals table */}
           <div style={{ minWidth: '210px', fontSize: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
-              <span style={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', fontSize: '9px' }}>Sub Total</span>
+              <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Sub Total</span>
               <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>₹ {f2(subTotal)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
-              <span style={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
+              <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
               <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{isTaxIncl ? 'Inclusive' : `₹ ${f2(totalGst)}`}</span>
             </div>
             {tcsAmt > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ fontWeight: 700, color: '#475569', textTransform: 'uppercase', fontSize: '9px' }}>TCS / Other Tax</span>
+                <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>TCS / Other Tax</span>
                 <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>₹ {f2(tcsAmt)}</span>
               </div>
             )}
@@ -254,11 +258,11 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
             Terms &amp; Conditions
           </p>
           {termsLines.length > 0 ? (
-            <div style={{ color: '#374151', lineHeight: '1.6' }}>
+            <div style={{ color: '#000', lineHeight: '1.6' }}>
               {termsLines.map((line, idx) => <p key={idx} style={{ margin: '1px 0' }}>{line}</p>)}
             </div>
           ) : (
-            <ol style={{ paddingLeft: '14px', color: '#374151', lineHeight: '1.6', margin: 0 }}>
+            <ol style={{ paddingLeft: '14px', color: '#000', lineHeight: '1.6', margin: 0 }}>
               <li>{isTaxIncl ? 'Rates are inclusive of GST. No separate GST will be charged.' : 'Rates are basic rates. GST as applicable is shown separately.'}</li>
               <li>Material should exactly match specifications. Deviations must be approved in writing.</li>
               <li>Tax Invoice must reach Accounts within 2 working days of delivery with GRN copy.</li>
@@ -278,7 +282,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
               {data.prepared_by_sig
                 ? <img src={data.prepared_by_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-                : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '7px' }}>Digitally Signed</span>
+                : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Digitally Signed</span>
               }
             </div>
             <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -292,7 +296,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
               {data.released_mgmt_sig
                 ? <img src={data.released_mgmt_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-                : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '7px' }}>{data.released_mgmt_name ? 'Approved' : 'Pending'}</span>
+                : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>{data.released_mgmt_name ? 'Approved' : 'Pending'}</span>
               }
             </div>
             <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -308,7 +312,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
                 ? <img src={data.authorized_md_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
                 : data.authorized_md_name
                   ? <div style={{ border: '3px solid #16a34a', color: '#16a34a', borderRadius: '50%', padding: '2px 4px', fontWeight: 900, fontSize: '6px', transform: 'rotate(-12deg)' }}>BCIM AUTHORIZED</div>
-                  : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '7px' }}>Pending</span>
+                  : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Pending</span>
               }
             </div>
             <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
