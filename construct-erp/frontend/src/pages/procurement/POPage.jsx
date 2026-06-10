@@ -636,6 +636,10 @@ function PODetailPanel({ po, detailedPO, onClose, onApprove, onReject, isApprovi
     table { border-collapse: collapse; }
     thead { display: table-header-group; }
     tbody tr { page-break-inside: avoid; }
+    /* Layout table: signature footer repeats at the bottom of EVERY printed page */
+    .po-layout { width: 100%; }
+    .po-layout > tfoot, .po-layout-footer { display: table-footer-group; }
+    .po-layout > tbody > tr, .po-layout > tbody > tr > td { page-break-inside: auto !important; break-inside: auto !important; }
     .po-items-table thead { display: table-header-group; }
     .po-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
     .po-totals-block, .po-approval-block { page-break-inside: avoid; break-inside: avoid; }

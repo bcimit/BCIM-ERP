@@ -59,11 +59,74 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
   const tcsAmt     = parseFloat(data.tcs_amount || 0);
   const grandTotal = parseFloat(data.grand_total || (subTotal + totalGst + tcsAmt));
 
+  // ── Signature / approval grid — rendered in a tfoot so it repeats at the
+  //    bottom of EVERY printed page (table-footer-group behaviour) ───────────
+  const approvalGrid = (
+    <div className="po-approval-block" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #000', fontSize: '8px', height: '80px' }}>
+      {/* Col 1: Prepared By */}
+      <div style={{ borderRight: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          {data.prepared_by_sig
+            ? <img src={data.prepared_by_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
+            : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Digitally Signed</span>
+          }
+        </div>
+        <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+          Prepared By
+        </div>
+        <p style={{ margin: 0, fontSize: '7px' }}>{data.prepared_by_name || 'Procurement'}</p>
+      </div>
+
+      {/* Col 2: Director */}
+      <div style={{ borderRight: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          {data.released_mgmt_sig
+            ? <img src={data.released_mgmt_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
+            : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>{data.released_mgmt_name ? 'Approved' : 'Pending'}</span>
+          }
+        </div>
+        <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+          Director
+        </div>
+        <p style={{ margin: 0, fontSize: '7px', fontWeight: 600 }}>{data.released_mgmt_name || 'Pending'}</p>
+      </div>
+
+      {/* Col 3: Managing Director */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          {data.authorized_md_sig
+            ? <img src={data.authorized_md_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
+            : data.authorized_md_name
+              ? <div style={{ border: '3px solid #16a34a', color: '#16a34a', borderRadius: '50%', padding: '2px 4px', fontWeight: 900, fontSize: '6px', transform: 'rotate(-12deg)' }}>BCIM AUTHORIZED</div>
+              : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Pending</span>
+          }
+        </div>
+        <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Managing Director
+        </div>
+        <p style={{ margin: 0, fontSize: '7px', fontWeight: 600 }}>{data.authorized_md_name || 'BCIM Engineering'}</p>
+      </div>
+    </div>
+  );
+
   return (
     <div ref={ref} className="po-print-wrapper">
       {/* po-page: no fixed minHeight — content determines height, allows multi-page */}
       <div className="po-page bg-white text-black font-sans"
         style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4' }}>
+
+        {/* Layout table: tfoot repeats the signature grid at the bottom of every printed page */}
+        <table className="po-layout" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tfoot className="po-layout-footer">
+            <tr>
+              <td style={{ padding: '10px 0 0' }}>
+                {approvalGrid}
+              </td>
+            </tr>
+          </tfoot>
+          <tbody className="po-layout-body">
+            <tr>
+              <td style={{ padding: 0 }}>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* HEADER                                                              */}
@@ -113,8 +176,9 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
               Vendor / Supplier
             </p>
             <p style={{ fontWeight: 700, fontSize: '11px', margin: '0 0 3px', color: '#000' }}>{data.vendor_name || '—'}</p>
+            {data.vendor_contact_person && <p style={{ margin: '0 0 3px', color: '#000', fontWeight: 600 }}>Kind Attn: {data.vendor_contact_person}</p>}
             {data.vendor_address && <p style={{ color: '#000', whiteSpace: 'pre-line', margin: '0 0 3px' }}>{data.vendor_address}</p>}
-            {data.vendor_phone && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Tel: {data.vendor_phone}</p>}
+            {data.vendor_phone && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Mobile: {data.vendor_phone}</p>}
             {data.vendor_email && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Email: {data.vendor_email}</p>}
             <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#000' }}>
               GSTIN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_gstin || data.vendor_gst || '—'}</span>
@@ -274,55 +338,12 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           )}
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* APPROVAL GRID — 4 COLUMNS                                         */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className="po-approval-block" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #000', fontSize: '8px', height: '80px' }}>
-          {/* Col 1: Prepared By */}
-          <div style={{ borderRight: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-              {data.prepared_by_sig
-                ? <img src={data.prepared_by_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-                : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Digitally Signed</span>
-              }
-            </div>
-            <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              Prepared By
-            </div>
-            <p style={{ margin: 0, fontSize: '7px' }}>{data.prepared_by_name || 'Procurement'}</p>
-          </div>
-
-          {/* Col 2: Director */}
-          <div style={{ borderRight: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-              {data.released_mgmt_sig
-                ? <img src={data.released_mgmt_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-                : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>{data.released_mgmt_name ? 'Approved' : 'Pending'}</span>
-              }
-            </div>
-            <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-              Director
-            </div>
-            <p style={{ margin: 0, fontSize: '7px', fontWeight: 600 }}>{data.released_mgmt_name || 'Pending'}</p>
-          </div>
-
-          {/* Col 3: Managing Director */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-              {data.authorized_md_sig
-                ? <img src={data.authorized_md_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-                : data.authorized_md_name
-                  ? <div style={{ border: '3px solid #16a34a', color: '#16a34a', borderRadius: '50%', padding: '2px 4px', fontWeight: 900, fontSize: '6px', transform: 'rotate(-12deg)' }}>BCIM AUTHORIZED</div>
-                  : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Pending</span>
-              }
-            </div>
-            <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Managing Director
-            </div>
-            <p style={{ margin: 0, fontSize: '7px', fontWeight: 600 }}>{data.authorized_md_name || 'BCIM Engineering'}</p>
-          </div>
-        </div>
         </div>{/* /po-footer-block */}
+
+              </td>
+            </tr>
+          </tbody>
+        </table>{/* /po-layout */}
 
       </div>
     </div>
