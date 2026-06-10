@@ -340,6 +340,10 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
 
         </div>{/* /po-footer-block */}
 
+            </td></tr>
+          </tbody>
+        </table>
+
       </div>
     </div>
   );
