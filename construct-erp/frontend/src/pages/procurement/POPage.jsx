@@ -638,8 +638,8 @@ function PODetailPanel({ po, detailedPO, onClose, onApprove, onReject, isApprovi
     tbody tr { page-break-inside: avoid; }
     .po-items-table thead { display: table-header-group; }
     .po-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
-    .po-totals-block, .po-approval-block, .po-terms-block { page-break-inside: avoid; }
-    .po-footer-block { page-break-before: avoid !important; break-before: avoid !important; page-break-inside: avoid; break-inside: avoid; }
+    .po-totals-block, .po-approval-block { page-break-inside: avoid; break-inside: avoid; }
+    .po-footer-block { page-break-before: auto; break-before: auto; }
     @page { size: A4 portrait; margin: 8mm 8mm 12mm 8mm; }
     @media print { body { margin: 0; } }
   </style>

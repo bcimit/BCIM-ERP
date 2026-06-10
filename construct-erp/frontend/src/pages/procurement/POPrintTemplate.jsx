@@ -218,8 +218,8 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* FOOTER: TOTALS + TERMS + APPROVAL — kept together, no page break  */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className="po-footer-block" style={{ pageBreakBefore: 'avoid', breakBefore: 'avoid', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-        <div className="po-totals-block" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '16px' }}>
+        <div className="po-footer-block">
+        <div className="po-totals-block" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '16px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
           {/* Amount in Words */}
           <div style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', background: '#f8fafc' }}>
             <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#000', letterSpacing: '0.05em', marginBottom: '4px' }}>Amount in Words</p>
