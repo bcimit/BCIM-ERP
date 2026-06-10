@@ -575,15 +575,29 @@ const updateWorkOrder = async (req, res) => {
       start_date, end_date, total_value, contract_value,
       cost_head, work_category, tower_block, vendor_id,
       gst_pct, tds_pct, retention_pct, advance_recovery_pct,
+      wo_number,
     } = req.body;
 
     if (status && !VALID_WO_STATUSES.includes(status))
       return res.status(400).json({ error: `Invalid status. Must be one of: ${VALID_WO_STATUSES.join(', ')}` });
 
+    if (wo_number !== undefined) {
+      const trimmed = String(wo_number).trim().toUpperCase();
+      if (!trimmed) return res.status(400).json({ error: 'wo_number cannot be empty' });
+      const dup = await query(
+        `SELECT wo.id FROM work_orders wo
+         JOIN projects p ON wo.project_id = p.id
+         WHERE UPPER(TRIM(wo.wo_number)) = $1 AND wo.id <> $2 AND p.company_id = $3`,
+        [trimmed, req.params.id, req.user.company_id]
+      );
+      if (dup.rows.length) return res.status(409).json({ error: `Work Order number ${trimmed} is already in use` });
+    }
+
     const sets = [];
     const params = [req.params.id, req.user.company_id];
     let i = 3;
 
+    if (wo_number         !== undefined) { sets.push(`wo_number = $${i++}`);                           params.push(String(wo_number).trim().toUpperCase()); }
     if (status            !== undefined) { sets.push(`status = $${i++}`);                              params.push(status); }
     if (subject           !== undefined) { sets.push(`subject = $${i}, work_description = $${i++}`);  params.push(subject); }
     if (scope_of_work     !== undefined) { sets.push(`scope_of_work = $${i++}`);                      params.push(scope_of_work); }
