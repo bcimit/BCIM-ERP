@@ -115,19 +115,6 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
       <div className="po-page bg-white text-black font-sans"
         style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4' }}>
 
-        {/* Layout table: tfoot repeats the signature grid at the bottom of every printed page */}
-        <table className="po-layout" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tfoot className="po-layout-footer">
-            <tr>
-              <td style={{ padding: '10px 0 0' }}>
-                {approvalGrid}
-              </td>
-            </tr>
-          </tfoot>
-          <tbody className="po-layout-body">
-            <tr>
-              <td style={{ padding: 0 }}>
-
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* HEADER                                                              */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -338,12 +325,12 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           )}
         </div>
 
-        </div>{/* /po-footer-block */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* SIGNATURE / APPROVAL GRID — last footer only                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {approvalGrid}
 
-              </td>
-            </tr>
-          </tbody>
-        </table>{/* /po-layout */}
+        </div>{/* /po-footer-block */}
 
       </div>
     </div>

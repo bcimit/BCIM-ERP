@@ -106,19 +106,6 @@ const WOPrintTemplate = React.forwardRef(({ data }, ref) => {
       <div className="wo-page bg-white text-black font-sans"
         style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4' }}>
 
-        {/* Layout table: tfoot repeats the signature grid at the bottom of every printed page */}
-        <table className="wo-layout" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tfoot className="wo-layout-footer">
-            <tr>
-              <td style={{ padding: '10px 0 0' }}>
-                {approvalGrid}
-              </td>
-            </tr>
-          </tfoot>
-          <tbody className="wo-layout-body">
-            <tr>
-              <td style={{ padding: 0 }}>
-
         {/* ════════════════════════════════════════════════════════════════════ */}
         {/* HEADER                                                               */}
         {/* ════════════════════════════════════════════════════════════════════ */}
@@ -315,12 +302,12 @@ const WOPrintTemplate = React.forwardRef(({ data }, ref) => {
           )}
         </div>
 
-        </div>{/* /wo-footer-block */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* SIGNATURE / APPROVAL GRID — last footer only                       */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {approvalGrid}
 
-              </td>
-            </tr>
-          </tbody>
-        </table>{/* /wo-layout */}
+        </div>{/* /wo-footer-block */}
 
       </div>
     </div>

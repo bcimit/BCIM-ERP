@@ -46,7 +46,10 @@ const WO_STAGE_ROLES = {
   'md-approve':          { roles: ['md','ceo','admin','super_admin'],                                        depts: ['md','managing director','ceo'] },
 };
 // maps status → pipeline stage number (1-indexed)
-const WO_STATUS_STAGE = { draft:1, pending:1, submitted:2, approved:3, active:3, rejected:0, completed:3, terminated:0, closed:3 };
+// NOTE: 'active' is a legacy / directly-issued operational status that never went
+// through MD authorization — it must NOT mark the MD stage as done (stage 3).
+// Only an explicit MD approval (status 'approved') completes the pipeline.
+const WO_STATUS_STAGE = { draft:1, pending:1, submitted:2, approved:3, active:2, rejected:0, completed:3, terminated:0, closed:3 };
 
 function canApproveWOStage(stageId, user) {
   if (!user) return false;
@@ -861,14 +864,11 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onMDApprove, onReject
     table { border-collapse: collapse; }
     thead { display: table-header-group; }
     tbody tr { page-break-inside: avoid; }
-    /* Layout table: signature footer repeats at the bottom of EVERY printed page */
-    .wo-layout { width: 100%; }
-    .wo-layout > tfoot, .wo-layout-footer { display: table-footer-group; }
-    .wo-layout > tbody > tr, .wo-layout > tbody > tr > td { page-break-inside: auto !important; break-inside: auto !important; }
     .wo-items-table thead { display: table-header-group; }
     .wo-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
+    /* Keep totals + terms + signature together at the end (last footer) */
     .wo-totals-block, .wo-approval-block { page-break-inside: avoid; break-inside: avoid; }
-    .wo-footer-block { page-break-before: auto; break-before: auto; }
+    .wo-footer-block { page-break-inside: avoid; break-inside: avoid; }
     @page { size: A4 portrait; margin: 8mm 8mm 12mm 8mm; }
     @media print { body { margin: 0; } }
   </style>
