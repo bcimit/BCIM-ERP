@@ -13,6 +13,7 @@ import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import { subcontractorAPI, vendorAPI, projectAPI } from '../../api/client';
 import toast from 'react-hot-toast';
+import WOPrintTemplate from './WOPrintTemplate';
 
 const UNITS = ['SQFT', 'SQM', 'RMT', 'Nos', 'MT', 'Point', 'Month', 'LS', 'Day'];
 const inr = v => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -693,7 +694,7 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving
     enabled: !!wo?.id,
   });
 
-  const printRef = React.useRef(null);
+  const printZoneRef = React.useRef(null);
   const displayWO = { ...wo, ...(detail || {}) };
   const lineItems = displayWO.items || [];
   const val     = Number(displayWO.total_value || displayWO.contract_amount || 0);
@@ -703,26 +704,40 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving
   const cfg     = STATUS_CONFIG[displayWO.status] || STATUS_CONFIG.pending;
   const canApprove = ['draft','pending','submitted'].includes(displayWO.status);
 
+  // ── Print in a new isolated window — same approach as Purchase Orders ─────
   const handlePrint = () => {
-    if (!printRef.current) return;
-    const html = printRef.current.innerHTML;
+    if (!printZoneRef.current) return;
+    const html = printZoneRef.current.innerHTML;
     const win = window.open('', '_blank', 'width=900,height=700');
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-      <title>Work Order — ${displayWO.wo_number}</title>
-      <style>*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-      body{margin:0;padding:0;font-family:Arial,sans-serif}
-      table{border-collapse:collapse}thead{display:table-header-group}
-      tbody tr{page-break-inside:avoid}
-      @page{size:A4 portrait;margin:8mm}
-      </style></head><body>${html}</body></html>`);
+    if (!win) { window.print(); return; }           // fallback if popup blocked
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Work Order — ${displayWO.wo_number}</title>
+  <style>
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; }
+    table { border-collapse: collapse; }
+    thead { display: table-header-group; }
+    tbody tr { page-break-inside: avoid; }
+    .wo-items-table thead { display: table-header-group; }
+    .wo-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
+    .wo-totals-block, .wo-approval-block, .wo-terms-block { page-break-inside: avoid; }
+    @page { size: A4 portrait; margin: 8mm 8mm 12mm 8mm; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>${html}</body>
+</html>`);
     win.document.close();
     win.onload = () => { win.focus(); win.print(); win.close(); };
-    setTimeout(() => { try { win.focus(); win.print(); win.close(); } catch(_){} }, 1000);
+    setTimeout(() => { try { win.focus(); win.print(); win.close(); } catch(_) {} }, 1200);
   };
 
   return (
-    /* Full-screen centred modal — covers entire viewport */
+    <>
+    {/* Full-screen centred modal — covers entire viewport */}
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-5xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
 
@@ -752,7 +767,7 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving
         </div>
 
         {/* ── Scrollable Body ── */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 space-y-5" ref={printRef}>
+        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 space-y-5">
 
           {/* Financial summary strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -931,6 +946,12 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving
         </div>
       </div>
     </div>
+
+    {/* Hidden print zone — content captured via ref, printed in new window */}
+    <div ref={printZoneRef} style={{ display: 'none' }} aria-hidden="true">
+      <WOPrintTemplate data={displayWO} />
+    </div>
+    </>
   );
 }
 
