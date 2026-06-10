@@ -9,7 +9,24 @@ const { getNextDqsNumber } = require('../services/documentNumber.service');
 const { sendMail } = require('../services/mail.service');
 const wa = require('../services/whatsapp.service');
 const { notifyPoCreated, notifyPoRejected, notifyPoApproved } = require('../services/notif.helper');
+const { runSchemaInit } = require('../utils/schemaInit');
 const router = express.Router();
+
+// Ensure columns referenced on PO create exist on older databases
+runSchemaInit('purchase_orders_columns', async () => {
+  await query(`
+    ALTER TABLE purchase_orders
+      ADD COLUMN IF NOT EXISTS mrs_id UUID REFERENCES material_requisitions(id),
+      ADD COLUMN IF NOT EXISTS po_ref_no VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS po_req_no VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS po_req_date DATE,
+      ADD COLUMN IF NOT EXISTS approval_no VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS delivery_address TEXT,
+      ADD COLUMN IF NOT EXISTS order_intro TEXT,
+      ADD COLUMN IF NOT EXISTS payment_terms TEXT,
+      ADD COLUMN IF NOT EXISTS tcs_amount NUMERIC(15,2) DEFAULT 0
+  `);
+});
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
