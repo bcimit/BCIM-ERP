@@ -130,6 +130,8 @@ const getWorkOrder = async (req, res) => {
               v.name AS vendor_name, v.vendor_type,
               v.gst_number AS vendor_gstin, v.pan_number AS vendor_pan,
               v.address AS vendor_address,
+              v.contact_person AS vendor_contact_person,
+              v.phone AS vendor_phone, v.email AS vendor_email,
               u.name AS manager_name
        FROM work_orders wo
        JOIN projects p ON wo.project_id = p.id

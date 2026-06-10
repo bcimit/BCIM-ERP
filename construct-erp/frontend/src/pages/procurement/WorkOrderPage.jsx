@@ -864,6 +864,10 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onMDApprove, onReject
     table { border-collapse: collapse; }
     thead { display: table-header-group; }
     tbody tr { page-break-inside: avoid; }
+    /* Layout table: signature footer repeats at the bottom of EVERY printed page */
+    .wo-layout { width: 100%; }
+    .wo-layout > tfoot, .wo-layout-footer { display: table-footer-group; }
+    .wo-layout > tbody > tr, .wo-layout > tbody > tr > td { page-break-inside: auto !important; break-inside: auto !important; }
     .wo-items-table thead { display: table-header-group; }
     .wo-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
     .wo-totals-block, .wo-approval-block { page-break-inside: avoid; break-inside: avoid; }
