@@ -1,5 +1,6 @@
 // Asset Master — Snipe-IT style
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -13,104 +14,140 @@ import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
 import bcimLogo from '../../assets/bcim-logo.png';
 
+// ─── QR Label Grid (shared by on-screen preview & print portal) ───
+function QRLabelGrid({ assets, gridClassName }) {
+  return (
+    <div className={gridClassName || 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4'}>
+      {assets.map(a => (
+        <div key={a.id} className="qr-label bg-white flex flex-col items-center text-center"
+          style={{border:'2px solid #334155', borderRadius:'10px', padding:'12px 10px', gap:'6px'}}>
+
+          {/* ── Company header ── */}
+          <div style={{width:'100%', borderBottom:'1.5px solid #334155', paddingBottom:'8px', marginBottom:'2px',
+            display:'flex', flexDirection:'column', alignItems:'center', gap:'4px'}}>
+            <img src={bcimLogo} alt="BCIM" style={{height:'32px', width:'auto', objectFit:'contain'}} />
+            <div style={{fontSize:'9px', fontWeight:700, color:'#1e293b', letterSpacing:'0.8px', textTransform:'uppercase', lineHeight:'1.2'}}>
+              BCIM Engineering Pvt. Ltd.
+            </div>
+          </div>
+
+          {/* ── QR Code ── */}
+          <QRCodeSVG
+            value={`BCIM|${a.asset_code}|${a.asset_name}|${a.serial_number||'N/A'}`}
+            size={110} level="H"
+            style={{display:'block'}}
+          />
+
+          {/* ── Asset code ── */}
+          <div style={{fontFamily:'monospace', fontWeight:800, fontSize:'13px', color:'#1e1b4b', letterSpacing:'0.5px'}}>
+            {a.asset_code}
+          </div>
+
+          {/* ── Asset name ── */}
+          <div style={{fontSize:'11px', fontWeight:600, color:'#1e293b', lineHeight:'1.3', maxWidth:'150px'}}>
+            {a.asset_name}
+          </div>
+
+          {/* ── Brand · Model ── */}
+          {a.brand && (
+            <div style={{fontSize:'10px', color:'#475569', fontWeight:500}}>
+              {a.brand}{a.model ? ` · ${a.model}` : ''}
+            </div>
+          )}
+
+          {/* ── Serial ── */}
+          {a.serial_number && (
+            <div style={{fontSize:'10px', color:'#334155', fontFamily:'monospace', fontWeight:600}}>
+              S/N: {a.serial_number}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── QR Print Preview ─────────────────────────────────────────────
 function QRPrintPreview({ assets, onClose }) {
+  const [printRoot, setPrintRoot] = useState(null);
+
   useEffect(() => {
-    // Inject print-only CSS: hide everything except our QR zone
+    // Inject print-only CSS: hide everything except our print portal root
     const style = document.createElement('style');
     style.id = '__qr_print_style__';
     style.textContent = `
       @media print {
-        body > * { visibility: hidden !important; }
-        #qr-print-zone, #qr-print-zone * { visibility: visible !important; }
-        #qr-print-zone {
-          position: fixed !important;
-          top: 0 !important; left: 0 !important;
-          width: 100% !important; background: white !important;
-          padding: 16px !important;
+        @page { margin: 10mm; }
+        body > *:not(#__qr_print_root__) { display: none !important; }
+        #__qr_print_root__ {
+          display: block !important;
+          position: static !important;
+          width: 100% !important;
+          background: white !important;
+          padding: 0 !important;
+          margin: 0 !important;
         }
-        .qr-label { page-break-inside: avoid; break-inside: avoid; }
+        #__qr_print_root__ .qr-print-grid {
+          display: grid !important;
+          grid-template-columns: repeat(3, 1fr) !important;
+          gap: 10px !important;
+        }
+        #__qr_print_root__ .qr-label { page-break-inside: avoid; break-inside: avoid; }
         /* Force all text to print dark regardless of screen color */
-        #qr-print-zone * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        #__qr_print_root__ * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       }
     `;
     document.head.appendChild(style);
-    return () => { document.getElementById('__qr_print_style__')?.remove(); };
+
+    // Create a print-only portal root as a direct child of <body> so it isn't
+    // clipped by the modal's fixed/overflow container and can flow across pages.
+    const root = document.createElement('div');
+    root.id = '__qr_print_root__';
+    root.style.display = 'none';
+    document.body.appendChild(root);
+    setPrintRoot(root);
+
+    return () => {
+      document.getElementById('__qr_print_style__')?.remove();
+      root.remove();
+    };
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center overflow-y-auto p-6">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4">
-        {/* Header — hidden when printing */}
-        <div className="flex items-center justify-between px-6 py-4 border-b" style={{printColorAdjust:'exact'}}>
-          <div>
-            <h2 className="font-bold text-slate-800 text-lg">QR Labels</h2>
-            <p className="text-xs text-slate-400">{assets.length} asset{assets.length!==1?'s':''} · click Print to send to printer</p>
+    <>
+      <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center overflow-y-auto p-6">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b">
+            <div>
+              <h2 className="font-bold text-slate-800 text-lg">QR Labels</h2>
+              <p className="text-xs text-slate-400">{assets.length} asset{assets.length!==1?'s':''} · click Print to send to printer</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">
+                <Printer className="w-4 h-4" /> Print
+              </button>
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">
-              <Printer className="w-4 h-4" /> Print
-            </button>
-            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
 
-        {/* QR grid — this is what gets printed */}
-        <div id="qr-print-zone" className="p-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {assets.map(a => (
-              <div key={a.id} className="qr-label bg-white flex flex-col items-center text-center"
-                style={{border:'2px solid #334155', borderRadius:'10px', padding:'12px 10px', gap:'6px'}}>
-
-                {/* ── Company header ── */}
-                <div style={{width:'100%', borderBottom:'1.5px solid #334155', paddingBottom:'8px', marginBottom:'2px',
-                  display:'flex', flexDirection:'column', alignItems:'center', gap:'4px'}}>
-                  <img src={bcimLogo} alt="BCIM" style={{height:'32px', width:'auto', objectFit:'contain'}} />
-                  <div style={{fontSize:'9px', fontWeight:700, color:'#1e293b', letterSpacing:'0.8px', textTransform:'uppercase', lineHeight:'1.2'}}>
-                    BCIM Engineering Pvt. Ltd.
-                  </div>
-                </div>
-
-                {/* ── QR Code ── */}
-                <QRCodeSVG
-                  value={`BCIM|${a.asset_code}|${a.asset_name}|${a.serial_number||'N/A'}`}
-                  size={110} level="H"
-                  style={{display:'block'}}
-                />
-
-                {/* ── Asset code ── */}
-                <div style={{fontFamily:'monospace', fontWeight:800, fontSize:'13px', color:'#1e1b4b', letterSpacing:'0.5px'}}>
-                  {a.asset_code}
-                </div>
-
-                {/* ── Asset name ── */}
-                <div style={{fontSize:'11px', fontWeight:600, color:'#1e293b', lineHeight:'1.3', maxWidth:'150px'}}>
-                  {a.asset_name}
-                </div>
-
-                {/* ── Brand · Model ── */}
-                {a.brand && (
-                  <div style={{fontSize:'10px', color:'#475569', fontWeight:500}}>
-                    {a.brand}{a.model ? ` · ${a.model}` : ''}
-                  </div>
-                )}
-
-                {/* ── Serial ── */}
-                {a.serial_number && (
-                  <div style={{fontSize:'10px', color:'#334155', fontFamily:'monospace', fontWeight:600}}>
-                    S/N: {a.serial_number}
-                  </div>
-                )}
-              </div>
-            ))}
+          {/* On-screen preview grid */}
+          <div className="p-6">
+            <QRLabelGrid assets={assets} />
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Print-only copy, portalled to <body> so it flows across multiple pages */}
+      {printRoot && createPortal(
+        <QRLabelGrid assets={assets} gridClassName="qr-print-grid" />,
+        printRoot
+      )}
+    </>
   );
 }
 
