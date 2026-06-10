@@ -10,7 +10,7 @@ const { notifyScBillSubmitted, notifyScWoSubmitted } = require('../services/noti
 router.use(authenticate);
 const CID  = req => req.user.company_id;
 const ADMIN = ['super_admin','admin'];
-const PLANNER = ['super_admin','admin','project_manager','site_engineer','qs_engineer'];
+const PLANNER = ['super_admin','admin','project_manager','site_engineer','qs_engineer','procurement_manager'];
 
 // ── Auto-number helpers ────────────────────────────────────────────
 async function nextScCode(cid) {
