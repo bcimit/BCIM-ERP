@@ -53,19 +53,33 @@ router.delete('/work-orders/:id', authorize('super_admin', 'admin', 'project_man
   }
 });
 
-// PATCH /work-orders/:id/approve — approve a WO (submit → approved)
-router.patch('/work-orders/:id/approve', authorize('super_admin', 'admin', 'project_manager'), async (req, res) => {
+// PATCH /work-orders/:id/approve — Stage 1 (Procurement): draft/pending → submitted
+router.patch('/work-orders/:id/approve', authorize('super_admin', 'admin', 'project_manager', 'procurement_manager'), async (req, res) => {
   try {
-    const { comments } = req.body;
     const result = await query(
-      `UPDATE work_orders SET status='approved', updated_at=NOW()
-       WHERE id=$1 AND status IN ('pending','submitted','draft')
+      `UPDATE work_orders SET status='submitted', updated_at=NOW()
+       WHERE id=$1 AND status IN ('pending','draft')
          AND project_id IN (SELECT id FROM projects WHERE company_id=$2)
        RETURNING *`,
       [req.params.id, req.user.company_id]
     );
-    if (!result.rows.length) return res.status(404).json({ error: 'Work order not found or already approved' });
-    res.json({ data: result.rows[0], message: 'Work Order approved' });
+    if (!result.rows.length) return res.status(404).json({ error: 'Work order not found or not in pending/draft status' });
+    res.json({ data: result.rows[0], message: 'Work Order procurement approved' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /work-orders/:id/md-approve — Stage 2 (MD): submitted → approved
+router.patch('/work-orders/:id/md-approve', authorize('super_admin', 'admin'), async (req, res) => {
+  try {
+    const result = await query(
+      `UPDATE work_orders SET status='approved', updated_at=NOW()
+       WHERE id=$1 AND status = 'submitted'
+         AND project_id IN (SELECT id FROM projects WHERE company_id=$2)
+       RETURNING *`,
+      [req.params.id, req.user.company_id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Work order not found or not awaiting MD approval' });
+    res.json({ data: result.rows[0], message: 'Work Order MD authorized' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -40,22 +40,21 @@ const DEFAULT_PO_TERMS = `1. All Bills and DCs should contain the Reference of t
 
 const UNITS = ['MT', 'Bags', 'CUM', 'SQM', 'SQFT', 'Nos', 'RMT', 'KG', 'Litre', 'Month', 'LS', 'Point', 'Day', 'Roll', 'Bundle', 'Coil', 'Drum', 'Yard', 'Pairs', 'Brass'];
 
-// Finance approval stage removed — accounts not involved in PO/WO
-// Flow: pending → verified_audit → released_mgmt → approved
+// 2-Stage Approval: Procurement → MD
+// Flow: pending → verified_audit (Procurement Approved) → approved (MD Authorized)
 const STATUS_CONFIG = {
-  pending:        { label: 'Pending Audit',  short: 'Pending',    color: 'bg-yellow-50 text-yellow-700 border-yellow-200',  dot: 'bg-yellow-500',  icon: Clock,        stage: 1 },
-  verified_audit: { label: 'Audit Verified', short: 'Audit OK',   color: 'bg-blue-50 text-blue-700 border-blue-200',        dot: 'bg-blue-500',    icon: UserCheck,    stage: 2 },
-  released_mgmt:  { label: 'Mgmt Released',  short: 'Released',   color: 'bg-violet-50 text-violet-700 border-violet-200',  dot: 'bg-violet-500',  icon: Building2,    stage: 3 },
-  approved:       { label: 'MD Authorized',  short: 'Authorized', color: 'bg-emerald-50 text-emerald-700 border-emerald-200',dot: 'bg-emerald-500', icon: CheckCircle2, stage: 4 },
-  part_received:  { label: 'Part Received',  short: 'Part Rcvd',  color: 'bg-cyan-50 text-cyan-700 border-cyan-200',        dot: 'bg-cyan-500',    icon: Package,      stage: 5 },
-  fully_received: { label: 'Fully Received', short: 'Received',   color: 'bg-green-50 text-green-700 border-green-200',     dot: 'bg-green-500',   icon: Check,        stage: 6 },
-  rejected:       { label: 'Rejected',       short: 'Rejected',   color: 'bg-red-50 text-red-700 border-red-200',           dot: 'bg-red-400',     icon: XCircle,      stage: 0 },
+  pending:        { label: 'Pending Procurement', short: 'Pending',     color: 'bg-yellow-50 text-yellow-700 border-yellow-200',  dot: 'bg-yellow-500',  icon: Clock,        stage: 1 },
+  verified_audit: { label: 'Procurement Approved',short: 'Proc OK',    color: 'bg-blue-50 text-blue-700 border-blue-200',        dot: 'bg-blue-500',    icon: UserCheck,    stage: 2 },
+  released_mgmt:  { label: 'Procurement Approved',short: 'Proc OK',    color: 'bg-blue-50 text-blue-700 border-blue-200',        dot: 'bg-blue-500',    icon: UserCheck,    stage: 2 },
+  approved:       { label: 'MD Authorized',       short: 'Authorized',  color: 'bg-emerald-50 text-emerald-700 border-emerald-200',dot: 'bg-emerald-500', icon: CheckCircle2, stage: 3 },
+  part_received:  { label: 'Part Received',       short: 'Part Rcvd',  color: 'bg-cyan-50 text-cyan-700 border-cyan-200',        dot: 'bg-cyan-500',    icon: Package,      stage: 4 },
+  fully_received: { label: 'Fully Received',      short: 'Received',    color: 'bg-green-50 text-green-700 border-green-200',     dot: 'bg-green-500',   icon: Check,        stage: 5 },
+  rejected:       { label: 'Rejected',            short: 'Rejected',    color: 'bg-red-50 text-red-700 border-red-200',           dot: 'bg-red-400',     icon: XCircle,      stage: 0 },
 };
 
 const STAGE_ACTIONS = [
-  { id: 'verify-audit', label: 'Audit Verify',    reqStatus: 'pending'        },
-  { id: 'release-mgmt', label: 'Director Release', reqStatus: 'verified_audit' },
-  { id: 'authorize-md', label: 'MD Authorize',     reqStatus: 'released_mgmt'  },
+  { id: 'procurement-approve', label: 'Procurement Approve', reqStatus: 'pending'        },
+  { id: 'md-approve',          label: 'MD Authorize',        reqStatus: 'verified_audit' },
 ];
 
 const inr  = v => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -535,16 +534,14 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, isPend
 }
 
 const STAGE_LABELS = {
-  'verify-audit': 'Audit Verification',
-  'release-mgmt': 'Director Release',
-  'authorize-md': 'MD Authorization',
+  'procurement-approve': 'Procurement Approval',
+  'md-approve':          'MD Authorization',
 };
 
-// Which roles / departments can action each stage (Finance removed)
+// Which roles / departments can action each stage
 const STAGE_ROLES = {
-  'verify-audit': { roles: ['audit','admin','super_admin'],                         depts: ['audit','internal audit'] },
-  'release-mgmt': { roles: ['manager','director','gm','admin','super_admin'],       depts: ['manage','director','gm','general manager'] },
-  'authorize-md': { roles: ['md','ceo','admin','super_admin'],                      depts: ['md','managing director','ceo'] },
+  'procurement-approve': { roles: ['procurement_manager','project_manager','manager','admin','super_admin'], depts: ['procurement','purchase'] },
+  'md-approve':          { roles: ['md','ceo','admin','super_admin'],                                        depts: ['md','managing director','ceo'] },
 };
 
 function canApproveStage(stageId, user) {
@@ -663,7 +660,9 @@ function PODetailPanel({ po, detailedPO, onClose, onApprove, onReject, isApprovi
   });
   const linkedBills   = billsData?.bills   || [];
   const billsSummary  = billsData?.summary || {};
-  const currentAction = STAGE_ACTIONS.find(a => a.reqStatus === liveStatus);
+  const currentAction = STAGE_ACTIONS.find(a =>
+    a.reqStatus === liveStatus || (a.id === 'md-approve' && liveStatus === 'released_mgmt')
+  );
   const cfg = STATUS_CONFIG[liveStatus] || STATUS_CONFIG.pending;
   const signatures = detailedPO?.signatures || {};
   const isTaxInclusive = Boolean(detailedPO?.gst_inclusive ?? po.gst_inclusive);
@@ -963,19 +962,19 @@ function PODetailPanel({ po, detailedPO, onClose, onApprove, onReject, isApprovi
                   <div>
                     <p className="text-sm font-medium text-slate-900">{authorized ? 'Action Required' : 'Awaiting Authorization'}</p>
                     <p className={clsx('text-xs font-medium', authorized ? 'text-emerald-700' : 'text-slate-500')}>
-                      {authorized ? `${currentAction.label} — sign to authorize` : `${STAGE_LABELS[currentAction.id]} — not your approval level`}
+                      {authorized ? `${currentAction.label} — click to authorize` : `${STAGE_LABELS[currentAction.id]} — not your approval level`}
                     </p>
                   </div>
                 </div>
                 {authorized ? (
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setSigModal({ stage: currentAction.id })}
+                      onClick={() => onApprove(currentAction.id)}
                       disabled={isApproving}
                       className="flex-[2] h-9 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      {isApproving ? 'Processing…' : 'Sign & Authorize'}
+                      {isApproving ? 'Processing…' : currentAction.id === 'procurement-approve' ? 'Procurement Approve' : 'MD Authorize'}
                     </button>
                     <button
                       onClick={() => setRejectModal(true)}
@@ -1007,15 +1006,6 @@ function PODetailPanel({ po, detailedPO, onClose, onApprove, onReject, isApprovi
           />
         </div>
 
-        {/* Signature modal */}
-        {sigModal && (
-          <SignaturePadModal
-            signerName={user?.name || 'Authorized Signatory'}
-            signerRole={STAGE_LABELS[sigModal.stage] || sigModal.stage}
-            onSave={dataUrl => { onApprove(sigModal.stage, dataUrl); setSigModal(null); }}
-            onClose={() => setSigModal(null)}
-          />
-        )}
         {/* Reject reason modal — Bug fix: was silent reject with no reason */}
         {rejectModal && (
           <PORejectModal
@@ -1580,7 +1570,7 @@ export default function POPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, stage, signature_img }) => poAPI.approve(id, stage, { signature_img }),
+    mutationFn: ({ id, stage }) => poAPI.approve(id, stage, {}),
     onSuccess: () => {
       toast.success('Authorized successfully');
       qc.invalidateQueries({ queryKey: ['purchase-orders'] });
@@ -1845,8 +1835,8 @@ export default function POPage() {
           po={selectedPO}
           detailedPO={detailedPO}
           onClose={() => setSelectedPO(null)}
-          onApprove={(stage, signature_img) => {
-            approveMutation.mutate({ id: selectedPO.id, stage, signature_img });
+          onApprove={(stage) => {
+            approveMutation.mutate({ id: selectedPO.id, stage });
           }}
           onReject={(reason) => rejectMutation.mutate({ id: selectedPO.id, reason })}
           isApproving={approveMutation.isPending}

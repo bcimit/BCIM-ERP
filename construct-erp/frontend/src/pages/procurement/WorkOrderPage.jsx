@@ -19,10 +19,10 @@ const UNITS = ['SQFT', 'SQM', 'RMT', 'Nos', 'MT', 'Point', 'Month', 'LS', 'Day']
 const inr = v => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const STATUS_CONFIG = {
-  draft:      { label: 'Draft',      cls: 'bg-slate-100  text-slate-700  border-slate-200' },
-  pending:    { label: 'Pending',    cls: 'bg-amber-50   text-amber-700  border-amber-200' },
-  submitted:  { label: 'Submitted',  cls: 'bg-blue-50    text-blue-700   border-blue-200' },
-  approved:   { label: 'Approved',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  draft:      { label: 'Draft',                cls: 'bg-slate-100  text-slate-700  border-slate-200' },
+  pending:    { label: 'Pending',              cls: 'bg-amber-50   text-amber-700  border-amber-200' },
+  submitted:  { label: 'Procurement Approved', cls: 'bg-blue-50    text-blue-700   border-blue-200' },
+  approved:   { label: 'MD Authorized',        cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   active:     { label: 'Active',     cls: 'bg-teal-50    text-teal-700   border-teal-200' },
   completed:  { label: 'Completed',  cls: 'bg-indigo-50  text-indigo-700 border-indigo-200' },
   terminated: { label: 'Terminated', cls: 'bg-red-50     text-red-600    border-red-200' },
@@ -687,7 +687,7 @@ function CreateWOModal({ onClose, vendors, projects, onCreate }) {
 }
 
 /* ── WO Detail Panel — Full-Screen Modal ────────────────────────────────── */
-function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving, isRejecting }) {
+function WODetailPanel({ wo, onClose, onDelete, onApprove, onMDApprove, onReject, isApproving, isMDApproving, isRejecting }) {
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['work-order-detail', wo?.id],
     queryFn: () => subcontractorAPI.getWorkOrder(wo.id).then(r => r.data),
@@ -702,7 +702,8 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving
   const paid    = Number(displayWO.total_paid || 0);
   const balance = Math.max(val - billed, 0);
   const cfg     = STATUS_CONFIG[displayWO.status] || STATUS_CONFIG.pending;
-  const canApprove = ['draft','pending','submitted'].includes(displayWO.status);
+  const canProcurementApprove = ['draft','pending'].includes(displayWO.status);
+  const canMDApprove = displayWO.status === 'submitted';
 
   // ── Print in a new isolated window — same approach as Purchase Orders ─────
   const handlePrint = () => {
@@ -921,13 +922,19 @@ function WODetailPanel({ wo, onClose, onDelete, onApprove, onReject, isApproving
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors">
               <Printer className="w-4 h-4" /> Print
             </button>
-            {canApprove && onApprove && (
+            {canProcurementApprove && onApprove && (
               <button onClick={() => onApprove(wo.id)} disabled={isApproving}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-                <CheckCircle2 className="w-4 h-4" /> {isApproving ? 'Approving…' : 'Approve WO'}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                <CheckCircle2 className="w-4 h-4" /> {isApproving ? 'Processing…' : 'Procurement Approve'}
               </button>
             )}
-            {canApprove && onReject && (
+            {canMDApprove && onMDApprove && (
+              <button onClick={() => onMDApprove(wo.id)} disabled={isMDApproving}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                <CheckCircle2 className="w-4 h-4" /> {isMDApproving ? 'Processing…' : 'MD Authorize'}
+              </button>
+            )}
+            {(canProcurementApprove || canMDApprove) && onReject && (
               <button onClick={() => onReject(wo.id)} disabled={isRejecting}
                 className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-xl hover:bg-amber-100 disabled:opacity-50 transition-colors">
                 <X className="w-4 h-4" /> {isRejecting ? 'Rejecting…' : 'Reject WO'}
@@ -1004,11 +1011,20 @@ export default function WorkOrderPage() {
   const approveMutation = useMutation({
     mutationFn: id => subcontractorAPI.approveWorkOrder(id),
     onSuccess: () => {
-      toast.success('Work Order approved');
-      setSelectedWO(null);
+      toast.success('Work Order procurement approved');
       qc.invalidateQueries({ queryKey: ['work-orders'] });
     },
     onError: e => toast.error(e?.response?.data?.error || 'Approval failed'),
+  });
+
+  const mdApproveMutation = useMutation({
+    mutationFn: id => subcontractorAPI.mdApproveWorkOrder(id),
+    onSuccess: () => {
+      toast.success('Work Order MD authorized');
+      setSelectedWO(null);
+      qc.invalidateQueries({ queryKey: ['work-orders'] });
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'MD approval failed'),
   });
 
   const rejectMutation = useMutation({
@@ -1261,8 +1277,10 @@ export default function WorkOrderPage() {
           onClose={() => setSelectedWO(null)}
           onDelete={id => deleteMutation.mutate(id)}
           onApprove={id => approveMutation.mutate(id)}
+          onMDApprove={id => mdApproveMutation.mutate(id)}
           onReject={id => rejectMutation.mutate(id)}
           isApproving={approveMutation.isPending}
+          isMDApproving={mdApproveMutation.isPending}
           isRejecting={rejectMutation.isPending}
         />
       )}

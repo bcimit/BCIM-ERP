@@ -183,6 +183,7 @@ export const subcontractorAPI = {
   bulkImportWOs:     (data)   => api.post('/subcontractors/work-orders/bulk-import', data),
   deleteWorkOrder:   (id)     => api.delete(`/subcontractors/work-orders/${id}`),
   approveWorkOrder:  (id, d)  => api.patch(`/subcontractors/work-orders/${id}/approve`, d),
+  mdApproveWorkOrder:(id)     => api.patch(`/subcontractors/work-orders/${id}/md-approve`),
   rejectWorkOrder:   (id, d)  => api.patch(`/subcontractors/work-orders/${id}/reject`, d),
   downloadWOTemplate:()       => api.get('/subcontractors/work-orders/import/template', { responseType: 'blob' }),
   excelImportPreview:(file)   => { const fd = new FormData(); fd.append('file', file); return api.post('/subcontractors/work-orders/import/excel', fd, { headers: { 'Content-Type': undefined } }); },

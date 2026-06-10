@@ -931,12 +931,11 @@ router.patch('/:id/reject', async (req, res) => {
   }
 });
 
-// Stage-based Approval — Finance stage removed (accounts not involved in PO/WO)
-// Flow: pending → verified_audit → released_mgmt → approved
+// 2-Stage Approval: Procurement → MD
+// Flow: pending → verified_audit (Procurement) → approved (MD)
 const PO_STAGES = {
-  'verify-audit': { nextStatus: 'verified_audit', colBy: 'verified_procurement_by', colAt: 'verified_procurement_at', requiredPrev: 'pending'        },
-  'release-mgmt': { nextStatus: 'released_mgmt',  colBy: 'released_mgmt_by',        colAt: 'released_mgmt_at',        requiredPrev: 'verified_audit' },
-  'authorize-md': { nextStatus: 'approved',        colBy: 'authorized_md_by',        colAt: 'authorized_md_at',        requiredPrev: 'released_mgmt'  },
+  'procurement-approve': { nextStatus: 'verified_audit', colBy: 'verified_procurement_by', colAt: 'verified_procurement_at', requiredPrev: ['pending'] },
+  'md-approve':          { nextStatus: 'approved',        colBy: 'authorized_md_by',        colAt: 'authorized_md_at',        requiredPrev: ['verified_audit', 'released_mgmt'] },
 };
 
 router.patch('/:id/:stage', async (req, res) => {
@@ -956,7 +955,7 @@ router.patch('/:id/:stage', async (req, res) => {
     if (!po.rows.length || po.rows[0].company_id !== req.user.company_id) {
       return res.status(404).json({ error: 'Purchase Order not found' });
     }
-    if (po.rows[0].status !== cfg.requiredPrev) {
+    if (!cfg.requiredPrev.includes(po.rows[0].status)) {
       return res.status(400).json({ error: `Cannot perform ${stage}. Current status: ${po.rows[0].status}` });
     }
 
