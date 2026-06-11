@@ -297,7 +297,7 @@ async function upsertParsedOrder({ doc, parsed, projectId, user }) {
           `INSERT INTO po_items
              (po_id, material_name, hsn_code, quantity, unit, rate, gst_rate, gst_amount, total_amount, sort_order)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [recordId, item.material_name, item.hsn_code, item.quantity, item.unit, item.rate, item.gst_rate, item.gst_amount, item.total_amount, item.sort_order]
+          [recordId, item.material_name, item.hsn_code, parseFloat(item.quantity)||0, item.unit, parseFloat(item.rate)||0, parseFloat(item.gst_rate)||0, parseFloat(item.gst_amount)||0, parseFloat(item.total_amount)||0, item.sort_order]
         );
       }
     } else {
@@ -350,7 +350,7 @@ async function upsertParsedOrder({ doc, parsed, projectId, user }) {
         await client.query(
           `INSERT INTO work_order_items (wo_id, description, unit, quantity, rate, remarks)
            VALUES ($1,$2,$3,$4,$5,$6)`,
-          [recordId, item.description, item.unit, item.quantity, item.rate, item.remarks]
+          [recordId, item.description, item.unit, parseFloat(item.quantity)||0, parseFloat(item.rate)||0, item.remarks]
         );
       }
     }
@@ -683,8 +683,8 @@ router.post('/:id/parse-order', async (req, res) => {
               gst_rate, gst_amount, total_amount, sort_order)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
           [recordId, item.material_name, item.hsn_code,
-           item.quantity, item.unit, item.rate,
-           item.gst_rate, item.gst_amount, item.total_amount, item.sort_order]
+           parseFloat(item.quantity)||0, item.unit, parseFloat(item.rate)||0,
+           parseFloat(item.gst_rate)||0, parseFloat(item.gst_amount)||0, parseFloat(item.total_amount)||0, item.sort_order]
         );
       }
 
@@ -739,7 +739,7 @@ router.post('/:id/parse-order', async (req, res) => {
         await query(
           `INSERT INTO work_order_items (wo_id, description, unit, quantity, rate)
            VALUES ($1,$2,$3,$4,$5)`,
-          [recordId, item.description, item.unit, item.quantity, item.rate]
+          [recordId, item.description, item.unit, parseFloat(item.quantity)||0, parseFloat(item.rate)||0]
         );
       }
     }

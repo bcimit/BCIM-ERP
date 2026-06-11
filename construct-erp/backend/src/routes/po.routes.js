@@ -1053,8 +1053,8 @@ router.post('/import/confirm', async (req, res) => {
         await client.query(
           `INSERT INTO po_items (po_id, material_name, hsn_code, quantity, unit, rate, gst_rate, gst_amount, total_amount, sort_order)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [po_id, it.material_name || 'Item', it.hsn_code || '', it.quantity, it.unit || 'Nos',
-           it.rate, it.gst_rate, it.gst_amount, it.total_amount, it.sort_order]
+          [po_id, it.material_name || 'Item', it.hsn_code || '', parseFloat(it.quantity)||0, it.unit || 'Nos',
+           parseFloat(it.rate)||0, parseFloat(it.gst_rate)||0, parseFloat(it.gst_amount)||0, parseFloat(it.total_amount)||0, it.sort_order]
         );
       }
 
@@ -1145,8 +1145,8 @@ router.post('/bulk-import', async (req, res) => {
           // Insert each line item
           for (let idx = 0; idx < items.length; idx++) {
             const it      = items[idx];
-            const qty     = parseFloat(it.quantity);
-            const rate    = parseFloat(it.rate);
+            const qty     = parseFloat(it.quantity) || 0;
+            const rate    = parseFloat(it.rate)     || 0;
             const gstRate = parseFloat(it.gst_rate) || 0;
             const base    = qty * rate;
             const gstAmt  = base * gstRate / 100;
