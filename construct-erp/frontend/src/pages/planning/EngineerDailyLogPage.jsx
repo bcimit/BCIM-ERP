@@ -88,16 +88,6 @@ function LogForm({ log, projects, selectedProjectId, onClose }) {
     staleTime: 60000,
   });
 
-  // Load planning activities for the selected project (for schedule-linked logging)
-  const { data: planActivities = [] } = useQuery({
-    queryKey: ['plan-acts-for-log', form.project_id],
-    queryFn: () => planningAPI.listActivities({ project_id: form.project_id, limit: 500 })
-      .then(r => r.data?.data ?? r.data ?? [])
-      .catch(() => []),
-    enabled: !!form.project_id,
-    staleTime: 60000,
-  });
-
   const initActivities = () =>
     isEdit && log.activities?.length
       ? log.activities.map(a => ({ ...a }))
@@ -111,6 +101,16 @@ function LogForm({ log, projects, selectedProjectId, onClose }) {
     general_remarks: log?.general_remarks || '',
     issues:          log?.issues         || '',
     next_day_plan:   log?.next_day_plan  || '',
+  });
+
+  // Load planning activities for the selected project (for schedule-linked logging)
+  const { data: planActivities = [] } = useQuery({
+    queryKey: ['plan-acts-for-log', form.project_id],
+    queryFn: () => planningAPI.listActivities({ project_id: form.project_id, limit: 500 })
+      .then(r => r.data?.data ?? r.data ?? [])
+      .catch(() => []),
+    enabled: !!form.project_id,
+    staleTime: 60000,
   });
 
   useEffect(() => {
