@@ -1,23 +1,43 @@
 // src/pages/procurement/WORegisterPage.jsx
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import {
+  Activity,
   AlertCircle,
   Building2,
   Calendar,
+  Check,
+  CheckCircle2,
   ChevronRight,
   Download,
   FileText,
   Hammer,
+  Package,
   Plus,
+  Receipt,
   Search,
   X,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { clsx } from 'clsx';
+import toast from 'react-hot-toast';
 import { projectAPI, subcontractorAPI, vendorAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
+
+/* ── WO approval stages (mirrors WorkOrderPage.jsx) ── */
+const WO_STAGES = [
+  { id: 'procurement-approve', label: 'Procurement Approve', reqStatuses: ['draft', 'pending'] },
+  { id: 'md-approve',          label: 'MD Authorize',        reqStatuses: ['submitted'] },
+];
+const WO_STAGE_NUM = { draft: 1, pending: 1, submitted: 2, approved: 3, active: 2, rejected: 0, completed: 3, terminated: 0, closed: 3 };
+const BILL_STATUS_CFG = {
+  pending:  { cls: 'bg-amber-50 text-amber-700 border-amber-200',    label: 'Pending' },
+  approved: { cls: 'bg-blue-50  text-blue-700  border-blue-200',     label: 'Approved' },
+  paid:     { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Paid' },
+  rejected: { cls: 'bg-red-50   text-red-600   border-red-200',      label: 'Rejected' },
+};
 
 const inr = v => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -51,6 +71,9 @@ function TD({ children, right, className = '' }) {
 }
 
 function WODrawer({ wo, onClose }) {
+  const { user } = useAuthStore();
+  const qc = useQueryClient();
+
   const { data: detail, isLoading } = useQuery({
     queryKey: ['wo-register-detail', wo?.id],
     queryFn: () => subcontractorAPI.getWorkOrder(wo.id).then(r => r.data),
@@ -58,182 +81,383 @@ function WODrawer({ wo, onClose }) {
     staleTime: 5 * 60 * 1000,
     refetchOnMount: 'always',
   });
-  const data   = { ...wo, ...(detail || {}) };
-  const items  = data.items || [];
-  const val    = Number(data.total_value || data.contract_amount || 0);
-  const billed = Number(data.total_billed || 0);
-  const paid   = Number(data.total_paid || 0);
+
+  const { data: billsRaw = [] } = useQuery({
+    queryKey: ['wo-register-bills', wo?.id],
+    queryFn: () => subcontractorAPI.listBills({ wo_id: wo.id })
+      .then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    enabled: !!wo?.id,
+  });
+  const bills = Array.isArray(billsRaw) ? billsRaw : [];
+
+  const approveMut = useMutation({
+    mutationFn: () => subcontractorAPI.approveWorkOrder(wo.id, {}),
+    onSuccess: () => {
+      toast.success('Work Order approved');
+      qc.invalidateQueries({ queryKey: ['wo-register-detail', wo.id] });
+      qc.invalidateQueries({ queryKey: ['work-orders'] });
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Approval failed'),
+  });
+  const mdApproveMut = useMutation({
+    mutationFn: () => subcontractorAPI.mdApproveWorkOrder(wo.id),
+    onSuccess: () => {
+      toast.success('Work Order MD authorized');
+      qc.invalidateQueries({ queryKey: ['wo-register-detail', wo.id] });
+      qc.invalidateQueries({ queryKey: ['work-orders'] });
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'MD approval failed'),
+  });
+  const rejectMut = useMutation({
+    mutationFn: () => subcontractorAPI.rejectWorkOrder(wo.id, {}),
+    onSuccess: () => {
+      toast.success('Work Order rejected');
+      qc.invalidateQueries({ queryKey: ['wo-register-detail', wo.id] });
+      qc.invalidateQueries({ queryKey: ['work-orders'] });
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Rejection failed'),
+  });
+
+  const data    = { ...wo, ...(detail || {}) };
+  const items   = data.items || [];
+  const val     = Number(data.total_value || data.contract_amount || 0);
+  const billed  = Number(data.total_billed || 0);
+  const paid    = Number(data.total_paid || 0);
   const balance = Math.max(val - billed, 0);
-  const statusCfg = STATUS[data.status] || STATUS.pending;
+  const liveStatus = data.status;
+  const curStage   = WO_STAGE_NUM[liveStatus] ?? 1;
+
+  // Bills summary
+  const totalBilled    = bills.reduce((s, b) => s + Number(b.total_amount || 0), 0);
+  const approvedBilled = bills.filter(b => ['approved','paid'].includes(b.workflow_status))
+                              .reduce((s, b) => s + Number(b.total_amount || 0), 0);
+  const pendingBilled  = totalBilled - approvedBilled;
+  const utilPct        = val > 0 ? Math.min(100, (totalBilled / val) * 100) : 0;
+
+  const currentStageAction = WO_STAGES.find(s => s.reqStatuses.includes(liveStatus));
+  const userRole = String(user?.role || '').toLowerCase();
+  const canApprove = currentStageAction?.id === 'procurement-approve'
+    ? ['procurement_manager','project_manager','manager','admin','super_admin'].includes(userRole)
+    : currentStageAction?.id === 'md-approve'
+    ? ['md','ceo','admin','super_admin'].includes(userRole)
+    : false;
+
+  const itemsTotal = items.reduce((s, it) => s + Number(it.amount || Number(it.quantity||0)*Number(it.rate||0)), 0);
 
   return (
-    /* Full-screen modal — "separate window" feel */
-    <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-5xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[70] bg-[#f4f6f9] flex flex-col overflow-hidden">
 
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 flex-shrink-0">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0">
-              <Hammer className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="font-mono text-base font-bold text-white">{data.wo_number}</span>
-                <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-full border', statusCfg.cls)}>
-                  {statusCfg.label}
-                </span>
-                {data.cost_head && (
-                  <span className="text-[11px] bg-white/10 text-white/80 px-2 py-0.5 rounded-full">{data.cost_head}</span>
-                )}
-              </div>
-              <p className="text-sm text-white/80 mt-0.5 truncate max-w-[600px]">{data.subject || 'No subject'}</p>
-            </div>
-          </div>
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-200 bg-white flex-shrink-0 shadow-sm">
+        <div className="flex items-center gap-3">
           <button onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white flex-shrink-0 transition-colors">
-            <X className="w-5 h-5" />
+            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-600 hover:border-slate-300 transition-all mr-1">
+            <X className="w-4 h-4" />
           </button>
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <Hammer className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-base font-medium text-slate-900 font-mono">{data.wo_number}</p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate max-w-[420px]">
+              {data.vendor_name || '—'} · {data.created_at ? dayjs(data.created_at).format('DD MMM YYYY') : '—'}
+            </p>
+          </div>
+          <StatusBadge status={liveStatus} />
         </div>
+        <div className="hidden md:flex items-center gap-1">
+          {[
+            { label: 'Contract Value', value: `₹ ${inr(val)}`,     color: 'text-slate-700' },
+            { label: 'Billed',         value: `₹ ${inr(billed)}`,  color: 'text-indigo-600' },
+            { label: 'Balance',        value: `₹ ${inr(balance)}`,
+              color: balance > 0 ? 'text-amber-600 font-extrabold' : 'text-emerald-600 font-extrabold' },
+          ].map((k, i) => (
+            <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{k.label}</span>
+              <span className={clsx('text-sm font-bold', k.color)}>{k.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 space-y-5">
+      {/* ── Two-column body ── */}
+      <div className="flex-1 overflow-hidden flex">
 
-          {/* ── Financial summary strip ── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="rounded-xl border-2 border-blue-800 p-4" style={{background:'linear-gradient(135deg,#1a3a6b 0%,#122d58 100%)'}}>
-              <p className="text-xs font-bold text-blue-200 uppercase tracking-wider mb-2">Contract / Total Value</p>
-              <p className="text-xl font-bold font-mono text-white leading-tight">₹ {inr(val)}</p>
-            </div>
-            <div className="rounded-xl border-2 border-indigo-400 bg-indigo-600 p-4">
-              <p className="text-xs font-bold text-indigo-200 uppercase tracking-wider mb-2">Billed So Far</p>
-              <p className="text-xl font-bold font-mono text-white leading-tight">₹ {inr(billed)}</p>
-              {val > 0 && <p className="text-sm font-semibold text-indigo-200 mt-1">{Math.round((billed/val)*100)}% of WO value</p>}
-            </div>
-            <div className={clsx('rounded-xl border-2 p-4', balance > 0 ? 'border-amber-400 bg-amber-500' : 'border-emerald-400 bg-emerald-600')}>
-              <p className={clsx('text-xs font-bold uppercase tracking-wider mb-2', balance > 0 ? 'text-amber-100' : 'text-emerald-100')}>Balance to Bill</p>
-              <p className="text-xl font-bold font-mono text-white leading-tight">₹ {inr(balance)}</p>
-              <p className={clsx('text-sm font-semibold mt-1', balance > 0 ? 'text-amber-100' : 'text-emerald-100')}>{balance > 0 ? 'Pending billing' : '✓ Fully billed'}</p>
-            </div>
-            <div className="rounded-xl border-2 border-emerald-400 bg-emerald-600 p-4">
-              <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-2">Amount Paid</p>
-              <p className="text-xl font-bold font-mono text-white leading-tight">₹ {inr(paid)}</p>
-              {billed > 0 && <p className="text-sm font-semibold text-emerald-100 mt-1">{Math.round((paid/billed)*100)}% of billed</p>}
-            </div>
+        {/* LEFT — details + BOQ */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 border-r border-slate-200">
+
+          {/* Info grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ['Vendor / Sub-Con',  data.vendor_name     || '—'],
+              ['Vendor Type',       data.vendor_type     || '—'],
+              ['Vendor GSTIN',      data.vendor_gstin    || '—'],
+              ['Project',           data.project_name    || '—'],
+              ['Start Date',        data.start_date  ? dayjs(data.start_date).format('DD MMM YYYY')  : '—'],
+              ['End / Target Date', data.end_date    ? dayjs(data.end_date).format('DD MMM YYYY')    : '—'],
+              ['Contract Amount',   `₹ ${inr(data.contract_amount || val)}`],
+              ['Cost Head',         data.cost_head      || '—'],
+              ['Work Category',     data.work_category  || '—'],
+              ['Tower / Block',     data.tower_block    || '—'],
+              ['Work Description',  data.work_description || data.subject || '—'],
+              ['Manager',           data.manager_name   || '—'],
+            ].map(([label, value]) => (
+              <div key={label} className="bg-white border border-slate-200 rounded-lg p-3">
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-sm font-medium text-slate-800 break-words">{value}</p>
+              </div>
+            ))}
           </div>
 
-          {/* ── Work Order Details ── */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Work Order Details</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-0 divide-x divide-y divide-slate-100">
-              {[
-                ['Vendor / Sub-Con',    data.vendor_name     || '-'],
-                ['Vendor Type',         data.vendor_type     || '-'],
-                ['Vendor GSTIN',        data.vendor_gstin    || '-'],
-                ['Project',             data.project_name    || '-'],
-                ['Start Date',          data.start_date ? dayjs(data.start_date).format('DD MMM YYYY') : '-'],
-                ['End / Target Date',   data.end_date   ? dayjs(data.end_date).format('DD MMM YYYY')   : '-'],
-                ['Contract Amount',     `₹ ${inr(data.contract_amount || val)}`],
-                ['Cost Head',           data.cost_head    || '-'],
-                ['Work Category',       data.work_category || '-'],
-                ['Tower / Block',       data.tower_block  || '-'],
-                ['Work Description',    data.work_description || data.subject || '-'],
-                ['Manager',             data.manager_name || '-'],
-                ['Created Date',        data.created_at ? dayjs(data.created_at).format('DD MMM YYYY') : '-'],
-              ].map(([label, value]) => (
-                <div key={label} className="px-4 py-3">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-0.5">{label}</p>
-                  <p className="text-sm font-medium text-slate-800 break-words">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── BOQ Line Items ── */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">BOQ Line Items</p>
-              <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+          {/* BOQ line items */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+              <Package className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">BOQ Line Items</span>
+              <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
                 {isLoading ? '…' : `${items.length} item${items.length !== 1 ? 's' : ''}`}
               </span>
             </div>
             {isLoading ? (
-              <div className="p-8 text-center text-sm text-slate-400">Loading line items…</div>
-            ) : items.length === 0 ? (
-              <div className="p-8 text-center text-sm text-slate-400">No BOQ items found for this work order.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-800">
-                    <tr>
-                      {['#', 'Description', 'Unit', 'WO Qty', 'Billed Qty', 'Balance Qty', 'Rate (₹)', 'Amount (₹)'].map(h => (
-                        <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-white/80 whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it, idx) => {
-                      const qty      = Number(it.quantity || 0);
-                      const rate     = Number(it.rate || 0);
-                      const bQty     = Number(it.billed_qty    || 0);
-                      const remQty   = Number(it.remaining_qty ?? Math.max(qty - bQty, 0));
-                      const amount   = Number(it.amount || qty * rate);
-                      const billedPct = qty > 0 ? Math.round((bQty / qty) * 100) : 0;
-                      return (
-                        <tr key={it.id || idx} className={clsx('border-b border-slate-50', idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40')}>
-                          <td className="px-4 py-3 text-slate-400 font-mono">{idx + 1}</td>
-                          <td className="px-4 py-3 font-medium text-slate-800 max-w-[260px]">{it.description || `Item ${idx + 1}`}</td>
-                          <td className="px-4 py-3 text-slate-500">{it.unit || 'LS'}</td>
-                          <td className="px-4 py-3 font-mono text-right text-slate-700">{qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
-                          <td className="px-4 py-3 font-mono text-right">
-                            <span className="font-semibold text-emerald-700">{bQty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</span>
-                            {billedPct > 0 && <span className="text-[9px] text-emerald-500 ml-1">({billedPct}%)</span>}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-right">
-                            <span className={clsx('font-semibold', remQty > 0 ? 'text-amber-600' : 'text-slate-400')}>
-                              {remQty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 font-mono text-right text-slate-600">{inr(rate)}</td>
-                          <td className="px-4 py-3 font-mono text-right font-semibold text-slate-800">{inr(amount)}</td>
-                        </tr>
-                      );
-                    })}
-                    {/* Totals row */}
-                    <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
-                      <td colSpan={7} className="px-4 py-3 text-right text-sm text-slate-700 uppercase tracking-wider">Total Contract Value</td>
-                      <td className="px-4 py-3 font-mono text-right text-base font-bold text-slate-900">
-                        {inr(items.reduce((s, it) => s + Number(it.amount || Number(it.quantity||0) * Number(it.rate||0)), 0))}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
               </div>
+            ) : items.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-400">No BOQ items for this work order.</div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    {['#', 'Description', 'Unit', 'WO Qty', 'Billed', 'Balance', 'Rate (₹)', 'Amount (₹)'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-medium text-slate-500 uppercase tracking-wider bg-slate-50 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {items.map((it, idx) => {
+                    const qty      = Number(it.quantity || 0);
+                    const rate     = Number(it.rate || 0);
+                    const bQty     = Number(it.billed_qty || 0);
+                    const remQty   = Number(it.remaining_qty ?? Math.max(qty - bQty, 0));
+                    const amount   = Number(it.amount || qty * rate);
+                    const billedPct = qty > 0 ? Math.round((bQty / qty) * 100) : 0;
+                    return (
+                      <tr key={it.id || idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2.5 text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-3 py-2.5 font-medium text-slate-800 max-w-[260px]">{it.description || `Item ${idx + 1}`}</td>
+                        <td className="px-3 py-2.5">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-medium uppercase">{it.unit || 'LS'}</span>
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-right text-slate-700">{qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
+                        <td className="px-3 py-2.5 font-mono text-right">
+                          <span className="font-semibold text-emerald-700">{bQty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</span>
+                          {billedPct > 0 && <span className="text-[9px] text-emerald-500 ml-1">({billedPct}%)</span>}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-right">
+                          <span className={clsx('font-semibold', remQty > 0 ? 'text-amber-600' : 'text-slate-400')}>
+                            {remQty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-right text-slate-600">{inr(rate)}</td>
+                        <td className="px-3 py-2.5 font-mono text-right font-semibold text-slate-800">{inr(amount)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50">
+                    <td colSpan={7} className="px-3 py-2.5 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Total</td>
+                    <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-indigo-700">{inr(itemsTotal)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             )}
           </div>
 
-          {/* ── Scope of Work ── */}
+          {/* Scope of Work */}
           {(data.scope_of_work || data.work_description) && (
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Scope of Work / Description</p>
-              <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+            <div className="bg-white border border-slate-200 rounded-xl p-4">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Scope of Work</p>
+              <p className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">
                 {data.scope_of_work || data.work_description}
               </p>
             </div>
           )}
         </div>
 
-        {/* ── Footer ── */}
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
-          <div className="text-xs text-slate-400">
-            WO created: {data.created_at ? dayjs(data.created_at).format('DD MMM YYYY') : '—'}
+        {/* RIGHT — linked bills + approval pipeline */}
+        <div className="w-[420px] xl:w-[480px] flex-shrink-0 overflow-y-auto p-6 space-y-4 bg-[#f4f6f9]">
+
+          {/* ── Linked Bills / Invoices ── */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+              <Receipt className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Linked Bills / Invoices</span>
+              <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                {bills.length} {bills.length === 1 ? 'bill' : 'bills'}
+              </span>
+            </div>
+
+            {bills.length > 0 && (
+              <div className="grid grid-cols-3 gap-px bg-slate-100 border-b border-slate-100">
+                {[
+                  { label: 'Total Billed', value: inr(totalBilled),    color: 'text-slate-800' },
+                  { label: 'Approved',     value: inr(approvedBilled), color: 'text-emerald-600' },
+                  { label: 'Pending',      value: inr(pendingBilled),  color: 'text-amber-600' },
+                ].map((k, i) => (
+                  <div key={i} className="bg-white p-3 text-center">
+                    <p className="text-[10px] text-slate-400 font-medium mb-0.5">{k.label}</p>
+                    <p className={clsx('text-xs font-bold', k.color)}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {bills.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
+                <Receipt className="w-6 h-6 opacity-30" />
+                <p className="text-xs">No bills linked to this WO yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      {['SL', 'Bill No.', 'Date', 'Amount', 'Status'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-medium text-slate-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {bills.map((b, i) => {
+                      const st = BILL_STATUS_CFG[b.workflow_status] || BILL_STATUS_CFG.pending;
+                      return (
+                        <tr key={b.id || i} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-3 py-2.5 text-slate-400 font-mono">{i + 1}</td>
+                          <td className="px-3 py-2.5 font-medium text-slate-800">{b.bill_number || '—'}</td>
+                          <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
+                            {b.bill_date ? dayjs(b.bill_date).format('DD MMM YY') : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap">₹{inr(b.total_amount)}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={clsx('px-2 py-0.5 rounded-full text-[10px] font-medium border', st.cls)}>{st.label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td colSpan={3} className="px-3 py-2.5 text-xs font-medium text-slate-500 uppercase">Total</td>
+                      <td className="px-3 py-2.5 text-xs font-bold text-indigo-700">₹{inr(totalBilled)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+
+            {/* WO Utilisation bar */}
+            {val > 0 && bills.length > 0 && (
+              <div className="px-4 pb-4 pt-2">
+                <div className="flex justify-between text-[10px] text-slate-400 font-medium mb-1">
+                  <span>WO Utilisation</span>
+                  <span>{utilPct.toFixed(1)}% of ₹{inr(val)}</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={clsx('h-full rounded-full transition-all', totalBilled > val ? 'bg-red-500' : 'bg-indigo-500')}
+                    style={{ width: `${utilPct}%` }} />
+                </div>
+              </div>
+            )}
           </div>
-          <button onClick={onClose}
-            className="px-5 py-2 bg-slate-900 text-white text-sm font-semibold rounded-xl hover:bg-slate-800 transition-colors">
-            Close
-          </button>
-        </div>
+
+          {/* ── Approval Pipeline ── */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Approval Pipeline</span>
+            </div>
+            <div className="p-4">
+              <div className="relative">
+                <div className="absolute bg-slate-200 left-[17px] top-5" style={{ width: 1, height: 'calc(100% - 40px)' }} />
+                <div className="space-y-3">
+                  {WO_STAGES.map((stage, idx) => {
+                    const isDone   = curStage > idx + 1;
+                    const isActive = curStage === idx + 1;
+                    return (
+                      <div key={stage.id} className="flex items-start gap-3 relative">
+                        <div className={clsx(
+                          'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 z-10 border-2 mt-0.5',
+                          isDone   ? 'bg-emerald-500 border-emerald-500' :
+                          isActive ? 'bg-indigo-600 border-indigo-600'   : 'bg-white border-slate-200'
+                        )}>
+                          {isDone
+                            ? <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                            : <span className={clsx('text-xs font-bold', isActive ? 'text-white' : 'text-slate-400')}>{idx + 1}</span>}
+                        </div>
+                        <div className="flex-1 min-w-0 pt-1.5">
+                          <p className={clsx('text-xs font-semibold',
+                            isDone ? 'text-slate-500 line-through' : isActive ? 'text-slate-900' : 'text-slate-400'
+                          )}>{stage.label}</p>
+                        </div>
+                        {isDone   && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 mt-0.5">Done</span>}
+                        {isActive && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 animate-pulse mt-0.5">Pending</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Action panel ── */}
+          {currentStageAction && (
+            <div className={clsx('border rounded-xl p-4 space-y-3', canApprove ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200')}>
+              <div className="flex items-center gap-3">
+                <div className={clsx('w-9 h-9 rounded-lg border flex items-center justify-center',
+                  canApprove ? 'bg-emerald-100 border-emerald-200' : 'bg-slate-100 border-slate-200')}>
+                  <CheckCircle2 className={clsx('w-4 h-4', canApprove ? 'text-emerald-600' : 'text-slate-400')} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{canApprove ? 'Action Required' : 'Awaiting Authorization'}</p>
+                  <p className={clsx('text-xs font-medium', canApprove ? 'text-emerald-700' : 'text-slate-500')}>
+                    {canApprove ? `${currentStageAction.label} — click to authorize` : `${currentStageAction.label} — not your approval level`}
+                  </p>
+                </div>
+              </div>
+              {canApprove ? (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => currentStageAction.id === 'procurement-approve' ? approveMut.mutate() : mdApproveMut.mutate()}
+                    disabled={approveMut.isPending || mdApproveMut.isPending}
+                    className="flex-[2] h-9 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {(approveMut.isPending || mdApproveMut.isPending) ? 'Processing…' : currentStageAction.label}
+                  </button>
+                  <button
+                    onClick={() => { if (window.confirm('Reject this Work Order?')) rejectMut.mutate(); }}
+                    disabled={rejectMut.isPending}
+                    className="flex-1 h-9 rounded-lg bg-white border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-colors disabled:opacity-50">
+                    {rejectMut.isPending ? '…' : 'Reject'}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic px-1">
+                  This WO is waiting for the {currentStageAction.label} team to act.
+                </p>
+              )}
+            </div>
+          )}
+
+        </div>{/* end right column */}
+      </div>{/* end two-column body */}
+
+      {/* Footer */}
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-t border-slate-100 bg-white">
+        <span className="text-xs text-slate-400">
+          WO created: {data.created_at ? dayjs(data.created_at).format('DD MMM YYYY') : '—'}
+        </span>
       </div>
     </div>
   );
