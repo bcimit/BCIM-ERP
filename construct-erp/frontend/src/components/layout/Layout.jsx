@@ -768,6 +768,7 @@ function usePageTitle() {
 // ── Mobile slide-in sidebar ──────────────────────────────────────────────────
 function MobileSidebar({ open, onClose, navGroups, user, matchesPath }) {
   const [expandedGroup, setExpandedGroup] = useState(null);
+  const [expandedSection, setExpandedSection] = useState(null);
   const { t } = useLanguage();
 
   return (
@@ -815,30 +816,59 @@ function MobileSidebar({ open, onClose, navGroups, user, matchesPath }) {
                   <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flex: 1 }}>{t(group.label)}</span>
                   <ChevronDown size={12} style={{ opacity: 0.75, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
-                {isOpen && (
-                  <div style={{ paddingBottom: 4 }}>
-                    {group.items.map(item => {
-                      const Icon = item.icon;
-                      const active = matchesPath(item.to);
-                      return (
-                        <NavLink key={item.to} to={item.to} onClick={onClose}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 10,
-                            padding: '7px 16px 7px 28px',
-                            background: active ? hexToRgba(color, 0.18) : 'transparent',
-                            color: active ? '#fff' : 'rgba(255,255,255,0.85)',
-                            textDecoration: 'none', fontSize: 13,
-                            fontWeight: active ? 600 : 400,
-                            borderLeft: active ? `3px solid ${color}` : '3px solid transparent',
-                          }}
-                        >
-                          <Icon size={13} />
-                          {t(item.label)}
-                        </NavLink>
-                      );
-                    })}
-                  </div>
-                )}
+                {isOpen && (() => {
+                  const renderLink = (item, nested) => {
+                    const Icon = item.icon;
+                    const active = matchesPath(item.to);
+                    return (
+                      <NavLink key={item.to} to={item.to} onClick={onClose}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: nested ? '7px 16px 7px 40px' : '7px 16px 7px 28px',
+                          background: active ? hexToRgba(color, 0.18) : 'transparent',
+                          color: active ? '#fff' : 'rgba(255,255,255,0.85)',
+                          textDecoration: 'none', fontSize: 13,
+                          fontWeight: active ? 600 : 400,
+                          borderLeft: active ? `3px solid ${color}` : '3px solid transparent',
+                        }}
+                      >
+                        <Icon size={13} />
+                        {t(item.label)}
+                      </NavLink>
+                    );
+                  };
+                  return (
+                    <div style={{ paddingBottom: 4 }}>
+                      {getNavSections(group).map(section => {
+                        const isSub = section.label && section.items.length > 1;
+                        if (!isSub) return section.items.map(item => renderLink(item, false));
+                        const key       = `${group.label}:${section.label}`;
+                        const subOpen   = expandedSection === key;
+                        const subActive = section.items.some(i => matchesPath(i.to));
+                        const SubIcon   = section.items[0]?.icon || FolderSearch;
+                        return (
+                          <div key={key}>
+                            <button
+                              onClick={() => setExpandedSection(subOpen ? null : key)}
+                              style={{
+                                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                                padding: '7px 16px 7px 28px', background: 'transparent', border: 'none',
+                                color: subActive ? '#fff' : 'rgba(255,255,255,0.85)', cursor: 'pointer', textAlign: 'left',
+                                fontSize: 13, fontWeight: 600,
+                              }}
+                            >
+                              <SubIcon size={13} />
+                              <span style={{ flex: 1 }}>{t(section.label)}</span>
+                              <span style={{ fontSize: 10, opacity: 0.6 }}>{section.items.length}</span>
+                              <ChevronDown size={11} style={{ opacity: 0.75, transform: subOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                            </button>
+                            {subOpen && section.items.map(item => renderLink(item, true))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -852,6 +882,7 @@ function MobileSidebar({ open, onClose, navGroups, user, matchesPath }) {
 function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset }) {
   const activeGroup = navGroups.find(group => group.items.some(item => matchesPath(item.to)))?.label;
   const [expandedGroup, setExpandedGroup] = useState(activeGroup || navGroups[0]?.label);
+  const [expandedSection, setExpandedSection] = useState(null);
   const [hovered, setHovered] = useState(false);
   const { t } = useLanguage();
   const location = useLocation();
@@ -860,6 +891,15 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
   useEffect(() => {
     if (activeGroup && !collapsed) setExpandedGroup(activeGroup);
   }, [activeGroup, collapsed]);
+
+  // Auto-open the sub-group that contains the active page
+  useEffect(() => {
+    const grp = navGroups.find(g => g.label === expandedGroup);
+    if (!grp) { setExpandedSection(null); return; }
+    const act = getNavSections(grp).find(s => s.label && s.items.length > 1 && s.items.some(i => matchesPath(i.to)));
+    setExpandedSection(act ? `${grp.label}:${act.label}` : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedGroup, location.pathname]);
 
   // Close on EVERY navigation — this is the reliable auto-hide trigger.
   // Works regardless of mouse position after clicking a link.
@@ -937,35 +977,71 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                     </span>
                     <ChevronDown size={13} style={{ color: '#94A3B8', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }} />
                   </button>
-                  {isOpen && (
-                    <div style={{ padding: '3px 0 5px' }}>
-                      {group.items.map(item => {
-                        const Icon = item.icon;
-                        const active = matchesPath(item.to);
-                        return (
-                          <NavLink
-                            key={item.to}
-                            to={item.to}
-                            onClick={handleNavClick}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 9,
-                              margin: '1px 0', padding: '7px 10px 7px 22px',
-                              borderRadius: 8,
-                              background: active ? hexToRgba(color, 0.12) : 'transparent',
-                              color: active ? color : '#64748B',
-                              textDecoration: 'none',
-                              fontSize: 11, fontWeight: active ? 700 : 600,
-                              textTransform: 'uppercase', letterSpacing: '0.04em',
-                              borderLeft: active ? `3px solid ${color}` : '3px solid transparent',
-                            }}
-                          >
-                            <Icon size={14} style={{ flexShrink: 0 }} />
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t(item.label)}</span>
-                          </NavLink>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {isOpen && (() => {
+                    const renderLink = (item, nested) => {
+                      const Icon = item.icon;
+                      const active = matchesPath(item.to);
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          onClick={handleNavClick}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 9,
+                            margin: '1px 0', padding: nested ? '6px 10px 6px 14px' : '7px 10px 7px 22px',
+                            borderRadius: 8,
+                            background: active ? hexToRgba(color, 0.12) : 'transparent',
+                            color: active ? color : '#64748B',
+                            textDecoration: 'none',
+                            fontSize: 11, fontWeight: active ? 700 : 600,
+                            textTransform: 'uppercase', letterSpacing: '0.04em',
+                            borderLeft: active ? `3px solid ${color}` : '3px solid transparent',
+                          }}
+                        >
+                          <Icon size={14} style={{ flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t(item.label)}</span>
+                        </NavLink>
+                      );
+                    };
+                    return (
+                      <div style={{ padding: '3px 0 5px' }}>
+                        {getNavSections(group).map(section => {
+                          const isSub = section.label && section.items.length > 1;
+                          if (!isSub) return section.items.map(item => renderLink(item, false));
+                          const key       = `${group.label}:${section.label}`;
+                          const subOpen   = expandedSection === key;
+                          const subActive = section.items.some(i => matchesPath(i.to));
+                          const SubIcon   = section.items[0]?.icon || FolderSearch;
+                          return (
+                            <div key={key}>
+                              <button
+                                onClick={() => setExpandedSection(subOpen ? null : key)}
+                                style={{
+                                  width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                                  margin: '1px 0', padding: '7px 10px 7px 22px',
+                                  borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left',
+                                  background: subOpen ? hexToRgba(color, 0.07) : 'transparent',
+                                  color: subActive ? color : '#475569',
+                                }}
+                              >
+                                <SubIcon size={14} style={{ flexShrink: 0 }} />
+                                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                  {t(section.label)}
+                                </span>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8' }}>{section.items.length}</span>
+                                <ChevronDown size={12} style={{ color: '#94A3B8', transform: subOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }} />
+                              </button>
+                              {subOpen && (
+                                <div style={{ margin: '0 0 2px 30px', paddingLeft: 4, borderLeft: `2px solid ${hexToRgba(color, 0.25)}` }}>
+                                  {section.items.map(item => renderLink(item, true))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
