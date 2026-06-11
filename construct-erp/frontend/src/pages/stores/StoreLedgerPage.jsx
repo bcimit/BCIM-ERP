@@ -696,7 +696,7 @@ export default function StoreLedgerPage() {
     };
   };
 
-  const printActiveReport = () => {
+  const printActiveReport = async () => {
     const report = getReportDefinition();
     if (!report.rows.length) {
       toast.error('No data available to print');
@@ -708,12 +708,25 @@ export default function StoreLedgerPage() {
       return;
     }
 
-    // Resolve project name from the active filter
+    // Resolve project name — prefer projectsData, fall back to inventory rows
     const projectName = projectFilter
-      ? (projectsData.find(p => p.id === projectFilter)?.name || '—')
+      ? (projectsData.find(p => String(p.id) === String(projectFilter))?.name
+          || inventoryData.find(r => r.project_id === projectFilter)?.project_name
+          || projectFilter)
       : 'All Projects';
     const storesPersonName = user?.name || '—';
-    const logoUrl = `${window.location.origin}/bcim-logo.png`;
+
+    // Pre-fetch logo as base64 so the blank window can render it without timing issues
+    let logoSrc = '';
+    try {
+      const res = await fetch(`${window.location.origin}/bcim-logo.png`);
+      const blob = await res.blob();
+      logoSrc = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (_) { /* logo just won't render */ }
 
     const headerCells = report.columns.map(h => `<th>${escapeHtml(h)}</th>`).join('');
     const bodyRows = report.rows.map(row => `<tr>${row.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
@@ -773,7 +786,7 @@ export default function StoreLedgerPage() {
         <table class="doc-header">
           <tr>
             <td class="logo-cell" rowspan="1">
-              <img src="${logoUrl}" alt="BCIM" onerror="this.style.display='none'" />
+              ${logoSrc ? `<img src="${logoSrc}" alt="BCIM" style="height:48px;width:auto;object-fit:contain;" />` : '<span style="font-size:9px;font-weight:900;color:#0f2d6b;">BCIM</span>'}
             </td>
             <td class="title-cell">
               <div class="doc-title">${escapeHtml(report.title)}</div>
