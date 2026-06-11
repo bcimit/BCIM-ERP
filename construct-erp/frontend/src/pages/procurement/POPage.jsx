@@ -557,8 +557,8 @@ const STAGE_LABELS = {
 
 // Which roles / departments can action each stage
 const STAGE_ROLES = {
-  'procurement-approve': { roles: ['procurement_manager','project_manager','manager','admin','super_admin'], depts: ['procurement','purchase'] },
-  'md-approve':          { roles: ['md','ceo','managing_director','admin','super_admin'],                    depts: ['md','managing director','ceo'] },
+  'procurement-approve': { roles: ['procurement_manager','project_manager','manager','admin','super_admin','md','ceo','managing_director'], depts: ['procurement','purchase'] },
+  'md-approve':          { roles: ['md','ceo','managing_director','admin','super_admin'],                                                          depts: ['md','managing director','ceo'] },
 };
 
 function canApproveStage(stageId, user) {
