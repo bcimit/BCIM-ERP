@@ -43,7 +43,7 @@ const WO_STAGE_LABELS = {
 };
 const WO_STAGE_ROLES = {
   'procurement-approve': { roles: ['procurement_manager','project_manager','manager','admin','super_admin'], depts: ['procurement','purchase'] },
-  'md-approve':          { roles: ['md','ceo','admin','super_admin'],                                        depts: ['md','managing director','ceo'] },
+  'md-approve':          { roles: ['md','ceo','managing_director','admin','super_admin'],                    depts: ['md','managing director','ceo'] },
 };
 // maps status → pipeline stage number (1-indexed)
 // NOTE: 'active' is a legacy / directly-issued operational status that never went

@@ -694,9 +694,9 @@ router.patch('/:id', async (req, res) => {
           const basic = (parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0);
           const gst   = basic * ((parseFloat(it.gst_rate) || 0) / 100);
           await client.query(
-            `INSERT INTO po_items (po_id, material_name, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [req.params.id, it.material_name, it.hsn_code || null,
+            `INSERT INTO po_items (po_id, material_name, make_model, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [req.params.id, it.material_name, it.make_model || null, it.hsn_code || null,
              parseFloat(it.quantity) || 0, it.unit || 'Nos',
              parseFloat(it.rate) || 0, parseFloat(it.gst_rate) || 0,
              it.req_date || null, j + 1]
@@ -887,9 +887,9 @@ router.post('/', async (req, res) => {
         
         await client.query(
           `INSERT INTO po_items (
-            po_id, material_name, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [poId, item.material_name, item.hsn_code || null, parseFloat(item.quantity) || 0, item.unit, parseFloat(item.rate) || 0, parseFloat(item.gst_rate) || 0, item.req_date || null, i + 1]
+            po_id, material_name, make_model, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [poId, item.material_name, item.make_model || null, item.hsn_code || null, parseFloat(item.quantity) || 0, item.unit, parseFloat(item.rate) || 0, parseFloat(item.gst_rate) || 0, item.req_date || null, i + 1]
         );
         subTotal += basic;
         totalGst += gst;

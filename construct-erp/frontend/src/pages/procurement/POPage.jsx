@@ -302,12 +302,12 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
         }))
       : prefill?.items?.length
         ? prefill.items
-        : [{ material_name: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]
+        : [{ material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]
   );
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
-  const addItem = () => setItems(p => [...p, { material_name: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]);
+  const addItem = () => setItems(p => [...p, { material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const activeMrsList = mrsList.filter(m => m.status !== 'rejected');
 
@@ -468,16 +468,18 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                 <Plus className="w-3 h-3" /> Add Row
               </button>
             </div>
-            <div className="grid gap-1.5 mb-2" style={{ gridTemplateColumns: '2fr 80px 70px 100px 90px 70px 105px 32px' }}>
-              {['Description', 'HSN', 'Unit', 'Qty', 'Rate (₹)', 'GST%', 'Req Date', ''].map(h => (
+            <div className="grid gap-1.5 mb-2" style={{ gridTemplateColumns: '2fr 1.2fr 80px 70px 100px 90px 70px 105px 32px' }}>
+              {['Description', 'Make / Model', 'HSN', 'Unit', 'Qty', 'Rate (₹)', 'GST%', 'Req Date', ''].map(h => (
                 <div key={h} className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider px-1">{h}</div>
               ))}
             </div>
             <div className="space-y-2">
               {items.map((it, i) => (
-                <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '2fr 80px 70px 100px 90px 70px 105px 32px' }}>
+                <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '2fr 1.2fr 80px 70px 100px 90px 70px 105px 32px' }}>
                   <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400 transition-all"
                     placeholder="Material description" value={it.material_name} onChange={e => setItem(i, 'material_name', e.target.value)} />
+                  <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                    placeholder="Brand / spec" value={it.make_model || ''} onChange={e => setItem(i, 'make_model', e.target.value)} />
                   <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
                     placeholder="HSN" value={it.hsn_code} onChange={e => setItem(i, 'hsn_code', e.target.value)} />
                   <select className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
@@ -556,7 +558,7 @@ const STAGE_LABELS = {
 // Which roles / departments can action each stage
 const STAGE_ROLES = {
   'procurement-approve': { roles: ['procurement_manager','project_manager','manager','admin','super_admin'], depts: ['procurement','purchase'] },
-  'md-approve':          { roles: ['md','ceo','admin','super_admin'],                                        depts: ['md','managing director','ceo'] },
+  'md-approve':          { roles: ['md','ceo','managing_director','admin','super_admin'],                    depts: ['md','managing director','ceo'] },
 };
 
 function canApproveStage(stageId, user) {
@@ -793,7 +795,8 @@ function PODetailPanel({ po, detailedPO, onClose, onEdit, onApprove, onReject, i
                         <td className="px-3 py-2.5 text-slate-900 font-medium font-mono">{i + 1}</td>
                         <td className="px-3 py-2.5 font-medium text-slate-800">
                           {it.material_name}
-                          {it.hsn_code && <div className="text-slate-900 font-medium font-normal">HSN: {it.hsn_code}</div>}
+                          {it.make_model && <div className="text-xs text-indigo-600 font-medium">{it.make_model}</div>}
+                          {it.hsn_code && <div className="text-slate-900 font-medium font-normal text-xs">HSN: {it.hsn_code}</div>}
                         </td>
                         <td className="px-3 py-2.5">
                           <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-900 border border-slate-200 font-medium uppercase">{it.unit}</span>
