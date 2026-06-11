@@ -3,13 +3,13 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { approvalsAPI } from '../../api/client';
+import { approvalsAPI, mrsAPI } from '../../api/client';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import useAuthStore from '../../store/authStore';
 import {
   CheckCircle2, XCircle, Eye, RefreshCw, Clock, AlertTriangle,
   FileText, Briefcase, Layers, Shield, Receipt, ShoppingCart, Package,
-  ChevronRight, MessageSquare, X, CheckCheck, Bell,
+  ChevronRight, MessageSquare, X, CheckCheck, Bell, Landmark,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -122,8 +122,156 @@ function ActionModal({ item, actionType, onConfirm, onClose }) {
   );
 }
 
+// ─── MD Authorization Modal (MRS only) ───────────────────────────────────────
+function MDAuthModal({ mrsId, mrsRef, onClose, onAuthorized }) {
+  const qc = useQueryClient();
+
+  const { data: mrsData, isLoading } = useQuery({
+    queryKey: ['mrs-detail-for-md', mrsId],
+    queryFn: () => mrsAPI.get(mrsId).then(r => r.data?.data ?? r.data),
+    enabled: !!mrsId,
+    staleTime: 0,
+  });
+
+  const items = mrsData?.items || [];
+
+  const [approvedItems, setApprovedItems] = useState(null);
+  const [remarks, setRemarks] = useState('');
+
+  // Init approvedItems once items load
+  const resolvedItems = approvedItems ?? items.map(it => ({
+    id: it.id,
+    material_name: it.material_name || it.material,
+    unit: it.unit,
+    qty: String(it.quantity ?? it.qty ?? ''),
+    original_qty: it.quantity ?? it.qty,
+    included: true,
+  }));
+
+  const toggle  = (idx) => setApprovedItems(resolvedItems.map((it, i) => i === idx ? { ...it, included: !it.included } : it));
+  const setQty  = (idx, v) => setApprovedItems(resolvedItems.map((it, i) => i === idx ? { ...it, qty: v } : it));
+
+  const includedCount = resolvedItems.filter(it => it.included).length;
+
+  const authMut = useMutation({
+    mutationFn: (data) => mrsAPI.approve(mrsId, 'approve-md', data),
+    onSuccess: () => {
+      toast.success('MRS authorized by MD');
+      qc.invalidateQueries({ queryKey: ['my-approvals'] });
+      onAuthorized();
+      onClose();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Authorization failed'),
+  });
+
+  const handleAuthorize = () => {
+    authMut.mutate({
+      approved_items: resolvedItems.map(it => ({
+        id: it.id,
+        qty: parseFloat(it.qty) || 0,
+        included: it.included,
+      })),
+      remarks,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-green-800 px-6 py-4 flex items-start justify-between flex-shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Landmark size={16} className="opacity-80" /> MD Authorization
+            </h2>
+            <p className="text-xs text-green-200 mt-0.5">{mrsRef} — review &amp; approve line items</p>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-5 py-2.5 bg-green-50 border-b border-green-100 flex-shrink-0">
+          <p className="text-xs text-green-800 font-medium">
+            Check items to include · edit quantities if needed · uncheck to exclude
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setApprovedItems(resolvedItems.map(it => ({ ...it, included: true })))}
+              className="text-[10px] font-bold text-green-700 hover:underline">Select All</button>
+            <span className="text-green-300">|</span>
+            <button onClick={() => setApprovedItems(resolvedItems.map(it => ({ ...it, included: false })))}
+              className="text-[10px] font-bold text-red-500 hover:underline">Clear All</button>
+          </div>
+        </div>
+
+        {/* Items */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : resolvedItems.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No line items found</p>
+          ) : resolvedItems.map((it, idx) => (
+            <div key={it.id || idx} className={clsx(
+              'flex items-center gap-3 border rounded-xl px-4 py-3 transition-all',
+              it.included ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200 opacity-50'
+            )}>
+              <input type="checkbox" checked={it.included} onChange={() => toggle(idx)}
+                className="w-4 h-4 accent-green-700 cursor-pointer flex-shrink-0" />
+              <span className="flex-1 text-sm font-semibold text-slate-800 truncate min-w-0">{it.material_name}</span>
+              <span className="text-xs text-slate-500 bg-white border border-slate-200 rounded px-2 py-0.5 font-mono flex-shrink-0">{it.unit}</span>
+              <span className="text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
+                Req: <span className="font-bold text-slate-600">{it.original_qty}</span>
+              </span>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <span className="text-[10px] text-green-700 font-bold whitespace-nowrap">Approve:</span>
+                <input type="number" min="0" step="any"
+                  value={it.qty} onChange={e => setQty(idx, e.target.value)}
+                  disabled={!it.included}
+                  className="w-24 h-8 bg-white border border-slate-200 rounded-lg px-2 text-sm font-mono text-right outline-none focus:border-green-500 disabled:bg-slate-100 disabled:text-slate-400 transition" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Remarks */}
+        <div className="px-5 py-3 border-t border-slate-100 flex-shrink-0">
+          <label className="text-xs font-bold text-slate-700 block mb-1.5">MD Remarks (optional)</label>
+          <textarea rows={2} value={remarks} onChange={e => setRemarks(e.target.value)}
+            placeholder="Authorization notes, conditions, or special instructions…"
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm outline-none focus:border-green-400 resize-none transition" />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+          <div>
+            <span className={clsx('text-sm font-bold', includedCount === 0 ? 'text-red-500' : 'text-green-700')}>
+              {includedCount} of {resolvedItems.length} items authorized
+            </span>
+            {includedCount === 0 && <p className="text-[11px] text-red-400">Please select at least one item</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose}
+              className="px-4 h-9 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-white transition">
+              Cancel
+            </button>
+            <button onClick={handleAuthorize}
+              disabled={authMut.isPending || includedCount === 0 || isLoading}
+              className="px-5 h-9 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800 disabled:opacity-50 transition shadow-sm">
+              {authMut.isPending ? 'Authorizing…' : `Authorize ${includedCount} Item${includedCount !== 1 ? 's' : ''} →`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Single Approval Card ─────────────────────────────────────────────────────
-function ApprovalCard({ item, onApprove, onReject, onView }) {
+function ApprovalCard({ item, onApprove, onReject, onView, onMDReview }) {
   const meta   = TYPE_META[item.doc_type] || TYPE_META['SC Bill'];
   const Icon   = meta.icon;
   const daysOld = Math.floor((Date.now() - new Date(item.created_at)) / 86400000);
@@ -202,18 +350,27 @@ function ApprovalCard({ item, onApprove, onReject, onView }) {
               title="View details">
               <Eye style={{width:16,height:16}} />
             </button>
-            {/* Check (for MB submitted) */}
-            {item.entity_type === 'sc_mb' && item.status === 'submitted' && (
-              <button onClick={() => onApprove(item)}
-                className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors">
-                <CheckCircle2 style={{width:13,height:13}} /> Check
+            {/* MRS at MD stage: "Review & Authorize" instead of plain Approve */}
+            {item.entity_type === 'mrs' && item.status === 'approved_mgmt' ? (
+              <button onClick={() => onMDReview(item)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-green-700 text-white rounded-lg text-xs font-bold hover:bg-green-800 transition-colors">
+                <Landmark style={{width:13,height:13}} /> Review &amp; Authorize
               </button>
+            ) : (
+              <>
+                {/* Check (for MB submitted) */}
+                {item.entity_type === 'sc_mb' && item.status === 'submitted' && (
+                  <button onClick={() => onApprove(item)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors">
+                    <CheckCircle2 style={{width:13,height:13}} /> Check
+                  </button>
+                )}
+                <button onClick={() => onApprove(item)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
+                  <CheckCircle2 style={{width:13,height:13}} /> Approve
+                </button>
+              </>
             )}
-            <button onClick={() => onApprove(item)}
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
-              <CheckCircle2 style={{width:13,height:13}} />
-              {item.entity_type === 'sc_mb' && item.status === 'submitted' ? 'Approve' : 'Approve'}
-            </button>
             <button onClick={() => onReject(item)}
               className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition-colors">
               <XCircle style={{width:13,height:13}} /> Reject
@@ -233,6 +390,7 @@ export default function ApprovalsPage() {
   const [filter,    setFilter]   = useState('All');
   const [search,    setSearch]   = useState('');
   const [actionModal, setAction] = useState(null);  // { item, type }
+  const [mdModal,   setMDModal]  = useState(null);  // { id, ref }
 
   const { data: raw, isLoading, refetch } = useQuery({
     queryKey: ['my-approvals'],
@@ -278,10 +436,11 @@ export default function ApprovalsPage() {
     onError: e => toast.error(e?.response?.data?.error || 'Action failed'),
   });
 
-  const handleView = (item) => navigate(item.action_url);
-  const handleApprove = (item) => setAction({ item, type: 'approve' });
-  const handleReject  = (item) => setAction({ item, type: 'reject' });
-  const handleConfirm = (item, action, comment) => actionMut.mutate({ item, action, comment });
+  const handleView     = (item) => navigate(item.action_url);
+  const handleApprove  = (item) => setAction({ item, type: 'approve' });
+  const handleReject   = (item) => setAction({ item, type: 'reject' });
+  const handleConfirm  = (item, action, comment) => actionMut.mutate({ item, action, comment });
+  const handleMDReview = (item) => setMDModal({ id: item.id, ref: item.ref_no });
 
   // KPI summary
   const kpiItems = Object.entries(summary).slice(0, 5);
@@ -411,7 +570,8 @@ export default function ApprovalsPage() {
                       item={item}
                       onApprove={handleApprove}
                       onReject={handleReject}
-                      onView={handleView} />
+                      onView={handleView}
+                      onMDReview={handleMDReview} />
                   ))}
                 </div>
               </div>
@@ -434,7 +594,8 @@ export default function ApprovalsPage() {
                       item={item}
                       onApprove={handleApprove}
                       onReject={handleReject}
-                      onView={handleView} />
+                      onView={handleView}
+                      onMDReview={handleMDReview} />
                   ))}
                 </div>
               </div>
@@ -457,6 +618,15 @@ export default function ApprovalsPage() {
           actionType={actionModal.type}
           onConfirm={handleConfirm}
           onClose={() => setAction(null)} />
+      )}
+
+      {/* MD Authorization modal (MRS only) */}
+      {mdModal && (
+        <MDAuthModal
+          mrsId={mdModal.id}
+          mrsRef={mdModal.ref}
+          onClose={() => setMDModal(null)}
+          onAuthorized={() => qc.invalidateQueries({ queryKey: ['my-approvals'] })} />
       )}
     </div>
   );
