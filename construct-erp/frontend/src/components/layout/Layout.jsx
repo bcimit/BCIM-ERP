@@ -257,13 +257,13 @@ const NAV_SECTIONS = {
   'Planning': [
     { label: 'Dashboard',  paths: ['/planning','/planning/p6-dashboard'] },
     { label: 'Schedule',   paths: ['/planning/wbs','/planning/activities','/planning/milestones','/planning/look-ahead'] },
-    { label: 'Progress',   paths: ['/planning/dpr','/planning/progress','/planning/delays','/planning/reports'] },
+    { label: 'Progress',   paths: ['/planning/engineer-log','/planning/dpr','/planning/progress','/planning/delays','/planning/reports'] },
     { label: 'P6',         paths: ['/planning/risks','/planning/mrp'] },
     { label: 'Documents',  paths: ['/planning/documents'] },
   ],
   'Procurement': [
     { label: 'Request',          paths: ['/procurement/material-request'] },
-    { label: 'Vendors & Rates',  paths: ['/procurement/vendors','/procurement/live-rate-checker','/procurement/rate-contracts'] },
+    { label: 'Vendors & Rates',  paths: ['/procurement/vendors','/procurement/vendor-mapping','/procurement/live-rate-checker','/procurement/rate-contracts'] },
     { label: 'RFQ',              paths: ['/procurement/rfqs'] },
     { label: 'Quotations',       paths: ['/procurement/quotations'] },
     { label: 'Comparative Statements', paths: ['/procurement/comparative-statements'] },
@@ -292,9 +292,9 @@ const NAV_SECTIONS = {
     { label: 'Documents',             paths: ['/finance/documents'] },
   ],
   'HR & Admin': [
-    { label: 'People',     paths: ['/hr-admin','/hr-admin/employees'] },
+    { label: 'People',     paths: ['/hr-admin','/hr-admin/employees','/ess'] },
     { label: 'Time',       paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays'] },
-    { label: 'Payroll',    paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/loans','/hr-admin/expenses'] },
+    { label: 'Payroll',    paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses'] },
     { label: 'Admin',      paths: ['/hr-admin/departments','/hr-admin/appraisals','/hr-admin/advanced'] },
     { label: 'Integrate',  paths: ['/hr-admin/essl-sync','/hr-admin/import'] },
     { label: 'Reports',    paths: ['/hr-admin/reports'] },
@@ -308,10 +308,10 @@ const NAV_SECTIONS = {
     { label: 'Documents',  paths: ['/tqs/documents'] },
   ],
   'QS & Billing': [
-    { label: 'Overview',             paths: ['/qs'] },
-    { label: 'Quantity Survey',      paths: ['/qs/boq','/qs/measurements','/qs/ra-bills'] },
+    { label: 'Overview',             paths: ['/qs','/qs/boq-dashboard'] },
+    { label: 'Quantity Survey',      paths: ['/qs/boq','/qs/boq-mapping','/qs/measurements','/qs/ra-bills'] },
     { label: 'Vendor Certification', paths: ['/qs/vendor-certifications','/qs/retention-releases'] },
-    { label: 'Controls',             paths: ['/qs/variations','/qs/material-recon','/qs/reports'] },
+    { label: 'Controls',             paths: ['/qs/variations','/qs/material-recon','/qs/norms','/qs/reports'] },
     { label: 'Documents',            paths: ['/qs/documents'] },
   ],
   'Quality (QA/QC)': [
@@ -323,7 +323,7 @@ const NAV_SECTIONS = {
     { label: 'NCR & Snag',   paths: ['/quality/ncr','/quality/snags'] },
     { label: 'Audits',       paths: ['/quality/audits'] },
     { label: 'Doc Control',  paths: ['/quality/documents','/quality/templates','/quality/reports'] },
-    { label: 'Documents',    paths: ['/quality/doc-repository'] },
+    { label: 'Documents',    paths: ['/quality/doc-repository','/quality/document-library'] },
   ],
   'HSE & Safety': [
     { label: 'Safety',    paths: ['/hse','/hse/incidents','/hse/permits','/hse/ppe'] },
@@ -340,6 +340,14 @@ const NAV_SECTIONS = {
   'Tender Management': [
     { label: 'Tenders',   paths: ['/tender-management','/tender-management/issue'] },
     { label: 'Documents', paths: ['/tender-management/documents'] },
+  ],
+  'Subcontractors': [
+    { label: 'Overview',    paths: ['/sc/dashboard','/sc/master'] },
+    { label: 'Work Orders', paths: ['/sc/work-orders'] },
+    { label: 'Site Work',   paths: ['/sc/labour','/sc/progress'] },
+    { label: 'Billing',     paths: ['/sc/bill-preparation','/sc/bill-approval'] },
+    { label: 'Payments',    paths: ['/sc/payments','/sc/deductions'] },
+    { label: 'More',        paths: ['/sc/reports','/sc/documents','/sc/settings'] },
   ],
 };
 
