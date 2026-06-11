@@ -34,6 +34,10 @@ const router = express.Router();
   // 5. Rate per item — needed for inventory unit_rate update
   await safe(`ALTER TABLE grn_items ADD COLUMN IF NOT EXISTS rate NUMERIC(14,2) DEFAULT 0`);
 
+  // 6. IGN bracket — structured notes (Issues / General already in remarks / Inspection Notes)
+  await safe(`ALTER TABLE grn ADD COLUMN IF NOT EXISTS issues_notes TEXT`);
+  await safe(`ALTER TABLE grn ADD COLUMN IF NOT EXISTS inspection_notes TEXT`);
+
   console.log('[GRN] Schema migration OK');
 })();
 
@@ -163,7 +167,9 @@ router.post('/', async (req, res) => {
     const {
       project_id, po_id, po_number, vendor_id, grn_date,
       vehicle_number, driver_name, challan_number, invoice_number,
-      site_location, gate_pass_no, wb_slip_no, remarks, items,
+      site_location, gate_pass_no, wb_slip_no,
+      remarks, issues_notes, inspection_notes,
+      items,
       bill: billData,
     } = req.body;
 
@@ -192,11 +198,12 @@ router.post('/', async (req, res) => {
         `INSERT INTO grn (
           project_id, po_id, vendor_id, grn_number, grn_date,
           vehicle_number, driver_name, challan_number, invoice_number,
-          site_location, gate_pass_no, wb_slip_no, remarks,
+          site_location, gate_pass_no, wb_slip_no, remarks, issues_notes, inspection_notes,
           quality_status, received_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14) RETURNING *`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',$16) RETURNING *`,
         [project_id, po_id, vendor_id, grn_number, grn_date, vehicle_number, driver_name,
-         challan_number, invoice_number, site_location, gate_pass_no, wb_slip_no, remarks, req.user.id]
+         challan_number, invoice_number, site_location, gate_pass_no, wb_slip_no,
+         remarks, issues_notes || null, inspection_notes || null, req.user.id]
       );
       const grnId = headerRes.rows[0].id;
 

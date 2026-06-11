@@ -149,11 +149,38 @@ const GRNPrintTemplate = React.forwardRef(({ data }, ref) => {
           </tfoot>
         </table>
 
-        {/* ── REMARKS ──────────────────────────────────────────── */}
-        {data.remarks && (
-          <div style={{ borderLeft: '2px solid black', borderRight: '2px solid black', borderBottom: '2px solid black', padding: '5px 8px', fontSize: '9px' }}>
-            <span style={{ fontWeight: 700 }}>Remarks: </span>{data.remarks}
-          </div>
+        {/* ── IGN — Issues / General / Inspection Notes ────────── */}
+        {(data.issues_notes || data.remarks || data.inspection_notes) && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', borderLeft: '2px solid black', borderRight: '2px solid black', borderBottom: '2px solid black' }}>
+            <thead>
+              <tr>
+                <td colSpan={3} style={{ background: '#1e293b', color: 'white', padding: '3px 8px', fontSize: '8px', fontWeight: 900, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  IGN — Issues / General Remarks / Inspection Notes
+                </td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {[
+                  { lbl: 'I — Issues Found',    val: data.issues_notes,     bg: '#fff1f2' },
+                  { lbl: 'G — General Remarks', val: data.remarks,          bg: '#f8fafc' },
+                  { lbl: 'N — Inspection Notes',val: data.inspection_notes, bg: '#eff6ff' },
+                ].map((col, i, arr) => (
+                  <td key={col.lbl} style={{
+                    width: '33.33%',
+                    borderRight: i < arr.length - 1 ? '2px solid black' : 'none',
+                    padding: '5px 8px',
+                    verticalAlign: 'top',
+                    background: col.bg,
+                    fontSize: '8.5px',
+                  }}>
+                    <div style={{ fontWeight: 800, fontSize: '7.5px', textTransform: 'uppercase', color: '#555', marginBottom: '3px', letterSpacing: '0.04em' }}>{col.lbl}</div>
+                    <div style={{ color: col.val ? '#111' : '#aaa', fontStyle: col.val ? 'normal' : 'italic' }}>{col.val || '—'}</div>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         )}
 
         {/* ── SIGNATURE BLOCK ──────────────────────────────────── */}

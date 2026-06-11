@@ -139,11 +139,25 @@ function GRNDetailPanel({ grn, onClose, onVerify, onApprove, verifyLoading, appr
             ))}
           </div>
 
-          {/* Remarks */}
-          {grn.remarks && (
-            <div className="bg-white border border-slate-200 rounded-lg px-3 py-2.5">
-              <div className="text-[10px] text-slate-900 font-medium uppercase mb-1">Remarks</div>
-              <div className="text-sm text-slate-900">{grn.remarks}</div>
+          {/* IGN bracket — only if any of the three fields has content */}
+          {(grn.issues_notes || grn.remarks || grn.inspection_notes) && (
+            <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
+              <div className="bg-slate-800 px-4 py-2 flex items-center gap-3">
+                <span className="text-xs font-black text-white uppercase tracking-widest">IGN</span>
+                <span className="text-[10px] text-slate-400 font-medium">Issues · General · Inspection Notes</span>
+              </div>
+              <div className="grid grid-cols-3 divide-x-2 divide-slate-300">
+                {[
+                  { key: 'issues_notes',     label: 'I — Issues Found',     val: grn.issues_notes,     bg: 'bg-red-50',   text: 'text-red-700',   circle: 'bg-red-100 border-red-300 text-red-600' },
+                  { key: 'remarks',          label: 'G — General Remarks',  val: grn.remarks,          bg: 'bg-white',     text: 'text-slate-700', circle: 'bg-slate-100 border-slate-300 text-slate-600' },
+                  { key: 'inspection_notes', label: 'N — Inspection Notes', val: grn.inspection_notes, bg: 'bg-blue-50',  text: 'text-blue-700',  circle: 'bg-blue-100 border-blue-300 text-blue-600' },
+                ].map(({ key, label, val, bg, text, circle }) => (
+                  <div key={key} className={`p-3 ${bg}`}>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1">{label}</div>
+                    <div className={`text-xs font-medium ${text} leading-relaxed min-h-[28px]`}>{val || <span className="text-slate-300 italic">—</span>}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -651,7 +665,8 @@ function GRNForm({ onClose, projects, qc }) {
     project_id: '', vendor_id: '', grn_date: dayjs().format('YYYY-MM-DD'),
     po_id: '', po_number: '', vehicle_number: '', driver_name: '',
     challan_number: '', invoice_number: '',
-    site_location: '', gate_pass_no: '', wb_slip_no: '', remarks: '',
+    site_location: '', gate_pass_no: '', wb_slip_no: '',
+    issues_notes: '', remarks: '', inspection_notes: '',
   });
   const [items, setItems] = useState([emptyItem()]);
   const [createBill, setCreateBill] = useState(false);
@@ -1039,12 +1054,46 @@ function GRNForm({ onClose, projects, qc }) {
             </div>
           </div>
 
-          {/* Remarks */}
-          <div className="border border-slate-200 rounded-xl p-5">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Remarks</h3>
-            <textarea rows={2} placeholder="Any notes about this receipt…" value={form.remarks}
-              onChange={e => setField('remarks', e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm outline-none focus:border-indigo-400 resize-none" />
+          {/* IGN — Issues / General / Notes bracket */}
+          <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
+            {/* Header strip */}
+            <div className="bg-slate-800 px-5 py-2 flex items-center gap-3">
+              <span className="text-xs font-black text-white uppercase tracking-widest">IGN</span>
+              <span className="text-[10px] text-slate-400 font-medium">Issues · General Remarks · Inspection Notes</span>
+            </div>
+            {/* Three bracket columns */}
+            <div className="grid grid-cols-3 divide-x-2 divide-slate-300">
+              <div className="p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-red-100 border-2 border-red-300 text-red-600 text-xs font-black flex items-center justify-center flex-shrink-0">I</span>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Issues Found</label>
+                </div>
+                <textarea rows={3} placeholder="Any problems, shortages or damaged materials…"
+                  value={form.issues_notes}
+                  onChange={e => setField('issues_notes', e.target.value)}
+                  className="w-full bg-red-50 border border-red-200 rounded-lg p-2.5 text-xs outline-none focus:border-red-400 resize-none" />
+              </div>
+              <div className="p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-slate-100 border-2 border-slate-300 text-slate-600 text-xs font-black flex items-center justify-center flex-shrink-0">G</span>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">General Remarks</label>
+                </div>
+                <textarea rows={3} placeholder="General notes about this delivery…"
+                  value={form.remarks}
+                  onChange={e => setField('remarks', e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs outline-none focus:border-slate-400 resize-none" />
+              </div>
+              <div className="p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 border-2 border-blue-300 text-blue-600 text-xs font-black flex items-center justify-center flex-shrink-0">N</span>
+                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Inspection Notes</label>
+                </div>
+                <textarea rows={3} placeholder="Notes for QC / stores verification team…"
+                  value={form.inspection_notes}
+                  onChange={e => setField('inspection_notes', e.target.value)}
+                  className="w-full bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs outline-none focus:border-blue-400 resize-none" />
+              </div>
+            </div>
           </div>
 
           {/* Bill Entry Toggle */}
