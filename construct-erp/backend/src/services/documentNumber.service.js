@@ -5,7 +5,8 @@ const DOC_NUMBER_TARGETS = {
 
 // Per-project numbering series, keyed by projects.project_code — overrides the default series.
 const PROJECT_SERIES = {
-  'LH-10': 'LANLH10',
+  'LH-10':     'LANLH10',
+  'WDIRY0151': 'DQS',      // Yelahanka — always PODQS / WODQS
 };
 
 async function getNextDqsNumber(client, targetName, projectCode) {
