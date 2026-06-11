@@ -666,9 +666,11 @@ function PODetailPanel({ po, detailedPO, onClose, onEdit, onApprove, onReject, i
 <body>${html}</body>
 </html>`);
     win.document.close();
-    // Give images time to load, then print
-    win.onload = () => { win.focus(); win.print(); win.close(); };
-    setTimeout(() => { try { win.focus(); win.print(); win.close(); } catch(_) {} }, 1200);
+    // onload fires when images are ready; fallback timeout if onload never fires (e.g. no images)
+    let printed = false;
+    const doPrint = () => { if (printed) return; printed = true; win.focus(); win.print(); win.close(); };
+    win.onload = doPrint;
+    setTimeout(doPrint, 1200);
   };
 
   // Linked bills

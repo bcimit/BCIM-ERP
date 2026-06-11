@@ -1,6 +1,6 @@
 // src/pages/documents/GFCMasterLogPage.jsx — GFC Drawing Master Log Tracker
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Layers, Plus, X, Search, RefreshCw, History, Pencil, Trash2,
   FileUp, CheckCircle2, PauseCircle, CircleSlash, FileStack,
@@ -128,7 +128,7 @@ function DrawingModal({ initial, projects, onClose, onSave, isPending }) {
           </div>
           <div>
             <label className={label}>Hard Copies Received</label>
-            <input type="number" min="0" value={form.copies_received} onChange={e => set('copies_received', e.target.value)} className={input} />
+            <input type="number" min="0" value={form.copies_received} onChange={e => set('copies_received', parseInt(e.target.value, 10) || 0)} className={input} />
           </div>
           <div className="flex items-end gap-4 pb-1">
             <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -320,7 +320,7 @@ export default function GFCMasterLogPage() {
       status: statusFilter || undefined,
       search: search || undefined,
     }).then(r => r.data?.data ?? []),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const { data: stats } = useQuery({

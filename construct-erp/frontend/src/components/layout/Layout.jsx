@@ -367,7 +367,10 @@ function getNavSections(group) {
 }
 
 function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const h = (hex || '#6366F1').replace(/^#/, '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(full.slice(0,2),16), g = parseInt(full.slice(2,4),16), b = parseInt(full.slice(4,6),16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(99,102,241,${alpha})`;
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
@@ -1507,6 +1510,13 @@ export default function Layout() {
   const currentLang = LANGUAGES.find(l => l.code === language) || LANGUAGES[0];
   const { title: pageTitle, group: pageGroup } = usePageTitle();
 
+  // Show welcome screen once per browser session on first load
+  useEffect(() => {
+    if (!sessionStorage.getItem('erp-welcomed')) {
+      setShowWelcome(true);
+    }
+  }, []);
+
   // Register device for push notifications (Android only — no-op in browser)
   useEffect(() => {
     if (user?.id) {
@@ -1549,7 +1559,7 @@ export default function Layout() {
   }, [logout, navigate]);
 
   const handleLogout = () => {
-    doLogout();
+    setShowLogout(true);
   };
 
   const initials = (user?.name || 'U').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
