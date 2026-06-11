@@ -826,11 +826,14 @@ export default function StoreLedgerPage() {
         .store-ledger-scroll {
           overscroll-behavior-x: contain;
           scroll-behavior: smooth;
+          scrollbar-width: thin;
+          scrollbar-color: #6366f1 #e2e8f0;
         }
-        .store-ledger-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
-        .store-ledger-scroll::-webkit-scrollbar-track { background: transparent; }
-        .store-ledger-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .store-ledger-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .store-ledger-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+        .store-ledger-scroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
+        .store-ledger-scroll::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 10px; border: 2px solid #e2e8f0; }
+        .store-ledger-scroll::-webkit-scrollbar-thumb:hover { background: #4f46e5; }
+        .store-ledger-scroll::-webkit-scrollbar-corner { background: #e2e8f0; }
         .store-ledger-table-shell {
           max-height: calc(100vh - 300px);
           min-height: 320px;
