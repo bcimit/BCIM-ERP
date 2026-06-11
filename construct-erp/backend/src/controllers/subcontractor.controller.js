@@ -255,8 +255,8 @@ const createWorkOrder = async (req, res) => {
           terms_conditions || null,
           cost_head || null, work_category || null, tower_block || null,
           req.user.id,
-          parseFloat(gst_pct ?? 18), parseFloat(tds_pct ?? 2),
-          parseFloat(retention_pct ?? 5), parseFloat(advance_recovery_pct ?? 10),
+          parseFloat(gst_pct) || 18, parseFloat(tds_pct) || 2,
+          parseFloat(retention_pct) || 5, parseFloat(advance_recovery_pct) || 10,
         ]
       );
       const wo = woResult.rows[0];
@@ -611,10 +611,10 @@ const updateWorkOrder = async (req, res) => {
     if (work_category     !== undefined) { sets.push(`work_category = $${i++}`);                      params.push(work_category || null); }
     if (tower_block       !== undefined) { sets.push(`tower_block = $${i++}`);                        params.push(tower_block || null); }
     if (vendor_id            !== undefined) { sets.push(`vendor_id = $${i++}`);              params.push(vendor_id); }
-    if (gst_pct              !== undefined) { sets.push(`gst_pct = $${i++}`);              params.push(parseFloat(gst_pct)); }
-    if (tds_pct              !== undefined) { sets.push(`tds_pct = $${i++}`);              params.push(parseFloat(tds_pct)); }
-    if (retention_pct        !== undefined) { sets.push(`retention_pct = $${i++}`);        params.push(parseFloat(retention_pct)); }
-    if (advance_recovery_pct !== undefined) { sets.push(`advance_recovery_pct = $${i++}`); params.push(parseFloat(advance_recovery_pct)); }
+    if (gst_pct              !== undefined && gst_pct !== '')              { sets.push(`gst_pct = $${i++}`);              params.push(parseFloat(gst_pct) || 0); }
+    if (tds_pct              !== undefined && tds_pct !== '')              { sets.push(`tds_pct = $${i++}`);              params.push(parseFloat(tds_pct) || 0); }
+    if (retention_pct        !== undefined && retention_pct !== '')        { sets.push(`retention_pct = $${i++}`);        params.push(parseFloat(retention_pct) || 0); }
+    if (advance_recovery_pct !== undefined && advance_recovery_pct !== '') { sets.push(`advance_recovery_pct = $${i++}`); params.push(parseFloat(advance_recovery_pct) || 0); }
 
     const finalValue = parseFloat(contract_value || total_value || 0);
     if ((contract_value !== undefined || total_value !== undefined) && finalValue > 0) {
