@@ -14,6 +14,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { inventoryAPI, projectAPI } from '../../api/client';
 import { PageHeader, Theme } from '../../theme';
+import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 
 const GST_RATE = 0.18;
@@ -465,6 +466,7 @@ function ImportModal({ projects, onClose, onDone }) {
 /* ── Main Page ───────────────────────────────────────────────── */
 export default function StoreLedgerPage() {
   const qc = useQueryClient();
+  const { user } = useAuthStore();
   const [tab, setTab]                     = useState('summary');
   const [selectedMaterial, setSelectedMaterial] = useState(null);
   const [search, setSearch]               = useState('');
@@ -705,9 +707,18 @@ export default function StoreLedgerPage() {
       window.print();
       return;
     }
+
+    // Resolve project name from the active filter
+    const projectName = projectFilter
+      ? (projectsData.find(p => p.id === projectFilter)?.name || '—')
+      : 'All Projects';
+    const storesPersonName = user?.name || '—';
+    const logoUrl = `${window.location.origin}/bcim-logo.png`;
+
     const headerCells = report.columns.map(h => `<th>${escapeHtml(h)}</th>`).join('');
     const bodyRows = report.rows.map(row => `<tr>${row.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
     const totalRow = report.totals ? `<tr class="total-row">${report.totals.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>` : '';
+
     win.document.write(`
       <!doctype html>
       <html>
@@ -715,30 +726,79 @@ export default function StoreLedgerPage() {
         <title>${escapeHtml(report.title)}</title>
         <style>
           * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { margin: 24px; font-family: Arial, sans-serif; color: #0f172a; }
-          .head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 3px solid #0f2d6b; padding-bottom: 12px; margin-bottom: 16px; }
-          h1 { margin: 0; font-size: 20px; color: #0f2d6b; letter-spacing: .04em; text-transform: uppercase; }
-          .sub { margin-top: 4px; font-size: 12px; color: #475569; font-weight: 700; }
-          table { width: 100%; border-collapse: collapse; font-size: 9px; }
-          th { background: #0f2d6b; color: #fff; text-align: left; padding: 7px 6px; border: 1px solid #94a3b8; }
-          td { padding: 6px; border: 1px solid #cbd5e1; vertical-align: top; }
-          td:nth-child(n+5), th:nth-child(n+5) { text-align: right; }
-          .total-row td { background: #eaf1ff; font-weight: 800; color: #0f2d6b; }
+          body { margin: 0; font-family: Arial, sans-serif; color: #0f172a; }
+
+          /* ── Document header ── */
+          .doc-header {
+            display: table; width: 100%; border-collapse: collapse;
+            border: 2px solid #0f2d6b; margin-bottom: 0;
+          }
+          .doc-header td { border: 1px solid #0f2d6b; padding: 6px 10px; vertical-align: middle; }
+          .logo-cell { width: 90px; text-align: center; }
+          .logo-cell img { height: 48px; width: auto; object-fit: contain; }
+          .title-cell { text-align: center; }
+          .doc-title { font-size: 14px; font-weight: 900; color: #0f2d6b; letter-spacing: .06em; text-transform: uppercase; text-decoration: underline; }
+          .doc-sub { font-size: 9px; color: #475569; margin-top: 3px; }
+          .meta-cell { width: 30%; font-size: 9px; }
+          .meta-row { display: flex; gap: 4px; margin-bottom: 3px; }
+          .meta-label { font-weight: 700; color: #475569; width: 90px; flex-shrink: 0; }
+          .meta-value { font-weight: 600; color: #0f172a; }
+
+          /* ── Info strip ── */
+          .info-strip {
+            display: table; width: 100%; border-collapse: collapse;
+            border: 2px solid #0f2d6b; border-top: none; margin-bottom: 12px;
+          }
+          .info-strip td { border: 1px solid #0f2d6b; padding: 4px 8px; font-size: 9px; }
+          .info-lbl { font-weight: 700; color: #475569; }
+          .info-val { font-weight: 600; }
+
+          /* ── Data table ── */
+          table.data { width: 100%; border-collapse: collapse; font-size: 9px; }
+          table.data th { background: #0f2d6b; color: #fff; text-align: left; padding: 6px; border: 1px solid #94a3b8; font-size: 8.5px; text-transform: uppercase; letter-spacing: .04em; }
+          table.data td { padding: 5px 6px; border: 1px solid #cbd5e1; vertical-align: top; }
+          table.data td:nth-child(n+5), table.data th:nth-child(n+5) { text-align: right; }
+          table.data tr:nth-child(even) td { background: #f8fafc; }
+          .total-row td { background: #eaf1ff !important; font-weight: 800; color: #0f2d6b; border-top: 2px solid #0f2d6b; }
+
+          /* ── Footer ── */
+          .doc-footer { margin-top: 10px; display: flex; justify-content: space-between; font-size: 8px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; }
+
           @page { size: A4 landscape; margin: 10mm; }
         </style>
       </head>
       <body>
-        <div class="head">
-          <div>
-            <h1>${escapeHtml(report.title)}</h1>
-            <div class="sub">BCIM Engineering Pvt Ltd</div>
-          </div>
-          <div class="sub">${dayjs().format('DD MMM YYYY, hh:mm A')}</div>
-        </div>
-        <table>
+
+        <!-- Header table -->
+        <table class="doc-header">
+          <tr>
+            <td class="logo-cell" rowspan="1">
+              <img src="${logoUrl}" alt="BCIM" onerror="this.style.display='none'" />
+            </td>
+            <td class="title-cell">
+              <div class="doc-title">${escapeHtml(report.title)}</div>
+              <div class="doc-sub">BCIM Engineering Private Limited &mdash; Stores &amp; Inventory Control</div>
+            </td>
+            <td class="meta-cell">
+              <div class="meta-row"><span class="meta-label">Project :</span><span class="meta-value">${escapeHtml(projectName)}</span></div>
+              <div class="meta-row"><span class="meta-label">Prepared by :</span><span class="meta-value">${escapeHtml(storesPersonName)}</span></div>
+              <div class="meta-row"><span class="meta-label">Print Date :</span><span class="meta-value">${dayjs().format('DD MMM YYYY, hh:mm A')}</span></div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Data table -->
+        <table class="data">
           <thead><tr>${headerCells}</tr></thead>
           <tbody>${bodyRows}${totalRow}</tbody>
         </table>
+
+        <!-- Footer -->
+        <div class="doc-footer">
+          <span>BCIM Construct-ERP v3.0 &bull; Store Ledger &bull; ${escapeHtml(storesPersonName)}</span>
+          <span>Confidential &mdash; For internal use only &bull; Printed: ${dayjs().format('DD/MM/YYYY HH:mm')}</span>
+        </div>
+
       </body>
       </html>
     `);
