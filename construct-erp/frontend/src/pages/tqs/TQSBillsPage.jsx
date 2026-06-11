@@ -23,7 +23,7 @@ const moneyValue = (v) => {
   const rounded = Math.round(Number(v || 0));
   return Object.is(rounded, -0) ? 0 : rounded;
 };
-const inr = (v) => moneyValue(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const inr = (v) => moneyValue(v).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const num = (v) => Number(v || 0) || 0;
 const billBalanceDue = (bill = {}) => {
   const apiBalance = num(bill.balance_to_pay_display ?? bill.liability_balance ?? bill.balance_to_pay);

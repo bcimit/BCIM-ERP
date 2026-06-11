@@ -14,7 +14,7 @@ import {
   Cloud, CloudOff, ChevronRight
 } from 'lucide-react';
 
-const inr = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const inr = (v) => Math.round(Number(v || 0)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
 const STATUS_COLORS = {
