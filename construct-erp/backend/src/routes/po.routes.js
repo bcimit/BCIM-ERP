@@ -67,7 +67,7 @@ function applyProjectScope(req, sqlParts, params, alias = 'po', requestedProject
 
 async function getAccessiblePo(req, poId) {
   const { rows } = await query(
-    `SELECT po.id, po.project_id, p.company_id
+    `SELECT po.id, po.project_id, po.status, p.company_id
      FROM purchase_orders po
      JOIN projects p ON po.project_id = p.id
      WHERE po.id = $1`,
