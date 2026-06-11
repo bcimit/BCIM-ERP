@@ -365,6 +365,15 @@ export const grnAPI = {
   approve: (id, stage) => api.patch(`/grn/${id}/${stage}`),
 };
 
+export const creditNoteAPI = {
+  list:         (params) => api.get('/credit-notes', { params }),
+  get:          (id)     => api.get(`/credit-notes/${id}`),
+  create:       (data)   => api.post('/credit-notes', data),
+  update:       (id, d)  => api.put(`/credit-notes/${id}`, d),
+  updateStatus: (id, status) => api.patch(`/credit-notes/${id}/status`, { status }),
+  remove:       (id)     => api.delete(`/credit-notes/${id}`),
+};
+
 export const inventoryAPI = {
   list:          (params) => api.get('/inventory', { params }),
   create:        (data)   => api.post('/inventory', data),

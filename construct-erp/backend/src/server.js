@@ -33,6 +33,7 @@ const poRoutes = require('./routes/po.routes');
 const poAmendmentRoutes = require('./routes/poAmendment.routes');
 const liveRatesRoutes = require('./routes/live-rates.routes');
 const grnRoutes = require('./routes/grn.routes');
+const creditNotesRoutes = require('./routes/credit-notes.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
 const workerRoutes = require('./routes/worker.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
@@ -262,6 +263,7 @@ app.use(`${API}/purchase-orders`, poRoutes);
 app.use(`${API}/procurement/po-amendments`, poAmendmentRoutes);
 app.use(`${API}/procurement/live-rates`, liveRatesRoutes);
 app.use(`${API}/grn`, grnRoutes);
+app.use(`${API}/credit-notes`, creditNotesRoutes);
 app.use(`${API}/inventory`, inventoryRoutes);
 app.use(`${API}/subcontractors`, subcontractorRoutes);
 

@@ -155,6 +155,7 @@ const MRSPage                   = lazy(() => import('./pages/stores/MRSPage'));
 const IssuePage                 = lazy(() => import('./pages/stores/IssuePage'));
 const StoreLedgerPage           = lazy(() => import('./pages/stores/StoreLedgerPage'));
 const MaterialTransferPage      = lazy(() => import('./pages/stores/MaterialTransferPage'));
+const CreditNotePage            = lazy(() => import('./pages/stores/CreditNotePage'));
 const StoresDashboard           = lazy(() => import('./pages/dashboards/StoresDashboard'));
 // StockReportPage merged into StoreLedgerPage as "Monthly Movement" tab
 // GRNVerificationPage and GRNPrintPage merged into GRNPage
@@ -607,7 +608,8 @@ export default function App() {
                 <Route path="stores/mrs"    element={<RequireModule module="Stores"><MRSPage /></RequireModule>} />
                 <Route path="stores/issue"  element={<RequireModule module="Stores"><IssuePage /></RequireModule>} />
                 <Route path="stores/ledger" element={<RequireModule module="Stores"><StoreLedgerPage /></RequireModule>} />
-                <Route path="stores/mtr"    element={<RequireModule module="Stores"><MaterialTransferPage /></RequireModule>} />
+                <Route path="stores/mtr"           element={<RequireModule module="Stores"><MaterialTransferPage /></RequireModule>} />
+                <Route path="stores/credit-notes" element={<RequireModule module="Stores"><CreditNotePage /></RequireModule>} />
 
                 {/* Quality (QA/QC) */}
                 <Route path="quality"                    element={<RequireModule module="Quality (QA/QC)"><QAQCDashboard /></RequireModule>} />
