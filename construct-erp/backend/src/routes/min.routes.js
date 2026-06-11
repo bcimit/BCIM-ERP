@@ -8,17 +8,16 @@ router.use(authenticate);
 router.use(loadProjectScope);
 
 (async () => {
-  try {
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft'`);
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS contractor_id UUID`);
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS activity_name VARCHAR(255)`);
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS verified_receiver_by UUID`);
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS verified_receiver_at TIMESTAMPTZ`);
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS verified_receiver_sig TEXT`);
-    await query(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
-  } catch (e) {
-    console.warn('[MIN] schema migration skipped:', e.message);
-  }
+  const safe = (sql) => query(sql).catch(e => console.warn('[MIN migration]', e.message));
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft'`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS contractor_id UUID`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS activity_name VARCHAR(255)`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS verified_receiver_by UUID`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS verified_receiver_at TIMESTAMPTZ`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS verified_receiver_sig TEXT`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS material_notes TEXT`);
+  await safe(`ALTER TABLE material_issue_notes ADD COLUMN IF NOT EXISTS instructions_notes TEXT`);
 })();
 
 async function nextMINNumber(client, companyId) {
@@ -111,7 +110,8 @@ router.post('/', async (req, res) => {
   try {
     const {
       project_id, mrs_id, issued_to, vehicle_number,
-      issue_date, remarks, items, activity_name, contractor_id
+      issue_date, remarks, items, activity_name, contractor_id,
+      material_notes, instructions_notes
     } = req.body;
 
     if (!project_id || !items?.length) {
@@ -126,11 +126,13 @@ router.post('/', async (req, res) => {
       
       const min = await client.query(
         `INSERT INTO material_issue_notes
-           (project_id, min_number, mrs_id, issued_to, issued_by, vehicle_number, 
-            issue_date, remarks, activity_name, contractor_id, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft') RETURNING *`,
+           (project_id, min_number, mrs_id, issued_to, issued_by, vehicle_number,
+            issue_date, remarks, activity_name, contractor_id,
+            material_notes, instructions_notes, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'draft') RETURNING *`,
         [project_id, min_number, mrs_id || null, issued_to, req.user.id, vehicle_number || null,
-         issue_date || new Date(), remarks, activity_name, contractor_id || null]
+         issue_date || new Date(), remarks, activity_name, contractor_id || null,
+         material_notes || null, instructions_notes || null]
       );
 
       for (let i = 0; i < items.length; i++) {

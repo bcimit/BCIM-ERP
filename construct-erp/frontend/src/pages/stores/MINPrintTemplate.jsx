@@ -96,11 +96,25 @@ export default function MINPrintTemplate({ min }) {
         </table>
       </div>
 
-      {/* Footer Remarks */}
-      {min.remarks && (
-        <div className="mb-12">
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-2">Internal Remarks / Observations</span>
-          <p className="text-sm italic text-slate-700 leading-relaxed border-l-4 border-slate-200 pl-4">{min.remarks}</p>
+      {/* MIN Notes bracket */}
+      {(min.material_notes || min.instructions_notes || min.remarks) && (
+        <div className="mb-10 border-2 border-slate-800 overflow-hidden">
+          <div className="bg-slate-800 px-4 py-2 flex items-center gap-3">
+            <span className="text-xs font-black text-white uppercase tracking-widest">MIN Notes</span>
+            <span className="text-[10px] text-slate-400 font-medium">Material Condition · Instructions · Notes</span>
+          </div>
+          <div className="grid grid-cols-3 divide-x-2 divide-slate-300">
+            {[
+              { lbl: 'M — Material Condition', val: min.material_notes, bg: 'bg-amber-50' },
+              { lbl: 'I — Instructions to Receiver', val: min.instructions_notes, bg: 'bg-white' },
+              { lbl: 'N — Notes / Remarks', val: min.remarks, bg: 'bg-indigo-50' },
+            ].map(col => (
+              <div key={col.lbl} className={`${col.bg} p-4`}>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">{col.lbl}</p>
+                <p className="text-xs italic text-slate-700 leading-relaxed">{col.val || '—'}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

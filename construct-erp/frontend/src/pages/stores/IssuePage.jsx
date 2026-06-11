@@ -260,7 +260,8 @@ export default function IssuePage() {
 function MINForm({ onClose, projects, contractors, qc }) {
   const [formData, setFormData] = useState({
     project_id: '', activity_name: '', contractor_id: '',
-    issued_to: '', vehicle_number: '', issue_date: dayjs().format('YYYY-MM-DD'), remarks: '',
+    issued_to: '', vehicle_number: '', issue_date: dayjs().format('YYYY-MM-DD'),
+    material_notes: '', instructions_notes: '', remarks: '',
   });
   const [items, setItems] = useState([]);
   const [inventorySearch, setInventorySearch] = useState('');
@@ -383,9 +384,49 @@ function MINForm({ onClose, projects, contractors, qc }) {
                   {contractors?.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </div>
-              <div className="col-span-2 space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Remarks</label>
-                <input className={inp} placeholder="Any notes about this issue…"
+            </div>
+          </div>
+
+          {/* MIN Notes bracket — Material Condition · Instructions · Notes */}
+          <div className="border-2 border-slate-300 rounded-xl overflow-hidden">
+            <div className="bg-slate-800 px-5 py-2.5 flex items-center gap-3">
+              <span className="text-xs font-black text-white uppercase tracking-widest">MIN Notes</span>
+              <span className="text-[10px] text-slate-400 font-medium">Material Condition · Instructions · Notes</span>
+            </div>
+            <div className="grid grid-cols-3 divide-x-2 divide-slate-300">
+              {/* M — Material Condition */}
+              <div className="bg-amber-50 p-4 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-black text-amber-700 uppercase tracking-widest">M</span>
+                  <span className="text-[10px] font-semibold text-amber-600">Material Condition Notes</span>
+                </div>
+                <textarea rows={3}
+                  className="w-full text-xs bg-white border border-amber-200 rounded-lg px-3 py-2 outline-none focus:border-amber-400 resize-none"
+                  placeholder="Condition at issue — packaging, damage, batch…"
+                  value={formData.material_notes}
+                  onChange={e => setFormData(p => ({ ...p, material_notes: e.target.value }))} />
+              </div>
+              {/* I — Instructions to Receiver */}
+              <div className="bg-white p-4 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">I</span>
+                  <span className="text-[10px] font-semibold text-slate-600">Instructions to Receiver</span>
+                </div>
+                <textarea rows={3}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-slate-400 resize-none"
+                  placeholder="Handling, deployment, return conditions…"
+                  value={formData.instructions_notes}
+                  onChange={e => setFormData(p => ({ ...p, instructions_notes: e.target.value }))} />
+              </div>
+              {/* N — Notes / General Remarks */}
+              <div className="bg-indigo-50 p-4 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">N</span>
+                  <span className="text-[10px] font-semibold text-indigo-600">Notes / General Remarks</span>
+                </div>
+                <textarea rows={3}
+                  className="w-full text-xs bg-white border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 resize-none"
+                  placeholder="Admin notes, observations, follow-up…"
                   value={formData.remarks}
                   onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))} />
               </div>
