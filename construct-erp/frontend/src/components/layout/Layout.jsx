@@ -1050,24 +1050,57 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
               const color = GROUP_COLORS[group.label] || '#6366F1';
               const hasActive = group.items.some(item => matchesPath(item.to));
               const isOpen = expandedGroup === group.label;
+              const GroupIcon = group.items[0]?.icon || FolderSearch;
               return (
-                <div key={group.label} style={{ marginBottom: 4 }}>
+                <div key={group.label} style={{ marginBottom: 3 }}>
+                  {/* ── Group header ── colored left-bar + icon + label */}
                   <button
                     onClick={() => setExpandedGroup(isOpen ? null : group.label)}
                     style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-                      padding: '9px 10px', borderRadius: 8, border: 'none',
-                      background: hasActive ? hexToRgba(color, 0.1) : 'transparent',
-                      color: hasActive ? '#0F172A' : '#475569',
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 10px 8px 8px', borderRadius: 9, border: 'none',
+                      background: isOpen
+                        ? hexToRgba(color, 0.13)
+                        : hasActive ? hexToRgba(color, 0.08) : 'transparent',
                       cursor: 'pointer', textAlign: 'left',
+                      borderLeft: `3px solid ${isOpen || hasActive ? color : 'transparent'}`,
+                      transition: 'background 0.14s',
                     }}
                   >
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: hasActive ? `0 0 8px ${hexToRgba(color, 0.65)}` : 'none' }} />
-                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {/* Module icon badge */}
+                    <span style={{
+                      width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: isOpen || hasActive ? color : '#F1F5F9',
+                      color: isOpen || hasActive ? '#fff' : '#64748B',
+                      transition: 'background 0.14s, color 0.14s',
+                    }}>
+                      <GroupIcon size={13} />
+                    </span>
+                    <span style={{
+                      flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      fontSize: 12, fontWeight: 700,
+                      color: isOpen || hasActive ? '#0F172A' : '#475569',
+                    }}>
                       {t(group.label)}
                     </span>
-                    <ChevronDown size={13} style={{ color: '#94A3B8', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }} />
+                    {/* Item count badge */}
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 10,
+                      background: isOpen || hasActive ? hexToRgba(color, 0.15) : '#F1F5F9',
+                      color: isOpen || hasActive ? color : '#94A3B8',
+                      marginRight: 2, flexShrink: 0,
+                    }}>
+                      {group.items.length}
+                    </span>
+                    <ChevronDown size={13} style={{
+                      color: isOpen ? color : '#94A3B8',
+                      transform: isOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.18s',
+                      flexShrink: 0,
+                    }} />
                   </button>
+
                   {isOpen && (() => {
                     const renderLink = (item, nested) => {
                       const Icon = item.icon;
@@ -1078,18 +1111,18 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                           to={item.to}
                           onClick={handleNavClick}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: 9,
-                            margin: '1px 0', padding: nested ? '6px 10px 6px 14px' : '7px 10px 7px 22px',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            margin: '1px 0', padding: nested ? '6px 10px 6px 12px' : '6px 10px 6px 20px',
                             borderRadius: 8,
                             background: active ? hexToRgba(color, 0.12) : 'transparent',
                             color: active ? color : '#64748B',
                             textDecoration: 'none',
-                            fontSize: 11, fontWeight: active ? 700 : 600,
-                            textTransform: 'uppercase', letterSpacing: '0.04em',
+                            fontSize: 12.5, fontWeight: active ? 700 : 500,
                             borderLeft: active ? `3px solid ${color}` : '3px solid transparent',
+                            transition: 'background 0.12s',
                           }}
                         >
-                          <Icon size={14} style={{ flexShrink: 0 }} />
+                          <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t(item.label)}</span>
                         </NavLink>
                       );
@@ -1104,26 +1137,40 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                           const subActive = section.items.some(i => matchesPath(i.to));
                           const SubIcon   = section.items[0]?.icon || FolderSearch;
                           return (
-                            <div key={key}>
+                            <div key={key} style={{ marginBottom: 1 }}>
+                              {/* ── Sub-section header — colored pill style ── */}
                               <button
                                 onClick={() => setExpandedSection(subOpen ? null : key)}
                                 style={{
-                                  width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-                                  margin: '1px 0', padding: '7px 10px 7px 22px',
-                                  borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left',
-                                  background: subOpen ? hexToRgba(color, 0.07) : 'transparent',
-                                  color: subActive ? color : '#475569',
+                                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                                  margin: '2px 0', padding: '6px 10px 6px 20px',
+                                  borderRadius: 8, border: `1px solid ${subOpen || subActive ? hexToRgba(color, 0.3) : hexToRgba(color, 0.12)}`,
+                                  cursor: 'pointer', textAlign: 'left',
+                                  background: subOpen
+                                    ? hexToRgba(color, 0.1)
+                                    : subActive ? hexToRgba(color, 0.06) : hexToRgba(color, 0.04),
+                                  color: subActive || subOpen ? color : '#475569',
+                                  transition: 'background 0.12s',
                                 }}
                               >
-                                <SubIcon size={14} style={{ flexShrink: 0 }} />
-                                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                <SubIcon size={13} style={{ flexShrink: 0 }} />
+                                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5, fontWeight: 700 }}>
                                   {t(section.label)}
                                 </span>
-                                <span style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8' }}>{section.items.length}</span>
-                                <ChevronDown size={12} style={{ color: '#94A3B8', transform: subOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }} />
+                                <span style={{
+                                  fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 8,
+                                  background: hexToRgba(color, 0.18), color: color, marginRight: 2, flexShrink: 0,
+                                }}>
+                                  {section.items.length}
+                                </span>
+                                <ChevronDown size={11} style={{
+                                  color: subOpen ? color : '#94A3B8',
+                                  transform: subOpen ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.18s', flexShrink: 0,
+                                }} />
                               </button>
                               {subOpen && (
-                                <div style={{ margin: '0 0 2px 30px', paddingLeft: 4, borderLeft: `2px solid ${hexToRgba(color, 0.25)}` }}>
+                                <div style={{ margin: '2px 0 4px 28px', paddingLeft: 6, borderLeft: `2px solid ${hexToRgba(color, 0.3)}` }}>
                                   {section.items.map(item => renderLink(item, true))}
                                 </div>
                               )}
