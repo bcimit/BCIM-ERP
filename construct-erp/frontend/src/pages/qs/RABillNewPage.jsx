@@ -200,8 +200,10 @@ export default function RABillNewPage() {
 
   // FIX: variable was named `totals` (singular misread as plural) — renamed to `grossTotal` for clarity
   const grossTotal = items.reduce((acc, it) => acc + (it.amount || 0), 0);
+  const priceEscalation = parseFloat(formData.price_escalation || 0);
   const gstAmount = grossTotal * (formData.gst_rate / 100);
-  const retentionAmount = grossTotal * (formData.retention_percent / 100);
+  // Retention is charged on gross + price escalation (escalation is part of the certified value)
+  const retentionAmount = (grossTotal + priceEscalation) * (formData.retention_percent / 100);
   const tdsAmount = grossTotal * (formData.tds_rate / 100);
   const totalDeductions =
     retentionAmount +
@@ -211,7 +213,7 @@ export default function RABillNewPage() {
     parseFloat(formData.material_recovery_cement || 0) +
     parseFloat(formData.other_deductions || 0) +
     tdsAmount;
-  const netPayable = grossTotal + gstAmount - totalDeductions + parseFloat(formData.price_escalation || 0);
+  const netPayable = grossTotal + gstAmount - totalDeductions + priceEscalation;
 
   const activeItemCount = items.filter(it => it.current_qty > 0).length;
   const selectedProject = projects?.find(p => p.id === formData.project_id);
@@ -633,7 +635,7 @@ export default function RABillNewPage() {
               <div className="space-y-2">
                 <SummaryRow label="Gross Valuation" value={inr(grossTotal)} />
                 <SummaryRow label={`GST (${formData.gst_rate}%)`} value={`+ ${inr(gstAmount)}`} valueClass="text-blue-600" />
-                <SummaryRow label={`Retention (${formData.retention_percent}%)`} value={`− ${inr(retentionAmount)}`} valueClass="text-rose-500" />
+                <SummaryRow label={`Retention (${formData.retention_percent}% of gross + escl.)`} value={`− ${inr(retentionAmount)}`} valueClass="text-rose-500" />
                 <SummaryRow label={`TDS (${formData.tds_rate}%)`} value={`− ${inr(tdsAmount)}`} valueClass="text-rose-500" />
                 {parseFloat(formData.mobilization_advance_recovery) > 0 && (
                   <SummaryRow label="Mob. Adv. Recovery" value={`− ${inr(formData.mobilization_advance_recovery)}`} valueClass="text-rose-500" />

@@ -104,7 +104,8 @@ router.post('/', authorize('super_admin','admin','qs_engineer','project_manager'
     const billStatus = req.body.status === 'draft' ? 'draft' : 'submitted';
 
     const result = await withTransaction(async (client) => {
-      const retention_amount = parseFloat(gross_amount) * (parseFloat(retention_percent || 0) / 100);
+      // Retention is charged on gross + price escalation (escalation is part of the certified value)
+      const retention_amount = (parseFloat(gross_amount) + parseFloat(price_escalation || 0)) * (parseFloat(retention_percent || 0) / 100);
       const tds_amount       = parseFloat(gross_amount) * (parseFloat(tds_rate || 0) / 100);
       const total_deductions =
         retention_amount +
