@@ -994,9 +994,9 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
           bottom: 0,
           width: isExpanded ? 264 : 64,
           zIndex: 44,       // below header (50), above page content
-          background: '#FFFFFF',
-          borderRight: '1px solid #E2E8F0',
-          boxShadow: isExpanded ? '4px 0 18px rgba(15,23,42,0.10)' : '1px 0 10px rgba(15,23,42,0.04)',
+          background: 'linear-gradient(180deg, #111e3a 0%, #172554 60%, #1e3a8a 100%)',
+          borderRight: 'none',
+          boxShadow: isExpanded ? '4px 0 24px rgba(0,0,0,0.35)' : '2px 0 12px rgba(0,0,0,0.25)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1006,20 +1006,19 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
         {isExpanded ? (
           /* ── Expanded: full nav list ── */
           <div style={{ flex: 1, overflowY: 'auto', padding: 8, minWidth: 264 }}>
-            <div style={{ padding: '6px 8px 8px', borderBottom: '1px solid #EEF2F7', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Modules</div>
-              {/* Pin/unpin toggle */}
+            <div style={{ padding: '6px 8px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Navigation</div>
               <button
                 onClick={onToggle}
                 title={collapsed ? 'Pin sidebar open' : 'Switch to auto-hide'}
-                style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: collapsed ? 'linear-gradient(135deg,#F59E0B,#F97316)' : 'linear-gradient(135deg,#2563EB,#4F46E5)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: collapsed ? '0 2px 8px rgba(245,158,11,0.55)' : '0 2px 8px rgba(37,99,235,0.55)', transition: 'all 0.18s ease' }}
+                style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 0.18s ease' }}
               >
                 {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
               </button>
             </div>
             {recentPages.length > 0 && (
               <div style={{ marginBottom: 8 }}>
-                <div style={{ padding: '2px 10px 6px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <div style={{ padding: '2px 10px 6px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   <Clock3 size={9} />
                   Recent
                 </div>
@@ -1032,18 +1031,18 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                       style={{
                         display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px',
                         borderRadius: 7, textDecoration: 'none', fontSize: 12.5, fontWeight: isActive ? 600 : 400,
-                        color: isActive ? '#2563EB' : '#475569',
-                        background: isActive ? '#EFF6FF' : 'transparent',
-                        transition: 'background 0.12s, color 0.12s',
+                        color: isActive ? '#fff' : 'rgba(255,255,255,0.7)',
+                        background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                        transition: 'background 0.12s',
                       }}
                     >
-                      <Icon size={13} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7 }} />
+                      <Icon size={13} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.6 }} />
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{page.label}</span>
-                      <span style={{ fontSize: 9.5, color: '#CBD5E1', fontWeight: 500, flexShrink: 0 }}>{page.group}</span>
+                      <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.3)', fontWeight: 500, flexShrink: 0 }}>{page.group}</span>
                     </NavLink>
                   );
                 })}
-                <div style={{ height: 1, background: '#EEF2F7', margin: '6px 4px 8px' }} />
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '6px 4px 8px' }} />
               </div>
             )}
             {navGroups.map((group, gi) => {
@@ -1064,14 +1063,14 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                       margin: '1px 0',
                       padding: nested ? '6px 8px 6px 36px' : '6px 8px 6px 26px',
                       borderRadius: 6,
-                      background: active ? '#E8EDF2' : 'transparent',
-                      color: '#111827',
+                      background: active ? 'rgba(255,255,255,0.15)' : 'transparent',
+                      color: active ? '#fff' : 'rgba(255,255,255,0.75)',
                       textDecoration: 'none',
-                      fontSize: 12, fontWeight: active ? 700 : 500,
-                      borderLeft: active ? '3px solid #111827' : '3px solid transparent',
+                      fontSize: 12, fontWeight: active ? 600 : 400,
+                      borderLeft: active ? '3px solid rgba(255,255,255,0.8)' : '3px solid transparent',
                     }}
                   >
-                    <Icon size={13} style={{ flexShrink: 0, color: '#111827', opacity: active ? 1 : 0.55 }} />
+                    <Icon size={13} style={{ flexShrink: 0, opacity: active ? 1 : 0.55 }} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t(item.label)}</span>
                   </NavLink>
                 );
@@ -1079,36 +1078,35 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
 
               return (
                 <div key={group.label}>
-                  {gi > 0 && <div style={{ height: 1, background: '#D1D5DB', margin: '6px 4px 8px' }} />}
+                  {gi > 0 && <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '6px 4px 8px' }} />}
 
-                  {/* ── Module header — clickable to expand/collapse ── */}
+                  {/* ── Module header ── */}
                   <button
                     onClick={() => setExpandedGroup(isOpen ? null : group.label)}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                       padding: '9px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', textAlign: 'left',
-                      background: isOpen ? '#1E293B' : hasActive ? '#E2E8F0' : '#F1F5F9',
+                      background: isOpen ? 'rgba(255,255,255,0.15)' : hasActive ? 'rgba(255,255,255,0.08)' : 'transparent',
                       marginBottom: isOpen ? 4 : 0,
                       transition: 'background 0.15s',
                     }}
                   >
-                    <GroupIcon size={15} style={{ color: isOpen ? '#fff' : '#111827', flexShrink: 0 }} />
+                    <GroupIcon size={15} style={{ color: '#fff', flexShrink: 0, opacity: isOpen || hasActive ? 1 : 0.6 }} />
                     <span style={{
-                      flex: 1, fontSize: 13, fontWeight: 800, letterSpacing: '0.05em',
+                      flex: 1, fontSize: 13, fontWeight: 700, letterSpacing: '0.04em',
                       textTransform: 'uppercase',
-                      color: isOpen ? '#fff' : '#111827',
+                      color: isOpen || hasActive ? '#fff' : 'rgba(255,255,255,0.65)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {t(group.label)}
                     </span>
                     <ChevronDown size={13} style={{
-                      color: isOpen ? 'rgba(255,255,255,0.7)' : '#9CA3AF',
+                      color: 'rgba(255,255,255,0.45)',
                       transform: isOpen ? 'rotate(180deg)' : 'none',
                       transition: 'transform 0.18s', flexShrink: 0,
                     }} />
                   </button>
 
-                  {/* ── Items — only shown when open ── */}
                   {isOpen && (
                     <div style={{ paddingBottom: 4 }}>
                       {getNavSections(group).map(section => {
@@ -1121,7 +1119,7 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                             <div style={{
                               display: 'flex', alignItems: 'center', gap: 5,
                               padding: '5px 8px 2px 20px',
-                              color: subActive ? '#1E293B' : '#6B7280',
+                              color: subActive ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)',
                               fontSize: 10, fontWeight: 700,
                               textTransform: 'uppercase', letterSpacing: '0.07em',
                             }}>
@@ -1153,21 +1151,19 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                       style={{
                         width: 44, height: 38, margin: '2px auto 4px', display: 'flex',
                         alignItems: 'center', justifyContent: 'center', borderRadius: 9,
-                        textDecoration: 'none', position: 'relative',
-                        background: isActive ? '#EFF6FF' : 'transparent',
-                        color: isActive ? '#2563EB' : '#64748B',
-                        border: isActive ? '1px solid #BFDBFE' : '1px solid transparent',
+                        textDecoration: 'none',
+                        background: isActive ? 'rgba(255,255,255,0.18)' : 'transparent',
+                        color: isActive ? '#fff' : 'rgba(255,255,255,0.55)',
                       }}
                     >
                       <Icon size={16} />
                     </NavLink>
                   );
                 })}
-                <div style={{ height: 1, background: '#E2E8F0', margin: '4px 8px 6px' }} />
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '4px 8px 6px' }} />
               </>
             )}
             {navGroups.map(group => {
-              const color = GROUP_COLORS[group.label] || '#6366F1';
               const hasActive = group.items.some(item => matchesPath(item.to));
               const GroupIcon = group.items[0]?.icon || FolderSearch;
               return (
@@ -1179,15 +1175,14 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                     width: 44, height: 42,
                     margin: '2px auto 6px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: 10,
-                    border: hasActive ? `1px solid ${hexToRgba(color, 0.35)}` : '1px solid transparent',
-                    background: hasActive ? hexToRgba(color, 0.12) : 'transparent',
-                    color: hasActive ? color : '#64748B',
+                    borderRadius: 10, border: 'none',
+                    background: hasActive ? 'rgba(255,255,255,0.18)' : 'transparent',
+                    color: hasActive ? '#fff' : 'rgba(255,255,255,0.5)',
                     cursor: 'pointer', position: 'relative',
                   }}
                 >
                   <GroupIcon size={18} />
-                  {hasActive && <span style={{ position: 'absolute', left: 2, top: 10, bottom: 10, width: 3, borderRadius: 4, background: color }} />}
+                  {hasActive && <span style={{ position: 'absolute', left: 2, top: 10, bottom: 10, width: 3, borderRadius: 4, background: '#fff' }} />}
                 </button>
               );
             })}
