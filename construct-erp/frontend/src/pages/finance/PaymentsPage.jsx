@@ -117,7 +117,7 @@ function VendorPicker({ vendors, value, onChange, placeholder = 'Search vendor..
             ) : filtered.map(v => (
               <button key={v.id || v.name} type="button"
                 className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 border-b border-slate-50 last:border-b-0 transition-colors"
-                onClick={() => { onChange(v.name); setOpen(false); setQ(''); }}>
+                onClick={() => { onChange(v.name, v); setOpen(false); setQ(''); }}>
                 <div className="font-medium text-slate-800">{v.name}</div>
                 {v.contact_person && <div className="text-[11px] text-slate-900 font-medium mt-0.5">{v.contact_person}</div>}
               </button>
@@ -286,11 +286,20 @@ export default function PaymentsPage() {
     project_id: '', payee_name: '', payee_type: 'Contractor',
     description: '', amount: '', tds_rate: 0,
     payment_mode: 'RTGS', bank_ref: '', payment_date: '', cost_head: '',
+    // advance tracker fields
+    vendor_id: '', vendor_name: '', wo_number: '', po_number: '',
+    voucher_number: '', voucher_date: '',
   });
+
+  const FORM_RESET = {
+    project_id: '', payee_name: '', payee_type: 'Contractor', description: '', amount: '', tds_rate: 0,
+    payment_mode: 'RTGS', bank_ref: '', payment_date: '', cost_head: '',
+    vendor_id: '', vendor_name: '', wo_number: '', po_number: '', voucher_number: '', voucher_date: '',
+  };
 
   const resetModal = () => {
     setPayType('bill'); setVendorName(''); setSelectedPc(null);
-    setForm({ project_id: '', payee_name: '', payee_type: 'Contractor', description: '', amount: '', tds_rate: 0, payment_mode: 'RTGS', bank_ref: '', payment_date: '', cost_head: '' });
+    setForm(FORM_RESET);
   };
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -375,6 +384,19 @@ export default function PaymentsPage() {
     onError: e => toast.error(e?.response?.data?.error || 'Failed to record payment'),
   });
 
+  const advanceMut = useMutation({
+    mutationFn: d => tqsBillsAPI.recordAdvance(d),
+    onSuccess: () => {
+      toast.success('Advance recorded & linked to Bill Tracker');
+      qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: ['tqs-advances'] });
+      qc.invalidateQueries({ queryKey: ['liability-summary'] });
+      setShowModal(false);
+      resetModal();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed to record advance'),
+  });
+
   const deleteMut = useMutation({
     mutationFn: id => api.delete(`/payments/${id}`),
     onSuccess: () => { toast.success('Deleted'); qc.invalidateQueries({ queryKey: ['payments'] }); },
@@ -426,7 +448,7 @@ export default function PaymentsPage() {
   const tdsSplit    = payBill ? computeTdsSplit(payBill) : null;
   const canSubmitPay = payForm.payment_date && payForm.payment_mode && payForm.payment_ref.trim();
 
-  const canSubmit = createMut.isPending ? false
+  const canSubmit = (createMut.isPending || advanceMut.isPending) ? false
     : payType === 'bill'    ? (!!selectedPc && !!form.project_id && !!form.amount && !!form.payment_date)
     : payType === 'advance' ? (!!vendorName  && !!form.project_id && !!form.amount && !!form.payment_date)
     :                         (!!form.payee_name && !!form.project_id && !!form.amount && !!form.payment_date);
@@ -453,11 +475,21 @@ export default function PaymentsPage() {
         pc_number:    selectedPc.pc_number,
       });
     } else if (payType === 'advance') {
-      createMut.mutate({
-        ...base,
-        entity_name:  vendorName,
-        payee_name:   vendorName,
-        payment_type: 'advance',
+      advanceMut.mutate({
+        project_id:       form.project_id,
+        vendor_id:        form.vendor_id  || null,
+        vendor_name:      vendorName,
+        wo_number:        form.wo_number  || null,
+        po_number:        form.po_number  || null,
+        voucher_number:   form.voucher_number || null,
+        voucher_date:     form.voucher_date   || null,
+        order_value:      parseFloat(form.order_value || 0) || null,
+        amount:           parseFloat(form.amount),
+        payment_date:     form.payment_date,
+        payment_mode:     form.payment_mode,
+        reference_number: form.bank_ref  || null,
+        bank_name:        null,
+        remarks:          form.description || null,
       });
     } else {
       createMut.mutate({
@@ -804,7 +836,18 @@ export default function PaymentsPage() {
                   <VendorPicker
                     vendors={allVendors}
                     value={vendorName}
-                    onChange={name => { setVendorName(name); setSelectedPc(null); setForm(f => ({ ...f, payee_name: name, amount: '', project_id: '' })); }}
+                    onChange={(name, vendor) => {
+                      setVendorName(name);
+                      setSelectedPc(null);
+                      setForm(f => ({
+                        ...f,
+                        payee_name: name,
+                        vendor_name: name,
+                        vendor_id: vendor?.id || '',
+                        amount: payType === 'advance' ? f.amount : '',
+                        project_id: payType === 'advance' ? f.project_id : '',
+                      }));
+                    }}
                     placeholder="Select vendor..."
                   />
                 </div>
@@ -869,6 +912,32 @@ export default function PaymentsPage() {
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ── Advance Tracker Fields (advance type only) ── */}
+              {payType === 'advance' && vendorName && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+                  <p className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">Bill Tracker Link</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">WO / PO Reference</label>
+                      <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white" placeholder="e.g. WO/2026/001" value={form.wo_number} onChange={e => setForm(f => ({ ...f, wo_number: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Voucher Number</label>
+                      <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white" placeholder="Advance voucher no." value={form.voucher_number} onChange={e => setForm(f => ({ ...f, voucher_number: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Voucher Date</label>
+                      <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white" value={form.voucher_date} onChange={e => setForm(f => ({ ...f, voucher_date: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">PO / WO Order Value</label>
+                      <input type="number" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 bg-white" placeholder="Total WO/PO value (₹)" value={form.order_value || ''} onChange={e => setForm(f => ({ ...f, order_value: e.target.value }))} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-indigo-500">This advance will appear in TQS → Advance Tracker and will be auto-recovered from future bills.</p>
                 </div>
               )}
 
