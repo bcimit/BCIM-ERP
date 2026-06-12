@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Plus, X, Trash2, Package, HardHat } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, X, Trash2, Package, HardHat, Pencil } from 'lucide-react';
 import { priceEscalationAPI, projectAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
@@ -54,8 +54,30 @@ export default function PriceEscalationPage() {
   const [raNo, setRaNo] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
+  const [editRow, setEditRow] = useState(null); // null = add mode, row object = edit mode
   const [form, setForm] = useState(BLANK);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const openEdit = (row) => {
+    setEditRow(row);
+    setForm({
+      project_id: row.project_id || '',
+      ra_no: row.ra_no || '',
+      esc_type: row.esc_type || 'rmc',
+      material: row.material || '',
+      supplier: row.supplier || '',
+      invoice_no: row.invoice_no || '',
+      invoice_date: row.invoice_date ? dayjs(row.invoice_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+      unit: row.unit || 'Cum',
+      received_qty: row.received_qty || '',
+      consumed_qty: row.consumed_qty || '',
+      base_rate: row.base_rate || '',
+      approved_rate: row.approved_rate || '',
+      purchase_rate: row.purchase_rate || '',
+      remarks: row.remarks || '',
+    });
+    setShowModal(true);
+  };
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -90,6 +112,12 @@ export default function PriceEscalationPage() {
     onError: (e) => toast.error(e?.response?.data?.error || 'Failed to add'),
   });
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => priceEscalationAPI.update(id, data),
+    onSuccess: () => { toast.success('Escalation line updated'); invalidate(); setShowModal(false); setEditRow(null); setForm(BLANK); },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Failed to update'),
+  });
+
   const delMut = useMutation({
     mutationFn: (id) => priceEscalationAPI.remove(id),
     onSuccess: () => { toast.success('Deleted'); invalidate(); },
@@ -101,7 +129,12 @@ export default function PriceEscalationPage() {
 
   const submit = () => {
     if (!form.project_id) return toast.error('Select a project');
-    createMut.mutate({ ...form, rate_diff: rateDiff, amount: lineAmount });
+    const payload = { ...form, rate_diff: rateDiff, amount: lineAmount };
+    if (editRow) {
+      updateMut.mutate({ id: editRow.id, data: payload });
+    } else {
+      createMut.mutate(payload);
+    }
   };
 
   const net = parseFloat(stats?.net_escalation || 0);
@@ -116,7 +149,7 @@ export default function PriceEscalationPage() {
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Per-invoice rate variations (RMC / Steel) grouped by RA bill.</p>
         </div>
-        <button onClick={() => { setForm({ ...BLANK, project_id: projectId, ra_no: raNo }); setShowModal(true); }}
+        <button onClick={() => { setEditRow(null); setForm({ ...BLANK, project_id: projectId, ra_no: raNo }); setShowModal(true); }}
           className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
           <Plus className="w-4 h-4" /> Add Escalation
         </button>
@@ -191,8 +224,13 @@ export default function PriceEscalationPage() {
                     {parseFloat(r.amount) >= 0 ? '+' : ''}{fmt(r.amount)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button onClick={() => window.confirm('Delete this escalation line?') && delMut.mutate(r.id)}
-                      className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => openEdit(r)} className="text-slate-400 hover:text-blue-500" title="Edit">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => window.confirm('Delete this escalation line?') && delMut.mutate(r.id)}
+                        className="text-slate-400 hover:text-red-500" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -217,8 +255,8 @@ export default function PriceEscalationPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
-              <h2 className="font-semibold text-slate-900">Add Price Escalation Line</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+              <h2 className="font-semibold text-slate-900">{editRow ? 'Edit Price Escalation Line' : 'Add Price Escalation Line'}</h2>
+              <button onClick={() => { setShowModal(false); setEditRow(null); setForm(BLANK); }} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-5 grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -289,10 +327,10 @@ export default function PriceEscalationPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-200">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-              <button onClick={submit} disabled={createMut.isPending}
+              <button onClick={() => { setShowModal(false); setEditRow(null); setForm(BLANK); }} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+              <button onClick={submit} disabled={createMut.isPending || updateMut.isPending}
                 className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
-                {createMut.isPending ? 'Saving…' : 'Add Line'}
+                {(createMut.isPending || updateMut.isPending) ? 'Saving…' : editRow ? 'Save Changes' : 'Add Line'}
               </button>
             </div>
           </div>
