@@ -175,7 +175,8 @@ function StatCard({ label, value, icon, tone }) {
 function FormModal({ projects, onClose, onSubmit, saving }) {
   const [f, setF] = useState({
     project_id: '', proforma_no: '', proforma_date: new Date().toISOString().slice(0,10),
-    work_description: '', advance_amount: '', advance_pct: '', tax_amount: '', remarks: '',
+    work_description: '', hsn_code: '', advance_amount: '', advance_pct: '', tax_amount: '',
+    status: 'submitted', remarks: '',
   });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const total = (parseFloat(f.advance_amount) || 0) + (parseFloat(f.tax_amount) || 0);
@@ -198,7 +199,12 @@ function FormModal({ projects, onClose, onSubmit, saving }) {
             <Field label="Proforma Voucher No"><input value={f.proforma_no} onChange={e => set('proforma_no', e.target.value)} placeholder="Auto if blank" className="inp" /></Field>
             <Field label="Proforma Date"><input type="date" value={f.proforma_date} onChange={e => set('proforma_date', e.target.value)} className="inp" /></Field>
           </div>
-          <Field label="Work Description"><textarea value={f.work_description} onChange={e => set('work_description', e.target.value)} rows={2} className="inp" /></Field>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <Field label="Work Description"><input value={f.work_description} onChange={e => set('work_description', e.target.value)} placeholder="Concrete and Civil Works" className="inp" /></Field>
+            </div>
+            <Field label="HSN Code"><input value={f.hsn_code} onChange={e => set('hsn_code', e.target.value)} placeholder="995411" className="inp font-mono" /></Field>
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Advance Amount *"><input type="number" min="0" step="0.01" value={f.advance_amount} onChange={e => set('advance_amount', e.target.value)} className="inp font-mono" /></Field>
             <Field label="Advance %"><input type="number" min="0" step="0.01" value={f.advance_pct} onChange={e => set('advance_pct', e.target.value)} className="inp font-mono" /></Field>
@@ -208,7 +214,17 @@ function FormModal({ projects, onClose, onSubmit, saving }) {
             <span className="text-xs font-medium text-amber-700">Total Amount</span>
             <span className="font-mono font-bold text-amber-900">{inr(total)}</span>
           </div>
-          <Field label="Remarks"><input value={f.remarks} onChange={e => set('remarks', e.target.value)} className="inp" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Status">
+              <select value={f.status} onChange={e => set('status', e.target.value)} className="inp">
+                <option value="submitted">Submitted</option>
+                <option value="approved">Approved (by client)</option>
+                <option value="received">Received</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </Field>
+            <Field label="Remarks"><input value={f.remarks} onChange={e => set('remarks', e.target.value)} className="inp" /></Field>
+          </div>
         </div>
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>

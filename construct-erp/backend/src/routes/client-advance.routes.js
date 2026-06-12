@@ -16,6 +16,7 @@ const ensureTable = async () => {
       proforma_no         VARCHAR(100),
       proforma_date       DATE,
       work_description    TEXT,
+      hsn_code            VARCHAR(20),
       advance_amount      NUMERIC(15,2) NOT NULL DEFAULT 0,
       advance_pct         NUMERIC(5,2)  DEFAULT 0,
       tax_amount          NUMERIC(15,2) DEFAULT 0,
@@ -30,6 +31,8 @@ const ensureTable = async () => {
       created_at          TIMESTAMPTZ DEFAULT NOW(),
       updated_at          TIMESTAMPTZ DEFAULT NOW()
     )`);
+  // idempotent column add for already-created tables
+  await query(`ALTER TABLE client_advance_requests ADD COLUMN IF NOT EXISTS hsn_code VARCHAR(20)`);
 };
 runSchemaInit('client_advance_requests', ensureTable);
 
@@ -84,19 +87,20 @@ router.get('/stats', async (req, res) => {
 router.post('/', authorize('super_admin','admin','finance_manager','accountant','qs_engineer','project_manager'), async (req, res) => {
   try {
     const {
-      project_id, proforma_no, proforma_date, work_description,
-      advance_amount, advance_pct, tax_amount, remarks,
+      project_id, proforma_no, proforma_date, work_description, hsn_code,
+      advance_amount, advance_pct, tax_amount, status, remarks,
     } = req.body;
     const adv = parseFloat(advance_amount || 0);
     const tax = parseFloat(tax_amount || 0);
     const no = proforma_no || await nextNo(req.user.company_id);
+    const st = ['submitted','approved','received','rejected'].includes(status) ? status : 'submitted';
     const { rows } = await query(`
       INSERT INTO client_advance_requests
-        (company_id, project_id, proforma_no, proforma_date, work_description,
-         advance_amount, advance_pct, tax_amount, total_amount, remarks, created_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.user.company_id, project_id || null, no, proforma_date || null, work_description || null,
-       adv, parseFloat(advance_pct || 0), tax, adv + tax, remarks || null, req.user.id]);
+        (company_id, project_id, proforma_no, proforma_date, work_description, hsn_code,
+         advance_amount, advance_pct, tax_amount, total_amount, status, remarks, created_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.user.company_id, project_id || null, no, proforma_date || null, work_description || null, hsn_code || null,
+       adv, parseFloat(advance_pct || 0), tax, adv + tax, st, remarks || null, req.user.id]);
     res.status(201).json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -104,7 +108,7 @@ router.post('/', authorize('super_admin','admin','finance_manager','accountant',
 // PUT /:id — edit core fields
 router.put('/:id', authorize('super_admin','admin','finance_manager','accountant','qs_engineer','project_manager'), async (req, res) => {
   try {
-    const fields = ['project_id','proforma_no','proforma_date','work_description',
+    const fields = ['project_id','proforma_no','proforma_date','work_description','hsn_code',
       'advance_amount','advance_pct','tax_amount','remarks','status','approved_date'];
     const updates = []; const params = []; let i = 1;
     for (const f of fields) {
