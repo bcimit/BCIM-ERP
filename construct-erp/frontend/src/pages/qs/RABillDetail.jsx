@@ -16,6 +16,7 @@ import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import RABillPrintTemplate from './RABillPrintTemplate';
 import RABillTaxInvoice from './RABillTaxInvoice';
+import RABillProformaInvoice from './RABillProformaInvoice';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -49,11 +50,15 @@ export default function RABillDetail() {
   const qc = useQueryClient();
   const printRef       = useRef();
   const taxInvoiceRef  = useRef();
+  const proformaRef    = useRef();
   const { user } = useAuthStore();
   const role = user?.role || '';
-  const [showTaxModal, setShowTaxModal] = useState(false);
-  const [invoiceNo,    setInvoiceNo]    = useState('');
-  const [invoiceDate,  setInvoiceDate]  = useState(dayjs().format('YYYY-MM-DD'));
+  const [showTaxModal,      setShowTaxModal]      = useState(false);
+  const [invoiceNo,         setInvoiceNo]         = useState('');
+  const [invoiceDate,       setInvoiceDate]       = useState(dayjs().format('YYYY-MM-DD'));
+  const [showProformaModal, setShowProformaModal] = useState(false);
+  const [proformaNo,        setProformaNo]        = useState('');
+  const [proformaDate,      setProformaDate]      = useState(dayjs().format('YYYY-MM-DD'));
 
   // Backend now wraps detail in { data: {...} }
   const { data: b, isLoading } = useQuery({
@@ -81,6 +86,11 @@ export default function RABillDetail() {
   const handleTaxInvoicePrint = useReactToPrint({
     contentRef: taxInvoiceRef,
     documentTitle: `Tax_Invoice_${invoiceNo || b?.bill_number || 'export'}`,
+  });
+
+  const handleProformaPrint = useReactToPrint({
+    contentRef: proformaRef,
+    documentTitle: `Proforma_${proformaNo || b?.bill_number || 'export'}`,
   });
 
   const invalidate = () => {
@@ -200,12 +210,25 @@ export default function RABillDetail() {
             title="Download PDF">
             <Download size={16} />
           </button>
-          <button
-            onClick={() => { setInvoiceNo(''); setInvoiceDate(dayjs().format('YYYY-MM-DD')); setShowTaxModal(true); }}
-            className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-[11px] font-medium"
-            title="Generate Tax Invoice">
-            <FileSpreadsheet size={14} /> Tax Invoice
-          </button>
+          {/* Proforma Invoice — before certification */}
+          {['submitted', 'verified'].includes(b?.status) && (
+            <button
+              onClick={() => { setProformaNo(''); setProformaDate(dayjs().format('YYYY-MM-DD')); setShowProformaModal(true); }}
+              className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors text-[11px] font-medium"
+              title="Generate Proforma Invoice">
+              <FileSpreadsheet size={14} /> Proforma Invoice
+            </button>
+          )}
+
+          {/* Tax Invoice — after client certification */}
+          {['certified', 'paid'].includes(b?.status) && (
+            <button
+              onClick={() => { setInvoiceNo(''); setInvoiceDate(dayjs().format('YYYY-MM-DD')); setShowTaxModal(true); }}
+              className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-[11px] font-medium"
+              title="Generate Tax Invoice">
+              <FileSpreadsheet size={14} /> Tax Invoice
+            </button>
+          )}
 
           {/* Workflow action buttons — role-gated */}
           {!rejectedOrPaid && (
@@ -527,10 +550,56 @@ export default function RABillDetail() {
 
       <style>{`@media screen { .ra-bill-print-zone { display: none !important; } }`}</style>
 
+      {/* ── Proforma Invoice Full-Screen Preview ── */}
+      {showProformaModal && (
+        <div className="fixed inset-0 z-50 bg-[#e8eaf0] flex flex-col">
+          <div className="flex items-center gap-3 px-5 py-2.5 bg-white border-b border-[#e2e6ec] shadow-sm flex-shrink-0">
+            <button
+              onClick={() => setShowProformaModal(false)}
+              className="flex items-center gap-1.5 text-[12px] text-[#6a6f7d] hover:text-[#1a1c21] transition-colors"
+            >
+              <X size={15} /> Close
+            </button>
+            <div className="h-5 w-px bg-[#e2e6ec]" />
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] font-medium text-[#6a6f7d] whitespace-nowrap">Proforma No *</label>
+              <input
+                type="text"
+                value={proformaNo}
+                onChange={e => setProformaNo(e.target.value)}
+                placeholder="BCIM/PI/2526/01"
+                className="border border-[#d8dce6] rounded-lg px-2.5 py-1.5 text-[12px] w-36 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] font-medium text-[#6a6f7d]">Date</label>
+              <input
+                type="date"
+                value={proformaDate}
+                onChange={e => setProformaDate(e.target.value)}
+                className="border border-[#d8dce6] rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div className="ml-auto">
+              <button
+                onClick={() => { if (!proformaNo.trim()) { toast.error('Please enter a proforma number'); return; } handleProformaPrint(); }}
+                className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[12px] font-semibold hover:bg-blue-500 transition-colors flex items-center gap-2"
+              >
+                <Printer size={14} /> Print / Save PDF
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto flex justify-center py-8 px-4">
+            <div style={{ boxShadow: '0 4px 32px rgba(0,0,0,0.18)', background: '#fff' }}>
+              <RABillProformaInvoice ref={proformaRef} data={b} proformaNo={proformaNo} proformaDate={proformaDate} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Tax Invoice Full-Screen Preview ── */}
       {showTaxModal && (
         <div className="fixed inset-0 z-50 bg-[#e8eaf0] flex flex-col">
-          {/* Toolbar */}
           <div className="flex items-center gap-3 px-5 py-2.5 bg-white border-b border-[#e2e6ec] shadow-sm flex-shrink-0">
             <button
               onClick={() => setShowTaxModal(false)}
@@ -567,8 +636,6 @@ export default function RABillDetail() {
               </button>
             </div>
           </div>
-
-          {/* Invoice preview — scrollable */}
           <div className="flex-1 overflow-auto flex justify-center py-8 px-4">
             <div style={{ boxShadow: '0 4px 32px rgba(0,0,0,0.18)', background: '#fff' }}>
               <RABillTaxInvoice ref={taxInvoiceRef} data={b} invoiceNo={invoiceNo} invoiceDate={invoiceDate} />
