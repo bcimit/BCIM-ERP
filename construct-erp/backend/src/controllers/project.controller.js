@@ -196,7 +196,7 @@ const updateProject = async (req, res) => {
     const fields = ['name', 'type', 'description', 'client_name', 'client_gstin',
       'location', 'city', 'state', 'contract_value', 'start_date', 'end_date',
       'project_manager_id', 'site_engineer_id', 'qs_engineer_id',
-      'status', 'progress_pct', 'gst_type', 'rera_number'];
+      'status', 'progress_pct', 'gst_type', 'rera_number', 'client_advance_received'];
 
     const updates = [];
     const params = [];

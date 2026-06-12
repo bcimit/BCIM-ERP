@@ -2,12 +2,12 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectAPI, variationAPI, raBillAPI } from '../../api/client';
 import {
   ArrowLeft, Building2, FileText, UploadCloud, Trash2,
   TrendingUp, Wallet, Receipt, ShieldCheck, History,
-  MapPin, Activity, Users, CalendarDays, Hash
+  MapPin, Activity, Users, CalendarDays, Hash, Coins, Check, X as XIcon
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -29,10 +29,19 @@ const fullInr = v => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFract
 
 export default function ProjectDetail() {
   const { id } = useParams();
+  const qc = useQueryClient();
+  const [editingAdvance, setEditingAdvance] = React.useState(false);
+  const [advanceInput, setAdvanceInput] = React.useState('');
 
   const { data: project = {}, isLoading } = useQuery({
     queryKey: ['project', id],
     queryFn: () => projectAPI.get(id).then(r => r.data?.data || r.data || {}),
+  });
+
+  const saveAdvance = useMutation({
+    mutationFn: (val) => projectAPI.update(id, { client_advance_received: val }),
+    onSuccess: () => { qc.invalidateQueries(['project', id]); setEditingAdvance(false); toast.success('Advance updated'); },
+    onError: (e) => toast.error(e.response?.data?.error || 'Failed to save'),
   });
 
   const { data: variations = [] } = useQuery({
@@ -53,6 +62,8 @@ export default function ProjectDetail() {
     .reduce((s, b) => s + parseFloat(b.gross_amount || 0), 0);
   const totalRetention = bills.reduce((s, b) => s + parseFloat(b.retention_amount || 0), 0);
   const totalRecovery  = bills.reduce((s, b) => s + parseFloat(b.mobilization_advance_recovery || 0), 0);
+  const clientAdvance  = parseFloat(project.client_advance_received || 0);
+  const advanceBalance = clientAdvance - totalRecovery;
   const revisedContract = parseFloat(project.contract_value || 0) + totalVariations;
   const balanceToExecute = revisedContract - totalBilled;
   const progress = parseFloat(project.progress_pct || 0);
@@ -256,6 +267,61 @@ export default function ProjectDetail() {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Advance from Client */}
+              <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Coins size={15} className="text-amber-600" />
+                    <span className="text-sm font-semibold text-amber-900">Advance Received from Client</span>
+                  </div>
+                  {!editingAdvance && (
+                    <button onClick={() => { setAdvanceInput(clientAdvance || ''); setEditingAdvance(true); }}
+                      className="text-xs text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2">
+                      Edit
+                    </button>
+                  )}
+                </div>
+
+                {editingAdvance ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">₹</span>
+                    <input
+                      type="number" min="0" step="0.01"
+                      value={advanceInput}
+                      onChange={e => setAdvanceInput(e.target.value)}
+                      className="flex-1 border border-amber-300 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      placeholder="0.00"
+                      autoFocus
+                    />
+                    <button onClick={() => saveAdvance.mutate(parseFloat(advanceInput) || 0)}
+                      disabled={saveAdvance.isPending}
+                      className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                      <Check size={14} />
+                    </button>
+                    <button onClick={() => setEditingAdvance(false)} className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300">
+                      <XIcon size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4 mt-1">
+                    <div>
+                      <p className="text-xs text-amber-700 mb-0.5">Total Advance</p>
+                      <p className="text-base font-bold font-mono text-amber-900">{fullInr(clientAdvance)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-amber-700 mb-0.5">Recovered in Bills</p>
+                      <p className="text-base font-bold font-mono text-indigo-700">{fullInr(totalRecovery)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-amber-700 mb-0.5">Balance to Recover</p>
+                      <p className={clsx('text-base font-bold font-mono', advanceBalance > 0 ? 'text-red-600' : 'text-emerald-600')}>
+                        {fullInr(advanceBalance)}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
