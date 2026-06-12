@@ -1051,57 +1051,47 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
               const hasActive = group.items.some(item => matchesPath(item.to));
               const isOpen = expandedGroup === group.label;
               const GroupIcon = group.items[0]?.icon || FolderSearch;
+              // Sub-menu items use a fixed indigo/slate palette regardless of group color
+              const SUB_COLOR = '#4F46E5';
+              const SUB_ACTIVE_BG = '#EEF2FF';
               return (
                 <div key={group.label} style={{ marginBottom: 3 }}>
-                  {/* ── Group header ── colored left-bar + icon + label */}
+
+                  {/* ── MODULE header — solid group colour, white text ── */}
                   <button
                     onClick={() => setExpandedGroup(isOpen ? null : group.label)}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 10px 8px 8px', borderRadius: 9, border: 'none',
-                      background: isOpen
-                        ? hexToRgba(color, 0.13)
-                        : hasActive ? hexToRgba(color, 0.08) : 'transparent',
+                      padding: '9px 10px 9px 10px', borderRadius: 9, border: 'none',
+                      background: isOpen ? color : hasActive ? hexToRgba(color, 0.15) : '#F8FAFC',
                       cursor: 'pointer', textAlign: 'left',
-                      borderLeft: `3px solid ${isOpen || hasActive ? color : 'transparent'}`,
-                      transition: 'background 0.14s',
+                      transition: 'background 0.15s',
                     }}
                   >
-                    {/* Module icon badge */}
                     <span style={{
-                      width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                      width: 28, height: 28, borderRadius: 8, flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: isOpen || hasActive ? color : '#F1F5F9',
-                      color: isOpen || hasActive ? '#fff' : '#64748B',
-                      transition: 'background 0.14s, color 0.14s',
+                      background: isOpen ? 'rgba(255,255,255,0.22)' : hasActive ? color : '#E2E8F0',
+                      color: isOpen ? '#fff' : hasActive ? '#fff' : '#64748B',
                     }}>
-                      <GroupIcon size={13} />
+                      <GroupIcon size={14} />
                     </span>
                     <span style={{
                       flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      fontSize: 12, fontWeight: 700,
-                      color: isOpen || hasActive ? '#0F172A' : '#475569',
+                      fontSize: 12.5, fontWeight: 700,
+                      color: isOpen ? '#fff' : hasActive ? color : '#374151',
                     }}>
                       {t(group.label)}
                     </span>
-                    {/* Item count badge */}
-                    <span style={{
-                      fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 10,
-                      background: isOpen || hasActive ? hexToRgba(color, 0.15) : '#F1F5F9',
-                      color: isOpen || hasActive ? color : '#94A3B8',
-                      marginRight: 2, flexShrink: 0,
-                    }}>
-                      {group.items.length}
-                    </span>
                     <ChevronDown size={13} style={{
-                      color: isOpen ? color : '#94A3B8',
+                      color: isOpen ? 'rgba(255,255,255,0.8)' : '#94A3B8',
                       transform: isOpen ? 'rotate(180deg)' : 'none',
-                      transition: 'transform 0.18s',
-                      flexShrink: 0,
+                      transition: 'transform 0.18s', flexShrink: 0,
                     }} />
                   </button>
 
                   {isOpen && (() => {
+                    // ── nav link for individual pages (indigo palette) ──
                     const renderLink = (item, nested) => {
                       const Icon = item.icon;
                       const active = matchesPath(item.to);
@@ -1112,23 +1102,24 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                           onClick={handleNavClick}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 8,
-                            margin: '1px 0', padding: nested ? '6px 10px 6px 12px' : '6px 10px 6px 20px',
-                            borderRadius: 8,
-                            background: active ? hexToRgba(color, 0.12) : 'transparent',
-                            color: active ? color : '#64748B',
+                            margin: '1px 0',
+                            padding: nested ? '6px 10px 6px 14px' : '6px 10px 6px 22px',
+                            borderRadius: 7,
+                            background: active ? SUB_ACTIVE_BG : 'transparent',
+                            color: active ? SUB_COLOR : '#64748B',
                             textDecoration: 'none',
-                            fontSize: 12.5, fontWeight: active ? 700 : 500,
-                            borderLeft: active ? `3px solid ${color}` : '3px solid transparent',
+                            fontSize: 13, fontWeight: active ? 600 : 400,
+                            borderLeft: active ? `3px solid ${SUB_COLOR}` : '3px solid transparent',
                             transition: 'background 0.12s',
                           }}
                         >
-                          <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
+                          <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }} />
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t(item.label)}</span>
                         </NavLink>
                       );
                     };
                     return (
-                      <div style={{ padding: '3px 0 5px' }}>
+                      <div style={{ padding: '3px 0 5px', background: '#FAFBFD', borderRadius: '0 0 9px 9px', marginTop: 1 }}>
                         {getNavSections(group).map(section => {
                           const isSub = section.label && section.items.length > 1;
                           if (!isSub) return section.items.map(item => renderLink(item, false));
@@ -1138,39 +1129,39 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                           const SubIcon   = section.items[0]?.icon || FolderSearch;
                           return (
                             <div key={key} style={{ marginBottom: 1 }}>
-                              {/* ── Sub-section header — colored pill style ── */}
+                              {/* ── SUB-SECTION header — teal/slate palette, clearly different from module ── */}
                               <button
                                 onClick={() => setExpandedSection(subOpen ? null : key)}
                                 style={{
                                   width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                                  margin: '2px 0', padding: '6px 10px 6px 20px',
-                                  borderRadius: 8, border: `1px solid ${subOpen || subActive ? hexToRgba(color, 0.3) : hexToRgba(color, 0.12)}`,
+                                  margin: '2px 0', padding: '6px 10px 6px 14px',
+                                  borderRadius: 7, border: 'none',
                                   cursor: 'pointer', textAlign: 'left',
-                                  background: subOpen
-                                    ? hexToRgba(color, 0.1)
-                                    : subActive ? hexToRgba(color, 0.06) : hexToRgba(color, 0.04),
-                                  color: subActive || subOpen ? color : '#475569',
+                                  background: subOpen ? '#E0F2FE' : subActive ? '#F0F9FF' : '#F1F5F9',
+                                  color: subOpen || subActive ? '#0369A1' : '#475569',
                                   transition: 'background 0.12s',
                                 }}
                               >
                                 <SubIcon size={13} style={{ flexShrink: 0 }} />
-                                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5, fontWeight: 700 }}>
+                                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600 }}>
                                   {t(section.label)}
                                 </span>
                                 <span style={{
-                                  fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 8,
-                                  background: hexToRgba(color, 0.18), color: color, marginRight: 2, flexShrink: 0,
+                                  fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 8,
+                                  background: subOpen || subActive ? '#BAE6FD' : '#E2E8F0',
+                                  color: subOpen || subActive ? '#0369A1' : '#64748B',
+                                  marginRight: 2, flexShrink: 0,
                                 }}>
                                   {section.items.length}
                                 </span>
                                 <ChevronDown size={11} style={{
-                                  color: subOpen ? color : '#94A3B8',
+                                  color: subOpen ? '#0369A1' : '#94A3B8',
                                   transform: subOpen ? 'rotate(180deg)' : 'none',
                                   transition: 'transform 0.18s', flexShrink: 0,
                                 }} />
                               </button>
                               {subOpen && (
-                                <div style={{ margin: '2px 0 4px 28px', paddingLeft: 6, borderLeft: `2px solid ${hexToRgba(color, 0.3)}` }}>
+                                <div style={{ margin: '1px 0 3px 28px', paddingLeft: 6, borderLeft: '2px solid #BAE6FD' }}>
                                   {section.items.map(item => renderLink(item, true))}
                                 </div>
                               )}
