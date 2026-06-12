@@ -1048,6 +1048,7 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
             )}
             {navGroups.map((group, gi) => {
               const hasActive = group.items.some(item => matchesPath(item.to));
+              const isOpen = expandedGroup === group.label;
               const GroupIcon = group.items[0]?.icon || FolderSearch;
 
               const renderLink = (item, nested) => {
@@ -1078,52 +1079,61 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
 
               return (
                 <div key={group.label}>
-                  {/* divider between modules */}
                   {gi > 0 && <div style={{ height: 1, background: '#D1D5DB', margin: '6px 4px 8px' }} />}
 
-                  {/* ── Module header ── */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '9px 10px', borderRadius: 7,
-                    background: hasActive ? '#1E293B' : '#F1F5F9',
-                    marginBottom: 4,
-                  }}>
-                    <GroupIcon size={15} style={{ color: hasActive ? '#fff' : '#111827', flexShrink: 0 }} />
+                  {/* ── Module header — clickable to expand/collapse ── */}
+                  <button
+                    onClick={() => setExpandedGroup(isOpen ? null : group.label)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '9px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', textAlign: 'left',
+                      background: isOpen ? '#1E293B' : hasActive ? '#E2E8F0' : '#F1F5F9',
+                      marginBottom: isOpen ? 4 : 0,
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    <GroupIcon size={15} style={{ color: isOpen ? '#fff' : '#111827', flexShrink: 0 }} />
                     <span style={{
                       flex: 1, fontSize: 13, fontWeight: 800, letterSpacing: '0.05em',
                       textTransform: 'uppercase',
-                      color: hasActive ? '#fff' : '#111827',
+                      color: isOpen ? '#fff' : '#111827',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {t(group.label)}
                     </span>
-                  </div>
+                    <ChevronDown size={13} style={{
+                      color: isOpen ? 'rgba(255,255,255,0.7)' : '#9CA3AF',
+                      transform: isOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.18s', flexShrink: 0,
+                    }} />
+                  </button>
 
-                  {/* ── All items ── */}
-                  <div>
-                    {getNavSections(group).map(section => {
-                      const isSub = section.label && section.items.length > 1;
-                      if (!isSub) return section.items.map(item => renderLink(item, false));
-                      const subActive = section.items.some(i => matchesPath(i.to));
-                      const SubIcon = section.items[0]?.icon || FolderSearch;
-                      return (
-                        <div key={section.label}>
-                          {/* Sub-section label */}
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: 5,
-                            padding: '5px 8px 2px 20px',
-                            color: subActive ? '#1E293B' : '#6B7280',
-                            fontSize: 10, fontWeight: 700,
-                            textTransform: 'uppercase', letterSpacing: '0.07em',
-                          }}>
-                            <SubIcon size={10} style={{ flexShrink: 0 }} />
-                            {t(section.label)}
+                  {/* ── Items — only shown when open ── */}
+                  {isOpen && (
+                    <div style={{ paddingBottom: 4 }}>
+                      {getNavSections(group).map(section => {
+                        const isSub = section.label && section.items.length > 1;
+                        if (!isSub) return section.items.map(item => renderLink(item, false));
+                        const subActive = section.items.some(i => matchesPath(i.to));
+                        const SubIcon = section.items[0]?.icon || FolderSearch;
+                        return (
+                          <div key={section.label}>
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 5,
+                              padding: '5px 8px 2px 20px',
+                              color: subActive ? '#1E293B' : '#6B7280',
+                              fontSize: 10, fontWeight: 700,
+                              textTransform: 'uppercase', letterSpacing: '0.07em',
+                            }}>
+                              <SubIcon size={10} style={{ flexShrink: 0 }} />
+                              {t(section.label)}
+                            </div>
+                            {section.items.map(item => renderLink(item, true))}
                           </div>
-                          {section.items.map(item => renderLink(item, true))}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
