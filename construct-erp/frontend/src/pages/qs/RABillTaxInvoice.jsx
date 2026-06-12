@@ -39,7 +39,8 @@ const B2 = '2px solid #000';
 
 const cell = (extra = {}) => ({
   border: B, padding: '3px 6px', fontSize: '10.5pt',
-  fontFamily: 'Times New Roman, serif', verticalAlign: 'middle', ...extra,
+  fontFamily: 'Times New Roman, serif', verticalAlign: 'middle',
+  wordBreak: 'break-word', overflowWrap: 'anywhere', ...extra,
 });
 const hcell = (extra = {}) => ({
   ...cell(), fontWeight: 'bold', textAlign: 'center', ...extra,
@@ -115,7 +116,7 @@ const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate }, ref) =
       </table>
 
       {/* ── META ROWS: GSTIN / Invoice / Date ── */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', borderLeft: B2, borderRight: B2, borderBottom: B }}>
+      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderLeft: B2, borderRight: B2, borderBottom: B }}>
         <colgroup>
           <col style={{ width: '50%' }} />
           <col style={{ width: '50%' }} />
@@ -146,7 +147,7 @@ const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate }, ref) =
       </table>
 
       {/* ── BILLED TO / CONSIGNEE ── */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', borderLeft: B2, borderRight: B2, borderBottom: B }}>
+      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderLeft: B2, borderRight: B2, borderBottom: B }}>
         <colgroup>
           <col style={{ width: '50%' }} />
           <col style={{ width: '50%' }} />
@@ -171,7 +172,7 @@ const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate }, ref) =
       </table>
 
       {/* ── LINE ITEMS TABLE ── */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', borderLeft: B2, borderRight: B2, borderBottom: B }}>
+      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', borderLeft: B2, borderRight: B2, borderBottom: B }}>
         <thead>
           <tr>
             <th style={{ ...hcell(), width: '5%' }} rowSpan={2}>S.No</th>
