@@ -135,12 +135,13 @@ export default function ProjectDetail() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Baseline BOQ',       value: inr(project.contract_value), sub: 'Original order value',       color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
-          { label: 'Approved Variations', value: inr(totalVariations),        sub: 'Extras certified',           color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-100' },
-          { label: 'Total Certified',    value: inr(totalBilled),             sub: 'Certified & paid bills',     color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-          { label: 'Net Retention',      value: inr(totalRetention),          sub: 'Held back from payments',    color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-100' },
+          { label: 'Baseline BOQ',         value: inr(project.contract_value), sub: 'Original order value',       color: 'text-indigo-600',  bg: 'bg-indigo-50',  border: 'border-indigo-100' },
+          { label: 'Approved Variations',  value: inr(totalVariations),        sub: 'Extras certified',           color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-100' },
+          { label: 'Total Certified',      value: inr(totalBilled),            sub: 'Certified & paid bills',     color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+          { label: 'Net Retention',        value: inr(totalRetention),         sub: 'Held back from payments',    color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-100' },
+          { label: 'Client Advance',       value: inr(clientAdvance),          sub: advanceBalance >= 0 ? `bal ${inr(advanceBalance)} pending` : 'Fully recovered', color: 'text-orange-600',  bg: 'bg-orange-50',  border: 'border-orange-100' },
         ].map(m => (
           <div key={m.label} className={clsx('bg-white border rounded-xl p-5 shadow-sm', m.border)}>
             <div className={clsx('text-2xl font-medium tracking-tight font-mono mb-1', m.color)}>{m.value}</div>
