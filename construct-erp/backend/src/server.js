@@ -637,6 +637,9 @@ if (require.main === module) {
 
     const { initMdApprovalDigest } = require('./utils/md-approval-digest.service');
     initMdApprovalDigest();
+
+    const { initDailyActivityDigest } = require('./utils/daily-activity-digest.service');
+    initDailyActivityDigest();
   });
 }
 

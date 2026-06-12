@@ -27,6 +27,21 @@ router.post('/md-digest/run', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/v1/approvals/daily-activity-digest/run — manually trigger the
+// all-departments daily activity summary mail (admin only; the cron sends it
+// automatically every evening)
+router.post('/daily-activity-digest/run', async (req, res) => {
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['super_admin', 'admin'].includes(role)) {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+    const { runDailyActivityDigest } = require('../utils/daily-activity-digest.service');
+    const result = await runDailyActivityDigest({ manual: true });
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 const CID  = r => r.user.company_id;
 const UID  = r => r.user.id;
 // Roles are stored free-text and may differ in case (e.g. "Procurement_manager") —
