@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 // FIX: Added missing measurementAPI, vendorAPI, and materialReconAPI imports
-import { raBillAPI, projectAPI, boqAPI, measurementAPI, vendorAPI, variationAPI, normsAPI, materialReconAPI } from '../../api/client';
+import { raBillAPI, projectAPI, boqAPI, measurementAPI, vendorAPI, variationAPI, normsAPI, materialReconAPI, priceEscalationAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -212,6 +212,32 @@ export default function RABillNewPage() {
     queryFn: () => materialReconAPI.audit(formData.project_id).then(r => r.data.summary),
     enabled: !!formData.project_id,
   });
+
+  // Price Escalation Tracker — net escalation for this project & RA No.
+  const { data: priceEscStats } = useQuery({
+    queryKey: ['price-escalation-stats-for-bill', formData.project_id, formData.bill_number],
+    queryFn: () => priceEscalationAPI.stats({ project_id: formData.project_id, ra_no: formData.bill_number })
+      .then(r => r.data?.data ?? {}).catch(() => ({})),
+    enabled: !!formData.project_id && !!formData.bill_number,
+  });
+
+  // Auto-fill Price Escalation from tracker when it's still at its default (0)
+  useEffect(() => {
+    if (priceEscStats && formData.price_escalation === 0) {
+      const net = parseFloat(priceEscStats.net_escalation || 0);
+      if (net !== 0) set('price_escalation', net);
+    }
+  }, [priceEscStats]);
+
+  const handleSyncEscalation = () => {
+    const net = parseFloat(priceEscStats?.net_escalation || 0);
+    if (net !== 0) {
+      set('price_escalation', net);
+      toast.success(`Synced from Price Escalation Tracker: ${inr(net)}`);
+    } else {
+      toast(`No escalation records found for RA No. "${formData.bill_number}" in the Price Escalation Tracker.`, { icon: 'ℹ️', duration: 5000 });
+    }
+  };
 
   const handleSyncRecovery = () => {
     if (auditSummary?.net_recovery_due > 0) {
@@ -480,7 +506,17 @@ export default function RABillNewPage() {
                 </Field>
               </div>
 
-              <Field label="Price Escalation (± ₹)">
+              <Field
+                label="Price Escalation (± ₹)"
+                action={
+                  <button
+                    onClick={handleSyncEscalation}
+                    className="text-[9px] font-medium text-blue-500 uppercase hover:underline"
+                  >
+                    Sync from Tracker
+                  </button>
+                }
+              >
                 <div className="relative">
                   <input
                     type="number"
@@ -493,6 +529,11 @@ export default function RABillNewPage() {
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-medium text-slate-400">EPV / ESCL</span>
                 </div>
+                {priceEscStats?.line_count > 0 && (
+                  <p className="text-[9px] text-slate-400 mt-0.5">
+                    Tracker: {priceEscStats.line_count} line(s) for RA "{formData.bill_number}" — net {inr(priceEscStats.net_escalation)}
+                  </p>
+                )}
               </Field>
 
               <Field label="Other Deductions (₹)">
@@ -702,10 +743,13 @@ export default function RABillNewPage() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, action, children }) {
   return (
     <div className="space-y-1">
-      <label className="block text-[11px] font-medium text-[#6a6f7d]">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="block text-[11px] font-medium text-[#6a6f7d]">{label}</label>
+        {action}
+      </div>
       {children}
     </div>
   );
