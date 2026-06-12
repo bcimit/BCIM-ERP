@@ -111,6 +111,7 @@ const navGroups = [
     { to: '/finance/invoices/booking',    icon: ClipboardList,   label: 'Bill Booking' },
     { to: '/finance/payment-run',         icon: Wallet,          label: 'Payment Run' },
     { to: '/finance/payments',            icon: CreditCard,      label: 'Payments' },
+    { to: '/finance/client-advances',     icon: Coins,           label: 'Client Advance Requests' },
     { to: '/finance/customer-statements', icon: Receipt,         label: 'Customer Statements' },
     { to: '/finance/bank-reconciliation', icon: Banknote,        label: 'Bank Reconciliation' },
     { to: '/finance/cheque-tracker',      icon: BookOpen,        label: 'Cheque Tracker' },

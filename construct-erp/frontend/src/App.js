@@ -61,6 +61,7 @@ const TDSPage             = lazy(() => import('./pages/finance/TDSPage'));
 const BudgetPage          = lazy(() => import('./pages/finance/BudgetPage'));
 const PaymentsPage        = lazy(() => import('./pages/finance/PaymentsPage'));
 const PettyCashPage       = lazy(() => import('./pages/finance/PettyCashPage'));
+const ClientAdvanceRequestsPage = lazy(() => import('./pages/finance/ClientAdvanceRequestsPage'));
 const FinanceHubPage      = lazy(() => import('./pages/finance/FinanceHubPage'));
 const AccountsDashboard   = lazy(() => import('./pages/dashboards/AccountsDashboard'));
 const CustomerStatementsPage = lazy(() => import('./pages/finance/CustomerStatementsPage'));
@@ -470,6 +471,7 @@ export default function App() {
                 <Route path="finance/budget" element={<RequireModule module="Finance"><BudgetPage /></RequireModule>} />
                 <Route path="finance/payments" element={<RequireModule module="Finance"><PaymentsPage /></RequireModule>} />
                 <Route path="finance/petty-cash" element={<RequireModule module="Finance"><PettyCashPage /></RequireModule>} />
+                <Route path="finance/client-advances" element={<RequireModule module="Finance"><ClientAdvanceRequestsPage /></RequireModule>} />
                 <Route path="finance/invoices" element={<RequireModule module="Finance"><VendorInvoicePage /></RequireModule>} />
                 <Route path="finance/invoices/booking" element={<RequireModule module="Finance"><BillBookingPage /></RequireModule>} />
                 <Route path="finance/billing-reports" element={<RequireModule module="Finance"><BillingReportsPage /></RequireModule>} />

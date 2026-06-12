@@ -278,6 +278,15 @@ export const raBillAPI = {
   getPrevStats:  (params) => api.get('/ra-bills/previous-stats', { params }),
 };
 
+export const clientAdvanceAPI = {
+  list:    (params) => api.get('/client-advances', { params }),
+  stats:   (params) => api.get('/client-advances/stats', { params }),
+  create:  (data)   => api.post('/client-advances', data),
+  update:  (id, d)  => api.put(`/client-advances/${id}`, d),
+  receive: (id, d)  => api.post(`/client-advances/${id}/receive`, d),
+  remove:  (id)     => api.delete(`/client-advances/${id}`),
+};
+
 export const retentionAPI = {
   list:    (params) => api.get('/retention-releases', { params }),
   summary: (params) => api.get('/retention-releases/summary', { params }),
