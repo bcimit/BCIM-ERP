@@ -13,33 +13,33 @@ import {
 import { clsx } from 'clsx';
 import api from '../../api/client';
 
-// ── Colour palette ─────────────────────────────────────────────────────────────
+// ── Colour palette — one distinct, muted enterprise colour per department ─────
 const C = {
-  navy: { bg:'bg-[#eef4ff]', icon:'text-[#0f2d6b]', badge:'bg-[#e6efff] text-[#0f2d6b]', btn:'bg-[#0f2d6b] hover:bg-[#0a214f]', ring:'ring-[#b8c9ee]', hdr:'bg-[#0f2d6b]' },
-  blue: { bg:'bg-[#edf5ff]', icon:'text-[#1e40af]', badge:'bg-[#dbeafe] text-[#1e40af]', btn:'bg-[#1e40af] hover:bg-[#173486]', ring:'ring-[#bfdbfe]', hdr:'bg-[#1e40af]' },
-  red:  { bg:'bg-[#fff0ee]', icon:'text-[#dc2626]', badge:'bg-[#fee2e2] text-[#b91c1c]', btn:'bg-[#dc2626] hover:bg-[#b91c1c]', ring:'ring-[#fecaca]', hdr:'bg-[#dc2626]' },
-  gold: { bg:'bg-[#fff8df]', icon:'text-[#b8860b]', badge:'bg-[#fff1b8] text-[#7a5a00]', btn:'bg-[#c9a227] hover:bg-[#a98614]', ring:'ring-[#f3d56a]', hdr:'bg-[#c9a227]' },
-  slate:{ bg:'bg-[#f5f7fb]', icon:'text-[#334155]', badge:'bg-[#eef2f7] text-[#334155]', btn:'bg-[#334155] hover:bg-[#1e293b]', ring:'ring-[#cbd5e1]', hdr:'bg-[#334155]' },
-  indigo:{ bg:'bg-[#eef4ff]', icon:'text-[#0f2d6b]', badge:'bg-[#e6efff] text-[#0f2d6b]', btn:'bg-[#0f2d6b] hover:bg-[#0a214f]', ring:'ring-[#b8c9ee]', hdr:'bg-[#0f2d6b]' },
-  emerald:{ bg:'bg-[#fff8df]', icon:'text-[#b8860b]', badge:'bg-[#fff1b8] text-[#7a5a00]', btn:'bg-[#c9a227] hover:bg-[#a98614]', ring:'ring-[#f3d56a]', hdr:'bg-[#c9a227]' },
-  amber:{ bg:'bg-[#fff8df]', icon:'text-[#b8860b]', badge:'bg-[#fff1b8] text-[#7a5a00]', btn:'bg-[#c9a227] hover:bg-[#a98614]', ring:'ring-[#f3d56a]', hdr:'bg-[#c9a227]' },
-  violet:{ bg:'bg-[#edf5ff]', icon:'text-[#1e40af]', badge:'bg-[#dbeafe] text-[#1e40af]', btn:'bg-[#1e40af] hover:bg-[#173486]', ring:'ring-[#bfdbfe]', hdr:'bg-[#1e40af]' },
-  teal:{ bg:'bg-[#edf5ff]', icon:'text-[#1e40af]', badge:'bg-[#dbeafe] text-[#1e40af]', btn:'bg-[#1e40af] hover:bg-[#173486]', ring:'ring-[#bfdbfe]', hdr:'bg-[#1e40af]' },
-  orange:{ bg:'bg-[#fff8df]', icon:'text-[#b8860b]', badge:'bg-[#fff1b8] text-[#7a5a00]', btn:'bg-[#c9a227] hover:bg-[#a98614]', ring:'ring-[#f3d56a]', hdr:'bg-[#c9a227]' },
-  cyan:{ bg:'bg-[#edf5ff]', icon:'text-[#1e40af]', badge:'bg-[#dbeafe] text-[#1e40af]', btn:'bg-[#1e40af] hover:bg-[#173486]', ring:'ring-[#bfdbfe]', hdr:'bg-[#1e40af]' },
+  navy:   { bg:'bg-[#eef2fb]', icon:'text-[#1e3a8a]', badge:'bg-[#e0e9fa] text-[#1e3a8a]', btn:'bg-[#1e3a8a] hover:bg-[#172d6e]', ring:'ring-[#c3d2f0]', hdr:'bg-[#1e3a8a]' },
+  blue:   { bg:'bg-[#eff6ff]', icon:'text-[#2563eb]', badge:'bg-[#dbeafe] text-[#1d4ed8]', btn:'bg-[#2563eb] hover:bg-[#1d4ed8]', ring:'ring-[#bfdbfe]', hdr:'bg-[#2563eb]' },
+  red:    { bg:'bg-[#fef2f2]', icon:'text-[#dc2626]', badge:'bg-[#fee2e2] text-[#b91c1c]', btn:'bg-[#dc2626] hover:bg-[#b91c1c]', ring:'ring-[#fecaca]', hdr:'bg-[#dc2626]' },
+  gold:   { bg:'bg-[#fffbeb]', icon:'text-[#b45309]', badge:'bg-[#fef3c7] text-[#92400e]', btn:'bg-[#b45309] hover:bg-[#92400e]', ring:'ring-[#fde68a]', hdr:'bg-[#b45309]' },
+  slate:  { bg:'bg-[#f8fafc]', icon:'text-[#475569]', badge:'bg-[#e2e8f0] text-[#334155]', btn:'bg-[#475569] hover:bg-[#334155]', ring:'ring-[#cbd5e1]', hdr:'bg-[#475569]' },
+  indigo: { bg:'bg-[#eef2ff]', icon:'text-[#4f46e5]', badge:'bg-[#e0e7ff] text-[#4338ca]', btn:'bg-[#4f46e5] hover:bg-[#4338ca]', ring:'ring-[#c7d2fe]', hdr:'bg-[#4f46e5]' },
+  emerald:{ bg:'bg-[#ecfdf5]', icon:'text-[#059669]', badge:'bg-[#d1fae5] text-[#047857]', btn:'bg-[#059669] hover:bg-[#047857]', ring:'ring-[#a7f3d0]', hdr:'bg-[#059669]' },
+  amber:  { bg:'bg-[#fffbeb]', icon:'text-[#d97706]', badge:'bg-[#fef3c7] text-[#b45309]', btn:'bg-[#d97706] hover:bg-[#b45309]', ring:'ring-[#fde68a]', hdr:'bg-[#d97706]' },
+  violet: { bg:'bg-[#f5f3ff]', icon:'text-[#7c3aed]', badge:'bg-[#ede9fe] text-[#6d28d9]', btn:'bg-[#7c3aed] hover:bg-[#6d28d9]', ring:'ring-[#ddd6fe]', hdr:'bg-[#7c3aed]' },
+  teal:   { bg:'bg-[#f0fdfa]', icon:'text-[#0d9488]', badge:'bg-[#ccfbf1] text-[#0f766e]', btn:'bg-[#0d9488] hover:bg-[#0f766e]', ring:'ring-[#99f6e4]', hdr:'bg-[#0d9488]' },
+  orange: { bg:'bg-[#fff7ed]', icon:'text-[#ea580c]', badge:'bg-[#ffedd5] text-[#c2410c]', btn:'bg-[#ea580c] hover:bg-[#c2410c]', ring:'ring-[#fed7aa]', hdr:'bg-[#ea580c]' },
+  cyan:   { bg:'bg-[#ecfeff]', icon:'text-[#0891b2]', badge:'bg-[#cffafe] text-[#0e7490]', btn:'bg-[#0891b2] hover:bg-[#0e7490]', ring:'ring-[#a5f3fc]', hdr:'bg-[#0891b2]' },
 };
 
 // ── Departments ────────────────────────────────────────────────────────────────
 const DEPTS = [
   { key:'all',            label:'All Reports',       icon:BarChart3,     color:'navy' },
-  { key:'tqs',            label:'Bill Tracker',      icon:Send,          color:'navy' },
-  { key:'finance',        label:'Finance',           icon:IndianRupee,   color:'gold' },
-  { key:'hr',             label:'HR & Admin',        icon:Users,         color:'blue' },
-  { key:'procurement',    label:'Procurement',       icon:Truck,         color:'gold' },
-  { key:'stores',         label:'Stores',            icon:Package,       color:'blue' },
+  { key:'tqs',            label:'Bill Tracker',      icon:Send,          color:'indigo' },
+  { key:'finance',        label:'Finance',           icon:IndianRupee,   color:'emerald' },
+  { key:'hr',             label:'HR & Admin',        icon:Users,         color:'violet' },
+  { key:'procurement',    label:'Procurement',       icon:Truck,         color:'amber' },
+  { key:'stores',         label:'Stores',            icon:Package,       color:'teal' },
   { key:'qs',             label:'QS & Billing',      icon:Layers,        color:'navy' },
   { key:'planning',       label:'Planning',          icon:Flag,          color:'blue' },
-  { key:'quality',        label:'Quality (QA/QC)',   icon:ShieldCheck,   color:'blue' },
+  { key:'quality',        label:'Quality (QA/QC)',   icon:ShieldCheck,   color:'cyan' },
   { key:'hse',            label:'HSE & Safety',      icon:AlertTriangle, color:'red' },
   { key:'tender',         label:'Tender',            icon:Gavel,         color:'gold' },
   { key:'assets',         label:'Assets & IT',       icon:Briefcase,     color:'slate' },
@@ -688,30 +688,29 @@ export default function ReportsPage() {
     <div className="flex h-full min-h-0 bg-slate-50 overflow-hidden max-xl:flex-col">
 
       {/* ── Department sidebar ─────────────────────────────────────────────── */}
-      <aside className="report-hub-dept-sidebar w-52 flex-shrink-0 flex flex-col overflow-hidden max-xl:w-full max-xl:max-h-[190px]"
-             style={{ background: '#ffffff', borderRight: '1px solid #e8edf3' }}>
+      <aside className="report-hub-dept-sidebar w-60 flex-shrink-0 flex flex-col overflow-hidden bg-white border-r border-slate-200 max-xl:w-full max-xl:max-h-[200px]">
 
         {/* Header */}
-        <div className="px-4 pt-4 pb-3 flex-shrink-0 max-xl:pt-3 max-xl:pb-2"
-             style={{ borderBottom: '1px solid #f1f5f9' }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                 style={{ background: 'linear-gradient(135deg, #0f2d6b 0%, #1e40af 72%, #dc2626 100%)' }}>
-              <FileBarChart className="w-3.5 h-3.5 text-white" />
+        <div className="px-4 pt-4 pb-3.5 flex-shrink-0 border-b border-slate-100 max-xl:pt-3 max-xl:pb-2.5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                 style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)' }}>
+              <FileBarChart className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
             </div>
             <div>
-              <p className="text-[12.5px] font-medium text-slate-700 leading-tight">Reports Hub</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">{REPORTS.length} reports</p>
+              <p className="text-sm font-semibold text-slate-900 leading-tight">Reports Hub</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{REPORTS.length} reports · {DEPTS.length - 1} departments</p>
             </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 max-xl:flex max-xl:gap-1.5 max-xl:space-y-0 max-xl:overflow-x-auto max-xl:overflow-y-hidden max-xl:pb-3
+        <nav className="flex-1 overflow-y-auto px-2.5 py-2.5 space-y-0.5 max-xl:flex max-xl:gap-1.5 max-xl:space-y-0 max-xl:overflow-x-auto max-xl:overflow-y-hidden max-xl:pb-3
                         [&::-webkit-scrollbar]:w-1
                         [&::-webkit-scrollbar-track]:transparent
                         [&::-webkit-scrollbar-thumb]:rounded-full
                         [&::-webkit-scrollbar-thumb]:bg-slate-200">
+          <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest max-xl:hidden">Departments</p>
           {DEPTS.map((d, idx) => {
             const Icon = d.icon;
             const active = dept === d.key;
@@ -720,37 +719,37 @@ export default function ReportsPage() {
             return (
               <React.Fragment key={d.key}>
                 {idx === 1 && (
-                  <div className="mx-1 my-1.5 border-t border-slate-100 max-xl:hidden" />
+                  <div className="mx-2 my-2 border-t border-slate-100 max-xl:hidden" />
                 )}
                 <button
                   onClick={() => handleSelectDept(d.key)}
                   className={clsx(
-                    'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-150 relative group max-xl:w-auto max-xl:min-w-[120px]',
+                    'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all duration-150 relative group max-xl:w-auto max-xl:min-w-[140px]',
                     active
-                      ? 'bg-[#eef4ff] text-[#0f2d6b]'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                      ? clsx(c.bg, 'shadow-sm')
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
                   )}
                 >
                   {/* Left accent bar for active */}
                   {active && (
-                    <span className={clsx('absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full', c.btn.split(' ')[0])} />
+                    <span className={clsx('absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full', c.btn.split(' ')[0])} />
                   )}
 
                   {/* Icon */}
                   <div className={clsx(
-                    'w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all duration-150',
-                    active ? c.bg : 'bg-slate-100 group-hover:bg-slate-200'
+                    'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-150',
+                    active ? 'bg-white shadow-sm' : 'bg-slate-100 group-hover:bg-slate-200'
                   )}>
-                    <Icon className={clsx('w-2.5 h-2.5', active ? c.icon : 'text-slate-400 group-hover:text-slate-500')} />
+                    <Icon className={clsx('w-3.5 h-3.5', active ? c.icon : 'text-slate-400 group-hover:text-slate-600')} />
                   </div>
 
                   <span className={clsx(
-                    'text-[11px] flex-1 truncate leading-none',
-                    active ? 'font-medium' : 'font-normal'
+                    'text-xs flex-1 truncate leading-none',
+                    active ? clsx('font-semibold', c.icon) : 'font-medium'
                   )}>{d.label}</span>
 
                   <span className={clsx(
-                    'text-[9px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none tabular-nums font-medium',
+                    'text-[10px] px-1.5 py-0.5 rounded-md min-w-[20px] text-center leading-none tabular-nums font-semibold',
                     active ? c.badge : 'bg-slate-100 text-slate-400'
                   )}>{cnt}</span>
                 </button>
@@ -761,47 +760,49 @@ export default function ReportsPage() {
       </aside>
 
       {/* ── Report list ────────────────────────────────────────────────────── */}
-      <div className="report-hub-list-panel w-64 flex-shrink-0 bg-white border-r border-slate-100 flex flex-col overflow-hidden max-xl:w-full max-xl:max-h-[250px] max-xl:border-r-0 max-xl:border-b">
+      <div className="report-hub-list-panel w-72 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-hidden max-xl:w-full max-xl:max-h-[260px] max-xl:border-r-0 max-xl:border-b">
 
         {/* Panel header */}
-        <div className="px-3 pt-3 pb-2.5 border-b border-slate-100 flex-shrink-0">
+        <div className="px-3.5 pt-4 pb-3 border-b border-slate-100 flex-shrink-0">
           {/* Dept label */}
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
               {DEPTS.find(d => d.key === dept)?.label || 'Reports'}
             </span>
-            <span className="text-[10px] text-slate-400 tabular-nums">
+            <span className="text-[10px] font-medium text-slate-400 tabular-nums bg-slate-100 px-2 py-0.5 rounded-full">
               {visibleReports.length} report{visibleReports.length !== 1 ? 's' : ''}
             </span>
           </div>
           {/* Search */}
-          <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-200
-                          focus-within:border-[#b8c9ee] focus-within:bg-[#eef4ff]/60 transition-all">
-            <Search className="w-3 h-3 text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200
+                          focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 focus-within:bg-white transition-all">
+            <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search reports…"
-              className="flex-1 bg-transparent text-xs text-slate-600 placeholder-slate-400 outline-none"
+              className="flex-1 bg-transparent text-xs text-slate-700 placeholder-slate-400 outline-none"
             />
             {search && (
               <button onClick={() => setSearch('')} className="text-slate-300 hover:text-slate-500 transition-colors">
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
 
         {/* Report cards */}
-        <div className="flex-1 overflow-y-auto py-2 px-2 max-xl:grid max-xl:grid-cols-[repeat(auto-fit,minmax(210px,1fr))] max-xl:gap-1.5
+        <div className="flex-1 overflow-y-auto py-2.5 px-2.5 max-xl:grid max-xl:grid-cols-[repeat(auto-fit,minmax(220px,1fr))] max-xl:gap-1.5
                         [&::-webkit-scrollbar]:w-1
                         [&::-webkit-scrollbar-track]:transparent
                         [&::-webkit-scrollbar-thumb]:rounded-full
                         [&::-webkit-scrollbar-thumb]:bg-slate-200">
           {visibleReports.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
-              <Search className="w-6 h-6 opacity-30" />
-              <p className="text-xs">No reports found</p>
+            <div className="flex flex-col items-center justify-center py-12 gap-2.5 text-slate-400">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                <Search className="w-4 h-4 opacity-50" />
+              </div>
+              <p className="text-xs font-medium">No reports found</p>
             </div>
           ) : (
             visibleReports.map(r => {
@@ -813,34 +814,28 @@ export default function ReportsPage() {
                   key={r.key}
                   onClick={() => setSelectedReport(r)}
                   className={clsx(
-                    'w-full text-left px-3 py-2.5 rounded-xl mb-1 transition-all duration-150 relative overflow-hidden group max-xl:mb-0',
+                    'w-full text-left px-3 py-3 rounded-xl mb-1.5 transition-all duration-150 relative overflow-hidden group border max-xl:mb-0',
                     active
-                      ? 'bg-slate-50 shadow-sm'
-                      : 'hover:bg-slate-50'
+                      ? clsx(c.bg, 'border-transparent shadow-sm ring-1', c.ring)
+                      : 'border-transparent hover:bg-slate-50 hover:border-slate-100'
                   )}
                 >
-                  {/* Colored left border accent */}
-                  <span className={clsx(
-                    'absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full transition-all duration-150',
-                    active ? c.btn.split(' ')[0] : 'opacity-0 group-hover:opacity-40 bg-slate-300'
-                  )} />
-
-                  <div className="flex items-start gap-2.5 pl-1">
+                  <div className="flex items-start gap-3">
                     <div className={clsx(
-                      'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-150',
-                      active ? c.bg : 'bg-slate-100 group-hover:bg-slate-200'
+                      'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-150',
+                      active ? 'bg-white shadow-sm' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-sm'
                     )}>
-                      <Icon className={clsx('w-3.5 h-3.5 transition-all duration-150', active ? c.icon : 'text-slate-400 group-hover:text-slate-500')} />
+                      <Icon className={clsx('w-4 h-4 transition-all duration-150', active ? c.icon : 'text-slate-400 group-hover:text-slate-600')} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className={clsx(
-                        'text-[11.5px] leading-tight',
-                        active ? 'font-medium text-slate-800' : 'font-normal text-slate-600 group-hover:text-slate-700'
+                        'text-xs leading-tight',
+                        active ? 'font-semibold text-slate-900' : 'font-medium text-slate-700 group-hover:text-slate-900'
                       )}>{r.title}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug line-clamp-2">{r.desc}</p>
+                      <p className="text-[10.5px] text-slate-400 mt-1 leading-snug line-clamp-2">{r.desc}</p>
                     </div>
                     {active && (
-                      <ChevronRight className={clsx('w-3 h-3 flex-shrink-0 mt-1', c.icon)} />
+                      <ChevronRight className={clsx('w-3.5 h-3.5 flex-shrink-0 mt-1', c.icon)} />
                     )}
                   </div>
                 </button>
@@ -981,7 +976,7 @@ function ReportGenerator({ report }) {
         /* ── 4. Print header ── */
         #report-print-header {
           display: flex !important;
-          background: #0f2d6b !important;
+          background: #1e3a8a !important;
           color: #fff !important;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
@@ -999,7 +994,7 @@ function ReportGenerator({ report }) {
         tbody tr { page-break-inside: avoid; break-inside: avoid; }
 
         thead tr, thead th {
-          background: #0f2d6b !important;
+          background: #1e3a8a !important;
           color: #fff !important;
           font-size: 7pt !important;
           padding: 5px 6px !important;
@@ -1017,8 +1012,8 @@ function ReportGenerator({ report }) {
           border-bottom: 0.5pt solid #e2e8f0 !important;
         }
         tfoot tr {
-          background: #fff8df !important;
-          border-top: 1.5pt solid #0f2d6b !important;
+          background: #f1f5f9 !important;
+          border-top: 1.5pt solid #1e3a8a !important;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
@@ -1073,31 +1068,36 @@ function ReportGenerator({ report }) {
     <div className="flex flex-col h-full min-h-0 print:h-auto print:overflow-visible">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="report-hub-header bg-white border-b border-slate-100 px-6 py-4 flex-shrink-0">
+      <div className="report-hub-header bg-white border-b border-slate-200 px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between gap-4 max-md:flex-col max-md:items-start">
-          <div className="flex items-center gap-3">
-            <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center', c.bg)}>
+          <div className="flex items-center gap-3.5">
+            <div className={clsx('w-11 h-11 rounded-xl flex items-center justify-center shadow-sm ring-1', c.bg, c.ring)}>
               <Icon className={clsx('w-5 h-5', c.icon)} />
             </div>
             <div>
-              <h2 className="text-base font-medium text-slate-800">{report.title}</h2>
-              <p className="text-xs text-slate-400">{report.desc}</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900 leading-tight">{report.title}</h2>
+                <span className={clsx('text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide', c.badge)}>
+                  {DEPTS.find(d => d.key === report.dept)?.label || report.dept}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">{report.desc}</p>
             </div>
           </div>
           {generated && rows && (
             <div className="flex items-center gap-2 max-md:w-full max-md:flex-wrap">
               <button
                 onClick={handleExport}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-900 hover:bg-slate-50 transition-all max-md:flex-1"
+                className="flex items-center justify-center gap-1.5 px-3.5 h-9 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm max-md:flex-1"
               >
-                <Download className="w-3.5 h-3.5" />
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                 Export CSV
               </button>
               <button
                 onClick={handlePrint}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-900 hover:bg-slate-50 transition-all max-md:flex-1"
+                className="flex items-center justify-center gap-1.5 px-3.5 h-9 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm max-md:flex-1"
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-3.5 h-3.5 text-slate-500" />
                 Print
               </button>
             </div>
@@ -1106,37 +1106,41 @@ function ReportGenerator({ report }) {
       </div>
 
       {/* ── Filters + Generate button ──────────────────────────────────────── */}
-      <div className="report-hub-filter-bar bg-white border-b border-slate-100 px-6 py-3 flex-shrink-0">
+      <div className="report-hub-filter-bar bg-white border-b border-slate-200 px-6 py-3.5 flex-shrink-0">
         <div className="flex flex-wrap items-end gap-3">
+          <div className="flex items-center gap-1.5 self-end h-9 pr-1 text-slate-400">
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Filters</span>
+          </div>
           {hasDateFilter && (
             <>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium text-slate-900 font-medium uppercase tracking-wide">From Date</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">From Date</label>
                 <input
                   type="date"
                   value={fromDate}
                   onChange={e => setFromDate(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 outline-none focus:ring-2 focus:ring-indigo-200 bg-slate-50"
+                  className="text-xs h-9 border border-slate-200 rounded-lg px-3 text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 bg-white shadow-sm"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium text-slate-900 font-medium uppercase tracking-wide">To Date</label>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">To Date</label>
                 <input
                   type="date"
                   value={toDate}
                   onChange={e => setToDate(e.target.value)}
-                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 outline-none focus:ring-2 focus:ring-indigo-200 bg-slate-50"
+                  className="text-xs h-9 border border-slate-200 rounded-lg px-3 text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 bg-white shadow-sm"
                 />
               </div>
             </>
           )}
           {hasProjectFilter && (
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium text-slate-900 font-medium uppercase tracking-wide">Project</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Project</label>
               <select
                 value={projectId}
                 onChange={e => setProjectId(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 outline-none focus:ring-2 focus:ring-indigo-200 bg-slate-50 min-w-[180px] max-sm:min-w-0 max-sm:w-full"
+                className="text-xs h-9 border border-slate-200 rounded-lg px-3 text-slate-700 outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 bg-white shadow-sm min-w-[200px] max-sm:min-w-0 max-sm:w-full"
               >
                 <option value="">All Projects</option>
                 {projects.map(p => (
@@ -1149,8 +1153,8 @@ function ReportGenerator({ report }) {
             onClick={generate}
             disabled={loading}
             className={clsx(
-              'flex items-center justify-center gap-2 px-5 py-2 rounded-xl text-white text-sm font-medium transition-all shadow-sm max-sm:w-full',
-              loading ? 'opacity-60 cursor-not-allowed bg-indigo-400' : `${c.btn}`
+              'flex items-center justify-center gap-2 px-5 h-9 rounded-lg text-white text-xs font-semibold transition-all shadow-sm max-sm:w-full',
+              loading ? 'opacity-60 cursor-not-allowed bg-slate-400' : `${c.btn}`
             )}
           >
             {loading ? (
@@ -1161,7 +1165,8 @@ function ReportGenerator({ report }) {
             {loading ? 'Generating…' : 'Generate Report'}
           </button>
           {generated && rows && (
-            <span className="text-xs text-slate-900 font-medium self-end pb-1.5">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 h-9 self-end">
+              <CheckCircle2 className="w-3.5 h-3.5" />
               {rows.length} record{rows.length !== 1 ? 's' : ''} found
             </span>
           )}
@@ -1173,37 +1178,45 @@ function ReportGenerator({ report }) {
 
         {/* Not yet generated */}
         {!generated && !loading && !error && (
-          <div className="h-full flex flex-col items-center justify-center text-slate-900 font-medium gap-3">
-            <div className={clsx('w-16 h-16 rounded-2xl flex items-center justify-center', c.bg)}>
-              <Icon className={clsx('w-8 h-8 opacity-40', c.icon)} />
+          <div className="h-full flex flex-col items-center justify-center gap-4">
+            <div className={clsx('w-20 h-20 rounded-2xl flex items-center justify-center ring-1', c.bg, c.ring)}>
+              <Icon className={clsx('w-9 h-9 opacity-50', c.icon)} />
             </div>
-            <p className="text-sm font-medium text-slate-500">Set filters and click <span className="text-[#0f2d6b]">Generate Report</span></p>
-            <p className="text-xs text-slate-400">Results will appear here as a table you can print or export</p>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-slate-700">Ready to generate</p>
+              <p className="text-xs text-slate-400 mt-1">Set your filters above and click <span className={clsx('font-semibold', c.icon)}>Generate Report</span></p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Results appear here as a table you can print or export to Excel</p>
+            </div>
           </div>
         )}
 
         {/* Error */}
         {error && (
-          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
+          <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3.5 text-sm text-red-700 shadow-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Could not generate this report</p>
+              <p className="text-xs mt-0.5 text-red-600">{error}</p>
+            </div>
           </div>
         )}
 
         {/* Empty results */}
         {generated && !loading && rows && rows.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-slate-900 font-medium gap-2">
-            <Info className="w-10 h-10 opacity-20" />
-            <p className="text-sm font-medium">No records found for the selected filters</p>
-            <p className="text-xs">Try changing the date range or project</p>
+          <div className="h-full flex flex-col items-center justify-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+              <Info className="w-6 h-6 text-slate-300" />
+            </div>
+            <p className="text-sm font-semibold text-slate-600">No records found for the selected filters</p>
+            <p className="text-xs text-slate-400">Try widening the date range or selecting a different project</p>
           </div>
         )}
 
         {/* Data table */}
         {rows && rows.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm" id="report-output">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="report-output">
             {/* Print header (only visible on print) */}
-            <div id="report-print-header" className="hidden items-center justify-between bg-[#0f2d6b] text-white px-6 py-4 mb-0">
+            <div id="report-print-header" className="hidden items-center justify-between bg-[#1e3a8a] text-white px-6 py-4 mb-0">
               <div>
                 <p className="text-base font-bold">{report.title}</p>
                 {hasDateFilter && (
@@ -1213,14 +1226,41 @@ function ReportGenerator({ report }) {
               <p className="text-xs opacity-70">Generated: {new Date().toLocaleString('en-IN')}</p>
             </div>
 
+            {/* Summary strip (screen only) */}
+            <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className={clsx('w-9 h-9 rounded-lg flex items-center justify-center ring-1', c.bg, c.ring)}>
+                  <Icon className={clsx('w-4 h-4', c.icon)} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{report.title}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {rows.length} record{rows.length !== 1 ? 's' : ''}
+                    {hasDateFilter && ` · ${new Date(fromDate).toLocaleDateString('en-IN')} – ${new Date(toDate).toLocaleDateString('en-IN')}`}
+                    {hasProjectFilter && projectId && ` · ${projects.find(p => p.id === projectId)?.name || 'Project'}`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {report.columns.filter(col => col.type === 'amount' && totals[col.key] !== undefined).slice(0, 3).map(col => (
+                  <div key={col.key} className="px-3.5 py-2 rounded-lg bg-white border border-slate-200 shadow-sm">
+                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block leading-none mb-1">{col.label}</span>
+                    <span className="text-[13px] font-bold text-slate-800 tabular-nums leading-none">
+                      ₹{Number(totals[col.key]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
-                  <tr className="bg-[#0f2d6b] text-white">
-                    <th className="px-3 py-2.5 text-left font-medium text-[11px] w-8">#</th>
+                  <tr className="bg-[#1e3a8a] text-white">
+                    <th className="px-3.5 py-3 text-left font-semibold text-[10px] uppercase tracking-wider w-10">#</th>
                     {report.columns.map(col => (
                       <th key={col.key} className={clsx(
-                        'px-3 py-2.5 font-medium text-[11px] whitespace-nowrap',
+                        'px-3.5 py-3 font-semibold text-[10px] uppercase tracking-wider whitespace-nowrap',
                         col.type === 'amount' || col.type === 'number' ? 'text-right' : 'text-left'
                       )}>
                         {col.label}
@@ -1230,13 +1270,13 @@ function ReportGenerator({ report }) {
                 </thead>
                 <tbody>
                   {rows.map((row, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                      <td className="px-3 py-2 text-slate-900 font-medium text-[10px]">{i + 1}</td>
+                    <tr key={i} className={clsx('transition-colors hover:bg-indigo-50/40', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60')}>
+                      <td className="px-3.5 py-2.5 text-slate-400 font-medium text-[10px] tabular-nums border-b border-slate-100">{i + 1}</td>
                       {report.columns.map(col => (
                         <td key={col.key} className={clsx(
-                          'px-3 py-2 text-slate-900 border-b border-slate-100',
-                          col.mono ? 'font-mono text-[10px]' : '',
-                          col.type === 'amount' || col.type === 'number' ? 'text-right tabular-nums' : ''
+                          'px-3.5 py-2.5 text-slate-700 border-b border-slate-100',
+                          col.mono ? 'font-mono text-[10.5px] font-medium text-slate-600' : '',
+                          col.type === 'amount' || col.type === 'number' ? 'text-right tabular-nums font-medium' : ''
                         )}>
                           {fmt(firstValue(row, col), col.type)}
                         </td>
@@ -1247,12 +1287,12 @@ function ReportGenerator({ report }) {
                 {/* Totals row */}
                 {Object.keys(totals).length > 0 && (
                   <tfoot>
-                    <tr className="bg-[#fff8df] font-medium border-t-2 border-[#0f2d6b]">
-                      <td className="px-3 py-2.5 text-[11px] text-slate-500">—</td>
+                    <tr className="bg-slate-50 border-t-2 border-[#1e3a8a]">
+                      <td className="px-3.5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total</td>
                       {report.columns.map(col => (
                         <td key={col.key} className={clsx(
-                          'px-3 py-2.5 text-[11px]',
-                          col.type === 'amount' || col.type === 'number' ? 'text-right tabular-nums font-medium text-slate-800' : ''
+                          'px-3.5 py-3 text-[11.5px]',
+                          col.type === 'amount' || col.type === 'number' ? 'text-right tabular-nums font-bold text-[#1e3a8a]' : ''
                         )}>
                           {totals[col.key] !== undefined
                             ? col.type === 'amount'
