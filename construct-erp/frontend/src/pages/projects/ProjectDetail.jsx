@@ -3,7 +3,7 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectAPI, variationAPI, raBillAPI } from '../../api/client';
+import { projectAPI, variationAPI, raBillAPI, clientAdvanceAPI } from '../../api/client';
 import {
   ArrowLeft, Building2, FileText, UploadCloud, Trash2,
   TrendingUp, Wallet, Receipt, ShieldCheck, History,
@@ -60,6 +60,11 @@ export default function ProjectDetail() {
   const { data: bills = [] } = useQuery({
     queryKey: ['ra-bills', id],
     queryFn: () => raBillAPI.list({ project_id: id }).then(r => r.data?.data || []),
+  });
+
+  const { data: advStats = {} } = useQuery({
+    queryKey: ['client-advance-stats', id],
+    queryFn: () => clientAdvanceAPI.stats({ project_id: id }).then(r => r.data?.data || {}),
   });
 
   const [docs, setDocs] = React.useState([]);
@@ -149,7 +154,7 @@ export default function ProjectDetail() {
           { label: 'Approved Variations',  value: inr(totalVariations),        sub: 'Extras certified',           color: 'text-amber-600',   border: 'border-amber-100' },
           { label: 'Total Certified',      value: inr(totalBilled),            sub: 'Certified & paid bills',     color: 'text-emerald-600', border: 'border-emerald-100' },
           { label: 'Net Retention',        value: inr(totalRetention),         sub: 'Held back from payments',    color: 'text-blue-600',    border: 'border-blue-100' },
-          { label: 'Client Advance',       value: inr(clientAdvance),          sub: advanceBalance > 0.01 ? `bal ${crore(advanceBalance)} pending` : 'Fully recovered', color: 'text-orange-600', border: 'border-orange-100' },
+          { label: 'Client Advance',       value: inr(clientAdvance),          sub: parseFloat(advStats.total_pending || 0) > 0.01 ? `${crore(advStats.total_pending)} due from client` : (parseFloat(advStats.total_requested || 0) > 0 ? 'Fully received' : 'No advance requested'), color: 'text-orange-600', border: 'border-orange-100' },
         ].map(m => (
           <div key={m.label} className={clsx('bg-white border rounded-xl p-4 shadow-sm', m.border)}>
             <div className={clsx('text-lg font-semibold tracking-tight font-mono mb-1 truncate', m.color)}>{m.value}</div>

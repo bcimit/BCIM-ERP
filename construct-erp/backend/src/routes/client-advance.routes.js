@@ -78,20 +78,23 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /stats — totals by status
+// GET /stats — totals by status (optional ?project_id= filter)
 router.get('/stats', async (req, res) => {
   try {
+    const { project_id } = req.query;
+    const params = [req.user.company_id];
+    let where = 'WHERE company_id = $1';
+    if (project_id) { where += ` AND project_id = $2`; params.push(project_id); }
     const { rows } = await query(`
       SELECT
         COALESCE(SUM(advance_amount),0)                                                   AS total_requested,
-        COALESCE(SUM(received_amount),0)                                                   AS total_received,
+        COALESCE(SUM(received_amount),0)                                                  AS total_received,
         COALESCE(SUM(CASE WHEN status <> 'rejected' THEN GREATEST(advance_amount - received_amount,0) ELSE 0 END),0) AS total_pending,
         COUNT(*) FILTER (WHERE status='submitted') AS submitted_count,
         COUNT(*) FILTER (WHERE status='approved')  AS approved_count,
         COUNT(*) FILTER (WHERE status='partial')   AS partial_count,
         COUNT(*) FILTER (WHERE status='received')  AS received_count
-      FROM client_advance_requests WHERE company_id = $1`,
-      [req.user.company_id]);
+      FROM client_advance_requests ${where}`, params);
     res.json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
