@@ -1,8 +1,8 @@
 // src/pages/qs/RABillNewPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  ArrowLeft, Save, Plus, AlertTriangle
+import {
+  ArrowLeft, Save, Plus, AlertTriangle, FileText, Wallet
 } from 'lucide-react';
 import { clsx } from 'clsx';
 // FIX: Added missing measurementAPI, vendorAPI, and materialReconAPI imports
@@ -40,6 +40,7 @@ export default function RABillNewPage() {
   });
 
   const [items, setItems] = useState([]);
+  const [activeTab, setActiveTab] = useState('details');
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -355,197 +356,244 @@ export default function RABillNewPage() {
       <main className="flex-1 flex overflow-hidden">
 
         {/* ── Left sidebar ── */}
-        <aside className="w-[272px] flex-shrink-0 border-r border-[#e2e6ec] flex flex-col bg-white">
-          <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scroll">
+        <aside className="w-[340px] flex-shrink-0 border-r border-[#e2e6ec] flex flex-col bg-white">
 
-            {/* Bill Headers */}
-            <section className="space-y-3">
-              <h3 className="text-[10px] font-medium text-[#8e94a3] uppercase tracking-[0.15em]">
-                Bill Headers
-              </h3>
+          {/* Tabs */}
+          <div className="flex-shrink-0 flex border-b border-[#e2e6ec]">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1.5 h-10 text-[11px] font-medium uppercase tracking-wider transition-colors border-b-2',
+                activeTab === 'details'
+                  ? 'text-[#0067ff] border-[#0067ff] bg-blue-50/40'
+                  : 'text-[#8e94a3] hover:text-[#404452] border-transparent'
+              )}
+            >
+              <FileText size={13} /> Bill Details
+            </button>
+            <button
+              onClick={() => setActiveTab('financials')}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1.5 h-10 text-[11px] font-medium uppercase tracking-wider transition-colors border-b-2',
+                activeTab === 'financials'
+                  ? 'text-[#0067ff] border-[#0067ff] bg-blue-50/40'
+                  : 'text-[#8e94a3] hover:text-[#404452] border-transparent'
+              )}
+            >
+              <Wallet size={13} /> Deductions & Recovery
+            </button>
+          </div>
 
-              <Field label="Project Site *">
-                <select
-                  className="field-input"
-                  value={formData.project_id}
-                  onChange={e => set('project_id', e.target.value)}
-                >
-                  <option value="">— Select —</option>
-                  {projects?.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                {formData.project_id && projects?.find(p => p.id === formData.project_id) && (
-                  <div className="mt-2 p-2.5 bg-blue-50/50 border border-blue-100 rounded-lg space-y-1">
-                    <div className="text-[10px] font-medium text-blue-400 uppercase tracking-widest">Billing To Client</div>
-                    <div className="text-xs font-medium text-[#1a1c21] uppercase tracking-tight">
-                       {projects.find(p => p.id === formData.project_id)?.client_name || 'Generic Client'}
-                    </div>
-                    {(projects.find(p => p.id === formData.project_id)?.client_gstin || projects.find(p => p.id === formData.project_id)?.client_pan) && (
-                      <div className="text-[9px] font-medium text-slate-900 font-medium uppercase">
-                        GST: {projects.find(p => p.id === formData.project_id)?.client_gstin || '---'} | PAN: {projects.find(p => p.id === formData.project_id)?.client_pan || '---'}
+          <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scroll">
+
+            {activeTab === 'details' && (
+              <>
+                {/* Bill Headers */}
+                <section className="space-y-3">
+                  <h3 className="text-[10px] font-medium text-[#8e94a3] uppercase tracking-[0.15em]">
+                    Bill Headers
+                  </h3>
+
+                  <Field label="Project Site *">
+                    <select
+                      className="field-input"
+                      value={formData.project_id}
+                      onChange={e => set('project_id', e.target.value)}
+                    >
+                      <option value="">— Select —</option>
+                      {projects?.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {formData.project_id && projects?.find(p => p.id === formData.project_id) && (
+                      <div className="mt-2 p-2.5 bg-blue-50/50 border border-blue-100 rounded-lg space-y-1">
+                        <div className="text-[10px] font-medium text-blue-400 uppercase tracking-widest">Billing To Client</div>
+                        <div className="text-xs font-medium text-[#1a1c21] uppercase tracking-tight">
+                           {projects.find(p => p.id === formData.project_id)?.client_name || 'Generic Client'}
+                        </div>
+                        {(projects.find(p => p.id === formData.project_id)?.client_gstin || projects.find(p => p.id === formData.project_id)?.client_pan) && (
+                          <div className="text-[9px] font-medium text-slate-900 font-medium uppercase">
+                            GST: {projects.find(p => p.id === formData.project_id)?.client_gstin || '---'} | PAN: {projects.find(p => p.id === formData.project_id)?.client_pan || '---'}
+                          </div>
+                        )}
                       </div>
                     )}
+                  </Field>
+
+                  <Field label="RA Bill No. *">
+                    <input
+                      className="field-input font-mono bg-[#f4f6f9]"
+                      value={formData.bill_number}
+                      onChange={e => set('bill_number', e.target.value)}
+                    />
+                  </Field>
+                </section>
+
+                {/* Period */}
+                <section className="space-y-3">
+                  <h3 className="text-[10px] font-medium text-[#8e94a3] uppercase tracking-[0.15em]">
+                    Period
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="From">
+                      <input
+                        type="date"
+                        className="field-input text-[11px]"
+                        value={formData.bill_period_from}
+                        onChange={e => set('bill_period_from', e.target.value)}
+                      />
+                    </Field>
+                    <Field label="To">
+                      <input
+                        type="date"
+                        className="field-input text-[11px]"
+                        value={formData.bill_period_to}
+                        onChange={e => set('bill_period_to', e.target.value)}
+                      />
+                    </Field>
                   </div>
-                )}
-              </Field>
+                </section>
+              </>
+            )}
 
-              <Field label="RA Bill No. *">
-                <input
-                  className="field-input font-mono bg-[#f4f6f9]"
-                  value={formData.bill_number}
-                  onChange={e => set('bill_number', e.target.value)}
-                />
-              </Field>
-            </section>
+            {activeTab === 'financials' && (
+              <>
+                {/* Rates */}
+                <section className="space-y-3">
+                  <h3 className="text-[10px] font-medium text-[#8e94a3] uppercase tracking-[0.15em]">
+                    Rates
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Field label="Retention %">
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={formData.retention_percent}
+                        onChange={e => set('retention_percent', parseFloat(e.target.value) || 0)}
+                        min={0}
+                        max={100}
+                      />
+                    </Field>
+                    <Field label="GST %">
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={formData.gst_rate}
+                        onChange={e => set('gst_rate', parseFloat(e.target.value) || 0)}
+                        min={0}
+                      />
+                    </Field>
+                    <Field label="TDS %">
+                      <input
+                        type="number"
+                        className="field-input"
+                        value={formData.tds_rate}
+                        onChange={e => set('tds_rate', parseFloat(e.target.value) || 0)}
+                        min={0}
+                      />
+                    </Field>
+                  </div>
+                </section>
 
-            {/* Period */}
-            <section className="space-y-3">
-              <h3 className="text-[10px] font-medium text-[#8e94a3] uppercase tracking-[0.15em]">
-                Period
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="From">
-                  <input
-                    type="date"
-                    className="field-input text-[11px]"
-                    value={formData.bill_period_from}
-                    onChange={e => set('bill_period_from', e.target.value)}
-                  />
+                {/* Advance Recovery */}
+                <div className="space-y-3 p-3 bg-blue-50/30 border border-blue-100 rounded-xl">
+                  <h4 className="text-[10px] font-medium text-blue-600 uppercase tracking-widest">Advance Recovery</h4>
+                  <Field label="Mobilization (₹)">
+                    <input
+                      type="number"
+                      className="field-input border-blue-200"
+                      value={formData.mobilization_advance_recovery}
+                      onChange={e => set('mobilization_advance_recovery', parseFloat(e.target.value) || 0)}
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="Adhoc (₹)">
+                    <input
+                      type="number"
+                      className="field-input border-blue-200"
+                      value={formData.adhoc_advance_recovery}
+                      onChange={e => set('adhoc_advance_recovery', parseFloat(e.target.value) || 0)}
+                      min={0}
+                    />
+                  </Field>
+                </div>
+
+                {/* Technical Recovery */}
+                <div className="space-y-3 p-3 bg-amber-50/20 border border-amber-100 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">Technical Recovery</h4>
+                    <button
+                      onClick={handleSyncRecovery}
+                      className="text-[9px] font-medium text-blue-500 uppercase hover:underline"
+                    >
+                      Auto-Sync
+                    </button>
+                  </div>
+
+                  <Field label="Steel Recovery (₹)">
+                    <input
+                      type="number"
+                      className="field-input border-amber-200"
+                      value={formData.material_recovery_steel}
+                      onChange={e => set('material_recovery_steel', parseFloat(e.target.value) || 0)}
+                      min={0}
+                    />
+                  </Field>
+
+                  <Field label="Cement Recovery (₹)">
+                    <input
+                      type="number"
+                      className="field-input border-amber-200"
+                      value={formData.material_recovery_cement}
+                      onChange={e => set('material_recovery_cement', parseFloat(e.target.value) || 0)}
+                      min={0}
+                    />
+                  </Field>
+                </div>
+
+                {/* Price Escalation */}
+                <Field
+                  label="Price Escalation (± ₹)"
+                  action={
+                    <button
+                      onClick={handleSyncEscalation}
+                      className="text-[9px] font-medium text-blue-500 uppercase hover:underline"
+                    >
+                      Sync from Tracker
+                    </button>
+                  }
+                >
+                  <div className="relative">
+                    <input
+                      type="number"
+                      className={clsx(
+                        "field-input font-bold",
+                        parseFloat(formData.price_escalation) > 0 ? "text-green-600" : "text-red-500"
+                      )}
+                      value={formData.price_escalation}
+                      onChange={e => set('price_escalation', parseFloat(e.target.value) || 0)}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-medium text-slate-400">EPV / ESCL</span>
+                  </div>
+                  {priceEscStats?.line_count > 0 && (
+                    <p className="text-[9px] text-slate-400 mt-0.5">
+                      Tracker: {priceEscStats.line_count} line(s) for RA "{formData.bill_number}" — net {inr(priceEscStats.net_escalation)}
+                    </p>
+                  )}
                 </Field>
-                <Field label="To">
-                  <input
-                    type="date"
-                    className="field-input text-[11px]"
-                    value={formData.bill_period_to}
-                    onChange={e => set('bill_period_to', e.target.value)}
-                  />
-                </Field>
-              </div>
-            </section>
 
-            {/* Deductions */}
-            <section className="space-y-3">
-              <h3 className="text-[10px] font-medium text-[#8e94a3] uppercase tracking-[0.15em]">
-                Deductions
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Retention %">
+                {/* Other Deductions */}
+                <Field label="Other Deductions (₹)">
                   <input
                     type="number"
                     className="field-input"
-                    value={formData.retention_percent}
-                    onChange={e => set('retention_percent', parseFloat(e.target.value) || 0)}
-                    min={0}
-                    max={100}
-                  />
-                </Field>
-                <Field label="GST %">
-                  <input
-                    type="number"
-                    className="field-input"
-                    value={formData.gst_rate}
-                    onChange={e => set('gst_percent', parseFloat(e.target.value) || 0)}
+                    value={formData.other_deductions}
+                    onChange={e => set('other_deductions', parseFloat(e.target.value) || 0)}
                     min={0}
                   />
                 </Field>
-              </div>
-              <Field label="Mobilization Advance Recovery (₹)">
-                <input
-                  type="number"
-                  className="field-input"
-                  value={formData.mobilization_advance_recovery}
-                  onChange={e =>
-                    set('mobilization_advance_recovery', parseFloat(e.target.value) || 0)
-                  }
-                  min={0}
-                />
-              </Field>
-
-              <Field label="Adhoc (Advance Recovery) (₹)">
-                <input
-                  type="number"
-                  className="field-input"
-                  value={formData.adhoc_advance_recovery}
-                  onChange={e =>
-                    set('adhoc_advance_recovery', parseFloat(e.target.value) || 0)
-                  }
-                  min={0}
-                />
-              </Field>
-
-              <div className="space-y-3 p-3 bg-amber-50/20 border border-amber-100 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-[10px] font-medium text-amber-600 uppercase tracking-widest">Technical Recovery</h4>
-                  <button 
-                    onClick={handleSyncRecovery}
-                    className="text-[9px] font-medium text-blue-500 uppercase hover:underline"
-                  >
-                    Auto-Sync
-                  </button>
-                </div>
-                
-                <Field label="Steel Recovery (₹)">
-                  <input
-                    type="number"
-                    className="field-input border-amber-200"
-                    value={formData.material_recovery_steel}
-                    onChange={e => set('material_recovery_steel', parseFloat(e.target.value) || 0)}
-                    min={0}
-                  />
-                </Field>
-
-                <Field label="Cement Recovery (₹)">
-                  <input
-                    type="number"
-                    className="field-input border-amber-200"
-                    value={formData.material_recovery_cement}
-                    onChange={e => set('material_recovery_cement', parseFloat(e.target.value) || 0)}
-                    min={0}
-                  />
-                </Field>
-              </div>
-
-              <Field
-                label="Price Escalation (± ₹)"
-                action={
-                  <button
-                    onClick={handleSyncEscalation}
-                    className="text-[9px] font-medium text-blue-500 uppercase hover:underline"
-                  >
-                    Sync from Tracker
-                  </button>
-                }
-              >
-                <div className="relative">
-                  <input
-                    type="number"
-                    className={clsx(
-                      "field-input font-bold",
-                      parseFloat(formData.price_escalation) > 0 ? "text-green-600" : "text-red-500"
-                    )}
-                    value={formData.price_escalation}
-                    onChange={e => set('price_escalation', parseFloat(e.target.value) || 0)}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-medium text-slate-400">EPV / ESCL</span>
-                </div>
-                {priceEscStats?.line_count > 0 && (
-                  <p className="text-[9px] text-slate-400 mt-0.5">
-                    Tracker: {priceEscStats.line_count} line(s) for RA "{formData.bill_number}" — net {inr(priceEscStats.net_escalation)}
-                  </p>
-                )}
-              </Field>
-
-              <Field label="Other Deductions (₹)">
-                <input
-                  type="number"
-                  className="field-input"
-                  value={formData.other_deductions}
-                  onChange={e => set('other_deductions', parseFloat(e.target.value) || 0)}
-                  min={0}
-                />
-              </Field>
-            </section>
+              </>
+            )}
           </div>
 
           {/* ── Financial summary ── */}
@@ -722,11 +770,11 @@ export default function RABillNewPage() {
       <style>{`
         .field-input {
           width: 100%;
-          height: 32px;
+          height: 36px;
           border: 1px solid #d8dce1;
           border-radius: 6px;
-          padding: 0 8px;
-          font-size: 12px;
+          padding: 0 10px;
+          font-size: 13px;
           color: #1a1c21;
           background: #ffffff;
           outline: none;
