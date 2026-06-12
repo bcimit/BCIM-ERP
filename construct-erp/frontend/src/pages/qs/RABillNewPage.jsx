@@ -633,32 +633,48 @@ export default function RABillNewPage() {
             {/* Bill Summary breakdown */}
             <Card icon={<Receipt size={15} />} title="Bill Summary">
               <div className="space-y-2">
+                {/* Certified value (additions) */}
                 <SummaryRow label="Gross Valuation" value={inr(grossTotal)} />
                 <SummaryRow label={`GST (${formData.gst_rate}% of gross + escl.)`} value={`+ ${inr(gstAmount)}`} valueClass="text-blue-600" />
-                <SummaryRow label={`Retention (${formData.retention_percent}% of gross + escl.)`} value={`− ${inr(retentionAmount)}`} valueClass="text-rose-500" />
-                <SummaryRow label={`TDS (${formData.tds_rate}%)`} value={`− ${inr(tdsAmount)}`} valueClass="text-rose-500" />
-                {parseFloat(formData.mobilization_advance_recovery) > 0 && (
-                  <SummaryRow label="Mob. Adv. Recovery" value={`− ${inr(formData.mobilization_advance_recovery)}`} valueClass="text-rose-500" />
-                )}
-                {parseFloat(formData.adhoc_advance_recovery) > 0 && (
-                  <SummaryRow label="Adhoc Recovery" value={`− ${inr(formData.adhoc_advance_recovery)}`} valueClass="text-rose-500" />
-                )}
-                {parseFloat(formData.material_recovery_steel) > 0 && (
-                  <SummaryRow label="Steel Recovery" value={`− ${inr(formData.material_recovery_steel)}`} valueClass="text-rose-500" />
-                )}
-                {parseFloat(formData.material_recovery_cement) > 0 && (
-                  <SummaryRow label="Cement Recovery" value={`− ${inr(formData.material_recovery_cement)}`} valueClass="text-rose-500" />
-                )}
                 {parseFloat(formData.price_escalation) !== 0 && (
                   <SummaryRow
                     label="Price Escalation"
-                    value={parseFloat(formData.price_escalation) > 0 ? `+ ${inr(formData.price_escalation)}` : `− ${inr(Math.abs(formData.price_escalation))}`}
-                    valueClass={parseFloat(formData.price_escalation) > 0 ? 'text-emerald-600' : 'text-rose-500'}
+                    value={priceEscalation > 0 ? `+ ${inr(priceEscalation)}` : `− ${inr(Math.abs(priceEscalation))}`}
+                    valueClass={priceEscalation > 0 ? 'text-emerald-600' : 'text-rose-500'}
                   />
                 )}
-                {parseFloat(formData.other_deductions) > 0 && (
-                  <SummaryRow label="Other Deductions" value={`− ${inr(formData.other_deductions)}`} valueClass="text-rose-500" />
-                )}
+                <div className="border-t border-slate-100 pt-2 flex justify-between items-center">
+                  <span className="text-[12px] font-medium text-slate-600">Gross Bill Value</span>
+                  <span className="text-[12px] font-semibold font-mono text-slate-800">{inr(grossTotal + gstAmount + priceEscalation)}</span>
+                </div>
+
+                {/* Deductions block */}
+                <div className="mt-3 rounded-xl bg-rose-50/40 border border-rose-100 p-3 space-y-2">
+                  <div className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Deductions</div>
+                  <SummaryRow label={`Retention (${formData.retention_percent}% of gross + escl.)`} value={`− ${inr(retentionAmount)}`} valueClass="text-rose-500" />
+                  <SummaryRow label={`TDS (${formData.tds_rate}%)`} value={`− ${inr(tdsAmount)}`} valueClass="text-rose-500" />
+                  {parseFloat(formData.mobilization_advance_recovery) > 0 && (
+                    <SummaryRow label="Mob. Adv. Recovery" value={`− ${inr(formData.mobilization_advance_recovery)}`} valueClass="text-rose-500" />
+                  )}
+                  {parseFloat(formData.adhoc_advance_recovery) > 0 && (
+                    <SummaryRow label="Adhoc Recovery" value={`− ${inr(formData.adhoc_advance_recovery)}`} valueClass="text-rose-500" />
+                  )}
+                  {parseFloat(formData.material_recovery_steel) > 0 && (
+                    <SummaryRow label="Steel Recovery" value={`− ${inr(formData.material_recovery_steel)}`} valueClass="text-rose-500" />
+                  )}
+                  {parseFloat(formData.material_recovery_cement) > 0 && (
+                    <SummaryRow label="Cement Recovery" value={`− ${inr(formData.material_recovery_cement)}`} valueClass="text-rose-500" />
+                  )}
+                  {parseFloat(formData.other_deductions) > 0 && (
+                    <SummaryRow label="Other Deductions" value={`− ${inr(formData.other_deductions)}`} valueClass="text-rose-500" />
+                  )}
+                  <div className="border-t border-rose-200/70 pt-2 mt-1 flex justify-between items-center">
+                    <span className="text-[12px] font-semibold text-rose-700">Total Deductions</span>
+                    <span className="text-[13px] font-bold font-mono text-rose-600">− {inr(totalDeductions)}</span>
+                  </div>
+                </div>
+
+                {/* Net */}
                 <div className="border-t border-slate-100 pt-3 mt-1 flex justify-between items-center">
                   <span className="text-[13px] font-semibold text-slate-900">Net Payable</span>
                   <span className="text-[17px] font-bold text-indigo-600">{inr(netPayable)}</span>
