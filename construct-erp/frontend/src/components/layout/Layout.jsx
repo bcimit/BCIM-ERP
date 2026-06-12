@@ -1066,11 +1066,11 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                       background: active ? '#F1F5F9' : 'transparent',
                       color: active ? '#0F172A' : '#374151',
                       textDecoration: 'none',
-                      fontSize: 13, fontWeight: active ? 600 : 400,
+                      fontSize: 11.5, fontWeight: active ? 600 : 400,
                       borderLeft: active ? '3px solid #0F172A' : '3px solid transparent',
                     }}
                   >
-                    <Icon size={13} style={{ flexShrink: 0, color: active ? '#0F172A' : '#6B7280' }} />
+                    <Icon size={12} style={{ flexShrink: 0, color: active ? '#0F172A' : '#6B7280' }} />
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t(item.label)}</span>
                   </NavLink>
                 );
@@ -1078,18 +1078,18 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
 
               return (
                 <div key={group.label} style={{ marginBottom: 6 }}>
-                  {/* ── Module header — always visible, black ── */}
+                  {/* ── Module header — bigger, bold, black ── */}
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '7px 8px', borderRadius: 7,
+                    padding: '8px 8px', borderRadius: 7,
                     background: hasActive ? '#F1F5F9' : '#F8FAFC',
                     borderLeft: hasActive ? '3px solid #0F172A' : '3px solid #E2E8F0',
                     marginBottom: 2,
                   }}>
-                    <GroupIcon size={14} style={{ color: '#0F172A', flexShrink: 0 }} />
+                    <GroupIcon size={15} style={{ color: '#0F172A', flexShrink: 0 }} />
                     <span style={{
-                      flex: 1, fontSize: 12, fontWeight: 700, color: '#0F172A',
-                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                      flex: 1, fontSize: 13.5, fontWeight: 800, color: '#0F172A',
+                      textTransform: 'uppercase', letterSpacing: '0.04em',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {t(group.label)}
@@ -1105,15 +1105,15 @@ function DesktopSidebar({ navGroups, matchesPath, collapsed, onToggle, topOffset
                       const SubIcon = section.items[0]?.icon || FolderSearch;
                       return (
                         <div key={section.label}>
-                          {/* Sub-section label — gray, italic, indented */}
+                          {/* Sub-section label — smaller than module, gray */}
                           <div style={{
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            padding: '5px 8px 3px 16px',
-                            color: subActive ? '#374151' : '#6B7280',
-                            fontSize: 11, fontWeight: 600,
-                            textTransform: 'uppercase', letterSpacing: '0.05em',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            padding: '4px 8px 2px 16px',
+                            color: subActive ? '#374151' : '#9CA3AF',
+                            fontSize: 9.5, fontWeight: 700,
+                            textTransform: 'uppercase', letterSpacing: '0.06em',
                           }}>
-                            <SubIcon size={11} style={{ flexShrink: 0 }} />
+                            <SubIcon size={9} style={{ flexShrink: 0 }} />
                             {t(section.label)}
                           </div>
                           {section.items.map(item => renderLink(item, true))}
