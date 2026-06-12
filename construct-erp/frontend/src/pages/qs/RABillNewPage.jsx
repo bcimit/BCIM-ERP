@@ -29,6 +29,7 @@ export default function RABillNewPage() {
     bill_period_to: dayjs().format('YYYY-MM-DD'),
     retention_percent: 5,
     mobilization_advance_recovery: 0,
+    adhoc_advance_recovery: 0,
     material_recovery_steel: 0,
     material_recovery_cement: 0,
     price_escalation: 0,
@@ -198,7 +199,8 @@ export default function RABillNewPage() {
   const netPayable =
     grossTotal + gstAmount - (
       retentionAmount + 
-      parseFloat(formData.mobilization_advance_recovery || 0) + 
+      parseFloat(formData.mobilization_advance_recovery || 0) +
+      parseFloat(formData.adhoc_advance_recovery || 0) +
       parseFloat(formData.material_recovery_steel || 0) +
       parseFloat(formData.material_recovery_cement || 0) +
       parseFloat(formData.other_deductions || 0) +
@@ -422,13 +424,25 @@ export default function RABillNewPage() {
                   />
                 </Field>
               </div>
-              <Field label="Advance Recovery (₹)">
+              <Field label="Mobilization Advance Recovery (₹)">
                 <input
                   type="number"
                   className="field-input"
                   value={formData.mobilization_advance_recovery}
                   onChange={e =>
                     set('mobilization_advance_recovery', parseFloat(e.target.value) || 0)
+                  }
+                  min={0}
+                />
+              </Field>
+
+              <Field label="Adhoc (Advance Recovery) (₹)">
+                <input
+                  type="number"
+                  className="field-input"
+                  value={formData.adhoc_advance_recovery}
+                  onChange={e =>
+                    set('adhoc_advance_recovery', parseFloat(e.target.value) || 0)
                   }
                   min={0}
                 />
@@ -501,7 +515,10 @@ export default function RABillNewPage() {
             <SummaryRow label={`TDS (${formData.tds_rate}%)`} value={`− ${inr(tdsAmount)}`} valueClass="text-red-500" />
             
             {parseFloat(formData.mobilization_advance_recovery) > 0 && (
-              <SummaryRow label="Adv. Recovery" value={`− ${inr(formData.mobilization_advance_recovery)}`} valueClass="text-red-500" />
+              <SummaryRow label="Mob. Adv. Recovery" value={`− ${inr(formData.mobilization_advance_recovery)}`} valueClass="text-red-500" />
+            )}
+            {parseFloat(formData.adhoc_advance_recovery) > 0 && (
+              <SummaryRow label="Adhoc Recovery" value={`− ${inr(formData.adhoc_advance_recovery)}`} valueClass="text-red-500" />
             )}
             {parseFloat(formData.material_recovery_steel) > 0 && (
               <SummaryRow label="Steel Recovery" value={`− ${inr(formData.material_recovery_steel)}`} valueClass="text-red-500" />

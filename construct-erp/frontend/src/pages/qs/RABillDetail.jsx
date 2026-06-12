@@ -137,7 +137,8 @@ export default function RABillDetail() {
 
   const deductions = [
     { label: `Retention (${b.retention_percent}%)`, value: b.retention_amount },
-    { label: 'Advance Recovery',                    value: b.mobilization_advance_recovery },
+    { label: 'Mobilization Advance Recovery',       value: b.mobilization_advance_recovery },
+    { label: 'Adhoc (Advance Recovery)',            value: b.adhoc_advance_recovery },
     { label: 'Steel Recovery',                      value: b.material_recovery_steel },
     { label: 'Cement Recovery',                     value: b.material_recovery_cement },
     { label: `TDS (${b.tds_rate || 2}%)`,           value: b.tds_amount },

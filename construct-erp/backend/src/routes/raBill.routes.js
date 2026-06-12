@@ -19,6 +19,7 @@ const ensureRaBillCols = async () => {
     `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS client_tds_amount NUMERIC(15,2) DEFAULT 0`,
     `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS amount_received NUMERIC(15,2) DEFAULT 0`,
     `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS company_id UUID`,
+    `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS adhoc_advance_recovery NUMERIC(15,2) DEFAULT 0`,
   ];
   for (const sql of alters) {
     try { await query(sql); } catch (_) {}
@@ -85,7 +86,7 @@ router.post('/', authorize('super_admin','admin','qs_engineer','project_manager'
       project_id, bill_number, bill_date, work_description,
       bill_period_from, bill_period_to,
       gross_amount, gst_rate, gst_amount,
-      retention_percent, mobilization_advance_recovery,
+      retention_percent, mobilization_advance_recovery, adhoc_advance_recovery,
       material_recovery_steel, material_recovery_cement,
       price_escalation, other_deductions,
       tds_rate, items, remarks,
@@ -108,6 +109,7 @@ router.post('/', authorize('super_admin','admin','qs_engineer','project_manager'
       const total_deductions =
         retention_amount +
         parseFloat(mobilization_advance_recovery || 0) +
+        parseFloat(adhoc_advance_recovery || 0) +
         parseFloat(material_recovery_steel || 0) +
         parseFloat(material_recovery_cement || 0) +
         parseFloat(other_deductions || 0) +
@@ -121,20 +123,20 @@ router.post('/', authorize('super_admin','admin','qs_engineer','project_manager'
             bill_period_from, bill_period_to,
             gross_amount, gst_rate, gst_amount, gross_with_gst,
             retention_percent, retention_amount,
-            mobilization_advance_recovery,
+            mobilization_advance_recovery, adhoc_advance_recovery,
             material_recovery_steel, material_recovery_cement,
             price_escalation, other_deductions,
             tds_rate, tds_amount,
             total_deductions, net_payable, status, created_by, remarks,
             contractor_name, contractor_gstin, contractor_pan)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
          RETURNING *`,
         [
           project_id, bill_number, bill_date, work_description || null,
           bill_period_from || null, bill_period_to || null,
           gross_amount, parseFloat(gst_rate || 18), gst_amount, gross_with_gst,
           retention_percent, retention_amount,
-          mobilization_advance_recovery || 0,
+          mobilization_advance_recovery || 0, adhoc_advance_recovery || 0,
           material_recovery_steel || 0, material_recovery_cement || 0,
           price_escalation || 0, other_deductions || 0,
           tds_rate || 2, tds_amount,
