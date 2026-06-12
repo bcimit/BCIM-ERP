@@ -56,6 +56,7 @@ export default function RABillDetail() {
   const [showTaxModal,      setShowTaxModal]      = useState(false);
   const [invoiceNo,         setInvoiceNo]         = useState('');
   const [invoiceDate,       setInvoiceDate]       = useState(dayjs().format('YYYY-MM-DD'));
+  const [taxLetterhead,     setTaxLetterhead]     = useState(false);
   const [showProformaModal, setShowProformaModal] = useState(false);
   const [proformaNo,        setProformaNo]        = useState('');
   const [proformaDate,      setProformaDate]      = useState(dayjs().format('YYYY-MM-DD'));
@@ -639,6 +640,15 @@ export default function RABillDetail() {
                 className="border border-[#d8dce6] rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
+            <label className="flex items-center gap-1.5 text-[11px] font-medium text-[#6a6f7d] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={taxLetterhead}
+                onChange={e => setTaxLetterhead(e.target.checked)}
+                className="accent-amber-500"
+              />
+              On Letterhead (blank top)
+            </label>
             <div className="ml-auto">
               <button
                 onClick={() => { if (!invoiceNo.trim()) { toast.error('Please enter an invoice number'); return; } handleTaxInvoicePrint(); }}
@@ -651,7 +661,7 @@ export default function RABillDetail() {
           <div className="flex-1 overflow-auto flex justify-center py-6 px-4">
             <div style={{ width: A4_W * previewScale, height: A4_H * previewScale }}>
               <div style={{ width: A4_W, transform: `scale(${previewScale})`, transformOrigin: 'top left', boxShadow: '0 4px 32px rgba(0,0,0,0.18)', background: '#fff' }}>
-                <RABillTaxInvoice ref={taxInvoiceRef} data={b} invoiceNo={invoiceNo} invoiceDate={invoiceDate} />
+                <RABillTaxInvoice ref={taxInvoiceRef} data={b} invoiceNo={invoiceNo} invoiceDate={invoiceDate} letterhead={taxLetterhead} />
               </div>
             </div>
           </div>

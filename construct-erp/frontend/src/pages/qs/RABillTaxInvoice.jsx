@@ -51,7 +51,7 @@ const numCell = (extra = {}) => cell({
   textAlign: 'right', fontSize: '9.5pt', padding: '3px 4px', ...extra,
 });
 
-const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate }, ref) => {
+const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate, letterhead = false }, ref) => {
   if (!b) return null;
 
   const taxable = parseFloat(b.gross_amount || 0) + parseFloat(b.price_escalation || 0);
@@ -73,6 +73,9 @@ const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate }, ref) =
 
   return (
     <div ref={ref} style={page}>
+
+      {/* Blank clearance for pre-printed letterhead (header is printed on the physical paper) */}
+      {letterhead && <div style={{ height: '65mm' }} aria-hidden />}
 
       {/* ── TITLE ── */}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
