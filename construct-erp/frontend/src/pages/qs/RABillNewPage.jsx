@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Save, Plus, AlertTriangle, FileText, Wallet,
-  Building2, CalendarRange, Percent, TrendingUp, Layers, ReceiptText, Send
+  Building2, CalendarRange, Percent, TrendingUp, Layers, Receipt, Send
 } from 'lucide-react';
 import { clsx } from 'clsx';
 // FIX: Added missing measurementAPI, vendorAPI, and materialReconAPI imports
@@ -403,7 +403,7 @@ export default function RABillNewPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div className="grid place-items-center w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600">
-                  <ReceiptText size={16} />
+                  <Receipt size={16} />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-semibold text-slate-900 leading-tight">Measurement Ledger</h2>
@@ -629,7 +629,7 @@ export default function RABillNewPage() {
             </Card>
 
             {/* Bill Summary breakdown */}
-            <Card icon={<ReceiptText size={15} />} title="Bill Summary">
+            <Card icon={<Receipt size={15} />} title="Bill Summary">
               <div className="space-y-2">
                 <SummaryRow label="Gross Valuation" value={inr(grossTotal)} />
                 <SummaryRow label={`GST (${formData.gst_rate}%)`} value={`+ ${inr(gstAmount)}`} valueClass="text-blue-600" />
