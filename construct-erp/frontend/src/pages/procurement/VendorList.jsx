@@ -7,7 +7,7 @@ import {
   Shield, Search, Building2, ChevronDown, ChevronUp,
   Banknote, FileText, Filter
 } from 'lucide-react';
-import { vendorAPI, default as api } from '../../api/client';
+import { vendorAPI, projectAPI, default as api } from '../../api/client';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import DataToolbar from '../../components/common/DataToolbar';
@@ -75,6 +75,7 @@ export default function VendorList() {
   const [showForm, setShowForm]     = useState(false);
   const [editVendor, setEditVendor] = useState(null); // null = create mode, object = edit mode
   const [filterType, setFilterType] = useState('all');
+  const [filterProjectId, setFilterProjectId] = useState('');
   const [search, setSearch]         = useState('');
   const [expanded, setExpanded]     = useState(null);
   const qc = useQueryClient();
@@ -82,9 +83,15 @@ export default function VendorList() {
     defaultValues: { credit_days: 30 },
   });
 
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects-all'],
+    queryFn: () => projectAPI.list({ status: 'active' }).then(r => r.data?.data || r.data || []).catch(() => []),
+  });
+  const projects = projectsData || [];
+
   const { data, isLoading } = useQuery({
-    queryKey: ['vendors'],
-    queryFn: () => vendorAPI.list().then(r => r.data?.data || []).catch(() => []),
+    queryKey: ['vendors', filterProjectId],
+    queryFn: () => vendorAPI.list(filterProjectId ? { project_id: filterProjectId } : {}).then(r => r.data?.data || []).catch(() => []),
   });
 
   const openCreate = () => { setEditVendor(null); reset({ credit_days: 30 }); setShowForm(true); };
@@ -229,6 +236,16 @@ export default function VendorList() {
             </button>
           ))}
         </div>
+        <select
+          value={filterProjectId}
+          onChange={e => setFilterProjectId(e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 bg-white text-slate-700 outline-none focus:border-indigo-400 transition-all"
+        >
+          <option value="">All Projects</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.name || p.project_name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Vendor Table */}
