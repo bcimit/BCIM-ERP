@@ -342,11 +342,17 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
       delivery_date: p.delivery_date || (selected.required_by ? dayjs(selected.required_by).format('YYYY-MM-DD') : ''),
       notes: `Against MR ${refsFor(newIds)}`,
     }));
-    const appended = (selected.items || []).map(it => {
+    const itemsWithBalance = (selected.items || []).map(it => {
       const reqQty = Number(it.effective_qty ?? it.md_approved_qty ?? it.quantity ?? 0);
       const orderedQty = Number(it.ordered_qty || 0);
       const balanceQty = Math.max(reqQty - orderedQty, 0);
-      return {
+      return { it, reqQty, orderedQty, balanceQty };
+    });
+    const fullyOrdered = itemsWithBalance.filter(x => x.orderedQty > 0 && x.balanceQty <= 0).length;
+    const partiallyOrdered = itemsWithBalance.filter(x => x.orderedQty > 0 && x.balanceQty > 0).length;
+    const appended = itemsWithBalance
+      .filter(x => x.balanceQty > 0)
+      .map(({ it, reqQty, orderedQty, balanceQty }) => ({
         material_name: it.material_name || it.description || '',
         make_model: '',
         quantity: orderedQty > 0 ? String(balanceQty) : (it.quantity || ''),
@@ -359,11 +365,12 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
         _mrs_id: mrsId,
         _requested_qty: reqQty,
         _ordered_qty: orderedQty,
-      };
-    });
-    const alreadyOrdered = appended.filter(a => a._ordered_qty > 0).length;
-    if (alreadyOrdered > 0) {
-      toast(`${alreadyOrdered} item(s) in ${mrLabel(selected)} already have a PO raised — quantities set to the remaining balance.`, { icon: '⚠️', duration: 5000 });
+      }));
+    if (fullyOrdered > 0) {
+      toast(`${fullyOrdered} item(s) in ${mrLabel(selected)} already fully covered by a previous PO — skipped.`, { icon: '✅', duration: 5000 });
+    }
+    if (partiallyOrdered > 0) {
+      toast(`${partiallyOrdered} item(s) in ${mrLabel(selected)} are partially ordered — quantities set to the remaining balance.`, { icon: '⚠️', duration: 5000 });
     }
     setItems(prev => {
       // Drop the single empty starter row before adding the first MR's items
