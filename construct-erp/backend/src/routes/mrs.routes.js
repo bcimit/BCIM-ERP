@@ -425,6 +425,8 @@ router.use(loadProjectScope);
   // MD item-level authorization: which items to proceed, at what quantity
   await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS md_approved_qty NUMERIC(12,3)`);
   await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS md_included BOOLEAN DEFAULT TRUE`);
+  // Reason captured when MD / Procurement cancel an item after full approval
+  await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS cancel_reason TEXT`);
   console.log('[mrs] schema OK');
 })();
 
@@ -827,6 +829,48 @@ router.patch('/:id/reject', async (req, res) => {
     }
 
     res.json({ message: 'MRS rejected' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /stores/mrs/:id/cancel-items — MD / Procurement drop specific items
+// from an already-approved MR without rejecting the whole requisition.
+// Cancelled items are excluded (md_included=false) and zero-balanced
+// (md_approved_qty=0) so PO raising skips them; the row is kept for audit.
+// NOTE: must be registered BEFORE /:id/:stage so the wildcard can't swallow it.
+const CANCEL_ITEM_ROLES = ['managing_director', 'md', 'ceo', 'procurement_manager', 'procurement', 'admin', 'super_admin'];
+router.patch('/:id/cancel-items', async (req, res) => {
+  try {
+    const { item_ids, reason } = req.body;
+    if (!Array.isArray(item_ids) || !item_ids.length) {
+      return res.status(400).json({ error: 'item_ids (a non-empty array) is required.' });
+    }
+    if (!CANCEL_ITEM_ROLES.includes((req.user.role || '').toLowerCase())) {
+      return res.status(403).json({ error: 'Only the Managing Director or Procurement team can cancel approved items.' });
+    }
+    const mrs = await query(
+      `SELECT mr.*, p.company_id FROM material_requisitions mr
+       JOIN projects p ON mr.project_id = p.id WHERE mr.id = $1`,
+      [req.params.id]
+    );
+    if (!mrs.rows.length || mrs.rows[0].company_id !== req.user.company_id) {
+      return res.status(404).json({ error: 'MRS not found' });
+    }
+    if (!userCanAccessProject(req, mrs.rows[0].project_id)) {
+      return res.status(403).json({ error: 'You do not have access to this project.' });
+    }
+    if (mrs.rows[0].status !== 'approved_md') {
+      return res.status(400).json({ error: 'Items can only be cancelled on a fully-approved MR.' });
+    }
+    const upd = await query(
+      `UPDATE mrs_items
+       SET md_included = FALSE, md_approved_qty = 0, cancel_reason = $1
+       WHERE mrs_id = $2 AND id = ANY($3::uuid[])
+       RETURNING id`,
+      [reason || null, req.params.id, item_ids]
+    );
+    res.json({ message: `${upd.rowCount} item(s) cancelled`, cancelled: upd.rowCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

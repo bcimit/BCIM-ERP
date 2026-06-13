@@ -766,6 +766,7 @@ export const mrsAPI = {
   create:            (data)          => api.post('/stores/mrs', data),
   approve:           (id, stage, data) => api.patch(`/stores/mrs/${id}/${stage}`, data),
   reject:            (id, data)      => api.patch(`/stores/mrs/${id}/reject`, data),
+  cancelItems:       (id, data)      => api.patch(`/stores/mrs/${id}/cancel-items`, data),
   delete:            (id)            => api.delete(`/stores/mrs/${id}`),
   getWorkflowConfig: ()              => api.get('/stores/mrs/workflow-config'),
   saveWorkflow:      (projectId, stages) => api.put(`/stores/mrs/workflow-config/${projectId}`, { stages }),

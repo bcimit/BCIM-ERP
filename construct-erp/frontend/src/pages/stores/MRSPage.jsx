@@ -364,6 +364,16 @@ export default function MRSPage() {
     onError: (e) => toast.error(e?.response?.data?.error || 'Action failed'),
   });
 
+  const cancelItemsMutation = useMutation({
+    mutationFn: ({ id, item_ids, reason }) => mrsAPI.cancelItems(id, { item_ids, reason }),
+    onSuccess: (res) => {
+      toast.success(res?.data?.message || 'Item cancelled');
+      qc.invalidateQueries({ queryKey: ['mrs', user?.id] });
+      qc.invalidateQueries({ queryKey: ['mrs', user?.id, selectedMRS?.id] });
+    },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Cancel failed'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id) => mrsAPI.delete(id),
     onSuccess: () => {
@@ -555,6 +565,16 @@ export default function MRSPage() {
 
   const [showMDModal, setShowMDModal] = useState(false);
 
+  // MD / Procurement may cancel individual items on a fully-approved MR
+  const canCancelItems = liveStatus === 'approved_md' &&
+    ['managing_director', 'md', 'ceo', 'procurement_manager', 'procurement', 'admin', 'super_admin'].includes(userRoleLower);
+  const handleCancelItem = (it) => {
+    if (!it.id) return;
+    const reason = window.prompt(`Cancel "${it.material_name || it.material}" from this approved MR?\n\nThis excludes it from PO raising (kept for audit). Optional reason:`, '');
+    if (reason === null) return; // prompt dismissed
+    cancelItemsMutation.mutate({ id: selectedMRS.id, item_ids: [it.id], reason: reason || null });
+  };
+
   if (selectedMRS) {
     const detailItems = detailedMRS?.items || selectedMRS.items || [];
     return (
@@ -625,7 +645,7 @@ export default function MRSPage() {
                   <table className="w-full text-sm min-w-[760px]">
                     <thead>
                       <tr className="border-b border-slate-100 bg-white">
-                        {['#', 'Material', 'Unit', 'Requested Qty', liveStatus === 'approved_md' ? 'MD Approved Qty' : null, 'PO Raised', 'Balance', 'Purpose'].filter(Boolean).map(h => (
+                        {['#', 'Material', 'Unit', 'Requested Qty', liveStatus === 'approved_md' ? 'MD Approved Qty' : null, 'PO Raised', 'Balance', 'Purpose', canCancelItems ? 'Action' : null].filter(Boolean).map(h => (
                           <th key={h} className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
@@ -663,6 +683,21 @@ export default function MRSPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-slate-700">{it.purpose || '-'}</td>
+                            {canCancelItems && (
+                              <td className="px-4 py-3">
+                                {excluded ? (
+                                  <span className="text-[10px] text-slate-400 no-underline" title={it.cancel_reason || ''}>Cancelled</span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleCancelItem(it)}
+                                    disabled={cancelItemsMutation.isPending}
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:text-red-700 border border-red-200 hover:bg-red-50 rounded-lg px-2 py-1 transition-colors disabled:opacity-50"
+                                    title="Cancel this item (exclude from PO raising)">
+                                    <XCircle className="w-3.5 h-3.5" /> Cancel
+                                  </button>
+                                )}
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
