@@ -131,6 +131,9 @@ vendorRouter.get('/performance', async (req, res) => {
               AND g.grn_date > po.delivery_date + INTERVAL '1 day'
           )::int AS delayed_count,
           COUNT(*) FILTER (WHERE g.quality_status = 'approved')::int AS approved_count,
+          AVG(
+            EXTRACT(EPOCH FROM (g.grn_date::timestamp - po.po_date::timestamp)) / 86400
+          ) FILTER (WHERE g.grn_date IS NOT NULL AND po.po_date IS NOT NULL) AS avg_lead_days,
           MAX(COALESCE(g.approved_qc_at, g.verified_stores_at, g.grn_date::timestamp, g.created_at)) AS last_grn_at
         FROM grn g
         JOIN projects p ON p.id = g.project_id
@@ -189,6 +192,7 @@ vendorRouter.get('/performance', async (req, res) => {
         COALESCE(gs.on_time_count, 0) AS on_time_count,
         COALESCE(gs.delayed_count, 0) AS delayed_count,
         COALESCE(gs.approved_count, 0) AS approved_count,
+        gs.avg_lead_days,
         COALESCE(inv.invoice_count, 0) AS invoice_count,
         COALESCE(inv.invoice_value, 0) AS invoice_value,
         COALESCE(inv.avg_price_variance, 0) AS avg_price_variance,
@@ -237,6 +241,7 @@ vendorRouter.get('/performance', async (req, res) => {
         dqsBillCount,
         onTimeCount: n(row.on_time_count),
         delayedCount: n(row.delayed_count),
+        avgLeadDays: row.avg_lead_days != null ? Math.round(parseFloat(row.avg_lead_days) * 10) / 10 : null,
         purchaseValue: n(row.po_value),
         invoiceValue: n(row.invoice_value),
         dqsBillValue: n(row.dqs_bill_value),

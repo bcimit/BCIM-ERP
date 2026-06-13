@@ -485,4 +485,53 @@ router.get('/project-pl', async (req, res) => {
   }
 });
 
+// ── GET /reports/budget-vs-actual-procurement ─────────────────────────────
+// Compares each project's procurement-related budget heads against actual
+// purchase order spend
+router.get('/budget-vs-actual-procurement', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const params = [req.user.company_id];
+    const conditions = ['p.company_id = $1', 'p.is_active = TRUE'];
+    applyProjectScope(req, conditions, params, 'p', project_id);
+
+    const { rows } = await query(`
+      SELECT
+        p.id AS project_id,
+        p.name AS project_name,
+        b.id AS budget_item_id,
+        b.cost_head,
+        COALESCE(b.budgeted_amount, 0) AS budgeted_amount,
+        COALESCE(b.actual_amount, 0) AS actual_amount,
+        COALESCE(po.po_spend, 0) AS po_spend
+      FROM projects p
+      JOIN budget_items b ON b.project_id = p.id
+      LEFT JOIN LATERAL (
+        SELECT SUM(COALESCE(po2.grand_total, 0)) AS po_spend
+        FROM purchase_orders po2
+        WHERE po2.project_id = p.id
+          AND COALESCE(po2.status, '') NOT IN ('cancelled', 'rejected')
+      ) po ON TRUE
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY p.name, b.cost_head
+    `, params);
+
+    const data = rows.map(r => {
+      const budgeted = parseFloat(r.budgeted_amount) || 0;
+      const actual = parseFloat(r.actual_amount) || 0;
+      const variance = budgeted - actual;
+      return {
+        ...r,
+        variance_amount: variance,
+        variance_pct: budgeted > 0 ? (variance / budgeted) * 100 : 0,
+      };
+    });
+
+    res.json({ data });
+  } catch (err) {
+    console.error(err);
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -955,6 +955,155 @@ router.get('/comparison/:mrsId', async (req, res) => {
   }
 });
 
+// GET /quotations/cs-summary — Comparative Statement register across all MRS
+// Returns one row per MRS that has received vendor quotations, with the
+// ranked vendor totals (L1 = lowest, L2 = second-lowest) and the resulting
+// negotiation savings (highest quote vs L1).
+router.get('/cs-summary', async (req, res) => {
+  try {
+    const conditions = ['p.company_id = $1'];
+    const params = [req.user.company_id];
+    applyMrsProjectScope(req, conditions, params, 'mr');
+
+    const { rows } = await query(
+      `WITH item_qty AS (
+         SELECT id AS mrs_item_id, mrs_id, COALESCE(md_approved_qty, quantity) AS qty
+         FROM mrs_items
+         WHERE (md_included IS NULL OR md_included = TRUE)
+       ),
+       vendor_totals AS (
+         SELECT q.id AS quotation_id, q.mrs_id, q.vendor_id,
+                COALESCE(v.name, 'Unknown Vendor') AS vendor_name,
+                COALESCE(SUM(
+                  (iq.qty * COALESCE(qi.rate, 0))
+                  * (1 - COALESCE(qi.discount_percent, 0) / 100)
+                  * (1 + COALESCE(qi.gst_rate, 0) / 100)
+                ), 0) AS grand_total
+         FROM quotations q
+         LEFT JOIN vendors v ON v.id = q.vendor_id
+         LEFT JOIN quotation_items qi ON qi.quotation_id = q.id
+         LEFT JOIN item_qty iq ON iq.mrs_item_id = qi.mrs_item_id
+         WHERE q.company_id = $1
+         GROUP BY q.id, q.mrs_id, q.vendor_id, v.name
+       ),
+       ranked AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY mrs_id ORDER BY grand_total ASC) AS rnk
+         FROM vendor_totals
+         WHERE grand_total > 0
+       )
+       SELECT
+         mr.id AS mrs_id, mr.mrs_number, mr.serial_no_formatted, mr.cs_status, mr.created_at,
+         p.name AS project_name,
+         (SELECT COUNT(*) FROM vendor_totals vt WHERE vt.mrs_id = mr.id) AS vendor_count,
+         l1.vendor_name AS l1_vendor, l1.grand_total AS l1_amount,
+         l2.vendor_name AS l2_vendor, l2.grand_total AS l2_amount,
+         (SELECT MAX(grand_total) FROM vendor_totals vt WHERE vt.mrs_id = mr.id) AS highest_amount
+       FROM material_requisitions mr
+       JOIN projects p ON p.id = mr.project_id
+       LEFT JOIN ranked l1 ON l1.mrs_id = mr.id AND l1.rnk = 1
+       LEFT JOIN ranked l2 ON l2.mrs_id = mr.id AND l2.rnk = 2
+       WHERE ${conditions.join(' AND ')}
+         AND EXISTS (SELECT 1 FROM vendor_totals vt WHERE vt.mrs_id = mr.id)
+       ORDER BY mr.created_at DESC`,
+      params
+    );
+
+    const data = rows.map(r => {
+      const l1 = parseFloat(r.l1_amount) || 0;
+      const highest = parseFloat(r.highest_amount) || 0;
+      const savings = highest - l1;
+      return {
+        ...r,
+        savings_amount: savings,
+        savings_pct: highest > 0 ? (savings / highest) * 100 : 0,
+      };
+    });
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /quotations/vendor-participation — RFQ invite/response stats and L1 win count per vendor
+router.get('/vendor-participation', async (req, res) => {
+  try {
+    const conditions = ['p.company_id = $1'];
+    const params = [req.user.company_id];
+    applyMrsProjectScope(req, conditions, params, 'mr');
+
+    const { rows } = await query(
+      `WITH item_qty AS (
+         SELECT id AS mrs_item_id, mrs_id, COALESCE(md_approved_qty, quantity) AS qty
+         FROM mrs_items
+         WHERE (md_included IS NULL OR md_included = TRUE)
+       ),
+       vendor_totals AS (
+         SELECT q.id AS quotation_id, q.mrs_id, q.vendor_id,
+                COALESCE(SUM(
+                  (iq.qty * COALESCE(qi.rate, 0))
+                  * (1 - COALESCE(qi.discount_percent, 0) / 100)
+                  * (1 + COALESCE(qi.gst_rate, 0) / 100)
+                ), 0) AS grand_total
+         FROM quotations q
+         LEFT JOIN quotation_items qi ON qi.quotation_id = q.id
+         LEFT JOIN item_qty iq ON iq.mrs_item_id = qi.mrs_item_id
+         WHERE q.company_id = $1
+         GROUP BY q.id, q.mrs_id, q.vendor_id
+       ),
+       ranked AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY mrs_id ORDER BY grand_total ASC) AS rnk
+         FROM vendor_totals
+         WHERE grand_total > 0
+       ),
+       l1_wins AS (
+         SELECT vendor_id, COUNT(*) AS wins FROM ranked WHERE rnk = 1 GROUP BY vendor_id
+       ),
+       quote_counts AS (
+         SELECT q.vendor_id, COUNT(DISTINCT q.mrs_id) AS quoted_mrs
+         FROM quotations q
+         JOIN material_requisitions mr ON mr.id = q.mrs_id
+         JOIN projects p ON p.id = mr.project_id
+         WHERE ${conditions.join(' AND ')}
+         GROUP BY q.vendor_id
+       ),
+       rfq_invites AS (
+         SELECT rv.vendor_id,
+                COUNT(DISTINCT rv.rfq_id) AS rfqs_invited,
+                COUNT(DISTINCT rv.rfq_id) FILTER (WHERE rv.responded_at IS NOT NULL) AS rfqs_responded
+         FROM rfq_vendors rv
+         JOIN rfqs r ON r.id = rv.rfq_id
+         JOIN material_requisitions mr ON mr.id = r.mrs_id
+         JOIN projects p ON p.id = mr.project_id
+         WHERE ${conditions.join(' AND ')}
+         GROUP BY rv.vendor_id
+       )
+       SELECT
+         v.id AS vendor_id, v.name AS vendor_name,
+         COALESCE(ri.rfqs_invited, 0) AS rfqs_invited,
+         COALESCE(ri.rfqs_responded, 0) AS rfqs_responded,
+         COALESCE(qc.quoted_mrs, 0) AS quotes_submitted,
+         COALESCE(lw.wins, 0) AS l1_wins
+       FROM vendors v
+       LEFT JOIN rfq_invites ri ON ri.vendor_id = v.id
+       LEFT JOIN quote_counts qc ON qc.vendor_id = v.id
+       LEFT JOIN l1_wins lw ON lw.vendor_id = v.id
+       WHERE v.company_id = $1 AND v.is_active = true
+         AND (COALESCE(ri.rfqs_invited, 0) > 0 OR COALESCE(qc.quoted_mrs, 0) > 0)
+       ORDER BY rfqs_invited DESC, quotes_submitted DESC`,
+      params
+    );
+
+    const data = rows.map(r => ({
+      ...r,
+      response_rate_pct: r.rfqs_invited > 0 ? (r.rfqs_responded / r.rfqs_invited) * 100 : 0,
+      win_rate_pct: r.quotes_submitted > 0 ? (r.l1_wins / r.quotes_submitted) * 100 : 0,
+    }));
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /quotations — register a vendor quote for an MRS
 router.post('/', async (req, res) => {
   try {
