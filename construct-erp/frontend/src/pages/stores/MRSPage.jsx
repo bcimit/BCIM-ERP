@@ -11,6 +11,7 @@ import {
   ChevronRight, AlertCircle, FileText, Trash2, Activity,
   ChevronDown, Tag, CalendarDays, Filter, Eye, Rows3,
   UserRound, Layers3, Send, ClipboardCheck, Settings, GripVertical, RefreshCw,
+  ShoppingCart,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -33,6 +34,16 @@ const STATUS_CONFIG = {
   approved_md:     { label: 'Managing Director Approved', short: 'MD Appvd', color: 'bg-green-50 text-green-700 border-green-200',    dot: 'bg-green-500',   icon: Landmark,    stage: 5 },
   issued:          { label: 'Items Issued',          short: 'Issued',     color: 'bg-sky-50 text-sky-700 border-sky-200',             dot: 'bg-sky-500',     icon: CheckCircle, stage: 6 },
   rejected:        { label: 'Rejected',              short: 'Rejected',   color: 'bg-red-50 text-red-700 border-red-200',             dot: 'bg-red-400',     icon: XCircle,     stage: 0 },
+};
+
+const PO_STATUS_CONFIG = {
+  pending:        { short: 'Pending',     color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+  verified_audit: { short: 'Proc OK',     color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  released_mgmt:  { short: 'Proc OK',     color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  approved:       { short: 'Authorized',  color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  part_received:  { short: 'Part Rcvd',   color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  fully_received: { short: 'Received',    color: 'bg-green-50 text-green-700 border-green-200' },
+  rejected:       { short: 'Rejected',    color: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 const PRIORITY_CONFIG = {
@@ -614,7 +625,7 @@ export default function MRSPage() {
                   <table className="w-full text-sm min-w-[760px]">
                     <thead>
                       <tr className="border-b border-slate-100 bg-white">
-                        {['#', 'Material', 'Unit', 'Requested Qty', liveStatus === 'approved_md' ? 'MD Approved Qty' : null, 'Purpose'].filter(Boolean).map(h => (
+                        {['#', 'Material', 'Unit', 'Requested Qty', liveStatus === 'approved_md' ? 'MD Approved Qty' : null, 'PO Raised', 'Balance', 'Purpose'].filter(Boolean).map(h => (
                           <th key={h} className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
@@ -622,6 +633,9 @@ export default function MRSPage() {
                     <tbody className="divide-y divide-slate-100">
                       {detailItems.map((it, i) => {
                         const excluded = it.effective_included === false || it.md_included === false;
+                        const reqQty = Number(it.effective_qty ?? it.md_approved_qty ?? it.quantity ?? it.qty ?? 0);
+                        const orderedQty = Number(it.ordered_qty || 0);
+                        const balanceQty = Math.max(reqQty - orderedQty, 0);
                         return (
                           <tr key={i} className={clsx('hover:bg-slate-50', excluded && 'opacity-40 line-through')}>
                             <td className="px-4 py-3 text-xs font-mono text-slate-500">{i + 1}</td>
@@ -636,6 +650,18 @@ export default function MRSPage() {
                                 {excluded ? '—' : (it.md_approved_qty ?? it.quantity ?? it.qty)}
                               </td>
                             )}
+                            <td className="px-4 py-3">
+                              {orderedQty > 0
+                                ? <span className="font-bold text-purple-700">{orderedQty}</span>
+                                : <span className="text-slate-400">—</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              {excluded ? '—' : (
+                                orderedQty > 0
+                                  ? <span className={clsx('font-bold', balanceQty > 0 ? 'text-orange-600' : 'text-emerald-600')}>{balanceQty}</span>
+                                  : <span className="text-slate-400">{reqQty}</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-slate-700">{it.purpose || '-'}</td>
                           </tr>
                         );
@@ -646,6 +672,52 @@ export default function MRSPage() {
               </div>
 
               <div className="space-y-5">
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                    <ShoppingCart className="w-4 h-4 text-slate-500" />
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Linked Purchase Orders</span>
+                    {detailedMRS?.linked_pos?.length > 0 && (
+                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                        {detailedMRS.linked_pos.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 space-y-2">
+                    {!detailedMRS ? (
+                      <p className="text-xs text-slate-400">Loading…</p>
+                    ) : detailedMRS.linked_pos?.length ? (
+                      detailedMRS.linked_pos.map(po => {
+                        const cfg = PO_STATUS_CONFIG[po.status] || PO_STATUS_CONFIG.pending;
+                        const poLabel = po.po_ref_no || po.po_number || po.serial_no_formatted || 'PO';
+                        return (
+                          <Link
+                            key={po.id}
+                            to="/procurement/po"
+                            state={{ searchPO: poLabel }}
+                            className="block border border-slate-200 rounded-lg p-3 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-bold font-mono text-indigo-700">{poLabel}</span>
+                              <span className={clsx('text-[10px] px-2 py-0.5 rounded-full border font-semibold', cfg.color)}>
+                                {cfg.short}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between mt-1.5 text-xs text-slate-500">
+                              <span className="truncate">{po.vendor_name || '-'}</span>
+                              <span className="font-semibold text-slate-700">₹{Number(po.grand_total || 0).toLocaleString('en-IN')}</span>
+                            </div>
+                            {po.po_date && (
+                              <div className="text-[11px] text-slate-400 mt-1">{dayjs(po.po_date).format('DD MMM YYYY')}</div>
+                            )}
+                          </Link>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-400">No purchase order raised yet for this MRS.</p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                   <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-slate-500" />
@@ -953,7 +1025,14 @@ export default function MRSPage() {
                         <PriorityBadge priority={mrs.priority} />
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap align-top">
-                        <StatusBadge status={mrs.status} />
+                        <div className="flex flex-col gap-1.5 items-start">
+                          <StatusBadge status={mrs.status} />
+                          {mrs.has_po && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                              <ShoppingCart size={10} strokeWidth={2.5} /> PO Raised
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right align-top">
                         <div className="flex items-center justify-end gap-2">

@@ -505,17 +505,37 @@ router.get('/', async (req, res) => {
     // Fetch items for each MRS
     const ids = result.rows.map(r => r.id);
     let itemsMap = {};
+    let poSet = new Set();
     if (ids.length) {
       const items = await query(
-        `SELECT * FROM mrs_items WHERE mrs_id = ANY($1::uuid[]) ORDER BY sort_order`,
+        `SELECT mi.*, COALESCE(poi.ordered_qty, 0) AS ordered_qty
+         FROM mrs_items mi
+         LEFT JOIN (
+           SELECT poi.mrs_item_id, SUM(poi.quantity) AS ordered_qty
+           FROM po_items poi
+           JOIN purchase_orders po ON po.id = poi.po_id
+           WHERE po.status NOT IN ('rejected', 'cancelled')
+           GROUP BY poi.mrs_item_id
+         ) poi ON poi.mrs_item_id = mi.id
+         WHERE mi.mrs_id = ANY($1::uuid[]) ORDER BY mi.sort_order`,
         [ids]
       );
       items.rows.forEach(it => {
         if (!itemsMap[it.mrs_id]) itemsMap[it.mrs_id] = [];
         itemsMap[it.mrs_id].push(it);
       });
+
+      const pos = await query(
+        `SELECT DISTINCT mrs_id AS id FROM (
+           SELECT mrs_id FROM purchase_orders WHERE mrs_id = ANY($1::uuid[])
+           UNION ALL
+           SELECT unnest(mrs_ids) AS mrs_id FROM purchase_orders WHERE mrs_ids && $1::uuid[]
+         ) x WHERE mrs_id = ANY($1::uuid[])`,
+        [ids]
+      );
+      poSet = new Set(pos.rows.map(r => r.id));
     }
-    const data = result.rows.map(r => ({ ...r, items: itemsMap[r.id] || [] }));
+    const data = result.rows.map(r => ({ ...r, items: itemsMap[r.id] || [], has_po: poSet.has(r.id) }));
     res.json({ data });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -555,10 +575,28 @@ router.get('/:id', async (req, res) => {
       return res.status(403).json({ error: 'You do not have access to this project.' });
     }
     const items = await query(
-      `SELECT *,
-              COALESCE(md_approved_qty, quantity) AS effective_qty,
-              COALESCE(md_included, TRUE) AS effective_included
-       FROM mrs_items WHERE mrs_id = $1 ORDER BY sort_order`,
+      `SELECT mi.*,
+              COALESCE(mi.md_approved_qty, mi.quantity) AS effective_qty,
+              COALESCE(mi.md_included, TRUE) AS effective_included,
+              COALESCE(poi.ordered_qty, 0) AS ordered_qty
+       FROM mrs_items mi
+       LEFT JOIN (
+         SELECT poi.mrs_item_id, SUM(poi.quantity) AS ordered_qty
+         FROM po_items poi
+         JOIN purchase_orders po ON po.id = poi.po_id
+         WHERE po.status != 'rejected'
+         GROUP BY poi.mrs_item_id
+       ) poi ON poi.mrs_item_id = mi.id
+       WHERE mi.mrs_id = $1 ORDER BY mi.sort_order`,
+      [req.params.id]
+    );
+    const linkedPos = await query(
+      `SELECT po.id, po.po_number, po.serial_no_formatted, po.po_ref_no, po.status,
+              po.po_date, po.grand_total, v.name AS vendor_name
+       FROM purchase_orders po
+       LEFT JOIN vendors v ON v.id = po.vendor_id
+       WHERE po.mrs_id = $1 OR $1 = ANY(po.mrs_ids)
+       ORDER BY po.created_at DESC`,
       [req.params.id]
     );
     res.json({
@@ -566,6 +604,7 @@ router.get('/:id', async (req, res) => {
         ...mrs.rows[0],
         mrs_workflow: { stages: normalizeStageIds(mrs.rows[0].mrs_workflow?.stages) },
         items: items.rows,
+        linked_pos: linkedPos.rows,
       },
     });
   } catch (err) {

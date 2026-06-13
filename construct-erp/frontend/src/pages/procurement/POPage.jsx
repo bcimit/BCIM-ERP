@@ -302,6 +302,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
           gst_rate:      String(it.gst_rate ?? '18'),
           hsn_code:      it.hsn_code || '',
           req_date:      it.req_date ? dayjs(it.req_date).format('YYYY-MM-DD') : '',
+          mrs_item_id:   it.mrs_item_id || null,
         }))
       : prefill?.items?.length
         ? prefill.items
@@ -341,18 +342,29 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
       delivery_date: p.delivery_date || (selected.required_by ? dayjs(selected.required_by).format('YYYY-MM-DD') : ''),
       notes: `Against MR ${refsFor(newIds)}`,
     }));
-    const appended = (selected.items || []).map(it => ({
-      material_name: it.material_name || it.description || '',
-      make_model: '',
-      quantity: it.quantity || '',
-      unit: it.unit || 'Nos',
-      rate: '',
-      gst_rate: '18',
-      hsn_code: it.hsn_code || '',
-      req_date: selected.required_by ? dayjs(selected.required_by).format('YYYY-MM-DD') : '',
-      mrs_item_id: it.id || null,
-      _mrs_id: mrsId,
-    }));
+    const appended = (selected.items || []).map(it => {
+      const reqQty = Number(it.effective_qty ?? it.md_approved_qty ?? it.quantity ?? 0);
+      const orderedQty = Number(it.ordered_qty || 0);
+      const balanceQty = Math.max(reqQty - orderedQty, 0);
+      return {
+        material_name: it.material_name || it.description || '',
+        make_model: '',
+        quantity: orderedQty > 0 ? String(balanceQty) : (it.quantity || ''),
+        unit: it.unit || 'Nos',
+        rate: '',
+        gst_rate: '18',
+        hsn_code: it.hsn_code || '',
+        req_date: selected.required_by ? dayjs(selected.required_by).format('YYYY-MM-DD') : '',
+        mrs_item_id: it.id || null,
+        _mrs_id: mrsId,
+        _requested_qty: reqQty,
+        _ordered_qty: orderedQty,
+      };
+    });
+    const alreadyOrdered = appended.filter(a => a._ordered_qty > 0).length;
+    if (alreadyOrdered > 0) {
+      toast(`${alreadyOrdered} item(s) in ${mrLabel(selected)} already have a PO raised — quantities set to the remaining balance.`, { icon: '⚠️', duration: 5000 });
+    }
     setItems(prev => {
       // Drop the single empty starter row before adding the first MR's items
       const base = (prev.length === 1 && !prev[0].material_name && !prev[0].quantity && !prev[0].rate) ? [] : prev;
@@ -448,6 +460,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                     .map(m => (
                       <option key={m.id} value={m.id}>
                         {(m.serial_no_formatted || m.mrs_number || m.id?.slice(0, 8))} — {m.project_name || 'Project'} — {(m.status || 'raised').replaceAll('_', ' ')}
+                        {(m.items || []).some(it => Number(it.ordered_qty) > 0) ? ' — PO already raised for some items' : ''}
                       </option>
                     ))}
                 </select>
@@ -540,30 +553,37 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
             </div>
             <div className="space-y-2">
               {items.map((it, i) => (
-                <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '2fr 1.2fr 80px 70px 100px 90px 70px 105px 32px' }}>
-                  <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400 transition-all"
-                    placeholder="Material description" value={it.material_name} onChange={e => setItem(i, 'material_name', e.target.value)} />
-                  <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
-                    placeholder="Brand / spec" value={it.make_model || ''} onChange={e => setItem(i, 'make_model', e.target.value)} />
-                  <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
-                    placeholder="HSN" value={it.hsn_code} onChange={e => setItem(i, 'hsn_code', e.target.value)} />
-                  <select className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
-                    value={it.unit} onChange={e => setItem(i, 'unit', e.target.value)}>
-                    {it.unit && !UNITS.includes(it.unit) && <option key={it.unit}>{it.unit}</option>}
-                    {UNITS.map(u => <option key={u}>{u}</option>)}
-                  </select>
-                  <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-right outline-none focus:border-indigo-400 transition-all"
-                    placeholder="0" value={it.quantity} onChange={e => setItem(i, 'quantity', e.target.value)} />
-                  <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-right outline-none focus:border-indigo-400 transition-all"
-                    placeholder="0.00" value={it.rate} onChange={e => setItem(i, 'rate', e.target.value)} />
-                  <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-center outline-none focus:border-indigo-400 transition-all"
-                    value={it.gst_rate} onChange={e => setItem(i, 'gst_rate', e.target.value)} />
-                  <input type="date" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs outline-none focus:border-indigo-400 transition-all"
-                    value={it.req_date || ''} onChange={e => setItem(i, 'req_date', e.target.value)} />
-                  <button onClick={() => removeItem(i)} disabled={items.length === 1}
-                    className="w-8 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                <div key={i}>
+                  <div className="grid gap-2 items-center" style={{ gridTemplateColumns: '2fr 1.2fr 80px 70px 100px 90px 70px 105px 32px' }}>
+                    <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400 transition-all"
+                      placeholder="Material description" value={it.material_name} onChange={e => setItem(i, 'material_name', e.target.value)} />
+                    <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                      placeholder="Brand / spec" value={it.make_model || ''} onChange={e => setItem(i, 'make_model', e.target.value)} />
+                    <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                      placeholder="HSN" value={it.hsn_code} onChange={e => setItem(i, 'hsn_code', e.target.value)} />
+                    <select className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                      value={it.unit} onChange={e => setItem(i, 'unit', e.target.value)}>
+                      {it.unit && !UNITS.includes(it.unit) && <option key={it.unit}>{it.unit}</option>}
+                      {UNITS.map(u => <option key={u}>{u}</option>)}
+                    </select>
+                    <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-right outline-none focus:border-indigo-400 transition-all"
+                      placeholder="0" value={it.quantity} onChange={e => setItem(i, 'quantity', e.target.value)} />
+                    <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-right outline-none focus:border-indigo-400 transition-all"
+                      placeholder="0.00" value={it.rate} onChange={e => setItem(i, 'rate', e.target.value)} />
+                    <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-center outline-none focus:border-indigo-400 transition-all"
+                      value={it.gst_rate} onChange={e => setItem(i, 'gst_rate', e.target.value)} />
+                    <input type="date" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs outline-none focus:border-indigo-400 transition-all"
+                      value={it.req_date || ''} onChange={e => setItem(i, 'req_date', e.target.value)} />
+                    <button onClick={() => removeItem(i)} disabled={items.length === 1}
+                      className="w-8 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {it._ordered_qty > 0 && (
+                    <div className="text-[11px] text-purple-600 font-medium px-1 mt-1">
+                      ⚠ MR requested {it._requested_qty} {it.unit}, {it._ordered_qty} already covered by a previous PO — balance ({Math.max(it._requested_qty - it._ordered_qty, 0)}) filled in above
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1617,6 +1637,10 @@ export default function POPage() {
     if (location.state?.fromCS) {
       setPrefillData(location.state.fromCS);
       setShowForm(true);
+      window.history.replaceState({}, '');
+    }
+    if (location.state?.searchPO) {
+      setSearch(location.state.searchPO);
       window.history.replaceState({}, '');
     }
   }, [location.state]);
