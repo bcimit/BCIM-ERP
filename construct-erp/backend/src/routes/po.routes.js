@@ -437,6 +437,64 @@ router.get('/register', async (req, res) => {
   }
 });
 
+// GET /purchase-orders/items-report — Item-wise PO lines with delivery status (across accessible projects)
+router.get('/items-report', async (req, res) => {
+  try {
+    const { project_id, vendor_id, from, to, status } = req.query;
+    const conditions = ['p.company_id = $1', `po.status NOT IN ('rejected','cancelled')`];
+    const params = [req.user.company_id];
+    applyProjectScope(req, conditions, params, 'po', project_id);
+    let i = params.length + 1;
+    if (vendor_id) { conditions.push(`po.vendor_id = $${i++}`); params.push(vendor_id); }
+    if (from)      { conditions.push(`po.po_date >= $${i++}`);  params.push(from); }
+    if (to)        { conditions.push(`po.po_date <= $${i++}`);  params.push(to); }
+    if (status)    { conditions.push(`po.status = $${i++}`);    params.push(status); }
+
+    const { rows } = await query(`
+      SELECT
+        po.id AS po_id, po.po_number, po.serial_no_formatted, po.po_date, po.delivery_date,
+        po.status AS po_status,
+        v.name AS vendor_name, p.name AS project_name,
+        i.material_name, i.unit, i.quantity, i.rate, i.total_amount,
+        COALESCE((
+          SELECT SUM(gi.quantity_received)
+          FROM grn_items gi
+          JOIN grn g ON g.id = gi.grn_id
+          WHERE g.quality_status <> 'rejected'
+            AND (
+              gi.po_item_id = i.id
+              OR (
+                gi.po_item_id IS NULL
+                AND g.po_id = i.po_id
+                AND LOWER(TRIM(COALESCE(gi.material_name, ''))) = LOWER(TRIM(COALESCE(i.material_name, '')))
+                AND COALESCE(gi.unit, '') = COALESCE(i.unit, '')
+              )
+            )
+        ), 0) AS received_quantity
+      FROM po_items i
+      JOIN purchase_orders po ON po.id = i.po_id
+      JOIN vendors v ON v.id = po.vendor_id
+      JOIN projects p ON p.id = po.project_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY po.po_date DESC NULLS LAST, po.po_number ASC, i.sort_order ASC
+    `, params);
+
+    const data = rows.map(r => {
+      const qty = parseFloat(r.quantity) || 0;
+      const received = parseFloat(r.received_quantity) || 0;
+      const remaining = Math.max(0, qty - received);
+      return {
+        ...r,
+        remaining_quantity: remaining,
+        delivery_status: remaining <= 0 ? 'Completed' : (received > 0 ? 'Partial' : 'Pending'),
+      };
+    });
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /purchase-orders/register/export — Download 3-sheet Excel
 router.get('/register/export', async (req, res) => {
   try {

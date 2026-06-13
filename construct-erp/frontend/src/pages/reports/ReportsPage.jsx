@@ -295,25 +295,386 @@ const REPORTS = [
   },
 
   // ── Procurement ───────────────────────────────────────────────────────────────
+  // -- Purchase Requisition Reports --
+  {
+    key:'procurement-mrs-register', dept:'procurement', title:'Purchase Requisition Register', icon:ClipboardList, color:'amber',
+    desc:'All material requisitions with items, quantities, and status',
+    filters:['dateRange','project'],
+    endpoint:'/stores/mrs',
+    dataKey:null,
+    transform: rows => rows.map(r => ({
+      ...r,
+      requested_by: r.raised_by_name || r.requested_by,
+      items_summary: summarizeItems(r.items),
+      total_quantity: sumItemQuantity(r.items),
+    })),
+    columns:[
+      { key:'mrs_number',     label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',   label:'Project' },
+      { key:'requested_by',   label:'Requested By' },
+      { key:'items_summary',  label:'Material' },
+      { key:'total_quantity', label:'Total Qty',    type:'number' },
+      { key:'status',         label:'Status',       type:'status' },
+      { key:'created_at',     label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-mrs-pending', dept:'procurement', title:'Pending Requisition Report', icon:Clock, color:'amber',
+    desc:'Material requisitions awaiting approval',
+    filters:['dateRange','project'],
+    endpoint:'/stores/mrs',
+    dataKey:null,
+    transform: rows => rows
+      .filter(r => r.status === 'pending')
+      .map(r => ({
+        ...r,
+        requested_by: r.raised_by_name || r.requested_by,
+        items_summary: summarizeItems(r.items),
+        total_quantity: sumItemQuantity(r.items),
+      })),
+    columns:[
+      { key:'mrs_number',     label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',   label:'Project' },
+      { key:'requested_by',   label:'Requested By' },
+      { key:'items_summary',  label:'Material' },
+      { key:'total_quantity', label:'Total Qty',    type:'number' },
+      { key:'created_at',     label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-mrs-approved', dept:'procurement', title:'Approved Requisition Report', icon:CheckCircle2, color:'amber',
+    desc:'Material requisitions that have been approved',
+    filters:['dateRange','project'],
+    endpoint:'/stores/mrs',
+    dataKey:null,
+    transform: rows => rows
+      .filter(r => r.status === 'approved')
+      .map(r => ({
+        ...r,
+        requested_by: r.raised_by_name || r.requested_by,
+        approved_by: r.approved_by_name,
+        items_summary: summarizeItems(r.items),
+        total_quantity: sumItemQuantity(r.items),
+      })),
+    columns:[
+      { key:'mrs_number',     label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',   label:'Project' },
+      { key:'requested_by',   label:'Requested By' },
+      { key:'approved_by',    label:'Approved By' },
+      { key:'items_summary',  label:'Material' },
+      { key:'total_quantity', label:'Total Qty',    type:'number' },
+      { key:'created_at',     label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-mrs-rejected', dept:'procurement', title:'Rejected Requisition Report', icon:AlertTriangle, color:'amber',
+    desc:'Material requisitions that have been rejected',
+    filters:['dateRange','project'],
+    endpoint:'/stores/mrs',
+    dataKey:null,
+    transform: rows => rows
+      .filter(r => r.status === 'rejected')
+      .map(r => ({
+        ...r,
+        requested_by: r.raised_by_name || r.requested_by,
+        items_summary: summarizeItems(r.items),
+        total_quantity: sumItemQuantity(r.items),
+      })),
+    columns:[
+      { key:'mrs_number',     label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',   label:'Project' },
+      { key:'requested_by',   label:'Requested By' },
+      { key:'items_summary',  label:'Material' },
+      { key:'total_quantity', label:'Total Qty',    type:'number' },
+      { key:'created_at',     label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-mrs-project-wise', dept:'procurement', title:'Project-wise Requisition Report', icon:Layers, color:'amber',
+    desc:'Requisition counts and quantities grouped by project',
+    filters:['dateRange'],
+    endpoint:'/stores/mrs',
+    dataKey:null,
+    aggregate: rows => {
+      const m = {};
+      rows.forEach(r => {
+        const key = r.project_name || 'Unknown';
+        if (!m[key]) m[key] = { project_name:key, total_requisitions:0, pending:0, approved:0, rejected:0, total_quantity:0 };
+        m[key].total_requisitions++;
+        if (r.status === 'pending')  m[key].pending++;
+        if (r.status === 'approved') m[key].approved++;
+        if (r.status === 'rejected') m[key].rejected++;
+        m[key].total_quantity += sumItemQuantity(r.items);
+      });
+      return Object.values(m).sort((a,b) => b.total_requisitions - a.total_requisitions);
+    },
+    columns:[
+      { key:'project_name',      label:'Project' },
+      { key:'total_requisitions',label:'Total MRS',    type:'number' },
+      { key:'pending',           label:'Pending',      type:'number' },
+      { key:'approved',          label:'Approved',     type:'number' },
+      { key:'rejected',          label:'Rejected',     type:'number' },
+      { key:'total_quantity',    label:'Total Qty',    type:'number' },
+    ],
+  },
+
+  // -- RFQ Reports --
+  {
+    key:'procurement-rfq-register', dept:'procurement', title:'RFQ Register', icon:Send, color:'amber',
+    desc:'All RFQs issued to vendors with response status',
+    filters:['dateRange','project'],
+    endpoint:'/quotations/rfqs',
+    dataKey:null,
+    columns:[
+      { key:'rfq_number',   label:'RFQ No',       mono:true },
+      { key:'mrs_number',   label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name', label:'Project' },
+      { key:'due_date',     label:'Due Date',     type:'date' },
+      { key:'vendor_count', label:'Vendors Invited', type:'number' },
+      { key:'quote_count',  label:'Quotes Received', type:'number' },
+      { key:'status',       label:'Status',       type:'status' },
+      { key:'created_at',   label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-rfq-pending', dept:'procurement', title:'RFQ Pending Report', icon:Clock, color:'amber',
+    desc:'RFQs awaiting vendor responses',
+    filters:['project'],
+    endpoint:'/quotations/rfqs',
+    dataKey:null,
+    transform: rows => rows.filter(r => Number(r.quote_count || 0) < Number(r.vendor_count || 0)),
+    columns:[
+      { key:'rfq_number',   label:'RFQ No',       mono:true },
+      { key:'mrs_number',   label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name', label:'Project' },
+      { key:'due_date',     label:'Due Date',     type:'date' },
+      { key:'vendor_count', label:'Vendors Invited', type:'number' },
+      { key:'quote_count',  label:'Quotes Received', type:'number' },
+      { key:'status',       label:'Status',       type:'status' },
+    ],
+  },
+
+  // -- Quotation Reports --
+  {
+    key:'procurement-quotation-register', dept:'procurement', title:'Vendor Quotation Report', icon:FileText, color:'amber',
+    desc:'All vendor quotations received against requisitions',
+    filters:['dateRange','project'],
+    endpoint:'/quotations',
+    dataKey:null,
+    columns:[
+      { key:'quotation_number', label:'Quotation No', mono:true },
+      { key:'mrs_number',       label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',      label:'Vendor' },
+      { key:'unit_rate',        label:'Unit Rate (₹)',type:'amount' },
+      { key:'gst_rate',         label:'GST %',        type:'number' },
+      { key:'delivery_days',    label:'Delivery (Days)', type:'number' },
+      { key:'is_selected',      label:'Selected',     type:'status' },
+      { key:'created_at',       label:'Date',         type:'date' },
+    ],
+  },
+
+  // -- Purchase Order Reports --
   {
     key:'procurement-po', dept:'procurement', title:'Purchase Order Register', icon:FileText, color:'amber',
-    desc:'All POs with vendor, item, value, and delivery status',
+    desc:'All POs with vendor, project, value, and status',
     filters:['dateRange','project'],
     endpoint:'/purchase-orders',
     dataKey:null,
     columns:[
-      { key:'po_number',     label:'PO No',        mono:true },
+      { key:'po_number',     label:'PO No',        mono:true, keys:['serial_no_formatted'] },
       { key:'vendor_name',   label:'Vendor' },
-      { key:'description',   label:'Item / Material' },
-      { key:'quantity',      label:'Qty',          type:'number' },
-      { key:'unit_price',    label:'Rate (₹)',     type:'amount' },
-      { key:'total_amount',  label:'Total (₹)',    type:'amount' },
+      { key:'project_name',  label:'Project' },
+      { key:'sub_total',     label:'Sub Total (₹)',type:'amount' },
+      { key:'total_gst',     label:'GST (₹)',      type:'amount' },
+      { key:'grand_total',   label:'Grand Total (₹)', type:'amount' },
       { key:'status',        label:'Status',       type:'status' },
-      { key:'created_at',    label:'Date',         type:'date' },
+      { key:'po_date',       label:'Date',         type:'date' },
     ],
   },
   {
-    key:'procurement-vendor', dept:'procurement', title:'Vendor Register', icon:Star, color:'amber',
+    key:'procurement-po-open', dept:'procurement', title:'Open PO Report', icon:FileText, color:'amber',
+    desc:'POs that are active and not yet rejected or cancelled',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders',
+    dataKey:null,
+    transform: rows => rows.filter(r => !['rejected','cancelled'].includes(r.status)),
+    columns:[
+      { key:'po_number',     label:'PO No',        mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',   label:'Vendor' },
+      { key:'project_name',  label:'Project' },
+      { key:'grand_total',   label:'Grand Total (₹)', type:'amount' },
+      { key:'status',        label:'Status',       type:'status' },
+      { key:'po_date',       label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-po-pending-approval', dept:'procurement', title:'Pending Approval PO Report', icon:Clock, color:'amber',
+    desc:'POs awaiting procurement or management approval',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders',
+    dataKey:null,
+    transform: rows => rows.filter(r => ['pending','verified_audit','released_mgmt'].includes(r.status)),
+    columns:[
+      { key:'po_number',     label:'PO No',        mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',   label:'Vendor' },
+      { key:'project_name',  label:'Project' },
+      { key:'grand_total',   label:'Grand Total (₹)', type:'amount' },
+      { key:'status',        label:'Status',       type:'status' },
+      { key:'po_date',       label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-po-cancelled', dept:'procurement', title:'Cancelled / Rejected PO Report', icon:AlertTriangle, color:'amber',
+    desc:'POs that have been rejected or cancelled',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders',
+    dataKey:null,
+    transform: rows => rows.filter(r => ['rejected','cancelled'].includes(r.status)),
+    columns:[
+      { key:'po_number',     label:'PO No',        mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',   label:'Vendor' },
+      { key:'project_name',  label:'Project' },
+      { key:'grand_total',   label:'Grand Total (₹)', type:'amount' },
+      { key:'status',        label:'Status',       type:'status' },
+      { key:'po_date',       label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-po-vendor-wise', dept:'procurement', title:'Vendor-wise PO Report', icon:Star, color:'amber',
+    desc:'PO count and value grouped by vendor',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders',
+    dataKey:null,
+    aggregate: rows => {
+      const m = {};
+      rows.forEach(r => {
+        const key = r.vendor_name || 'Unknown';
+        if (!m[key]) m[key] = { vendor_name:key, po_count:0, sub_total:0, total_gst:0, grand_total:0 };
+        m[key].po_count++;
+        m[key].sub_total   += parseFloat(r.sub_total)   || 0;
+        m[key].total_gst   += parseFloat(r.total_gst)   || 0;
+        m[key].grand_total += parseFloat(r.grand_total) || 0;
+      });
+      return Object.values(m).sort((a,b) => b.grand_total - a.grand_total);
+    },
+    columns:[
+      { key:'vendor_name',  label:'Vendor' },
+      { key:'po_count',     label:'No. of POs',   type:'number' },
+      { key:'sub_total',    label:'Sub Total (₹)',type:'amount' },
+      { key:'total_gst',    label:'GST (₹)',      type:'amount' },
+      { key:'grand_total',  label:'Grand Total (₹)', type:'amount' },
+    ],
+  },
+  {
+    key:'procurement-po-project-wise', dept:'procurement', title:'Project-wise PO Report', icon:Layers, color:'amber',
+    desc:'PO count and value grouped by project',
+    filters:['dateRange'],
+    endpoint:'/purchase-orders',
+    dataKey:null,
+    aggregate: rows => {
+      const m = {};
+      rows.forEach(r => {
+        const key = r.project_name || 'Unknown';
+        if (!m[key]) m[key] = { project_name:key, po_count:0, grand_total:0 };
+        m[key].po_count++;
+        m[key].grand_total += parseFloat(r.grand_total) || 0;
+      });
+      return Object.values(m).sort((a,b) => b.grand_total - a.grand_total);
+    },
+    columns:[
+      { key:'project_name', label:'Project' },
+      { key:'po_count',     label:'No. of POs',   type:'number' },
+      { key:'grand_total',  label:'Grand Total (₹)', type:'amount' },
+    ],
+  },
+  {
+    key:'procurement-po-monthly', dept:'procurement', title:'Monthly PO Analysis Report', icon:TrendingUp, color:'amber',
+    desc:'PO count and value trend by month',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders',
+    dataKey:null,
+    aggregate: rows => {
+      const m = {};
+      rows.forEach(r => {
+        const d = r.po_date || r.created_at;
+        const key = d ? String(d).slice(0,7) : 'Unknown';
+        if (!m[key]) m[key] = { month:key, po_count:0, grand_total:0 };
+        m[key].po_count++;
+        m[key].grand_total += parseFloat(r.grand_total) || 0;
+      });
+      return Object.values(m).sort((a,b) => a.month.localeCompare(b.month));
+    },
+    columns:[
+      { key:'month',       label:'Month' },
+      { key:'po_count',    label:'No. of POs',   type:'number' },
+      { key:'grand_total', label:'Grand Total (₹)', type:'amount' },
+    ],
+  },
+
+  // -- Delivery Reports --
+  {
+    key:'procurement-item-wise-po', dept:'procurement', title:'Item-wise PO Report', icon:PackageCheck, color:'amber',
+    desc:'Line-item level PO data with ordered, received, and remaining quantities',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders/items-report',
+    dataKey:'data',
+    columns:[
+      { key:'po_number',          label:'PO No',        mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',        label:'Vendor' },
+      { key:'project_name',       label:'Project' },
+      { key:'material_name',      label:'Material' },
+      { key:'unit',                label:'Unit' },
+      { key:'quantity',            label:'Ordered Qty', type:'number' },
+      { key:'received_quantity',   label:'Received Qty',type:'number' },
+      { key:'remaining_quantity',  label:'Remaining Qty', type:'number' },
+      { key:'total_amount',        label:'Amount (₹)',  type:'amount' },
+      { key:'delivery_status',     label:'Status',      type:'status' },
+    ],
+  },
+  {
+    key:'procurement-pending-delivery', dept:'procurement', title:'Pending Delivery Report', icon:Clock, color:'amber',
+    desc:'PO line items with quantities yet to be delivered',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders/items-report',
+    dataKey:'data',
+    transform: rows => rows.filter(r => r.delivery_status !== 'Completed'),
+    columns:[
+      { key:'po_number',          label:'PO No',        mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',        label:'Vendor' },
+      { key:'project_name',       label:'Project' },
+      { key:'material_name',      label:'Material' },
+      { key:'unit',                label:'Unit' },
+      { key:'quantity',            label:'Ordered Qty', type:'number' },
+      { key:'received_quantity',   label:'Received Qty',type:'number' },
+      { key:'remaining_quantity',  label:'Remaining Qty', type:'number' },
+      { key:'delivery_date',       label:'Due Date',    type:'date' },
+      { key:'delivery_status',     label:'Status',      type:'status' },
+    ],
+  },
+  {
+    key:'procurement-overdue-delivery', dept:'procurement', title:'Overdue Delivery Report', icon:AlertTriangle, color:'amber',
+    desc:'PO line items pending delivery past the committed delivery date',
+    filters:['project'],
+    endpoint:'/purchase-orders/items-report',
+    dataKey:'data',
+    transform: rows => rows.filter(r =>
+      r.delivery_status !== 'Completed' &&
+      r.delivery_date && new Date(r.delivery_date) < new Date()
+    ),
+    columns:[
+      { key:'po_number',          label:'PO No',        mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',        label:'Vendor' },
+      { key:'project_name',       label:'Project' },
+      { key:'material_name',      label:'Material' },
+      { key:'remaining_quantity',  label:'Remaining Qty', type:'number' },
+      { key:'delivery_date',       label:'Due Date',    type:'date' },
+      { key:'delivery_status',     label:'Status',      type:'status' },
+    ],
+  },
+
+  // -- Vendor Reports --
+  {
+    key:'procurement-vendor', dept:'procurement', title:'Vendor Master Report', icon:Star, color:'amber',
     desc:'All vendors with contact, category, and status',
     filters:[],
     endpoint:'/vendors',
@@ -323,8 +684,26 @@ const REPORTS = [
       { key:'contact_person',label:'Contact' },
       { key:'phone',         label:'Phone',        mono:true },
       { key:'email',         label:'Email' },
-      { key:'category',      label:'Category' },
+      { key:'category',      label:'Category',     keys:['vendor_type'] },
       { key:'status',        label:'Status',       type:'status' },
+    ],
+  },
+  {
+    key:'procurement-vendor-performance', dept:'procurement', title:'Vendor Performance Report', icon:TrendingUp, color:'amber',
+    desc:'PO value, delivery timeliness, and invoicing per vendor',
+    filters:[],
+    endpoint:'/vendors/performance',
+    dataKey:null,
+    columns:[
+      { key:'vendor',           label:'Vendor' },
+      { key:'vendor_type',      label:'Category' },
+      { key:'po_count',         label:'No. of POs',   type:'number' },
+      { key:'po_value',         label:'PO Value (₹)', type:'amount' },
+      { key:'grn_count',        label:'GRNs',         type:'number' },
+      { key:'on_time_count',    label:'On-Time GRNs', type:'number' },
+      { key:'delayed_count',    label:'Delayed GRNs', type:'number' },
+      { key:'invoice_count',    label:'Invoices',     type:'number' },
+      { key:'invoice_value',    label:'Invoice Value (₹)', type:'amount' },
     ],
   },
 
