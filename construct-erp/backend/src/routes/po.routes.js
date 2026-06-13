@@ -30,6 +30,37 @@ runSchemaInit('purchase_orders_columns', async () => {
   await query(`ALTER TABLE po_items ADD COLUMN IF NOT EXISTS mrs_item_id UUID`);
 });
 
+// One-time / idempotent backfill: stamp po_items.mrs_item_id for historical PO
+// lines that were created before item-level MR tracking existed (or typed in
+// manually) but whose PO is header-linked to an MR. We match on a normalized
+// material name (lowercase, strip every non-alphanumeric char) so that spacing,
+// case, punctuation or make/model edits no longer break the link. Once stamped,
+// the MR "balance" calc uses the reliable direct join instead of name matching,
+// so a material whose PO was already raised can never reappear on a new PO.
+// Only links when the normalized name maps to exactly ONE MR item (avoids
+// mis-attributing when a single MR legitimately repeats a material name).
+runSchemaInit('po_items_mrs_item_backfill', async () => {
+  await query(`
+    UPDATE po_items poi
+    SET mrs_item_id = sub.mi_id
+    FROM (
+      SELECT poi2.id AS poi_id, MIN(mi.id::text)::uuid AS mi_id
+      FROM po_items poi2
+      JOIN purchase_orders po ON po.id = poi2.po_id
+      JOIN mrs_items mi
+        ON (mi.mrs_id = po.mrs_id OR mi.mrs_id = ANY(po.mrs_ids))
+       AND regexp_replace(lower(trim(mi.material_name)),  '[^a-z0-9]+', '', 'g')
+         = regexp_replace(lower(trim(poi2.material_name)), '[^a-z0-9]+', '', 'g')
+      WHERE poi2.mrs_item_id IS NULL
+        AND po.status NOT IN ('rejected', 'cancelled')
+        AND (po.mrs_id IS NOT NULL OR po.mrs_ids IS NOT NULL)
+      GROUP BY poi2.id
+      HAVING COUNT(DISTINCT mi.id) = 1
+    ) sub
+    WHERE poi.id = sub.poi_id AND poi.mrs_item_id IS NULL
+  `);
+});
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const esc = (value) => String(value ?? '')

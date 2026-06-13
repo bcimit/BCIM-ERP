@@ -516,28 +516,31 @@ router.get('/', async (req, res) => {
            GROUP BY poi.mrs_item_id
          ),
          fallback_raw AS (
-           SELECT po.mrs_id AS mrs_id, poi.material_name, poi.quantity
+           -- Attribute each NULL-mrs_item_id PO line to every distinct MR it is
+           -- header-linked to (mrs_id ∪ mrs_ids), de-duplicated so a PO carrying
+           -- the same MR id in both columns can never be counted twice.
+           SELECT linked_mrs_id AS mrs_id, poi.material_name, poi.quantity
            FROM po_items poi
            JOIN purchase_orders po ON po.id = poi.po_id
+           CROSS JOIN LATERAL unnest(ARRAY(
+             SELECT DISTINCT x FROM unnest(
+               COALESCE(po.mrs_ids, ARRAY[]::uuid[])
+               || CASE WHEN po.mrs_id IS NOT NULL THEN ARRAY[po.mrs_id] ELSE ARRAY[]::uuid[] END
+             ) x
+           )) AS linked_mrs_id
            WHERE poi.mrs_item_id IS NULL AND po.status NOT IN ('rejected', 'cancelled')
-             AND po.mrs_id = ANY($1::uuid[])
-           UNION ALL
-           SELECT unnest(po.mrs_ids) AS mrs_id, poi.material_name, poi.quantity
-           FROM po_items poi
-           JOIN purchase_orders po ON po.id = poi.po_id
-           WHERE poi.mrs_item_id IS NULL AND po.status NOT IN ('rejected', 'cancelled')
-             AND po.mrs_ids && $1::uuid[]
+             AND (po.mrs_id = ANY($1::uuid[]) OR po.mrs_ids && $1::uuid[])
          ),
          fallback AS (
-           SELECT mrs_id, lower(trim(material_name)) AS mname, SUM(quantity) AS ordered_qty
+           SELECT mrs_id, regexp_replace(lower(trim(material_name)), '[^a-z0-9]+', '', 'g') AS mname, SUM(quantity) AS ordered_qty
            FROM fallback_raw
            WHERE mrs_id = ANY($1::uuid[])
-           GROUP BY mrs_id, lower(trim(material_name))
+           GROUP BY mrs_id, regexp_replace(lower(trim(material_name)), '[^a-z0-9]+', '', 'g')
          )
          SELECT mi.*, COALESCE(direct.ordered_qty, 0) + COALESCE(fallback.ordered_qty, 0) AS ordered_qty
          FROM mrs_items mi
          LEFT JOIN direct ON direct.mrs_item_id = mi.id
-         LEFT JOIN fallback ON fallback.mrs_id = mi.mrs_id AND fallback.mname = lower(trim(mi.material_name))
+         LEFT JOIN fallback ON fallback.mrs_id = mi.mrs_id AND fallback.mname = regexp_replace(lower(trim(mi.material_name)), '[^a-z0-9]+', '', 'g')
          WHERE mi.mrs_id = ANY($1::uuid[]) ORDER BY mi.sort_order`,
         [ids]
       );
@@ -604,12 +607,12 @@ router.get('/:id', async (req, res) => {
          GROUP BY poi.mrs_item_id
        ),
        fallback AS (
-         SELECT lower(trim(poi.material_name)) AS mname, SUM(poi.quantity) AS ordered_qty
+         SELECT regexp_replace(lower(trim(poi.material_name)), '[^a-z0-9]+', '', 'g') AS mname, SUM(poi.quantity) AS ordered_qty
          FROM po_items poi
          JOIN purchase_orders po ON po.id = poi.po_id
          WHERE poi.mrs_item_id IS NULL AND po.status NOT IN ('rejected', 'cancelled')
            AND (po.mrs_id = $1 OR $1 = ANY(po.mrs_ids))
-         GROUP BY lower(trim(poi.material_name))
+         GROUP BY regexp_replace(lower(trim(poi.material_name)), '[^a-z0-9]+', '', 'g')
        )
        SELECT mi.*,
               COALESCE(mi.md_approved_qty, mi.quantity) AS effective_qty,
@@ -617,7 +620,7 @@ router.get('/:id', async (req, res) => {
               COALESCE(direct.ordered_qty, 0) + COALESCE(fallback.ordered_qty, 0) AS ordered_qty
        FROM mrs_items mi
        LEFT JOIN direct ON direct.mrs_item_id = mi.id
-       LEFT JOIN fallback ON fallback.mname = lower(trim(mi.material_name))
+       LEFT JOIN fallback ON fallback.mname = regexp_replace(lower(trim(mi.material_name)), '[^a-z0-9]+', '', 'g')
        WHERE mi.mrs_id = $1 ORDER BY mi.sort_order`,
       [req.params.id]
     );
