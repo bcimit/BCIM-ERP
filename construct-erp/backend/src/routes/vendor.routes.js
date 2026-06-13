@@ -369,7 +369,7 @@ vendorRouter.post('/project-map/backfill', authorize('super_admin', 'admin'), as
   try {
     const result = await query(
       `INSERT INTO project_vendors (project_id, vendor_id, added_by)
-       SELECT DISTINCT po.project_id, po.vendor_id, $1
+       SELECT DISTINCT po.project_id, po.vendor_id, $1::uuid
        FROM purchase_orders po
        JOIN projects p ON p.id = po.project_id
        WHERE po.vendor_id IS NOT NULL AND p.company_id = $2
