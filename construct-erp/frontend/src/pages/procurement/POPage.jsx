@@ -316,11 +316,22 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
     queryFn: () => vendorAPI.projectMap({ project_id: form.project_id }).then(r => r.data?.data || []),
     enabled: !!form.project_id,
   });
-  const vendorOptions = form.project_id && projectVendors?.length ? projectVendors : vendors;
+  let vendorOptions = form.project_id && projectVendors?.length ? projectVendors : vendors;
+  // Always include the PO's original vendor even if it's not in the project's
+  // mapped list, so editing an existing PO never hides its current vendor.
+  if (editingPO?.vendor_id && !vendorOptions.some(v => v.id === editingPO.vendor_id)) {
+    const original = vendors.find(v => v.id === editingPO.vendor_id);
+    if (original) vendorOptions = [...vendorOptions, original];
+  }
 
-  // Clear the selected vendor if it's not available for the now-selected project
+  // Clear the selected vendor if it's not available for the now-selected project.
+  // Skip this for the vendor the PO/prefill was already created with, so editing
+  // an older PO (created before its vendor was mapped to the project) doesn't
+  // silently wipe out the existing vendor.
+  const originalVendorId = editingPO?.vendor_id || prefill?.vendor_id || '';
   useEffect(() => {
-    if (form.project_id && form.vendor_id && projectVendors?.length && !projectVendors.some(v => v.id === form.vendor_id)) {
+    if (form.project_id && form.vendor_id && form.vendor_id !== originalVendorId
+        && projectVendors?.length && !projectVendors.some(v => v.id === form.vendor_id)) {
       setForm(p => ({ ...p, vendor_id: '' }));
     }
   }, [form.project_id, projectVendors]);
