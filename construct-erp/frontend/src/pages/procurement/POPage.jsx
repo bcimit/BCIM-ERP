@@ -400,6 +400,28 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
   const totalGST = items.reduce((s, it) => s + (parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0)*(parseFloat(it.gst_rate)||0)/100, 0);
   const tcsValue = parseFloat(form.tcs_amount || 0) || 0;
 
+  // GST break-up by rate, tracking which item numbers fall under each rate
+  const gstByRate = {}; // rate -> { amount, nums: [] }
+  items.forEach((it, idx) => {
+    const q = parseFloat(it.quantity)||0, rt = parseFloat(it.rate)||0, r = parseFloat(it.gst_rate)||0;
+    if (q <= 0 || rt <= 0 || r <= 0) return;
+    if (!gstByRate[r]) gstByRate[r] = { amount: 0, nums: [] };
+    gstByRate[r].amount += q * rt * r / 100;
+    gstByRate[r].nums.push(idx + 1);
+  });
+  const gstRates = Object.keys(gstByRate).map(Number).sort((a, b) => a - b);
+  // Collapse item numbers into compact ranges: [1,2,5..20,23] -> "1-2, 5-20, 23"
+  const fmtNos = (nums) => {
+    const s = [...nums].sort((a, b) => a - b), out = [];
+    let start = s[0], prev = s[0];
+    for (let k = 1; k <= s.length; k++) {
+      if (k < s.length && s[k] === prev + 1) { prev = s[k]; continue; }
+      out.push(start === prev ? `${start}` : `${start}-${prev}`);
+      if (k < s.length) { start = s[k]; prev = s[k]; }
+    }
+    return out.join(', ');
+  };
+
   const handleSubmit = () => {
     if (!form.vendor_id)  return toast.error('Select a vendor');
     if (!form.project_id) return toast.error('Select a project');
@@ -597,13 +619,29 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
 
             {/* Totals */}
             <div className="flex justify-end mt-4">
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 min-w-[220px] space-y-2">
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 min-w-[320px] space-y-2">
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Sub Total</span><span className="font-medium text-slate-800">{inr(subTotal)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>GST</span><span className="font-medium text-amber-600">{inr(totalGST)}</span>
-                </div>
+                {gstRates.length === 0 ? (
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>GST</span><span className="font-medium text-amber-600">{inr(totalGST)}</span>
+                  </div>
+                ) : (
+                  <>
+                    {gstRates.map(r => (
+                      <div key={r} className="flex justify-between gap-3 text-xs text-slate-500">
+                        <span className="leading-snug">GST @ {r}%{gstRates.length > 1 ? ` on item no. ${fmtNos(gstByRate[r].nums)}` : ''}</span>
+                        <span className="font-medium text-amber-600 whitespace-nowrap">{inr(gstByRate[r].amount)}</span>
+                      </div>
+                    ))}
+                    {gstRates.length > 1 && (
+                      <div className="flex justify-between text-xs text-slate-600 border-t border-slate-200 pt-1">
+                        <span className="font-medium">Total GST</span><span className="font-medium text-amber-600 whitespace-nowrap">{inr(totalGST)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>TCS / Other Tax</span><span className="font-medium text-slate-800">{inr(tcsValue)}</span>
                 </div>

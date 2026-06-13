@@ -33,6 +33,21 @@ function amountInWords(amount) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const f2 = v => parseFloat(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Collapse a list of item numbers into compact ranges, e.g.
+// [1,2,5,6,...,20,23,25,26] -> "1-2, 5-20, 23, 25-26"
+const formatItemNos = (nums) => {
+  if (!nums || !nums.length) return '';
+  const s = [...nums].sort((a, b) => a - b);
+  const out = [];
+  let start = s[0], prev = s[0];
+  for (let k = 1; k <= s.length; k++) {
+    if (k < s.length && s[k] === prev + 1) { prev = s[k]; continue; }
+    out.push(start === prev ? `${start}` : `${start}-${prev}`);
+    if (k < s.length) { start = s[k]; prev = s[k]; }
+  }
+  return out.join(', ');
+};
+
 // ─── LANCO Hills (LH-10) project overrides ────────────────────────────────────
 const LANCO_DELIVERY_ADDRESS = `LANCO HILLS - LH10
 LANCO Hills Residential Apartments, Tower - LH10,
@@ -59,13 +74,16 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
   const tcsAmt     = parseFloat(data.tcs_amount || 0);
   const grandTotal = parseFloat(data.grand_total || (subTotal + totalGst + tcsAmt));
 
-  // GST break-up by rate — items may carry different GST % (5 / 12 / 18 / 28)
-  const gstByRate = {};
+  // GST break-up by rate — items may carry different GST % (5 / 12 / 18 / 28).
+  // Track both the tax amount and the item numbers that fall under each rate.
+  const gstByRate = {}; // rate -> { amount, nums: [] }
   if (!isTaxIncl) {
-    items.forEach(it => {
+    items.forEach((it, idx) => {
       const r   = parseFloat(it.gst_rate || 0);
       const amt = parseFloat(it.gst_amount || (parseFloat(it.quantity||0) * parseFloat(it.rate||0) * r / 100));
-      gstByRate[r] = (gstByRate[r] || 0) + amt;
+      if (!gstByRate[r]) gstByRate[r] = { amount: 0, nums: [] };
+      gstByRate[r].amount += amt;
+      gstByRate[r].nums.push(idx + 1);
     });
   }
   const gstRates = Object.keys(gstByRate).map(Number).filter(r => r > 0).sort((a, b) => a - b);
@@ -293,28 +311,30 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           </div>
 
           {/* Totals table */}
-          <div style={{ minWidth: '210px', fontSize: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ minWidth: '300px', fontSize: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
               <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Sub Total</span>
-              <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(subTotal)}</span>
+              <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>₹ {f2(subTotal)}</span>
             </div>
             {isTaxIncl ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
                 <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
-                <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>Inclusive</span>
+                <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Inclusive</span>
               </div>
             ) : (
               <>
                 {gstRates.map(r => (
-                  <div key={r} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
-                    <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>GST @ {r}%</span>
-                    <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(gstByRate[r])}</span>
+                  <div key={r} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
+                    <span style={{ fontWeight: 700, color: '#000', fontSize: '8.5px', lineHeight: '1.35' }}>
+                      GST @ {r}% {gstRates.length > 1 ? `on item no. ${formatItemNos(gstByRate[r].nums)}` : ''}
+                    </span>
+                    <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>₹ {f2(gstByRate[r].amount)}</span>
                   </div>
                 ))}
                 {gstRates.length !== 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
                     <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
-                    <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(totalGst)}</span>
+                    <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>₹ {f2(totalGst)}</span>
                   </div>
                 )}
               </>
