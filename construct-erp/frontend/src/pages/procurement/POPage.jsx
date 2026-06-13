@@ -309,6 +309,22 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
         : [{ material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]
   );
 
+  // Vendors mapped to the selected project — restricts the Vendor dropdown so
+  // procurement users only see vendors approved for that project.
+  const { data: projectVendors } = useQuery({
+    queryKey: ['project-vendors-for-po', form.project_id],
+    queryFn: () => vendorAPI.projectMap({ project_id: form.project_id }).then(r => r.data?.data || []),
+    enabled: !!form.project_id,
+  });
+  const vendorOptions = form.project_id && projectVendors?.length ? projectVendors : vendors;
+
+  // Clear the selected vendor if it's not available for the now-selected project
+  useEffect(() => {
+    if (form.project_id && form.vendor_id && projectVendors?.length && !projectVendors.some(v => v.id === form.vendor_id)) {
+      setForm(p => ({ ...p, vendor_id: '' }));
+    }
+  }, [form.project_id, projectVendors]);
+
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
   const addItem = () => setItems(p => [...p, { material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]);
@@ -509,7 +525,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
               <Field label="Vendor *">
                 <select className={INP} value={form.vendor_id} onChange={e => set('vendor_id', e.target.value)}>
                   <option value="">Select vendor…</option>
-                  {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  {vendorOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </Field>
               <Field label="Project *">
