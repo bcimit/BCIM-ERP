@@ -198,4 +198,74 @@ router.delete('/benchmarks/:id', async (req, res) => {
   res.json({ message: 'Benchmark deleted', id });
 });
 
+// ─── GET /utilization — Rate Contract Utilization Report ─────────────────────
+// Compares actual PO item rates against company benchmark rates
+router.get('/utilization', async (req, res) => {
+  const companyId = req.user.company_id;
+  const { from, to, project_id } = req.query;
+
+  const conditions = ['p.company_id = $1'];
+  const params = [companyId];
+
+  if (project_id) {
+    params.push(project_id);
+    conditions.push(`po.project_id = $${params.length}`);
+  }
+  if (from) {
+    params.push(from);
+    conditions.push(`po.po_date >= $${params.length}`);
+  }
+  if (to) {
+    params.push(to);
+    conditions.push(`po.po_date <= $${params.length}`);
+  }
+
+  const result = await query(
+    `SELECT
+       pi.id AS po_item_id,
+       po.id AS po_id,
+       po.po_number,
+       po.po_date,
+       p.name AS project_name,
+       v.name AS vendor_name,
+       pi.material_name,
+       pi.unit,
+       pi.quantity,
+       pi.rate AS po_rate,
+       b.benchmark_rate,
+       b.min_acceptable,
+       b.max_acceptable,
+       b.category
+     FROM po_items pi
+     JOIN purchase_orders po ON po.id = pi.po_id
+     JOIN projects p ON p.id = po.project_id
+     LEFT JOIN vendors v ON v.id = po.vendor_id
+     LEFT JOIN material_rate_benchmarks b
+       ON b.company_id = $1 AND LOWER(b.material_name) = LOWER(pi.material_name)
+     WHERE ${conditions.join(' AND ')}
+       AND pi.rate > 0
+       AND b.benchmark_rate IS NOT NULL
+     ORDER BY po.po_date DESC`,
+    params
+  );
+
+  const data = result.rows.map(r => {
+    const poRate = parseFloat(r.po_rate) || 0;
+    const benchmark = parseFloat(r.benchmark_rate) || 0;
+    const variance = benchmark > 0 ? ((poRate - benchmark) / benchmark) * 100 : 0;
+    const minAcc = r.min_acceptable != null ? parseFloat(r.min_acceptable) : null;
+    const maxAcc = r.max_acceptable != null ? parseFloat(r.max_acceptable) : null;
+    let compliance = 'Within Range';
+    if (maxAcc != null && poRate > maxAcc) compliance = 'Above Max';
+    else if (minAcc != null && poRate < minAcc) compliance = 'Below Min';
+    return {
+      ...r,
+      variance_pct: Math.round(variance * 100) / 100,
+      compliance,
+    };
+  });
+
+  res.json({ data });
+});
+
 module.exports = router;

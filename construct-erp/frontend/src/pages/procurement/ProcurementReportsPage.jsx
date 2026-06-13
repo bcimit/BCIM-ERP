@@ -13,6 +13,7 @@ const CATEGORY_ORDER = [
   'Purchase Order Reports',
   'Delivery Reports',
   'Vendor Reports',
+  'Cost Analysis Reports',
 ];
 
 export default function ProcurementReportsPage() {

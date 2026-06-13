@@ -454,6 +454,23 @@ export const REPORTS = [
     ],
   },
 
+  {
+    key:'procurement-rfq-comparison', dept:'procurement', category:'RFQ Reports', title:'RFQ Comparison / Vendor Participation', icon:Users, color:'amber',
+    desc:'Vendor-wise RFQ invitations, response rate, quotes submitted, and L1 wins',
+    filters:[],
+    endpoint:'/quotations/vendor-participation',
+    dataKey:'data',
+    columns:[
+      { key:'vendor_name',        label:'Vendor' },
+      { key:'rfqs_invited',       label:'RFQs Invited',    type:'number' },
+      { key:'rfqs_responded',     label:'RFQs Responded',  type:'number' },
+      { key:'response_rate_pct',  label:'Response Rate %', type:'number' },
+      { key:'quotes_submitted',   label:'Quotes Submitted',type:'number' },
+      { key:'l1_wins',            label:'L1 Wins',         type:'number' },
+      { key:'win_rate_pct',       label:'Win Rate %',      type:'number' },
+    ],
+  },
+
   // -- Quotation Reports --
   {
     key:'procurement-quotation-register', dept:'procurement', category:'Quotation Reports', title:'Vendor Quotation Report', icon:FileText, color:'amber',
@@ -470,6 +487,58 @@ export const REPORTS = [
       { key:'delivery_days',    label:'Delivery (Days)', type:'number' },
       { key:'is_selected',      label:'Selected',     type:'status' },
       { key:'created_at',       label:'Date',         type:'date' },
+    ],
+  },
+  {
+    key:'procurement-comparative-statement', dept:'procurement', category:'Quotation Reports', title:'Comparative Statement Report', icon:BarChart3, color:'amber',
+    desc:'Vendor-wise comparative statement summary for each requisition — L1, L2, and highest bid',
+    filters:['dateRange','project'],
+    endpoint:'/quotations/cs-summary',
+    dataKey:'data',
+    columns:[
+      { key:'mrs_number',     label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',   label:'Project' },
+      { key:'vendor_count',   label:'Vendors Quoted', type:'number' },
+      { key:'l1_vendor',      label:'L1 Vendor' },
+      { key:'l1_amount',      label:'L1 Amount (₹)', type:'amount' },
+      { key:'l2_vendor',      label:'L2 Vendor' },
+      { key:'l2_amount',      label:'L2 Amount (₹)', type:'amount' },
+      { key:'cs_status',      label:'CS Status',     type:'status' },
+      { key:'created_at',     label:'Date',          type:'date' },
+    ],
+  },
+  {
+    key:'procurement-l1-vendor', dept:'procurement', category:'Quotation Reports', title:'L1 Vendor Report', icon:Target, color:'amber',
+    desc:'Lowest (L1) bidder selected for each requisition',
+    filters:['dateRange','project'],
+    endpoint:'/quotations/cs-summary',
+    dataKey:'data',
+    transform: rows => rows.filter(r => r.l1_vendor),
+    columns:[
+      { key:'mrs_number',   label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name', label:'Project' },
+      { key:'l1_vendor',    label:'L1 Vendor' },
+      { key:'l1_amount',    label:'L1 Amount (₹)', type:'amount' },
+      { key:'vendor_count', label:'Vendors Quoted', type:'number' },
+      { key:'cs_status',    label:'CS Status',     type:'status' },
+      { key:'created_at',   label:'Date',          type:'date' },
+    ],
+  },
+  {
+    key:'procurement-negotiation-savings', dept:'procurement', category:'Quotation Reports', title:'Negotiation Savings Report', icon:DollarSign, color:'amber',
+    desc:'Savings achieved between the highest quoted amount and the finalized L1 amount',
+    filters:['dateRange','project'],
+    endpoint:'/quotations/cs-summary',
+    dataKey:'data',
+    transform: rows => rows.filter(r => r.l1_vendor && r.savings_amount > 0),
+    columns:[
+      { key:'mrs_number',      label:'MRS No',       mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',    label:'Project' },
+      { key:'l1_vendor',       label:'L1 Vendor' },
+      { key:'l1_amount',       label:'L1 Amount (₹)', type:'amount' },
+      { key:'highest_amount',  label:'Highest Quote (₹)', type:'amount' },
+      { key:'savings_amount',  label:'Savings (₹)',   type:'amount' },
+      { key:'savings_pct',     label:'Savings %',     type:'number' },
     ],
   },
 
@@ -704,6 +773,122 @@ export const REPORTS = [
       { key:'delayed_count',    label:'Delayed GRNs', type:'number' },
       { key:'invoice_count',    label:'Invoices',     type:'number' },
       { key:'invoice_value',    label:'Invoice Value (₹)', type:'amount' },
+    ],
+  },
+  {
+    key:'procurement-vendor-rating', dept:'procurement', category:'Vendor Reports', title:'Vendor Rating Report', icon:Star, color:'amber',
+    desc:'Overall vendor score based on delivery, quality, and pricing performance',
+    filters:[],
+    endpoint:'/vendors/performance',
+    dataKey:null,
+    columns:[
+      { key:'vendor',     label:'Vendor' },
+      { key:'vendor_type',label:'Category' },
+      { key:'delivery',   label:'Delivery Score', type:'number' },
+      { key:'quality',    label:'Quality Score',  type:'number' },
+      { key:'pricing',    label:'Pricing Score',  type:'number' },
+      { key:'overall',    label:'Overall Score',  type:'number' },
+      { key:'tag',        label:'Rating',         type:'status' },
+      { key:'remarks',    label:'Remarks' },
+    ],
+  },
+  {
+    key:'procurement-vendor-lead-time', dept:'procurement', category:'Vendor Reports', title:'Vendor Lead Time Analysis', icon:Clock, color:'amber',
+    desc:'Average lead time (PO date to GRN date) per vendor',
+    filters:[],
+    endpoint:'/vendors/performance',
+    dataKey:null,
+    transform: rows => rows.filter(r => r.avgLeadDays != null),
+    columns:[
+      { key:'vendor',       label:'Vendor' },
+      { key:'vendor_type',  label:'Category' },
+      { key:'grnCount',     label:'GRNs',           type:'number', keys:['grn_count'] },
+      { key:'avgLeadDays',  label:'Avg Lead Time (Days)', type:'number' },
+      { key:'onTimeCount',  label:'On-Time GRNs',   type:'number', keys:['on_time_count'] },
+      { key:'delayedCount', label:'Delayed GRNs',   type:'number', keys:['delayed_count'] },
+    ],
+  },
+
+  // -- Cost Analysis Reports --
+  {
+    key:'procurement-cost-analysis', dept:'procurement', category:'Cost Analysis Reports', title:'Purchase Cost Analysis', icon:IndianRupee, color:'amber',
+    desc:'Material-wise purchase value, quantity, and average rate across all POs',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders/items-report',
+    dataKey:'data',
+    aggregate: rows => {
+      const m = {};
+      rows.forEach(r => {
+        const key = r.material_name || 'Unknown';
+        if (!m[key]) m[key] = { material_name: key, unit: r.unit, total_quantity: 0, total_amount: 0, po_count: 0 };
+        m[key].total_quantity += parseFloat(r.quantity) || 0;
+        m[key].total_amount += parseFloat(r.total_amount) || 0;
+        m[key].po_count += 1;
+      });
+      return Object.values(m).map(r => ({
+        ...r,
+        avg_rate: r.total_quantity > 0 ? r.total_amount / r.total_quantity : 0,
+      })).sort((a, b) => b.total_amount - a.total_amount);
+    },
+    columns:[
+      { key:'material_name', label:'Material' },
+      { key:'unit',           label:'Unit' },
+      { key:'po_count',       label:'No. of POs',   type:'number' },
+      { key:'total_quantity', label:'Total Qty',    type:'number' },
+      { key:'avg_rate',       label:'Avg Rate (₹)', type:'amount' },
+      { key:'total_amount',   label:'Total Amount (₹)', type:'amount' },
+    ],
+  },
+  {
+    key:'procurement-material-price-trend', dept:'procurement', category:'Cost Analysis Reports', title:'Material Price Trend Report', icon:TrendingUp, color:'amber',
+    desc:'Chronological rate history for each material across purchase orders',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders/items-report',
+    dataKey:'data',
+    transform: rows => [...rows].sort((a, b) =>
+      (a.material_name || '').localeCompare(b.material_name || '') ||
+      new Date(a.po_date || 0) - new Date(b.po_date || 0)
+    ),
+    columns:[
+      { key:'material_name', label:'Material' },
+      { key:'po_date',       label:'PO Date',    type:'date' },
+      { key:'po_number',     label:'PO No',      mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',   label:'Vendor' },
+      { key:'unit',          label:'Unit' },
+      { key:'rate',          label:'Rate (₹)',   type:'amount' },
+    ],
+  },
+  {
+    key:'procurement-budget-vs-actual', dept:'procurement', category:'Cost Analysis Reports', title:'Budget vs Actual Procurement Cost Report', icon:Wallet, color:'amber',
+    desc:'Budgeted vs actual cost per project cost head, with PO spend and variance',
+    filters:['project'],
+    endpoint:'/reports/budget-vs-actual-procurement',
+    dataKey:'data',
+    columns:[
+      { key:'project_name',     label:'Project' },
+      { key:'cost_head',        label:'Cost Head' },
+      { key:'budgeted_amount',  label:'Budgeted (₹)', type:'amount' },
+      { key:'actual_amount',    label:'Actual (₹)',   type:'amount' },
+      { key:'po_spend',         label:'PO Spend (₹)', type:'amount' },
+      { key:'variance_amount',  label:'Variance (₹)', type:'amount' },
+      { key:'variance_pct',     label:'Variance %',   type:'number' },
+    ],
+  },
+  {
+    key:'procurement-rate-contract-utilization', dept:'procurement', category:'Cost Analysis Reports', title:'Rate Contract Utilization Report', icon:CreditCard, color:'amber',
+    desc:'Actual PO rates compared against benchmark/contract rates, with variance and compliance',
+    filters:['dateRange','project'],
+    endpoint:'/live-rates/utilization',
+    dataKey:'data',
+    columns:[
+      { key:'material_name',  label:'Material' },
+      { key:'po_number',      label:'PO No',          mono:true },
+      { key:'vendor_name',    label:'Vendor' },
+      { key:'po_rate',        label:'PO Rate (₹)',    type:'amount' },
+      { key:'benchmark_rate', label:'Benchmark Rate (₹)', type:'amount' },
+      { key:'variance_pct',   label:'Variance %',     type:'number' },
+      { key:'compliance',     label:'Compliance',     type:'status' },
+      { key:'po_date',        label:'Date',           type:'date' },
     ],
   },
 
