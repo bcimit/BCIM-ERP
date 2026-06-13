@@ -102,8 +102,8 @@ const WOPrintTemplate = React.forwardRef(({ data }, ref) => {
 
   return (
     <div ref={ref} className="wo-print-wrapper">
-      <div className="wo-page bg-white text-black font-sans"
-        style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4' }}>
+      <div className="wo-page bg-white text-black"
+        style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4', fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif" }}>
 
         {/* Fixed page footer: print CSS pins this to the BOTTOM of every printed page */}
         <div className="wo-page-footer">
@@ -171,9 +171,9 @@ const WOPrintTemplate = React.forwardRef(({ data }, ref) => {
             {data.vendor_phone && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Mobile: {data.vendor_phone}</p>}
             {data.vendor_email && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Email: {data.vendor_email}</p>}
             <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#000' }}>
-              GSTIN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_gstin || '—'}</span>
+              GSTIN: <span style={{ fontFamily: 'inherit' }}>{data.vendor_gstin || '—'}</span>
             </p>
-            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 700, color: '#000' }}>PAN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_pan}</span></p>}
+            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 700, color: '#000' }}>PAN: <span style={{ fontFamily: 'inherit' }}>{data.vendor_pan}</span></p>}
           </div>
 
           {/* WO Summary */}
@@ -238,8 +238,8 @@ const WOPrintTemplate = React.forwardRef(({ data }, ref) => {
                   </td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', textTransform: 'uppercase', color: '#000' }}>{it.unit || '—'}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 700, color: '#000' }}>{qty.toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'monospace', color: '#000' }}>{f2(rate)}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: '#000' }}>{f2(amount)}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'inherit', color: '#000' }}>{f2(rate)}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontWeight: 700, fontFamily: 'inherit', color: '#000' }}>{f2(amount)}</td>
                 </tr>
               );
             }) : (
@@ -270,15 +270,15 @@ const WOPrintTemplate = React.forwardRef(({ data }, ref) => {
           <div style={{ minWidth: '210px', fontSize: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
               <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Work Value</span>
-              <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#000' }}>₹ {f2(workValue)}</span>
+              <span style={{ fontWeight: 700, fontFamily: 'inherit', color: '#000' }}>₹ {f2(workValue)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
               <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>GST ({gstPct}%)</span>
-              <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#000' }}>₹ {f2(gstAmt)}</span>
+              <span style={{ fontWeight: 700, fontFamily: 'inherit', color: '#000' }}>₹ {f2(gstAmt)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#1e293b', color: '#fff', borderRadius: '4px', marginTop: '4px' }}>
               <span style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px' }}>Grand Total</span>
-              <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: '12px' }}>₹ {f2(grandTotal)}</span>
+              <span style={{ fontWeight: 800, fontFamily: 'inherit', fontSize: '12px' }}>₹ {f2(grandTotal)}</span>
             </div>
           </div>
         </div>

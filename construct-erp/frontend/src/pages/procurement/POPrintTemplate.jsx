@@ -59,6 +59,17 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
   const tcsAmt     = parseFloat(data.tcs_amount || 0);
   const grandTotal = parseFloat(data.grand_total || (subTotal + totalGst + tcsAmt));
 
+  // GST break-up by rate — items may carry different GST % (5 / 12 / 18 / 28)
+  const gstByRate = {};
+  if (!isTaxIncl) {
+    items.forEach(it => {
+      const r   = parseFloat(it.gst_rate || 0);
+      const amt = parseFloat(it.gst_amount || (parseFloat(it.quantity||0) * parseFloat(it.rate||0) * r / 100));
+      gstByRate[r] = (gstByRate[r] || 0) + amt;
+    });
+  }
+  const gstRates = Object.keys(gstByRate).map(Number).filter(r => r > 0).sort((a, b) => a - b);
+
   // ── Signature / approval grid — rendered in a tfoot so it repeats at the
   //    bottom of EVERY printed page (table-footer-group behaviour) ───────────
   const approvalGrid = (
@@ -112,8 +123,8 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
   return (
     <div ref={ref} className="po-print-wrapper">
       {/* po-page: no fixed minHeight — content determines height, allows multi-page */}
-      <div className="po-page bg-white text-black font-sans"
-        style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4' }}>
+      <div className="po-page bg-white text-black"
+        style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4', fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif" }}>
 
         {/* Fixed page footer: print CSS pins this to the BOTTOM of every printed page */}
         <div className="po-page-footer">
@@ -181,9 +192,9 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
             {data.vendor_phone && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Mobile: {data.vendor_phone}</p>}
             {data.vendor_email && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Email: {data.vendor_email}</p>}
             <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#000' }}>
-              GSTIN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_gstin || data.vendor_gst || '—'}</span>
+              GSTIN: <span style={{ fontFamily: 'inherit' }}>{data.vendor_gstin || data.vendor_gst || '—'}</span>
             </p>
-            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 700, color: '#000' }}>PAN: <span style={{ fontFamily: 'monospace' }}>{data.vendor_pan}</span></p>}
+            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 700, color: '#000' }}>PAN: <span style={{ fontFamily: 'inherit' }}>{data.vendor_pan}</span></p>}
           </div>
 
           {/* PO Summary */}
@@ -222,7 +233,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           <thead>
             <tr style={{ background: '#1e293b', color: '#fff' }}>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '22px', textAlign: 'center' }}>SL</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'left' }}>Material Description & HSN</th>
+              <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'left' }}>Material Description</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '72px', textAlign: 'left' }}>Model / Make</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '36px', textAlign: 'center' }}>Unit</th>
               <th style={{ border: '1px solid #000', padding: '5px 4px', width: '36px', textAlign: 'center' }}>Qty</th>
@@ -248,19 +259,16 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
                   <td style={{ border: '1px solid #000', padding: '4px' }}>
                     <p style={{ fontWeight: 700, margin: '0 0 1px', color: '#000' }}>{it.material_name}</p>
                     {it.mix_design && <p style={{ color: '#000', fontSize: '8px', margin: '0 0 1px' }}>{it.mix_design}</p>}
-                    <p style={{ color: '#000', fontSize: '8px', margin: 0, fontFamily: 'monospace' }}>
-                      HSN: {it.hsn_code || '—'}
-                    </p>
                     {it.purpose && <p style={{ color: '#000', fontSize: '8px', margin: '1px 0 0', fontStyle: 'italic' }}>{it.purpose}</p>}
                   </td>
                   <td style={{ border: '1px solid #000', padding: '4px', color: '#000', fontWeight: 600 }}>{it.make_model || it.brand || it.model_make || '—'}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', textTransform: 'uppercase' }}>{it.unit || '—'}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 700 }}>{qty.toLocaleString('en-IN')}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'monospace' }}>{f2(rate)}</td>
+                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'inherit' }}>{f2(rate)}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center' }}>{isTaxIncl ? 'Incl.' : `${parseFloat(it.gst_rate || 0)}%`}</td>
-                  {!isTaxIncl && <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'monospace' }}>{f2(basic)}</td>}
-                  {!isTaxIncl && <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'monospace' }}>{f2(gstAmt)}</td>}
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace' }}>{f2(total)}</td>
+                  {!isTaxIncl && <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'inherit' }}>{f2(basic)}</td>}
+                  {!isTaxIncl && <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'inherit' }}>{f2(gstAmt)}</td>}
+                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontWeight: 700, fontFamily: 'inherit' }}>{f2(total)}</td>
                   <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontSize: '8px' }}>
                     {it.req_date ? dayjs(it.req_date).format('DD.MM.YY') : '—'}
                   </td>
@@ -296,21 +304,38 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
           <div style={{ minWidth: '210px', fontSize: '10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
               <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Sub Total</span>
-              <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>₹ {f2(subTotal)}</span>
+              <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(subTotal)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
-              <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
-              <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{isTaxIncl ? 'Inclusive' : `₹ ${f2(totalGst)}`}</span>
-            </div>
+            {isTaxIncl ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
+                <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
+                <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>Inclusive</span>
+              </div>
+            ) : (
+              <>
+                {gstRates.map(r => (
+                  <div key={r} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>GST @ {r}%</span>
+                    <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(gstByRate[r])}</span>
+                  </div>
+                ))}
+                {gstRates.length !== 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
+                    <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(totalGst)}</span>
+                  </div>
+                )}
+              </>
+            )}
             {tcsAmt > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
                 <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>TCS / Other Tax</span>
-                <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>₹ {f2(tcsAmt)}</span>
+                <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(tcsAmt)}</span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#1e293b', color: '#fff', borderRadius: '4px', marginTop: '4px' }}>
               <span style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px' }}>Grand Total</span>
-              <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: '12px' }}>₹ {f2(grandTotal)}</span>
+              <span style={{ fontWeight: 800, fontFamily: 'inherit', fontSize: '12px' }}>₹ {f2(grandTotal)}</span>
             </div>
           </div>
         </div>

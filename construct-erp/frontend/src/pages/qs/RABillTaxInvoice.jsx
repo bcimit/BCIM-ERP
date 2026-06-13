@@ -38,8 +38,8 @@ const B = '1px solid #000';
 const B2 = '2px solid #000';
 
 const cell = (extra = {}) => ({
-  border: B, padding: '3px 6px', fontSize: '10.5pt',
-  fontFamily: 'Times New Roman, serif', verticalAlign: 'middle',
+  border: B, padding: '3px 6px', fontSize: '10pt',
+  fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif", verticalAlign: 'middle',
   wordBreak: 'break-word', overflowWrap: 'anywhere', ...extra,
 });
 const hcell = (extra = {}) => ({
@@ -61,13 +61,13 @@ const RABillTaxInvoice = forwardRef(({ data: b, invoiceNo, invoiceDate, letterhe
   const total   = taxable + cgst + sgst;
 
   const page = {
-    fontFamily: 'Times New Roman, serif',
-    fontSize: '10.5pt',
+    fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif",
+    fontSize: '10pt',
     color: '#000',
     background: '#fff',
     padding: '8mm 7mm',
     width: '210mm',
-    minHeight: '297mm',
+    minHeight: '285mm',
     boxSizing: 'border-box',
   };
 
