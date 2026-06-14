@@ -15,6 +15,7 @@ import {
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import { subcontractorAPI, vendorAPI, projectAPI } from '../../api/client';
+import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
 import WOPrintTemplate from './WOPrintTemplate';
 
@@ -71,7 +72,7 @@ function StatusBadge({ status }) {
   );
 }
 
-const inp = 'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-slate-400';
+const inp = `w-full h-10 px-3 rounded-lg text-sm font-medium text-slate-900 outline-none transition-all border placeholder:text-slate-500 ${FIELD_HL}`;
 
 const WORK_CATEGORIES = ['Civil', 'Structural', 'Waterproofing', 'Electrical', 'Plumbing', 'Painting', 'Carpentry', 'Tiles', 'Aluminium', 'Demolition', 'Earth Work', 'Fabrication', 'Interior', 'Landscaping', 'General'];
 
