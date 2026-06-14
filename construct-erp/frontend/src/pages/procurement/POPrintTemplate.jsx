@@ -2,6 +2,7 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import dayjs from 'dayjs';
+import { getDeliveryAddress } from '../../constants/poAddresses';
 
 // ─── Amount to words ─────────────────────────────────────────────────────────
 const ONES  = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
@@ -47,13 +48,6 @@ const formatItemNos = (nums) => {
   }
   return out.join(', ');
 };
-
-// ─── LANCO Hills (LH-10) project overrides ────────────────────────────────────
-const LANCO_DELIVERY_ADDRESS = `LANCO HILLS - LH10
-LANCO Hills Residential Apartments, Tower - LH10,
-Survey nos 201, Manikonda, Rajendranagar Mandal,
-HYDERABAD - 500089
-Contact Person BCIM: Mr. Vijayan - 82700 94285`;
 
 const POPrintTemplate = React.forwardRef(({ data }, ref) => {
   if (!data) return (
@@ -241,7 +235,7 @@ const POPrintTemplate = React.forwardRef(({ data }, ref) => {
         {/* Delivery Address + Order Intro (stacked) */}
         <div style={{ marginBottom: '10px', fontSize: '9px' }}>
           <p style={{ fontWeight: 700, textDecoration: 'underline', marginBottom: '3px' }}>DELIVERY ADDRESS:</p>
-          <p style={{ color: '#000', whiteSpace: 'pre-line', marginBottom: '6px' }}>{data.delivery_address || (isLanco ? LANCO_DELIVERY_ADDRESS : data.project_name) || '—'}</p>
+          <p style={{ color: '#000', whiteSpace: 'pre-line', marginBottom: '6px' }}>{data.delivery_address || getDeliveryAddress({ project_code: data.project_code, name: data.project_name }) || '—'}</p>
           <p style={{ color: '#000', fontStyle: 'italic' }}>
             {data.order_intro || 'We hereby place an order on you for supply of the following materials / services as per the terms and conditions below.'}
           </p>

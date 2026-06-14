@@ -18,6 +18,7 @@ import { poAPI, vendorAPI, projectAPI, mrsAPI, inventoryAPI } from '../../api/cl
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import VendorSelect from '../../components/shared/VendorSelect';
+import { getBillingAddress, getDeliveryAddress } from '../../constants/poAddresses';
 import { Z_INP, Z_CARD, Z_HEAD, Z_LABEL } from '../../constants/zohoStyles';
 import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
@@ -364,6 +365,20 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
       setForm(p => ({ ...p, vendor_id: '' }));
     }
   }, [form.project_id, projectVendors]);
+
+  // Auto-fill Billing / Delivery address from the selected project's known
+  // addresses (same lookup used by the print template) — only when the user
+  // hasn't already typed something into those fields.
+  useEffect(() => {
+    if (!form.project_id) return;
+    const proj = projects.find(p => p.id === form.project_id);
+    if (!proj) return;
+    setForm(p => ({
+      ...p,
+      billing_address:  p.billing_address  || getBillingAddress(proj.project_code),
+      delivery_address: p.delivery_address || getDeliveryAddress(proj),
+    }));
+  }, [form.project_id]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const handleAddVendor = async (name) => {
