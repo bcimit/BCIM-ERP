@@ -1231,6 +1231,7 @@ export default function MRSPage() {
                       options={visibleProjects.map(proj => ({ value: proj.id, label: proj.name }))}
                       placeholder="Select project…"
                       searchPlaceholder="Search projects…"
+                      footerLabel="projects"
                       className="!h-9 !rounded-md !border-slate-300 !shadow-none !bg-white focus:!border-blue-500 focus:!ring-1 focus:!ring-blue-500/30"
                     />
                   </ZField>

@@ -275,6 +275,7 @@ const INP = `w-full h-10 rounded-lg px-3 text-sm text-slate-900 font-medium outl
 
 /* ─── New PO Modal ─── */
 function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpdate, isPending, prefill, editingPO }) {
+  const queryClient = useQueryClient();
   const isEditing = !!editingPO;
   const [form, setForm] = useState({
     mrs_id:           editingPO?.mrs_id       || prefill?.mrs_id       || '',
@@ -347,6 +348,17 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
   }, [form.project_id, projectVendors]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const handleAddVendor = async (name) => {
+    try {
+      const res = await vendorAPI.create({ name });
+      const newVendor = res.data?.data || res.data;
+      await queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      if (newVendor?.id) set('vendor_id', newVendor.id);
+      toast.success(`Vendor "${name}" added`);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to add vendor');
+    }
+  };
   const setItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
   const addItem = () => setItems(p => [...p, { material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
@@ -547,9 +559,12 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                 <SearchableSelect
                   value={form.vendor_id}
                   onChange={v => set('vendor_id', v)}
-                  options={vendorOptions.map(v => ({ value: v.id, label: v.name }))}
+                  options={vendorOptions.map(v => ({ value: v.id, label: v.name, sublabel: v.vendor_type ? v.vendor_type.replace(/_/g, ' ') : '' }))}
                   placeholder="Select vendor…"
                   searchPlaceholder="Search vendors…"
+                  footerLabel="vendors"
+                  onAddNew={handleAddVendor}
+                  addNewLabel="vendor"
                 />
               </Field>
               <Field label="Project *">
@@ -559,6 +574,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                   options={projects.map(p => ({ value: p.id, label: p.name }))}
                   placeholder="Select project…"
                   searchPlaceholder="Search projects…"
+                  footerLabel="projects"
                 />
               </Field>
               <Field label="PO Date *">

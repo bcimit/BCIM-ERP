@@ -575,6 +575,18 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
       : [{ description:'', quantity:'', unit:'SQM', rate:'', gst_rate: String(editingWO?.gst_pct ?? '18'), remarks:'' }]
   );
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const queryClient = useQueryClient();
+  const handleAddVendor = async (name) => {
+    try {
+      const res = await vendorAPI.create({ name });
+      const newVendor = res.data?.data || res.data;
+      await queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      if (newVendor?.id) f('vendor_id', newVendor.id);
+      toast.success(`Vendor "${name}" added`);
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to add vendor');
+    }
+  };
 
   // Contractors mapped to the selected project — restricts the vendor dropdown
   // so users only pick contractors approved for that project.
@@ -670,6 +682,7 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                   options={(projects||[]).map(p => ({ value: p.id, label: p.name }))}
                   placeholder="Select project…"
                   searchPlaceholder="Search projects…"
+                  footerLabel="projects"
                 />
               </div>
               <div>
@@ -694,6 +707,9 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                   options={vendorOptions.map(v => ({ value: v.id, label: v.name, sublabel: v.vendor_type ? v.vendor_type.replace(/_/g,' ') : '' }))}
                   placeholder="Select contractor…"
                   searchPlaceholder="Search contractors…"
+                  footerLabel="contractors"
+                  onAddNew={handleAddVendor}
+                  addNewLabel="contractor"
                 />
               </div>
               <div>

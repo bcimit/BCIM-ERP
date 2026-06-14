@@ -1,19 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Check } from 'lucide-react';
+import { Search, ChevronDown, Check, Plus, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { FIELD_HL } from '../../constants/fieldStyles';
 
 /**
  * Searchable replacement for a native <select>, styled to match MaterialCombobox.
  * options: [{ value, label, sublabel? }]
+ * footerLabel: plural noun shown in the footer count, e.g. "vendors" (default "options")
+ * onAddNew: optional async (name) => void — shows a "+ Add new …" action that lets the
+ *   user type a name and create a new option inline (e.g. add a new vendor)
+ * addNewLabel: label for the add-new action, e.g. "vendor" (default "item")
  */
-export default function SearchableSelect({ value, options = [], onChange, placeholder = 'Select…', searchPlaceholder = 'Search…', className }) {
+export default function SearchableSelect({ value, options = [], onChange, placeholder = 'Select…', searchPlaceholder = 'Search…', className, footerLabel = 'options', onAddNew, addNewLabel = 'item' }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ(''); } };
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ(''); setAdding(false); setNewName(''); } };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -28,6 +35,21 @@ export default function SearchableSelect({ value, options = [], onChange, placeh
     onChange(opt.value);
     setOpen(false);
     setQ('');
+  };
+
+  const handleAddNew = async () => {
+    const name = newName.trim();
+    if (!name || !onAddNew) return;
+    setSaving(true);
+    try {
+      await onAddNew(name);
+      setAdding(false);
+      setNewName('');
+      setQ('');
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -91,9 +113,50 @@ export default function SearchableSelect({ value, options = [], onChange, placeh
               })
             )}
           </div>
-          {filtered.length > 0 && (
-            <div className="px-3 py-1.5 border-t border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">
-              {filtered.length} {filtered.length === 1 ? 'option' : 'options'}
+          {(filtered.length > 0 || onAddNew) && (
+            <div className="px-3 py-1.5 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2">
+              {filtered.length > 0 && (
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                  {filtered.length} {footerLabel}
+                </span>
+              )}
+              {onAddNew && !adding && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setAdding(true); setNewName(q); }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[#378ADD] hover:text-[#2569b3] transition-colors ml-auto"
+                >
+                  <Plus className="w-3 h-3" /> Add new {addNewLabel}
+                </button>
+              )}
+            </div>
+          )}
+          {onAddNew && adding && (
+            <div className="p-2 border-t border-slate-100 bg-white flex items-center gap-1.5">
+              <input
+                type="text"
+                autoFocus
+                placeholder={`New ${addNewLabel} name…`}
+                className="h-8 flex-1 border border-slate-200 bg-white rounded-lg px-2.5 text-xs text-slate-900 placeholder:text-slate-400 font-medium outline-none focus:border-[#378ADD] focus:ring-2 focus:ring-[#378ADD]/15 transition-all"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddNew(); } if (e.key === 'Escape') { setAdding(false); setNewName(''); } }}
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); handleAddNew(); }}
+                disabled={saving || !newName.trim()}
+                className="h-8 px-3 rounded-lg bg-[#378ADD] text-white text-xs font-bold disabled:opacity-50 hover:bg-[#2569b3] transition-colors inline-flex items-center gap-1"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); setAdding(false); setNewName(''); }}
+                className="h-8 px-2 rounded-lg text-slate-400 hover:text-slate-600 text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           )}
           <style>{`
