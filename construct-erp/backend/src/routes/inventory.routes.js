@@ -258,7 +258,7 @@ router.get('/items-lookup', async (req, res) => {
         TRIM(COALESCE(i.unit, ''))     AS unit,
         i.closing_stock,
         i.reorder_level,
-        i.min_stock
+        i.minimum_level AS min_stock
       FROM inventory i
       JOIN projects p ON i.project_id = p.id
       WHERE p.company_id = $1
