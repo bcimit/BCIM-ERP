@@ -420,6 +420,7 @@ export const journalEntryAPI = {
   create:       (data)   => api.post('/journal-entries', data),
   updateStatus: (id, status) => api.patch(`/journal-entries/${id}/status`, { status }),
   remove:       (id)     => api.delete(`/journal-entries/${id}`),
+  dayBook:      (params) => api.get('/journal-entries/day-book', { params }),
 };
 
 export const bankAccountAPI = {

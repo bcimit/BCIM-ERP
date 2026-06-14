@@ -106,6 +106,43 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// ── DAY BOOK (posted entries + lines for a date range, default today) ────────
+router.get('/day-book', authenticate, async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const from = req.query.from || today;
+    const to = req.query.to || from;
+
+    const entries = await query(
+      `SELECT je.*, u.name AS created_by_name
+       FROM journal_entries je
+       LEFT JOIN users u ON u.id = je.created_by
+       WHERE je.company_id = $1 AND je.status = 'posted' AND je.entry_date BETWEEN $2 AND $3
+       ORDER BY je.entry_date ASC, je.created_at ASC`,
+      [req.user.company_id, from, to]
+    );
+
+    const ids = entries.rows.map(e => e.id);
+    const linesByEntry = {};
+    if (ids.length) {
+      const lines = await query(
+        `SELECT jel.*, coa.code AS account_code, coa.name AS account_name
+         FROM journal_entry_lines jel
+         JOIN chart_of_accounts coa ON coa.id = jel.account_id
+         WHERE jel.journal_entry_id = ANY($1)
+         ORDER BY jel.journal_entry_id, jel.sort_order`,
+        [ids]
+      );
+      lines.rows.forEach(l => { (linesByEntry[l.journal_entry_id] ||= []).push(l); });
+    }
+
+    const data = entries.rows.map(e => ({ ...e, lines: linesByEntry[e.id] || [] }));
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET ONE ──────────────────────────────────────────────────────────────────
 router.get('/:id', authenticate, async (req, res) => {
   try {

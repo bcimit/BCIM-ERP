@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { BarChart3, Scale, FileBarChart, Download, FileDown, Clock3, Wallet } from 'lucide-react';
-import { chartOfAccountsAPI, reportAPI } from '../../api/client';
+import { BarChart3, Scale, FileBarChart, Download, FileDown, Clock3, Wallet, BookOpen } from 'lucide-react';
+import { chartOfAccountsAPI, reportAPI, journalEntryAPI } from '../../api/client';
 import { inr } from '../dashboards/DashKPI';
 import { downloadCsv, downloadPdf } from '../../utils/exportCsv';
 import dayjs from 'dayjs';
@@ -14,6 +14,7 @@ const TABS = [
   { key: 'balance-sheet', label: 'Balance Sheet', icon: FileBarChart },
   { key: 'ar-aging', label: 'Aged Receivables', icon: Clock3 },
   { key: 'ap-aging', label: 'Aged Payables', icon: Wallet },
+  { key: 'day-book', label: 'Day Book', icon: BookOpen },
 ];
 
 const AGE_BUCKETS = ['current', '1-30', '31-60', '61-90', '90+'];
@@ -93,14 +94,81 @@ function Section({ title, rows, total, totalLabel }) {
   );
 }
 
+function DayBookView({ entries, from, to, onFrom, onTo }) {
+  const grandDebit = entries.reduce((s, e) => s + Number(e.total_debit || 0), 0);
+  const grandCredit = entries.reduce((s, e) => s + Number(e.total_credit || 0), 0);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="text-xs text-slate-500">From</label>
+        <input type="date" value={from} onChange={e => onFrom(e.target.value)}
+          className="border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+        <label className="text-xs text-slate-500">To</label>
+        <input type="date" value={to} onChange={e => onTo(e.target.value)}
+          className="border border-slate-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+      </div>
+      {entries.length === 0 ? (
+        <p className="px-4 py-10 text-sm text-slate-400 text-center bg-white border border-slate-200 rounded-md">No posted journal entries for this period</p>
+      ) : (
+        <div className="space-y-3">
+          {entries.map(e => (
+            <div key={e.id} className="bg-white border border-slate-200 rounded-md overflow-hidden">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-wrap gap-1">
+                <div>
+                  <span className="font-mono text-xs font-semibold text-blue-700">{e.entry_no}</span>
+                  <span className="text-xs text-slate-400 ml-2">{dayjs(e.entry_date).format('DD MMM YYYY')}</span>
+                  {e.reference && <span className="text-xs text-slate-400 ml-2">Ref: {e.reference}</span>}
+                </div>
+                <span className="text-xs text-slate-500">{e.narration}</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    {['Account', 'Description', 'Debit', 'Credit'].map(h => (
+                      <th key={h} className="px-4 py-1.5 text-left text-[11px] font-medium uppercase tracking-wider text-slate-400">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {e.lines.map(l => (
+                    <tr key={l.id}>
+                      <td className="px-4 py-1.5 text-slate-800">{l.account_code} — {l.account_name}</td>
+                      <td className="px-4 py-1.5 text-slate-500 text-xs">{l.description || '—'}</td>
+                      <td className="px-4 py-1.5 text-right font-mono">{Number(l.debit) > 0 ? inr(l.debit) : ''}</td>
+                      <td className="px-4 py-1.5 text-right font-mono">{Number(l.credit) > 0 ? inr(l.credit) : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+          <div className="bg-slate-50 border border-slate-200 rounded-md p-4 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-800">Total</span>
+            <span className="text-sm font-mono font-semibold text-slate-800">Dr {inr(grandDebit)} &nbsp;|&nbsp; Cr {inr(grandCredit)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AccountingReportsPage() {
   const [tab, setTab] = useState('trial-balance');
+  const [dbFrom, setDbFrom] = useState(dayjs().format('YYYY-MM-DD'));
+  const [dbTo, setDbTo] = useState(dayjs().format('YYYY-MM-DD'));
 
   const { data, isLoading } = useQuery({
     queryKey: ['chart-of-accounts', 'reports'],
     queryFn: () => chartOfAccountsAPI.list().then(r => r.data),
-    enabled: !['ar-aging', 'ap-aging'].includes(tab),
+    enabled: !['ar-aging', 'ap-aging', 'day-book'].includes(tab),
   });
+
+  const { data: dayBookData, isLoading: dayBookLoading } = useQuery({
+    queryKey: ['day-book', dbFrom, dbTo],
+    queryFn: () => journalEntryAPI.dayBook({ from: dbFrom, to: dbTo }).then(r => r.data?.data ?? []),
+    enabled: tab === 'day-book',
+  });
+  const dayBookEntries = dayBookData ?? [];
   const rows = (data?.data ?? []).filter(a => a.is_active !== false);
 
   const { data: arData, isLoading: arLoading } = useQuery({
@@ -178,10 +246,18 @@ export default function AccountingReportsPage() {
       lines.push(['', '', '', '', 'Total', arRows.reduce((s, r) => s + Number(r.amount || 0), 0)]);
       return { lines, filename: `aged-receivables-${stamp}` };
     }
-    const lines = [['Vendor / Project', 'Invoice Number', 'Due Date', 'Age (days)', 'Bucket', 'Amount']];
-    apRows.forEach(r => lines.push([r.party, r.ref, dayjs(r.date).format('DD MMM YYYY'), r.age_days, AGE_LABELS[r.bucket], r.amount]));
-    lines.push(['', '', '', '', 'Total', apRows.reduce((s, r) => s + Number(r.amount || 0), 0)]);
-    return { lines, filename: `aged-payables-${stamp}` };
+    if (tab === 'ap-aging') {
+      const lines = [['Vendor / Project', 'Invoice Number', 'Due Date', 'Age (days)', 'Bucket', 'Amount']];
+      apRows.forEach(r => lines.push([r.party, r.ref, dayjs(r.date).format('DD MMM YYYY'), r.age_days, AGE_LABELS[r.bucket], r.amount]));
+      lines.push(['', '', '', '', 'Total', apRows.reduce((s, r) => s + Number(r.amount || 0), 0)]);
+      return { lines, filename: `aged-payables-${stamp}` };
+    }
+    const lines = [['Entry No', 'Date', 'Reference', 'Account', 'Description', 'Debit', 'Credit']];
+    dayBookEntries.forEach(e => e.lines.forEach(l => lines.push([
+      e.entry_no, dayjs(e.entry_date).format('DD MMM YYYY'), e.reference || '',
+      `${l.account_code} — ${l.account_name}`, l.description || '', Number(l.debit) || '', Number(l.credit) || '',
+    ])));
+    return { lines, filename: `day-book-${dbFrom}-to-${dbTo}` };
   };
 
   const exportCsv = () => {
@@ -235,7 +311,7 @@ export default function AccountingReportsPage() {
       </div>
 
       <div className="px-6 py-5">
-        {(tab === 'ar-aging' && arLoading) || (tab === 'ap-aging' && apLoading) || (!['ar-aging','ap-aging'].includes(tab) && isLoading) ? (
+        {(tab === 'ar-aging' && arLoading) || (tab === 'ap-aging' && apLoading) || (tab === 'day-book' && dayBookLoading) || (!['ar-aging','ap-aging','day-book'].includes(tab) && isLoading) ? (
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
           </div>
@@ -245,6 +321,8 @@ export default function AccountingReportsPage() {
         ) : tab === 'ap-aging' ? (
           <AgingTable rows={apRows} buckets={apData?.buckets} total={apData?.total || 0}
             dateLabel="Due Date" nameLabel="Vendor / Project" amountLabel="Amount (₹)" />
+        ) : tab === 'day-book' ? (
+          <DayBookView entries={dayBookEntries} from={dbFrom} to={dbTo} onFrom={setDbFrom} onTo={setDbTo} />
         ) : tab === 'trial-balance' ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Section title="Debit Balances (Assets &amp; Expenses)" rows={[...byType.asset, ...byType.expense]} total={trialDebit} totalLabel="Total Debit" />
