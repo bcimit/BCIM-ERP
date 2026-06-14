@@ -1217,7 +1217,7 @@ export default function MRSPage() {
                   <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                     <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                   </div>
-                  <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Project Details</h3>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Project Details</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   <Field label="Project *">
@@ -1314,8 +1314,8 @@ export default function MRSPage() {
                       <Package className="w-3.5 h-3.5 text-indigo-600" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Material Items</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Select from store ledger or add new items</p>
+                      <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Material Items</h3>
+                      <p className="text-xs text-slate-600 mt-0.5">Select from store ledger or add new items</p>
                     </div>
                   </div>
                   <button
@@ -1327,7 +1327,7 @@ export default function MRSPage() {
                 </div>
                 <div className="hidden lg:grid gap-3 mb-2 px-1" style={{ gridTemplateColumns: '40px minmax(280px,2fr) 130px 120px 110px minmax(220px,2fr) 44px' }}>
                   {['#', 'Material Name', 'Quantity', 'Unit', 'Stock', 'Purpose', ''].map((h, i) => (
-                    <div key={i} className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{h}</div>
+                    <div key={i} className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">{h}</div>
                   ))}
                 </div>
                 <div className="space-y-2.5">
@@ -1355,7 +1355,7 @@ export default function MRSPage() {
                       <input
                         type="number"
                         placeholder="0"
-                        className={clsx('h-10 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-400 font-semibold outline-none transition-all text-right border', FIELD_HL)}
+                        className={clsx('h-10 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-500 font-semibold outline-none transition-all text-right border', FIELD_HL)}
                         value={item.qty}
                         onChange={e => { const n = [...items]; n[idx].qty = e.target.value; setItems(n); }}
                       />
@@ -1379,7 +1379,7 @@ export default function MRSPage() {
                       <input
                         type="text"
                         placeholder="Intended use"
-                        className={clsx('h-10 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none transition-all border', FIELD_HL)}
+                        className={clsx('h-10 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-500 font-medium outline-none transition-all border', FIELD_HL)}
                         value={item.purpose}
                         onChange={e => { const n = [...items]; n[idx].purpose = e.target.value; setItems(n); }}
                       />
@@ -1397,7 +1397,7 @@ export default function MRSPage() {
                 {/* Total quantity footer */}
                 <div className="hidden lg:grid gap-3 mt-2 pt-2 px-1 border-t border-slate-100" style={{ gridTemplateColumns: '40px minmax(280px,2fr) 130px 120px 110px minmax(220px,2fr) 44px' }}>
                   <div />
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider self-center">Total Requested Quantity</div>
+                  <div className="text-xs font-bold text-slate-700 uppercase tracking-wider self-center">Total Requested Quantity</div>
                   <div className="text-sm font-black text-indigo-700 text-right self-center">
                     {items.reduce((sum, i) => sum + (parseFloat(i.qty) || 0), 0)}
                   </div>
@@ -1411,12 +1411,12 @@ export default function MRSPage() {
                   <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                     <FileText className="w-3.5 h-3.5 text-indigo-600" />
                   </div>
-                  <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Remarks</h3>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Remarks</h3>
                 </div>
                 <textarea
                   rows={3}
                   placeholder="Additional notes or special instructions…"
-                  className={clsx('w-full rounded-lg p-3 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none transition-all resize-none border', FIELD_HL)}
+                  className={clsx('w-full rounded-lg p-3 text-sm text-slate-900 placeholder:text-slate-500 font-medium outline-none transition-all resize-none border', FIELD_HL)}
                   value={formData.remarks}
                   onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))}
                 />
@@ -1426,7 +1426,7 @@ export default function MRSPage() {
                     <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                       <Paperclip className="w-3.5 h-3.5 text-indigo-600" />
                     </div>
-                    <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider">Attachments</h3>
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Attachments</h3>
                   </div>
                   <label
                     onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -1478,7 +1478,7 @@ export default function MRSPage() {
               <div className="w-full lg:w-[300px] shrink-0 space-y-5">
                 {/* Request Summary */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
-                  <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <ClipboardCheck className="w-3.5 h-3.5 text-indigo-600" /> Request Summary
                   </h3>
                   {(() => {
@@ -1531,7 +1531,7 @@ export default function MRSPage() {
 
                 {/* Approval Workflow */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
-                  <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Layers3 className="w-3.5 h-3.5 text-indigo-600" /> Approval Workflow
                   </h3>
                   <ul className="space-y-0">
@@ -1561,7 +1561,7 @@ export default function MRSPage() {
 
                 {/* Submission Checklist */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
-                  <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <ClipboardList className="w-3.5 h-3.5 text-indigo-600" /> Submission Checklist
                   </h3>
                   {(() => {
@@ -1601,7 +1601,7 @@ export default function MRSPage() {
 
                 {/* Recent MRs */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm">
-                  <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
                     <History className="w-3.5 h-3.5 text-indigo-600" /> Recent MRs
                   </h3>
                   {(() => {
@@ -1808,7 +1808,7 @@ export default function MRSPage() {
 function Field({ label, children }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{label}</label>
+      <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{label}</label>
       {children}
     </div>
   );
@@ -2022,7 +2022,7 @@ function MaterialCombobox({ value, inventoryItems, onChange, onNewItem }) {
         <input
           type="text"
           placeholder="Search store ledger…"
-          className="h-10 w-full border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] rounded-lg pl-8 pr-8 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none focus:border-[#2569b3] transition-all border"
+          className="h-10 w-full border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] rounded-lg pl-8 pr-8 text-sm text-slate-900 placeholder:text-slate-500 font-medium outline-none focus:border-[#2569b3] transition-all border"
           value={q}
           onChange={handleInputChange}
           onFocus={() => setOpen(true)}
