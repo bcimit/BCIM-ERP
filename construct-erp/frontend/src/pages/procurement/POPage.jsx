@@ -2025,6 +2025,7 @@ export default function POPage() {
                   { label: 'Vendor / Project', key: 'vendor_name' },
                   { label: 'PO Date',          key: 'po_date' },
                   { label: 'Delivery',         key: 'delivery' },
+                  { label: 'Receipt',          key: null },
                   { label: 'Total with GST',   key: 'grand_total' },
                   { label: 'Status',           key: 'status' },
                   { label: '',                 key: null },
@@ -2061,6 +2062,19 @@ export default function POPage() {
                   <td className="px-4 py-3 whitespace-nowrap text-xs font-medium text-slate-700">{fmt(po.po_date)}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-400">{fmt(po.delivery_date)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
+                    {po.items_total > 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${po.items_received >= po.items_total ? 'bg-green-500' : po.items_received > 0 ? 'bg-amber-400' : 'bg-slate-200'}`}
+                            style={{ width: `${Math.round((po.items_received / po.items_total) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-500">{po.items_received}/{po.items_total}</span>
+                      </div>
+                    ) : <span className="text-xs text-slate-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="text-xs font-medium text-slate-800">{inr(po.grand_total)}</div>
                     <div className="text-xs text-slate-400">{po.gst_inclusive ? 'Tax inclusive' : 'Basic + GST'}</div>
                   </td>
@@ -2088,7 +2102,7 @@ export default function POPage() {
                 </tr>
                 {attachPOId === po.id && (
                   <tr>
-                    <td colSpan={7} className="px-6 pb-4 bg-indigo-50/30 border-b border-indigo-100">
+                    <td colSpan={8} className="px-6 pb-4 bg-indigo-50/30 border-b border-indigo-100">
                       <RecordAttachments
                         module="purchase_order"
                         recordId={po.id}

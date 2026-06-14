@@ -295,11 +295,31 @@ router.get('/', async (req, res) => {
     const conditions = ['p.company_id = $1'];
     const params = [req.user.company_id];
     applyProjectScope(req, conditions, params, 'po', project_id);
-    let sql = `SELECT po.*, v.name as vendor_name, p.name as project_name
-               FROM purchase_orders po 
-               JOIN vendors v ON po.vendor_id = v.id
-               JOIN projects p ON po.project_id = p.id 
-               WHERE ${conditions.join(' AND ')}`;
+    let sql = `
+      WITH recv AS (
+        SELECT gi.po_item_id, SUM(gi.quantity_received) AS qty
+        FROM grn_items gi
+        JOIN grn g ON g.id = gi.grn_id
+        WHERE g.quality_status NOT IN ('rejected')
+        GROUP BY gi.po_item_id
+      ),
+      po_rcv AS (
+        SELECT
+          poi.po_id,
+          COUNT(*) AS items_total,
+          COUNT(*) FILTER (WHERE COALESCE(r.qty, 0) >= poi.quantity) AS items_received
+        FROM po_items poi
+        LEFT JOIN recv r ON r.po_item_id = poi.id
+        GROUP BY poi.po_id
+      )
+      SELECT po.*, v.name AS vendor_name, p.name AS project_name,
+             COALESCE(rc.items_total, 0)    AS items_total,
+             COALESCE(rc.items_received, 0) AS items_received
+      FROM purchase_orders po
+      JOIN vendors v ON po.vendor_id = v.id
+      JOIN projects p ON po.project_id = p.id
+      LEFT JOIN po_rcv rc ON rc.po_id = po.id
+      WHERE ${conditions.join(' AND ')}`;
     let i = params.length + 1;
     if (status)     { sql += ` AND po.status = $${i++}`;     params.push(status); }
     sql += ' ORDER BY po.created_at DESC';
