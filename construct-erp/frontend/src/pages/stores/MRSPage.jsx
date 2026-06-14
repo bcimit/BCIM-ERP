@@ -1,6 +1,7 @@
 // src/pages/stores/MRSPage.jsx
 import RecordAttachments from '../../components/shared/RecordAttachments';
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
+import { FIELD_HL } from '../../constants/fieldStyles';
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -428,9 +429,6 @@ export default function MRSPage() {
   });
 
   const visibleProjects = projectsData ?? [];
-
-  // Highlight style for editable inputs/selects (blue border + light blue fill + soft glow)
-  const FIELD_HL = 'border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] focus:border-[#2569b3]';
 
   // ── Stock lookup helpers for the requisition item table ─────
   const stockOf = (materialName) => inventoryItems.find(i => i.material_name === materialName);

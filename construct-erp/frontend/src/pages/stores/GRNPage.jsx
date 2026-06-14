@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
-import { grnAPI, projectAPI, vendorAPI, poAPI } from '../../api/client';
+import { grnAPI, projectAPI, vendorAPI, poAPI, inventoryAPI } from '../../api/client';
+import MaterialCombobox from '../../components/shared/MaterialCombobox';
+import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
 import GRNPrintTemplate from './GRNPrintTemplate';
@@ -682,6 +684,13 @@ function GRNForm({ onClose, projects, qc }) {
     queryFn: () => vendorAPI.list().then(r => r.data?.data ?? r.data ?? []).catch(() => []),
   });
 
+  // Inventory lookup — for material name combobox
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ['inventory-lookup'],
+    queryFn: () => inventoryAPI.itemsLookup().then(r => r.data?.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Released (approved) POs for selected project
   const { data: releasedPOs = [], isFetching: posFetching } = useQuery({
     queryKey: ['po-released-grn', form.project_id],
@@ -795,7 +804,7 @@ function GRNForm({ onClose, projects, qc }) {
     createMutation.mutate(payload);
   };
 
-  const inp = 'w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400 transition-all';
+  const inp = `w-full h-10 rounded-lg px-3 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -943,14 +952,21 @@ function GRNForm({ onClose, projects, qc }) {
                             </span>
                           )}
                         </label>
-                        <input placeholder="Material name" value={it.material_name}
-                          onChange={e => updateItem(idx, 'material_name', e.target.value)}
-                          className="w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400" />
+                        <MaterialCombobox
+                          value={it.material_name}
+                          inventoryItems={inventoryItems}
+                          placeholder="Material name"
+                          onChange={(materialName, unit) => {
+                            updateItem(idx, 'material_name', materialName);
+                            if (unit) updateItem(idx, 'unit', unit);
+                          }}
+                        />
                       </div>
                       <div className="col-span-1 space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Unit</label>
                         <select value={it.unit} onChange={e => updateItem(idx, 'unit', e.target.value)}
-                          className="w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400">
+                          className={clsx('w-full h-10 rounded-lg px-2 text-sm outline-none transition-all border', FIELD_HL)}>
+                          {it.unit && !UNITS.includes(it.unit) && <option key={it.unit} value={it.unit}>{it.unit}</option>}
                           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
@@ -962,23 +978,23 @@ function GRNForm({ onClose, projects, qc }) {
                           value={it.use_thumb_rule ? (conv ?? '') : it.quantity_received}
                           readOnly={it.use_thumb_rule}
                           onChange={e => !it.use_thumb_rule && updateItem(idx, 'quantity_received', e.target.value)}
-                          className={clsx('w-full h-9 border rounded-lg px-3 text-sm text-right font-mono outline-none',
+                          className={clsx('w-full h-10 rounded-lg px-3 text-sm text-right font-mono outline-none transition-all border',
                             it.use_thumb_rule
                               ? 'bg-indigo-50 border-indigo-200 text-indigo-700 cursor-not-allowed'
-                              : 'bg-emerald-50 border-emerald-200 text-emerald-700 focus:border-emerald-400'
+                              : FIELD_HL
                           )} />
                       </div>
                       <div className="col-span-2 space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Rate (₹/Unit)</label>
                         <input type="number" placeholder="0.00" value={it.rate}
                           onChange={e => updateItem(idx, 'rate', e.target.value)}
-                          className="w-full h-9 bg-amber-50 border border-amber-200 rounded-lg px-3 text-sm text-right font-mono outline-none focus:border-amber-400" />
+                          className={clsx('w-full h-10 rounded-lg px-3 text-sm text-right font-mono outline-none transition-all border', FIELD_HL)} />
                       </div>
                       <div className="col-span-3 space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Quality Remarks</label>
                         <input placeholder="Inspection / rejection notes" value={it.quality_remarks}
                           onChange={e => updateItem(idx, 'quality_remarks', e.target.value)}
-                          className="w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400" />
+                          className={clsx('w-full h-10 rounded-lg px-3 text-sm outline-none transition-all border', FIELD_HL)} />
                       </div>
                       <div className="col-span-1 flex items-end justify-end pb-0.5">
                         <button onClick={() => removeRow(idx)} disabled={items.length === 1}
@@ -994,13 +1010,13 @@ function GRNForm({ onClose, projects, qc }) {
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Batch Number</label>
                         <input placeholder="Auto-generated if blank" value={it.batch_number}
                           onChange={e => updateItem(idx, 'batch_number', e.target.value)}
-                          className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs outline-none focus:border-indigo-400" />
+                          className={clsx('w-full h-9 rounded-lg px-3 text-xs outline-none transition-all border', FIELD_HL)} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-500 uppercase">Expiry Date</label>
                         <input type="date" value={it.expiry_date}
                           onChange={e => updateItem(idx, 'expiry_date', e.target.value)}
-                          className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs outline-none focus:border-indigo-400" />
+                          className={clsx('w-full h-9 rounded-lg px-3 text-xs outline-none transition-all border', FIELD_HL)} />
                       </div>
                       <div className="flex items-end pb-1">
                         <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 select-none">
@@ -1028,7 +1044,8 @@ function GRNForm({ onClose, projects, qc }) {
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-indigo-600 uppercase">Physical Unit</label>
                             <select value={it.physical_unit} onChange={e => updateItem(idx, 'physical_unit', e.target.value)}
-                              className="w-full h-8 bg-white border border-indigo-200 rounded-lg px-2 text-xs outline-none focus:border-indigo-400">
+                              className={clsx('w-full h-9 rounded-lg px-2 text-xs outline-none transition-all border', FIELD_HL)}>
+                              {it.physical_unit && !UNITS.includes(it.physical_unit) && <option key={it.physical_unit} value={it.physical_unit}>{it.physical_unit}</option>}
                               {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
                           </div>
@@ -1176,7 +1193,7 @@ function GRNForm({ onClose, projects, qc }) {
                                   <td className="px-3 py-1.5">
                                     <select value={gstVal}
                                       onChange={e => setItemGstOverrides(p => ({ ...p, [String(idx)]: e.target.value }))}
-                                      className="w-full h-7 bg-slate-50 border border-slate-200 rounded px-2 text-xs outline-none focus:border-indigo-400">
+                                      className={clsx('w-full h-8 rounded px-2 text-xs outline-none transition-all border', FIELD_HL)}>
                                       {['5','12','18','28'].map(v => <option key={v} value={v}>{v}%</option>)}
                                     </select>
                                   </td>

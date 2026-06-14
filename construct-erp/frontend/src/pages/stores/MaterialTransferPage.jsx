@@ -1,7 +1,9 @@
 // src/pages/stores/MaterialTransferPage.jsx — Material Transfer (MTR)
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { mtrAPI, projectAPI } from '../../api/client';
+import { mtrAPI, projectAPI, inventoryAPI } from '../../api/client';
+import MaterialCombobox from '../../components/shared/MaterialCombobox';
+import { FIELD_HL } from '../../constants/fieldStyles';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, RefreshCw, X, Eye, CheckCircle2, Truck,
@@ -15,7 +17,8 @@ import dayjs from 'dayjs';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 const fmt = (n) => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`;
-const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 transition bg-white';
+const inp = `w-full h-10 rounded-lg px-3 py-2 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
+const cellInp = `w-full rounded px-2 py-1.5 text-xs outline-none transition-all border ${FIELD_HL}`;
 
 const TRANSFER_TYPES = {
   site_to_site:     { label: 'Site to Site',      color: 'bg-blue-100 text-blue-700' },
@@ -103,6 +106,13 @@ function MTRForm({ mtr, projects, onClose }) {
       remarks: it.remarks || '',
     })) : [{ ...EMPTY_ITEM }]
   );
+
+  // Inventory lookup — for material name combobox
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ['inventory-lookup'],
+    queryFn: () => inventoryAPI.itemsLookup().then(r => r.data?.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setItem = (i, k, v) => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
@@ -278,48 +288,55 @@ function MTRForm({ mtr, projects, onClose }) {
                 {items.map((it, i) => (
                   <tr key={i} className="hover:bg-slate-50/50">
                     <td className="px-3 py-2 text-slate-400 font-mono">{i+1}</td>
-                    <td className="px-3 py-2">
-                      <input value={it.material_name} onChange={e => setItem(i,'material_name',e.target.value)}
-                        className="w-48 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-300"
-                        placeholder="Material description" />
+                    <td className="px-3 py-2 min-w-[200px]">
+                      <MaterialCombobox
+                        value={it.material_name}
+                        inventoryItems={inventoryItems}
+                        placeholder="Material description"
+                        onChange={(materialName, unit) => {
+                          setItem(i, 'material_name', materialName);
+                          if (unit) setItem(i, 'unit', unit);
+                        }}
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <input value={it.material_code} onChange={e => setItem(i,'material_code',e.target.value)}
-                        className="w-24 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-300"
+                        className={clsx('w-24', cellInp)}
                         placeholder="Code" />
                     </td>
                     <td className="px-3 py-2">
                       <select value={it.unit} onChange={e => setItem(i,'unit',e.target.value)}
-                        className="w-20 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-300">
+                        className={clsx('w-20', cellInp)}>
+                        {it.unit && !UNITS.includes(it.unit) && <option key={it.unit}>{it.unit}</option>}
                         {UNITS.map(u => <option key={u}>{u}</option>)}
                       </select>
                     </td>
                     <td className="px-3 py-2">
                       <input type="number" value={it.requested_qty} min={0} step="0.001"
                         onChange={e => setItem(i,'requested_qty',e.target.value)}
-                        className="w-20 border border-slate-200 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-300" />
+                        className={clsx('w-20 text-right', cellInp)} />
                     </td>
                     <td className="px-3 py-2">
                       <input type="number" value={it.rate} min={0} step="0.01"
                         onChange={e => setItem(i,'rate',e.target.value)}
-                        className="w-24 border border-slate-200 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-teal-300" />
+                        className={clsx('w-24 text-right', cellInp)} />
                     </td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-700">
                       {fmt((parseFloat(it.requested_qty)||0) * (parseFloat(it.rate)||0))}
                     </td>
                     <td className="px-3 py-2">
                       <input value={it.source_bin} onChange={e => setItem(i,'source_bin',e.target.value)}
-                        className="w-24 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-300"
+                        className={clsx('w-24', cellInp)}
                         placeholder="Rack/Bin" />
                     </td>
                     <td className="px-3 py-2">
                       <input value={it.dest_bin} onChange={e => setItem(i,'dest_bin',e.target.value)}
-                        className="w-24 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-300"
+                        className={clsx('w-24', cellInp)}
                         placeholder="Rack/Bin" />
                     </td>
                     <td className="px-3 py-2">
                       <input value={it.condition_note} onChange={e => setItem(i,'condition_note',e.target.value)}
-                        className="w-32 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-300"
+                        className={clsx('w-32', cellInp)}
                         placeholder="Good / Damaged…" />
                     </td>
                     <td className="px-3 py-2">

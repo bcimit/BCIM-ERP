@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight, Search, Plus, Clock, CheckCircle2,
   Printer, Box, ShieldCheck, MapPin, HardHat,
-  FileText, Send, X
+  FileText, Send, X, Package
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import { minAPI, projectAPI, mrsAPI, vendorAPI, inventoryAPI } from '../../api/client';
+import { FIELD_HL } from '../../constants/fieldStyles';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import toast from 'react-hot-toast';
 import { useReactToPrint } from 'react-to-print';
@@ -315,7 +316,7 @@ function MINForm({ onClose, projects, contractors, qc }) {
     i.material_name.toLowerCase().includes(inventorySearch.toLowerCase())
   );
 
-  const inp = 'w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm outline-none focus:border-indigo-400 transition-all';
+  const inp = `w-full h-10 rounded-lg px-3 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
@@ -444,35 +445,46 @@ function MINForm({ onClose, projects, contractors, qc }) {
                 )}
               </h3>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
-                  className="w-72 bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm outline-none focus:border-indigo-400 transition"
+                  className={clsx('w-72 h-10 pl-9 pr-4 text-sm font-medium rounded-lg outline-none transition-all border', FIELD_HL)}
                   placeholder={formData.project_id ? 'Search stock in project store…' : 'Select project first'}
                   disabled={!formData.project_id}
                   value={inventorySearch}
                   onChange={e => setInventorySearch(e.target.value)}
                 />
                 {inventorySearch && formData.project_id && (
-                  <div className="absolute top-full right-0 mt-2 w-full bg-white border border-slate-200 rounded-xl max-h-60 overflow-y-auto z-[110] shadow-xl">
-                    {filteredInventory.map(i => (
+                  <div className="absolute top-full right-0 mt-2 w-full bg-white border border-slate-200 rounded-xl max-h-72 overflow-y-auto z-[110] shadow-2xl p-1.5">
+                    {filteredInventory.map(i => {
+                      const c = parseFloat(i.closing_stock) || 0;
+                      const m = parseFloat(i.min_stock) || 0;
+                      const r = parseFloat(i.reorder_level) || 0;
+                      const dot = c <= 0 ? 'bg-rose-500' : (m > 0 && c <= m) || (r > 0 && c <= r) ? 'bg-amber-500' : 'bg-emerald-500';
+                      return (
                       <button key={i.id}
-                        className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 flex justify-between items-center transition"
+                        className="w-full text-left px-2.5 py-2.5 rounded-lg hover:bg-indigo-50 flex justify-between items-center gap-2.5 group transition-colors"
                         onClick={() => { addItem(i); setInventorySearch(''); }}>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">{i.material_name}</p>
+                        <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', dot)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 truncate">{i.material_name}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
                             Available:&nbsp;
-                            <span className={clsx('font-bold', (i.closing_stock || 0) <= 0 ? 'text-red-500' : 'text-indigo-600')}>
+                            <span className={clsx('font-bold', c <= 0 ? 'text-red-500' : 'text-indigo-600')}>
                               {i.closing_stock ?? 0} {i.unit}
                             </span>
                             {(i.unit_rate || i.rate) ? ` · ₹${i.unit_rate || i.rate}/unit` : ''}
                           </p>
                         </div>
+                        <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 group-hover:bg-indigo-100 group-hover:text-indigo-600 rounded px-2 py-0.5 flex-shrink-0">{i.unit}</span>
                         <Plus className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                       </button>
-                    ))}
+                      );
+                    })}
                     {filteredInventory.length === 0 && (
-                      <div className="p-4 text-center text-xs text-slate-400">No matching items in project store</div>
+                      <div className="p-4 text-center text-xs text-slate-400 flex flex-col items-center gap-1.5">
+                        <Package className="w-5 h-5 text-slate-300" />
+                        No matching items in project store
+                      </div>
                     )}
                   </div>
                 )}
@@ -509,17 +521,17 @@ function MINForm({ onClose, projects, contractors, qc }) {
                         <td className="py-2.5 px-2">
                           <input type="number" min={0} placeholder="0" value={it.quantity_requested}
                             onChange={e => setItem(idx, 'quantity_requested', e.target.value)}
-                            className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs text-center font-mono outline-none focus:border-slate-400" />
+                            className={clsx('w-full h-9 rounded-lg px-2 text-xs text-center font-mono outline-none transition-all border', FIELD_HL)} />
                         </td>
                         <td className="py-2.5 px-2">
                           <input type="number" min={0} placeholder="0" required value={it.quantity_issued}
                             onChange={e => setItem(idx, 'quantity_issued', e.target.value)}
-                            className="w-full h-8 bg-indigo-50 border border-indigo-300 rounded-lg px-2 text-xs text-center font-mono font-bold text-indigo-700 outline-none focus:border-indigo-500" />
+                            className={clsx('w-full h-9 rounded-lg px-2 text-xs text-center font-mono font-bold text-indigo-700 outline-none transition-all border', FIELD_HL)} />
                         </td>
                         <td className="py-2.5 px-2">
                           <input placeholder="Activity / floor details" value={it.purpose}
                             onChange={e => setItem(idx, 'purpose', e.target.value)}
-                            className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs outline-none focus:border-indigo-400" />
+                            className={clsx('w-full h-9 rounded-lg px-3 text-xs outline-none transition-all border', FIELD_HL)} />
                         </td>
                         <td className="py-2.5 pl-2">
                           <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))}

@@ -16,6 +16,7 @@ import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import { poAPI, vendorAPI, projectAPI, mrsAPI, inventoryAPI } from '../../api/client';
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
+import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
 import POPrintTemplate from './POPrintTemplate';
 
@@ -269,7 +270,7 @@ function Field({ label, children }) {
   );
 }
 
-const INP = 'w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm text-slate-900 outline-none focus:border-indigo-400 transition-all';
+const INP = `w-full h-10 rounded-lg px-3 text-sm text-slate-900 font-medium outline-none transition-all border ${FIELD_HL}`;
 
 /* ─── New PO Modal ─── */
 function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpdate, isPending, prefill, editingPO }) {
@@ -628,25 +629,25 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                         if (unit) setItem(i, 'unit', unit);
                       }}
                     />
-                    <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                    <input className={`h-10 px-2 text-sm rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       placeholder="Brand / spec" value={it.make_model || ''} onChange={e => setItem(i, 'make_model', e.target.value)} />
-                    <input className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                    <input className={`h-10 px-2 text-sm rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       placeholder="HSN" value={it.hsn_code} onChange={e => setItem(i, 'hsn_code', e.target.value)} />
-                    <select className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-indigo-400 transition-all"
+                    <select className={`h-10 px-2 text-sm rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       value={it.unit} onChange={e => setItem(i, 'unit', e.target.value)}>
                       {it.unit && !UNITS.includes(it.unit) && <option key={it.unit}>{it.unit}</option>}
                       {UNITS.map(u => <option key={u}>{u}</option>)}
                     </select>
-                    <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-right outline-none focus:border-indigo-400 transition-all"
+                    <input type="number" className={`h-10 px-2 text-sm text-right rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       placeholder="0" value={it.quantity} onChange={e => setItem(i, 'quantity', e.target.value)} />
-                    <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-right outline-none focus:border-indigo-400 transition-all"
+                    <input type="number" className={`h-10 px-2 text-sm text-right rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       placeholder="0.00" value={it.rate} onChange={e => setItem(i, 'rate', e.target.value)} />
-                    <input type="number" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-center outline-none focus:border-indigo-400 transition-all"
+                    <input type="number" className={`h-10 px-2 text-sm text-center rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       value={it.gst_rate} onChange={e => setItem(i, 'gst_rate', e.target.value)} />
-                    <input type="date" className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs outline-none focus:border-indigo-400 transition-all"
+                    <input type="date" className={`h-10 px-2 text-xs rounded-lg outline-none transition-all border ${FIELD_HL}`}
                       value={it.req_date || ''} onChange={e => setItem(i, 'req_date', e.target.value)} />
                     <button onClick={() => removeItem(i)} disabled={items.length === 1}
-                      className="w-8 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                      className="w-8 h-10 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
