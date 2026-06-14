@@ -5,7 +5,12 @@ const XLSX    = require('xlsx');
 const { authenticate } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject, appendProjectScope } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
+const { runSchemaInit } = require('../utils/schemaInit');
 const router = express.Router();
+
+runSchemaInit('inventory_maximum_level', async () => {
+  await query(`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS maximum_level NUMERIC(15,3)`);
+});
 router.use(authenticate);
 router.use(loadProjectScope);
 
@@ -634,7 +639,7 @@ router.post('/', async (req, res) => {
 // PATCH /inventory/:id — update minimum/reorder levels
 router.patch('/:id', async (req, res) => {
   try {
-    const { minimum_level, reorder_level, unit_rate, category, major_head, dc_idc, remarks, unit } = req.body;
+    const { minimum_level, reorder_level, maximum_level, unit_rate, category, major_head, dc_idc, remarks, unit } = req.body;
     const check = await query(
       `SELECT i.id, i.project_id FROM inventory i JOIN projects p ON i.project_id = p.id WHERE i.id = $1 AND p.company_id = $2`,
       [req.params.id, req.user.company_id]
@@ -648,15 +653,16 @@ router.patch('/:id', async (req, res) => {
       `UPDATE inventory SET
          minimum_level = COALESCE($1, minimum_level),
          reorder_level = COALESCE($2, reorder_level),
-         unit_rate     = COALESCE($3, unit_rate),
-         category      = COALESCE($4, category),
-         major_head    = COALESCE($5, major_head),
-         dc_idc        = COALESCE($6, dc_idc),
-         remarks       = COALESCE($7, remarks),
-         unit          = COALESCE($8, unit),
+         maximum_level = COALESCE($3, maximum_level),
+         unit_rate     = COALESCE($4, unit_rate),
+         category      = COALESCE($5, category),
+         major_head    = COALESCE($6, major_head),
+         dc_idc        = COALESCE($7, dc_idc),
+         remarks       = COALESCE($8, remarks),
+         unit          = COALESCE($9, unit),
          last_updated  = NOW()
-       WHERE id = $9`,
-      [minimum_level, reorder_level, unit_rate, category, major_head, dc_idc, remarks, unit, req.params.id]
+       WHERE id = $10`,
+      [minimum_level, reorder_level, maximum_level, unit_rate, category, major_head, dc_idc, remarks, unit, req.params.id]
     );
     res.json({ message: 'Inventory updated' });
   } catch (err) {

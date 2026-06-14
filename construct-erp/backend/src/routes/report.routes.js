@@ -1325,4 +1325,131 @@ router.get('/stores/site-balance', async (req, res) => {
   } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
 });
 
+// ── S19: Min-Max Stock Report ────────────────────────────────────────────────
+router.get('/stores/min-max', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const params = [req.user.company_id];
+    const conditions = ['p.company_id = $1'];
+    applyProjectScope(req, conditions, params, 'p', project_id);
+    const { rows } = await query(`
+      SELECT
+        i.material_name,
+        i.unit,
+        i.category,
+        COALESCE(i.site_location, '-')                                                 AS location,
+        p.name                                                                          AS project_name,
+        ROUND(i.closing_stock::numeric, 3)                                             AS current_stock,
+        ROUND(COALESCE(i.minimum_level, 0)::numeric, 3)                               AS minimum_level,
+        ROUND(COALESCE(i.maximum_level, 0)::numeric, 3)                               AS maximum_level,
+        ROUND(COALESCE(i.reorder_level, 0)::numeric, 3)                               AS reorder_level,
+        ROUND(COALESCE(i.unit_rate, 0)::numeric, 2)                                   AS unit_rate,
+        CASE
+          WHEN i.minimum_level IS NOT NULL AND i.closing_stock < i.minimum_level       THEN 'Below Min'
+          WHEN i.maximum_level IS NOT NULL AND i.closing_stock > i.maximum_level       THEN 'Above Max'
+          ELSE 'Within Range'
+        END                                                                             AS stock_status
+      FROM inventory i
+      JOIN projects p ON p.id = i.project_id
+      WHERE ${conditions.join(' AND ')}
+        AND i.closing_stock > 0
+      ORDER BY
+        CASE WHEN i.minimum_level IS NOT NULL AND i.closing_stock < i.minimum_level THEN 0
+             WHEN i.maximum_level IS NOT NULL AND i.closing_stock > i.maximum_level THEN 1
+             ELSE 2 END,
+        i.material_name
+    `, params);
+    res.json({ data: rows });
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
+});
+
+// ── S20: Excess Stock Report ─────────────────────────────────────────────────
+router.get('/stores/excess-stock', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const params = [req.user.company_id];
+    const conditions = ['p.company_id = $1', 'i.maximum_level IS NOT NULL', 'i.closing_stock > i.maximum_level'];
+    applyProjectScope(req, conditions, params, 'p', project_id);
+    const { rows } = await query(`
+      SELECT
+        i.material_name,
+        i.unit,
+        i.category,
+        COALESCE(i.site_location, '-')                                                 AS location,
+        p.name                                                                          AS project_name,
+        ROUND(i.closing_stock::numeric, 3)                                             AS current_stock,
+        ROUND(i.maximum_level::numeric, 3)                                             AS maximum_level,
+        ROUND((i.closing_stock - i.maximum_level)::numeric, 3)                        AS excess_qty,
+        ROUND(COALESCE(i.unit_rate, 0)::numeric, 2)                                   AS unit_rate,
+        ROUND(((i.closing_stock - i.maximum_level) * COALESCE(i.unit_rate, 0))::numeric, 2) AS excess_value
+      FROM inventory i
+      JOIN projects p ON p.id = i.project_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY excess_value DESC
+    `, params);
+    res.json({ data: rows });
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
+});
+
+// ── P19: Rate Contract Utilization ───────────────────────────────────────────
+router.get('/procurement/rate-contracts', async (req, res) => {
+  try {
+    const { project_id, from_date, to_date, from, to } = req.query;
+    const params = [req.user.company_id];
+    const conditions = ['rc.company_id = $1'];
+    const dateFrom = from_date || from;
+    const dateTo   = to_date   || to;
+    let poDateFilter = '';
+    if (dateFrom && dateTo) {
+      params.push(dateFrom, dateTo);
+      poDateFilter = `AND po.po_date::date BETWEEN $${params.length - 1} AND $${params.length}`;
+    }
+    const { rows } = await query(`
+      WITH po_usage AS (
+        SELECT
+          lower(trim(poi.material_name))        AS material_key,
+          po.vendor_id,
+          SUM(poi.quantity)                     AS total_qty,
+          SUM(poi.quantity * poi.rate)          AS total_value,
+          COUNT(DISTINCT po.id)                 AS po_count,
+          AVG(poi.rate)                         AS avg_po_rate
+        FROM po_items poi
+        JOIN purchase_orders po ON po.id = poi.po_id
+        WHERE po.company_id = $1
+          AND po.status NOT IN ('rejected','cancelled')
+          ${poDateFilter}
+        GROUP BY lower(trim(poi.material_name)), po.vendor_id
+      )
+      SELECT
+        rc.id,
+        rc.material_name,
+        rc.unit,
+        v.name                                                                          AS vendor_name,
+        ROUND(rc.contracted_rate::numeric, 4)                                          AS contracted_rate,
+        rc.valid_from,
+        rc.valid_to,
+        rc.contracted_qty,
+        rc.status                                                                        AS contract_status,
+        COALESCE(pu.po_count, 0)                                                        AS po_count,
+        ROUND(COALESCE(pu.total_qty, 0)::numeric, 3)                                   AS utilized_qty,
+        ROUND(COALESCE(pu.avg_po_rate, 0)::numeric, 4)                                 AS avg_po_rate,
+        ROUND((COALESCE(pu.avg_po_rate, 0) - rc.contracted_rate)::numeric, 4)          AS rate_variance,
+        ROUND(CASE WHEN rc.contracted_rate > 0
+              THEN ((COALESCE(pu.avg_po_rate, 0) - rc.contracted_rate) / rc.contracted_rate) * 100
+              ELSE 0 END::numeric, 2)                                                   AS variance_pct,
+        CASE
+          WHEN rc.valid_to IS NULL OR rc.valid_to >= CURRENT_DATE THEN 'Active'
+          ELSE 'Expired'
+        END                                                                             AS validity_status
+      FROM rate_contracts rc
+      LEFT JOIN vendors v ON v.id = rc.vendor_id
+      LEFT JOIN po_usage pu ON lower(trim(pu.material_key)) = lower(trim(rc.material_name))
+        AND (rc.vendor_id IS NULL OR pu.vendor_id = rc.vendor_id)
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY rc.material_name
+    `, params);
+    res.json({ data: rows });
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
+});
+
 module.exports = router;

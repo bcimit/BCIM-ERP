@@ -1578,4 +1578,11 @@ export const bidOpportunityAPI = {
   removeCostItem: (id, iid) => api.delete(`/bid-opportunities/${id}/cost-items/${iid}`),
 };
 
+export const rateContractAPI = {
+  list:   ()      => api.get('/procurement/rate-contracts'),
+  create: (d)     => api.post('/procurement/rate-contracts', d),
+  update: (id, d) => api.patch(`/procurement/rate-contracts/${id}`, d),
+  delete: (id)    => api.delete(`/procurement/rate-contracts/${id}`),
+};
+
 export default api;
