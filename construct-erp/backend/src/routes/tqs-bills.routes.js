@@ -15,6 +15,7 @@ const {
 const { sendMail } = require('../services/mail.service');
 const logger = require('../utils/logger');
 const { runSchemaInit } = require('../utils/schemaInit');
+const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 
 
 const router = express.Router();
@@ -3041,7 +3042,8 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
 
     // Fetch bill base amounts for certified_net calculation
     const billRes = await query(
-      `SELECT b.basic_amount, b.gst_amount, b.total_amount, b.vendor_id, b.vendor_name, b.wo_number, b.po_number, b.project_id
+      `SELECT b.sl_number, b.bill_type, b.basic_amount, b.gst_amount, b.total_amount,
+              b.vendor_id, b.vendor_name, b.wo_number, b.po_number, b.project_id
        FROM tqs_bills b WHERE b.id = $1`,
       [req.params.id]
     );
@@ -3135,6 +3137,48 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
     await logHistory(req.params.id, 'accounts',
       `Accounts processed — Advance Rec: ₹${n(advance_recovered).toFixed(0)}, TDS: ₹${n(tds_deduction).toFixed(0)}, Net: ₹${certified_net.toFixed(0)} → Procurement`,
       req.user.id);
+
+    // ── Auto-post Journal Voucher for the booked bill ──────────────────────────
+    // Dr Expense (subcontractor 5100 for WO / material 5000 for PO) + Dr Input GST,
+    // Cr Accounts Payable (net of statutory withholdings) + Cr TDS + Cr Retention.
+    // Idempotent: a re-submission replaces the prior auto JV so the GL stays in sync.
+    try {
+      const total     = n(bill.total_amount);
+      const gst        = n(bill.gst_amount);
+      const expenseBase = total - gst;            // basic + transport + other charges
+      const tds         = n(tds_deduction);
+      const retention   = n(retention_money);
+      const apCredit    = total - tds - retention; // advance & other deductions settle via subledger/payment
+      const isWO        = (bill.bill_type === 'wo') || (!!bill.wo_number && !bill.po_number);
+      const expenseCode = isWO ? '5100' : '5000';
+      const ref         = bill.sl_number || req.params.id;
+
+      if (total > 0) {
+        // Remove any prior auto JV for this bill so amounts always reflect the latest certification
+        await query(
+          `DELETE FROM journal_entries WHERE company_id = $1 AND source = 'auto_tqs_bill' AND reference = $2`,
+          [req.user.company_id, ref]
+        ).catch(() => {});
+
+        const lines = [
+          { code: expenseCode, debit: expenseBase, description: `${isWO ? 'Subcontractor' : 'Material'} — ${bill.vendor_name || ''} ${ref}` },
+        ];
+        if (gst > 0)       lines.push({ code: '1300', debit: gst, description: `Input GST / ITC — ${ref}` });
+        lines.push({ code: '2000', credit: apCredit, description: `Payable to ${bill.vendor_name || 'vendor'} — ${ref}` });
+        if (tds > 0)       lines.push({ code: '2200', credit: tds, description: `TDS deducted — ${ref}` });
+        if (retention > 0) lines.push({ code: '2300', credit: retention, description: `Retention withheld — ${ref}` });
+
+        await postAutoJournalStandalone({
+          companyId: req.user.company_id,
+          userId:    req.user.id,
+          entryDate: accts_jv_date,
+          reference: ref,
+          narration: `Bill booking — ${bill.vendor_name || ''} (${ref})`,
+          source:    'auto_tqs_bill',
+          lines,
+        });
+      }
+    } catch (_) { /* best-effort: never block the accounts stage over JV posting */ }
 
     res.json({ data: { workflow_status: 'procurement', certified_net, total_deductions: totalDed } });
   } catch (err) {
