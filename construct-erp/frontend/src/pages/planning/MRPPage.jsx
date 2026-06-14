@@ -7,6 +7,9 @@ import {
 import { planningP6API, projectAPI, planningAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
+import { FIELD_HL } from '../../constants/fieldStyles';
+
+const MRP_INP = `w-full h-10 rounded-lg px-3 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
 
 const STATUSES = ['pending','ordered','partial','received','consumed'];
 const STATUS_CFG = {
@@ -47,54 +50,54 @@ function AddMRPModal({ projectId, activities, onClose }) {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Material Name *</label>
               <input value={form.material_name} onChange={e => set('material_name', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. TMT Steel Bars" />
+                className={MRP_INP} placeholder="e.g. TMT Steel Bars" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Material Code</label>
               <input value={form.material_code} onChange={e => set('material_code', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="MAT-001" />
+                className={MRP_INP} placeholder="MAT-001" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Specification</label>
             <input value={form.specification} onChange={e => set('specification', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Fe 500D, 12mm dia" />
+              className={MRP_INP} placeholder="e.g. Fe 500D, 12mm dia" />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
               <select value={form.unit} onChange={e => set('unit', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm">
+                className={MRP_INP}>
                 {['nos','MT','kg','m³','m²','LM','LS','bags','litres','sets'].map(u=><option key={u}>{u}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">BOQ Qty</label>
               <input type="number" value={form.boq_qty} onChange={e => set('boq_qty', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" min={0} />
+                className={MRP_INP} min={0} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Planned Qty *</label>
               <input type="number" value={form.planned_qty} onChange={e => set('planned_qty', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" min={0} />
+                className={MRP_INP} min={0} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Unit Rate (₹)</label>
               <input type="number" value={form.unit_rate} onChange={e => set('unit_rate', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" min={0} />
+                className={MRP_INP} min={0} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Required By</label>
               <input type="date" value={form.required_date} onChange={e => set('required_date', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" />
+                className={MRP_INP} />
             </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Linked Activity</label>
             <select value={form.activity_id} onChange={e => set('activity_id', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm">
+              className={MRP_INP}>
               <option value="">None</option>
               {activities.map(a => <option key={a.id} value={a.id}>{a.activity_code} — {a.activity_name}</option>)}
             </select>
@@ -102,7 +105,7 @@ function AddMRPModal({ projectId, activities, onClose }) {
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Vendor</label>
             <input value={form.vendor_name} onChange={e => set('vendor_name', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Preferred vendor" />
+              className={MRP_INP} placeholder="Preferred vendor" />
           </div>
           {form.planned_qty && form.unit_rate && (
             <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
@@ -171,7 +174,7 @@ export default function MRPPage() {
         </div>
         <div className="flex items-center gap-2">
           <select value={projectId} onChange={e => setProjectId(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm w-64 shadow-sm">
+            className={clsx('h-10 w-64 rounded-lg px-3 text-sm font-medium outline-none transition-all border', FIELD_HL)}>
             <option value="">— Select project —</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
@@ -274,7 +277,7 @@ export default function MRPPage() {
                           {editing?.id === m.id ? (
                             <select value={editing.status}
                               onChange={e => setEditing(ed => ({ ...ed, status: e.target.value }))}
-                              className="border rounded text-xs px-1 py-0.5">
+                              className={clsx('h-8 rounded text-xs px-2 outline-none transition-all border', FIELD_HL)}>
                               {STATUSES.map(s => <option key={s} value={s}>{STATUS_CFG[s]?.label}</option>)}
                             </select>
                           ) : (

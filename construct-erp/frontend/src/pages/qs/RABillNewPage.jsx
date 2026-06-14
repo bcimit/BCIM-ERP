@@ -706,17 +706,19 @@ export default function RABillNewPage() {
       <style>{`
         .ra-bill-modern .field-input {
           width: 100%;
-          height: 38px;
-          border: 1px solid #e2e8f0;
+          height: 40px;
+          border: 1px solid #378ADD;
           border-radius: 10px;
           padding: 0 12px;
           font-size: 13px;
+          font-weight: 500;
           color: #0f172a;
-          background: #ffffff;
+          background: #E6F1FB;
+          box-shadow: 0 0 0 3px rgba(55,138,221,0.15);
           outline: none;
           transition: border-color .15s, box-shadow .15s;
         }
-        .ra-bill-modern .field-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px #eef2ff; }
+        .ra-bill-modern .field-input:focus { border-color: #2569b3; }
         .ra-bill-modern input::-webkit-outer-spin-button,
         .ra-bill-modern input::-webkit-inner-spin-button { -webkit-appearance: none; }
         .ra-bill-modern input[type=number] { -moz-appearance: textfield; }
