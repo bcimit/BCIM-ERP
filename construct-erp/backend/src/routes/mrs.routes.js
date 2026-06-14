@@ -427,6 +427,22 @@ router.use(loadProjectScope);
   await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS md_included BOOLEAN DEFAULT TRUE`);
   // Reason captured when MD / Procurement cancel an item after full approval
   await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS cancel_reason TEXT`);
+  // New "Create Material Request" wizard fields (mockup parity)
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS mr_type TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS cost_center TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS wo_boq_reference TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS delivery_location TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS requester_employee_id TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS requester_contact TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS requester_email TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS justification TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS linked_activity TEXT`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS planned_usage_date DATE`);
+  await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS special_handling TEXT`);
+  await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS item_code TEXT`);
+  await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS category TEXT`);
+  await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS est_rate NUMERIC(14,2)`);
+  await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS preferred_vendor_id UUID`);
   console.log('[mrs] schema OK');
 })();
 
@@ -651,7 +667,12 @@ router.get('/:id', async (req, res) => {
 // POST /stores/mrs
 router.post('/', async (req, res) => {
   try {
-    const { project_id, department, head_office_project_name, site_incharge, required_by, priority, remarks, items } = req.body;
+    const {
+      project_id, department, head_office_project_name, site_incharge, required_by, priority, remarks, items,
+      mr_type, cost_center, wo_boq_reference, delivery_location,
+      requester_employee_id, requester_contact, requester_email,
+      justification, linked_activity, planned_usage_date, special_handling,
+    } = req.body;
     if (!project_id || !items?.length) {
       return res.status(400).json({ error: 'project_id and at least one item are required' });
     }
@@ -696,27 +717,33 @@ router.post('/', async (req, res) => {
 
       const mrs = await client.query(
         `INSERT INTO material_requisitions (
-           project_id, mrs_number, serial_no_formatted, department, 
-           head_office_project_name, site_incharge, required_by, 
-           priority, remarks, raised_by, status
+           project_id, mrs_number, serial_no_formatted, department,
+           head_office_project_name, site_incharge, required_by,
+           priority, remarks, raised_by, status,
+           mr_type, cost_center, wo_boq_reference, delivery_location,
+           requester_employee_id, requester_contact, requester_email,
+           justification, linked_activity, planned_usage_date, special_handling
          )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending') RETURNING *`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
         [
-          project_id, mrs_number, serial_no_formatted, department, 
-          head_office_project_name || proj.rows[0].name, 
-          site_incharge, required_by, priority || 'normal', remarks, req.user.id
+          project_id, mrs_number, serial_no_formatted, department,
+          head_office_project_name || proj.rows[0].name,
+          site_incharge, required_by, priority || 'normal', remarks, req.user.id,
+          mr_type || null, cost_center || null, wo_boq_reference || null, delivery_location || null,
+          requester_employee_id || null, requester_contact || null, requester_email || null,
+          justification || null, linked_activity || null, planned_usage_date || null, special_handling || null,
         ]
       );
 
       // Insert items
       const inserted = [];
       for (let i = 0; i < items.length; i++) {
-        const { material, qty, unit, purpose } = items[i];
+        const { material, qty, unit, purpose, item_code, category, est_rate, preferred_vendor_id } = items[i];
         if (!material || !qty || !unit) continue;
         const it = await client.query(
-          `INSERT INTO mrs_items (mrs_id, material_name, quantity, unit, purpose, sort_order)
-           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [mrs.rows[0].id, material, parseFloat(qty), unit, purpose, i + 1]
+          `INSERT INTO mrs_items (mrs_id, material_name, quantity, unit, purpose, sort_order, item_code, category, est_rate, preferred_vendor_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+          [mrs.rows[0].id, material, parseFloat(qty), unit, purpose, i + 1, item_code || null, category || null, est_rate ? parseFloat(est_rate) : null, preferred_vendor_id || null]
         );
         inserted.push(it.rows[0]);
       }

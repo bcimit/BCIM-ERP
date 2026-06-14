@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
-import { mrsAPI, projectAPI, inventoryAPI } from '../../api/client';
+import { mrsAPI, projectAPI, inventoryAPI, vendorAPI, budgetAPI } from '../../api/client';
+import VendorSelect from '../../components/shared/VendorSelect';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import toast from 'react-hot-toast';
 import MRSPrintTemplate from './MRSPrintTemplate';
@@ -27,6 +28,41 @@ import { CONSTRUCTION_UNITS as UNITS } from '../../constants/units';
 import { Z_INP, Z_CARD, Z_HEAD } from '../../constants/zohoStyles';
 import ZField from '../../components/shared/ZField';
 const DEFAULT_CATEGORIES = ['Masonry Works'];
+
+const MR_TYPE_OPTIONS = ['New Purchase', 'Internal Transfer', 'Return to Store', 'Tool & Equipment'];
+const COST_CENTER_OPTIONS = ['CC-Civil-Structural', 'CC-MEP', 'CC-Finishing', 'CC-Admin-General'];
+const DELIVERY_LOCATION_OPTIONS = ['Site Store – Zone A', 'Site Store – Zone B', 'Container Office', 'Main Warehouse'];
+const ITEM_CATEGORY_OPTIONS = ['Steel', 'Cement', 'Aggregate', 'Electrical', 'Plumbing', 'Finishing', 'Other'];
+const MRS_DRAFT_KEY = 'mrs_new_request_draft';
+
+const WIZARD_STEPS = ['Request Info', 'Material Items', 'Justification', 'Review & Submit'];
+
+function WizardSteps({ step }) {
+  return (
+    <div className="flex items-center gap-1 px-6 border-b border-slate-200 bg-white flex-shrink-0 overflow-x-auto">
+      {WIZARD_STEPS.map((label, i) => {
+        const n = i + 1;
+        const done = n < step;
+        const active = n === step;
+        return (
+          <div key={label} className={clsx(
+            'flex items-center gap-2 py-2.5 pr-5 text-xs font-semibold whitespace-nowrap relative',
+            done ? 'text-emerald-600' : active ? 'text-blue-600' : 'text-slate-400'
+          )}>
+            <span className={clsx(
+              'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
+              done ? 'bg-emerald-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
+            )}>
+              {done ? <Check className="w-3 h-3" /> : n}
+            </span>
+            {label}
+            {n < WIZARD_STEPS.length && <ChevronRight className="w-3.5 h-3.5 text-slate-300 ml-2" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const DEPARTMENT_OPTIONS = [
   { value: 'Projects', label: 'Projects' },
@@ -74,10 +110,14 @@ const PO_STATUS_CONFIG = {
 };
 
 const PRIORITY_CONFIG = {
-  normal:   { label: 'Normal',   cls: 'bg-slate-100 text-slate-900 font-medium border-slate-200' },
-  urgent:   { label: 'Urgent',   cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
-  critical: { label: 'Critical', cls: 'bg-red-50 text-red-600 border-red-200' },
+  low:    { label: 'Low',    emoji: '🟢', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  medium: { label: 'Medium', emoji: '🟡', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  high:   { label: 'High',   emoji: '🟠', cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+  urgent: { label: 'Urgent', emoji: '🔴', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
 };
+// Older records used a 3-value priority scheme — map them onto the new 4-value set for display
+const PRIORITY_ALIAS = { normal: 'medium', critical: 'urgent' };
+const normalizePriority = (p) => (PRIORITY_CONFIG[p] ? p : (PRIORITY_ALIAS[p] || 'medium'));
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
@@ -91,10 +131,10 @@ function StatusBadge({ status }) {
 }
 
 function PriorityBadge({ priority }) {
-  const cfg = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.normal;
+  const cfg = PRIORITY_CONFIG[normalizePriority(priority)];
   return (
-    <span className={clsx('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border', cfg.cls)}>
-      {cfg.label}
+    <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border', cfg.cls)}>
+      <span>{cfg.emoji}</span> {cfg.label}
     </span>
   );
 }
@@ -308,12 +348,17 @@ export default function MRSPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showWorkflowConfig, setShowWorkflowConfig] = useState(false);
   const [projectFilter, setProjectFilter] = useState(selectedProjectId || 'all');
-  const [items, setItems] = useState([{ material: '', qty: '', unit: 'Nos', purpose: '' }]);
+  const [items, setItems] = useState([{ material: '', qty: '', unit: 'Nos', purpose: '', item_code: '', category: '', est_rate: '', preferred_vendor_id: '' }]);
   const [attachments, setAttachments] = useState([]);
   const [dragOver, setDragOver] = useState(false);
+  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     project_id: '', department: 'Projects', head_office_project_name: '',
-    site_incharge: '', required_by: '', priority: 'normal', remarks: '',
+    site_incharge: '', required_by: '', priority: 'medium', remarks: '',
+    request_date: dayjs().format('YYYY-MM-DD'), mr_type: 'New Purchase',
+    wo_boq_reference: '', cost_center: '', delivery_location: '',
+    requester_name: '', requester_employee_id: '', requester_contact: '', requester_email: '',
+    justification: '', linked_activity: '', planned_usage_date: '', special_handling: '',
   });
 
   const qc = useQueryClient();
@@ -356,6 +401,28 @@ export default function MRSPage() {
     queryFn: () => inventoryAPI.categories().then(r => r.data?.data ?? []),
     staleTime: 5 * 60 * 1000,
   });
+
+  // Vendors — for "Preferred Vendor" dropdown on each item row
+  const { data: vendors = [] } = useQuery({
+    queryKey: ['vendors-list'],
+    queryFn: () => vendorAPI.list({ limit: 500 }).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    staleTime: 5 * 60 * 1000,
+  });
+  const vendorOptions = [
+    { value: '', label: 'Auto-assign' },
+    ...vendors.map(v => ({ value: v.id, label: v.name, sublabel: v.vendor_type || v.category })),
+  ];
+
+  // Budget summary for the selected project — drives "Budget Available" / "After This MR"
+  const { data: budgetLines = [] } = useQuery({
+    queryKey: ['mrs-budget', formData.project_id],
+    queryFn: () => budgetAPI.list({ project_id: formData.project_id }).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    enabled: !!formData.project_id && showForm,
+    staleTime: 60 * 1000,
+  });
+  const budgetAvailable = budgetLines.length
+    ? budgetLines.reduce((sum, b) => sum + ((parseFloat(b.budgeted_amount) || 0) - (parseFloat(b.actual_amount) || 0)), 0)
+    : null;
 
   // New Item modal state
   const [showNewItemModal, setShowNewItemModal] = useState(false);
@@ -471,6 +538,16 @@ export default function MRSPage() {
   useEffect(() => {
     setProjectFilter(selectedProjectId || 'all');
   }, [selectedProjectId]);
+
+  // Pre-fill requester info from the logged-in user when the form opens
+  useEffect(() => {
+    if (!showForm || formData.requester_name) return;
+    setFormData(p => ({
+      ...p,
+      requester_name: user?.name || user?.email || '',
+      requester_email: user?.email || '',
+    }));
+  }, [showForm]);
 
   useEffect(() => {
     if (!showForm || formData.project_id || !visibleProjects.length) return;
@@ -590,21 +667,81 @@ export default function MRSPage() {
 
   const resetForm = () => {
     setShowForm(false);
-    setItems([{ material: '', qty: '', unit: 'Nos', purpose: '' }]);
-    setFormData({ project_id: '', department: 'Projects', head_office_project_name: '', site_incharge: '', required_by: '', priority: 'normal', remarks: '' });
+    setStep(1);
+    setItems([{ material: '', qty: '', unit: 'Nos', purpose: '', item_code: '', category: '', est_rate: '', preferred_vendor_id: '' }]);
+    setFormData({
+      project_id: '', department: 'Projects', head_office_project_name: '',
+      site_incharge: '', required_by: '', priority: 'medium', remarks: '',
+      request_date: dayjs().format('YYYY-MM-DD'), mr_type: 'New Purchase',
+      wo_boq_reference: '', cost_center: '', delivery_location: '',
+      requester_name: '', requester_employee_id: '', requester_contact: '', requester_email: '',
+      justification: '', linked_activity: '', planned_usage_date: '', special_handling: '',
+    });
     setAttachments([]);
     setDragOver(false);
   };
 
+  // Step-by-step validation, mirrors required (*) fields in the mockup
+  const STEP_VALIDATORS = {
+    1: () => {
+      if (!formData.project_id) return 'Please select a Project / Site';
+      if (!formData.required_by) return 'Please enter the Required By date';
+      if (!formData.mr_type) return 'Please select an MR Type';
+      if (!formData.requester_name) return 'Please enter the Requester Name';
+      if (!formData.department) return 'Please select a Department';
+      return null;
+    },
+    2: () => {
+      if (items.every(i => !i.material || !i.qty)) return 'Please add at least one material item with quantity';
+      return null;
+    },
+    3: () => {
+      if (!formData.justification?.trim()) return 'Please enter a Reason / Justification';
+      return null;
+    },
+  };
+
+  const goNext = () => {
+    const err = STEP_VALIDATORS[step]?.();
+    if (err) return toast.error(err);
+    setStep(s => Math.min(s + 1, WIZARD_STEPS.length));
+  };
+  const goBack = () => setStep(s => Math.max(s - 1, 1));
+
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(MRS_DRAFT_KEY, JSON.stringify({ formData, items }));
+      toast.success('Draft saved locally');
+    } catch {
+      toast.error('Could not save draft');
+    }
+  };
+
+  const loadDraft = () => {
+    try {
+      const raw = localStorage.getItem(MRS_DRAFT_KEY);
+      if (!raw) return toast.error('No saved draft found');
+      const { formData: fd, items: it } = JSON.parse(raw);
+      if (fd) setFormData(fd);
+      if (it?.length) setItems(it);
+      toast.success('Draft restored');
+    } catch {
+      toast.error('Could not restore draft');
+    }
+  };
+
   const handleSubmit = () => {
-    if (!formData.project_id || !formData.required_by || items.every(i => !i.material || !i.qty)) {
-      return toast.error('Please fill all required fields');
+    for (const n of [1, 2, 3]) {
+      const err = STEP_VALIDATORS[n]?.();
+      if (err) { setStep(n); return toast.error(err); }
     }
     createMutation.mutate({
       ...formData,
       items: items.filter(i => i.material && i.qty),
       required_by: dayjs(formData.required_by).format('YYYY-MM-DD'),
+      planned_usage_date: formData.planned_usage_date ? dayjs(formData.planned_usage_date).format('YYYY-MM-DD') : null,
     });
+    localStorage.removeItem(MRS_DRAFT_KEY);
   };
 
   const [showMDModal, setShowMDModal] = useState(false);
@@ -935,6 +1072,21 @@ export default function MRSPage() {
     );
   }
 
+  // ── Wizard derived values (New MR form footer / summary panels) ──
+  const readyItems = items.filter(i => i.material && i.qty);
+  const itemsWithValue = readyItems.map(i => {
+    const qty = parseFloat(i.qty) || 0;
+    const rate = parseFloat(i.est_rate) || 0;
+    return { ...i, estValue: qty * rate, stock: itemStockStatus(i.material) };
+  });
+  const estTotalValue = itemsWithValue.reduce((sum, i) => sum + i.estValue, 0);
+  const needPurchaseCount = itemsWithValue.filter(i => !i.stock || i.stock.state === 'out' || i.stock.state === 'low').length;
+  const inStockCount = itemsWithValue.filter(i => i.stock && i.stock.state === 'ok').length;
+  const afterThisMr = budgetAvailable !== null ? budgetAvailable - estTotalValue : null;
+  const fmtINR = (n) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
+  const requesterInitials = (formData.requester_name || '?')
+    .split(' ').filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
+
   return (
     <>
     <div style={{ background: Theme.pageBg, minHeight: '100vh' }}>
@@ -1186,9 +1338,10 @@ export default function MRSPage() {
               <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Priority Split</span>
             </div>
             <div className="space-y-2.5">
-              <StatBar label="Normal"   value={allMRS.filter(m => !m.priority || m.priority === 'normal').length}   total={allMRS.length} color="bg-slate-400" />
-              <StatBar label="Urgent"   value={allMRS.filter(m => m.priority === 'urgent').length}                  total={allMRS.length} color="bg-yellow-400" />
-              <StatBar label="Critical" value={allMRS.filter(m => m.priority === 'critical').length}                total={allMRS.length} color="bg-red-500" />
+              <StatBar label="Low"    value={allMRS.filter(m => normalizePriority(m.priority) === 'low').length}    total={allMRS.length} color="bg-emerald-400" />
+              <StatBar label="Medium" value={allMRS.filter(m => normalizePriority(m.priority) === 'medium').length} total={allMRS.length} color="bg-amber-400" />
+              <StatBar label="High"   value={allMRS.filter(m => normalizePriority(m.priority) === 'high').length}   total={allMRS.length} color="bg-orange-400" />
+              <StatBar label="Urgent" value={allMRS.filter(m => normalizePriority(m.priority) === 'urgent').length} total={allMRS.length} color="bg-rose-500" />
             </div>
           </div>
 
@@ -1211,9 +1364,9 @@ export default function MRSPage() {
 
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-3.5 flex-shrink-0 bg-white border-b border-slate-200">
-              <div>
-                <p className="text-[15px] font-semibold text-slate-800">Create Material Requisition</p>
-                <p className="text-xs text-slate-400 mt-0.5">Multi-stage approval document</p>
+              <div className="flex items-center gap-3">
+                <div className="text-xs text-slate-400">Procurement <span className="text-slate-300">›</span> Material Requests <span className="text-slate-300">›</span> <b className="text-slate-700">New MR</b></div>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-mono">Auto-generated</span>
               </div>
               <button
                 onClick={resetForm}
@@ -1223,6 +1376,8 @@ export default function MRSPage() {
               </button>
             </div>
 
+            <WizardSteps step={step} />
+
             {/* Modal body */}
             <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
               <div className="flex flex-col lg:flex-row gap-4">
@@ -1230,11 +1385,32 @@ export default function MRSPage() {
               {/* ── Main column ── */}
               <div className="flex-1 min-w-0 space-y-5">
 
-              {/* Project Details */}
+              {/* ════════ STEP 1 — Request Info ════════ */}
+              {step === 1 && <>
+              {/* Request Header */}
               <div className={Z_CARD}>
-                <h3 className={Z_HEAD}>Project Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 p-4">
-                  <ZField label="Project *">
+                <h3 className={Z_HEAD}>Request Header</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3.5 p-4">
+                  <ZField label="MR Number">
+                    <input className={clsx(Z_INP, 'bg-slate-50 text-slate-400 font-mono')} value="Auto-generated" readOnly />
+                  </ZField>
+                  <ZField label="Request Date *">
+                    <input type="date" className={Z_INP} value={formData.request_date}
+                      onChange={e => setFormData(p => ({ ...p, request_date: e.target.value }))} />
+                  </ZField>
+                  <ZField label="Required By Date *">
+                    <input type="date" className={Z_INP} value={formData.required_by}
+                      onChange={e => setFormData(p => ({ ...p, required_by: e.target.value }))} />
+                  </ZField>
+                  <ZField label="MR Type *">
+                    <select className={Z_INP} value={formData.mr_type}
+                      onChange={e => setFormData(p => ({ ...p, mr_type: e.target.value }))}>
+                      {MR_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </ZField>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 px-4 pb-4">
+                  <ZField label="Project / Site *">
                     <SearchableSelect
                       value={formData.project_id}
                       onChange={v => setFormData(p => ({ ...p, project_id: v }))}
@@ -1245,58 +1421,27 @@ export default function MRSPage() {
                       className="!h-9 !rounded-md !border-slate-300 !shadow-none !bg-white focus:!border-blue-500 focus:!ring-1 focus:!ring-blue-500/30"
                     />
                   </ZField>
-                  <ZField label="Department">
-                    <SearchableSelect
-                      value={formData.department}
-                      onChange={v => setFormData(p => ({ ...p, department: v }))}
-                      options={DEPARTMENT_OPTIONS}
-                      placeholder="Select department…"
-                      searchPlaceholder="Search departments…"
-                      footerLabel="departments"
-                      className="!h-9 !rounded-md !border-slate-300 !shadow-none !bg-white focus:!border-blue-500 focus:!ring-1 focus:!ring-blue-500/30"
-                    />
+                  <ZField label="Work Order / BOQ Reference">
+                    <input className={Z_INP} placeholder="e.g. WO-2026-041 – Civil Works"
+                      value={formData.wo_boq_reference}
+                      onChange={e => setFormData(p => ({ ...p, wo_boq_reference: e.target.value }))} />
                   </ZField>
-                  <ZField label="HO Project Name">
-                    <input
-                      className={Z_INP}
-                      placeholder="HO project name"
-                      value={formData.head_office_project_name}
-                      onChange={e => setFormData(p => ({ ...p, head_office_project_name: e.target.value }))}
-                    />
+                  <ZField label="Cost Center">
+                    <input className={Z_INP} list="cost-centers" placeholder="Select / type cost center"
+                      value={formData.cost_center}
+                      onChange={e => setFormData(p => ({ ...p, cost_center: e.target.value }))} />
+                    <datalist id="cost-centers">{COST_CENTER_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
                   </ZField>
-                  <ZField label="Site Incharge">
-                    <input
-                      className={Z_INP}
-                      placeholder="Enter name"
-                      value={formData.site_incharge}
-                      onChange={e => setFormData(p => ({ ...p, site_incharge: e.target.value }))}
-                    />
-                  </ZField>
-                  <ZField label="Required By *">
-                    <input
-                      type="date"
-                      className={Z_INP}
-                      value={formData.required_by}
-                      onChange={e => setFormData(p => ({ ...p, required_by: e.target.value }))}
-                    />
-                  </ZField>
-                  <ZField label="Priority">
-                    <div className="flex gap-1.5 h-9">
-                      {[
-                        { v: 'normal',   label: 'Normal',   on: 'bg-slate-700 text-white border-slate-700',   off: 'bg-white text-slate-500 border-slate-300 hover:border-slate-400' },
-                        { v: 'urgent',   label: 'Urgent',   on: 'bg-amber-500 text-white border-amber-500',   off: 'bg-white text-slate-500 border-slate-300 hover:border-amber-300' },
-                        { v: 'critical', label: 'Critical', on: 'bg-rose-600 text-white border-rose-600', off: 'bg-white text-slate-500 border-slate-300 hover:border-rose-300' },
-                      ].map(p => (
-                        <button
-                          key={p.v}
-                          type="button"
-                          onClick={() => setFormData(d => ({ ...d, priority: p.v }))}
-                          className={clsx(
-                            'flex-1 rounded-md border text-xs font-semibold transition-colors',
-                            formData.priority === p.v ? p.on : p.off
-                          )}
-                        >
-                          {p.label}
+                </div>
+                <div className="px-4 pb-4">
+                  <ZField label="Priority *">
+                    <div className="flex gap-2 h-9">
+                      {Object.entries(PRIORITY_CONFIG).map(([v, c]) => (
+                        <button key={v} type="button"
+                          onClick={() => setFormData(d => ({ ...d, priority: v }))}
+                          className={clsx('flex-1 rounded-md border text-xs font-semibold transition-colors',
+                            formData.priority === v ? c.cls + ' ring-1 ring-current/30' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400')}>
+                          {c.emoji} {c.label}
                         </button>
                       ))}
                     </div>
@@ -1304,118 +1449,219 @@ export default function MRSPage() {
                 </div>
               </div>
 
-              {/* Material Items */}
+              {/* Requester Information */}
+              <div className={Z_CARD}>
+                <h3 className={Z_HEAD}><UserRound className="w-3.5 h-3.5 inline mr-1.5 text-blue-500" />Requester Information</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <ZField label="Requester Name *">
+                        <input className={Z_INP} placeholder="Full name" value={formData.requester_name}
+                          onChange={e => setFormData(p => ({ ...p, requester_name: e.target.value }))} />
+                      </ZField>
+                      <ZField label="Employee ID">
+                        <input className={clsx(Z_INP, 'font-mono')} placeholder="BCIM-EMP-…" value={formData.requester_employee_id}
+                          onChange={e => setFormData(p => ({ ...p, requester_employee_id: e.target.value }))} />
+                      </ZField>
+                    </div>
+                    <div className="flex gap-3 items-center rounded-md border border-blue-100 bg-blue-50 px-3.5 py-3">
+                      <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">{requesterInitials}</div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-blue-700 truncate">{formData.requester_name || 'Requester'}</p>
+                        <p className="text-[11px] text-slate-600 truncate">{formData.department || '—'}{formData.project_id ? ` · ${visibleProjects.find(p => p.id === formData.project_id)?.name || ''}` : ''}</p>
+                        <div className="flex gap-1.5 mt-1">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Active</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <ZField label="Department *">
+                        <SearchableSelect
+                          value={formData.department}
+                          onChange={v => setFormData(p => ({ ...p, department: v }))}
+                          options={DEPARTMENT_OPTIONS}
+                          placeholder="Select department…"
+                          searchPlaceholder="Search departments…"
+                          footerLabel="departments"
+                          className="!h-9 !rounded-md !border-slate-300 !shadow-none !bg-white focus:!border-blue-500 focus:!ring-1 focus:!ring-blue-500/30"
+                        />
+                      </ZField>
+                      <ZField label="Delivery Location">
+                        <input className={Z_INP} list="delivery-locations" placeholder="Select / type location"
+                          value={formData.delivery_location}
+                          onChange={e => setFormData(p => ({ ...p, delivery_location: e.target.value }))} />
+                        <datalist id="delivery-locations">{DELIVERY_LOCATION_OPTIONS.map(c => <option key={c} value={c} />)}</datalist>
+                      </ZField>
+                    </div>
+                    <ZField label="Contact / Mobile">
+                      <input className={Z_INP} placeholder="+91 …" value={formData.requester_contact}
+                        onChange={e => setFormData(p => ({ ...p, requester_contact: e.target.value }))} />
+                    </ZField>
+                    <ZField label="Email for Notification">
+                      <input type="email" className={Z_INP} placeholder="name@bcim…" value={formData.requester_email}
+                        onChange={e => setFormData(p => ({ ...p, requester_email: e.target.value }))} />
+                    </ZField>
+                  </div>
+                </div>
+                <div className="px-4 pb-4">
+                  <ZField label="Site Incharge">
+                    <input className={Z_INP} placeholder="Enter name" value={formData.site_incharge}
+                      onChange={e => setFormData(p => ({ ...p, site_incharge: e.target.value }))} />
+                  </ZField>
+                </div>
+              </div>
+              </>}
+
+              {/* ════════ STEP 2 — Material Items ════════ */}
+              {step === 2 && <>
+              <div className="flex gap-2.5 rounded-md border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <span>Stock levels are as of today from the project store. Items marked <strong>Low / Nil</strong> are auto-flagged for purchase order.</span>
+              </div>
               <div className={Z_CARD}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                  <div>
-                    <h3 className="text-[13px] font-semibold text-slate-700">Material Items</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Select from store ledger or add new items</p>
+                  <h3 className="text-[13px] font-semibold text-slate-700"><Package className="w-3.5 h-3.5 inline mr-1.5 text-blue-500" />Item List</h3>
+                  <div className="flex items-center gap-2">
+                    <button title="Coming soon" disabled className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-semibold text-slate-400 border border-slate-200 cursor-not-allowed">
+                      <Upload className="w-3 h-3" /> Import from BOQ
+                    </button>
+                    <button title="Coming soon" disabled className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-semibold text-slate-400 border border-slate-200 cursor-not-allowed">
+                      <Upload className="w-3 h-3" /> Import Excel
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setItems([...items, { material: '', qty: '', unit: 'Nos', purpose: '' }])}
-                    className="flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> Add Row
-                  </button>
                 </div>
-                <div className="hidden lg:grid gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100" style={{ gridTemplateColumns: '36px minmax(280px,2fr) 110px 100px 90px minmax(200px,2fr) 36px' }}>
-                  {['#', 'Material Name', 'Quantity', 'Unit', 'Stock', 'Purpose', ''].map((h, i) => (
-                    <div key={i} className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{h}</div>
-                  ))}
-                </div>
-                <div>
-                  {items.map((item, idx) => {
-                    const stock = itemStockStatus(item.material);
-                    return (
-                    <div key={idx} className={clsx(
-                      'grid grid-cols-1 lg:grid-cols-[36px_minmax(280px,2fr)_110px_100px_90px_minmax(200px,2fr)_36px] gap-2 items-center px-4 py-2.5 border-b border-slate-100 last:border-b-0',
-                      idx % 2 === 1 && 'bg-slate-50/60'
-                    )}>
-                      <div className="hidden lg:flex items-center justify-center text-sm font-semibold text-slate-400" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{idx + 1}</div>
-                      <MaterialCombobox
-                        value={item.material}
-                        inventoryItems={inventoryItems}
-                        onChange={(materialName, unit) => {
-                          const n = [...items];
-                          n[idx].material = materialName;
-                          if (unit) n[idx].unit = unit;
-                          setItems(n);
-                        }}
-                        onNewItem={(prefill) => {
-                          setNewItemTargetIdx(idx);
-                          setNewItemForm(f => ({ ...f, material_name: prefill || '', category: '', category_custom: '', unit: item.unit || 'Nos' }));
-                          setCategoryMode('select');
-                          setShowNewItemModal(true);
-                        }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="0"
-                        className={clsx(Z_INP, 'text-right')}
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                        value={item.qty}
-                        onChange={e => { const n = [...items]; n[idx].qty = e.target.value; setItems(n); }}
-                      />
-                      <select
-                        className={clsx(Z_INP, 'px-2')}
-                        value={item.unit}
-                        onChange={e => { const n = [...items]; n[idx].unit = e.target.value; setItems(n); }}
-                      >
-                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                      <div className={clsx(
-                        'h-9 flex items-center justify-center rounded-md border text-xs font-semibold',
-                        !item.material ? 'border-slate-200 text-slate-400 bg-slate-50' :
-                        !stock ? 'border-slate-200 text-slate-500 bg-slate-50' :
-                        stock.state === 'out' ? 'border-rose-200 bg-rose-50 text-rose-600' :
-                        stock.state === 'low' ? 'border-amber-200 bg-amber-50 text-amber-600' :
-                        'border-emerald-200 bg-emerald-50 text-emerald-600'
-                      )}>
-                        {!item.material ? '—' : !stock ? 'New' : stock.state === 'out' ? 'Out' : stock.value}
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="Intended use"
-                        className={Z_INP}
-                        value={item.purpose}
-                        onChange={e => { const n = [...items]; n[idx].purpose = e.target.value; setItems(n); }}
-                      />
-                      <button
-                        onClick={() => { if (items.length > 1) setItems(items.filter((_, i) => i !== idx)); }}
-                        disabled={items.length === 1}
-                        className="w-9 h-9 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors justify-self-end lg:justify-self-center"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1100px]">
+                    <div className="grid gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-500 uppercase tracking-wide" style={{ gridTemplateColumns: '32px 100px minmax(220px,2fr) 110px 80px 80px 100px 110px 90px minmax(160px,1.5fr) 150px 32px' }}>
+                      {['#', 'Item Code', 'Material Description', 'Category', 'UOM', 'Req. Qty', 'Est. Rate', 'Est. Value', 'Stock', 'Purpose / Usage', 'Preferred Vendor', ''].map((h, i) => (
+                        <div key={i} className={i >= 5 && i <= 7 ? 'text-right' : ''}>{h}</div>
+                      ))}
                     </div>
-                    );
-                  })}
-                </div>
-                {/* Total quantity footer */}
-                <div className="hidden lg:grid gap-2 px-4 py-2.5 bg-slate-50 border-t border-slate-100" style={{ gridTemplateColumns: '36px minmax(280px,2fr) 110px 100px 90px minmax(200px,2fr) 36px' }}>
-                  <div />
-                  <div className="text-xs font-semibold text-slate-600 self-center">Total Requested Quantity</div>
-                  <div className="text-sm font-bold text-blue-600 text-right self-center" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                    {items.reduce((sum, i) => sum + (parseFloat(i.qty) || 0), 0)}
+                    {items.map((item, idx) => {
+                      const stock = itemStockStatus(item.material);
+                      const qty = parseFloat(item.qty) || 0;
+                      const rate = parseFloat(item.est_rate) || 0;
+                      const estVal = qty * rate;
+                      return (
+                      <div key={idx} className={clsx('grid gap-2 items-center px-4 py-2 border-b border-slate-100 last:border-b-0', idx % 2 === 1 && 'bg-slate-50/60')}
+                        style={{ gridTemplateColumns: '32px 100px minmax(220px,2fr) 110px 80px 80px 100px 110px 90px minmax(160px,1.5fr) 150px 32px' }}>
+                        <div className="text-center text-xs font-semibold text-slate-400 font-mono">{idx + 1}</div>
+                        <input className={clsx(Z_INP, 'font-mono !px-2')} placeholder="Code" value={item.item_code}
+                          onChange={e => { const n = [...items]; n[idx].item_code = e.target.value; setItems(n); }} />
+                        <MaterialCombobox
+                          value={item.material}
+                          inventoryItems={inventoryItems}
+                          onChange={(materialName, unit) => {
+                            const n = [...items];
+                            n[idx].material = materialName;
+                            if (unit) n[idx].unit = unit;
+                            const inv = inventoryItems.find(i => i.material_name === materialName);
+                            if (inv) { n[idx].category = inv.category || n[idx].category; n[idx].item_code = inv.item_code || n[idx].item_code; }
+                            setItems(n);
+                          }}
+                          onNewItem={(prefill) => {
+                            setNewItemTargetIdx(idx);
+                            setNewItemForm(f => ({ ...f, material_name: prefill || '', category: '', category_custom: '', unit: item.unit || 'Nos' }));
+                            setCategoryMode('select');
+                            setShowNewItemModal(true);
+                          }}
+                        />
+                        <select className={clsx(Z_INP, '!px-2')} value={item.category}
+                          onChange={e => { const n = [...items]; n[idx].category = e.target.value; setItems(n); }}>
+                          <option value="">—</option>
+                          {ITEM_CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select className={clsx(Z_INP, '!px-1')} value={item.unit}
+                          onChange={e => { const n = [...items]; n[idx].unit = e.target.value; setItems(n); }}>
+                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                        <input type="number" placeholder="0" className={clsx(Z_INP, 'text-right font-mono !px-2')} value={item.qty}
+                          onChange={e => { const n = [...items]; n[idx].qty = e.target.value; setItems(n); }} />
+                        <input type="number" placeholder="0" className={clsx(Z_INP, 'text-right font-mono !px-2')} value={item.est_rate}
+                          onChange={e => { const n = [...items]; n[idx].est_rate = e.target.value; setItems(n); }} />
+                        <div className="text-right font-mono text-xs font-semibold text-slate-700">{estVal ? estVal.toLocaleString('en-IN') : '—'}</div>
+                        <div className="flex justify-center">
+                          {!item.material ? <span className="text-xs text-slate-300">—</span> :
+                           !stock ? <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">New</span> :
+                           stock.state === 'out' ? <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">Nil</span> :
+                           stock.state === 'low' ? <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Low ({stock.value})</span> :
+                           <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">OK ({stock.value})</span>}
+                        </div>
+                        <input type="text" placeholder="Purpose / activity" className={Z_INP} value={item.purpose}
+                          onChange={e => { const n = [...items]; n[idx].purpose = e.target.value; setItems(n); }} />
+                        <VendorSelect
+                          value={item.preferred_vendor_id}
+                          options={vendorOptions}
+                          onChange={v => { const n = [...items]; n[idx].preferred_vendor_id = v; setItems(n); }}
+                          placeholder="Auto-assign"
+                          className="!h-9 !text-xs !font-medium"
+                        />
+                        <button onClick={() => { if (items.length > 1) setItems(items.filter((_, i) => i !== idx)); }}
+                          disabled={items.length === 1}
+                          className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 disabled:opacity-30 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      );
+                    })}
                   </div>
-                  <div className="col-span-4" />
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+                  <button
+                    onClick={() => setItems([...items, { material: '', qty: '', unit: 'Nos', purpose: '', item_code: '', category: '', est_rate: '', preferred_vendor_id: '' }])}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                    <Plus className="w-3.5 h-3.5" /> Add Item
+                  </button>
+                  <div className="text-sm">
+                    <span className="text-slate-500">Est. Total Value: </span>
+                    <span className="font-bold text-blue-600 font-mono">{fmtINR(estTotalValue)}</span>
+                  </div>
+                </div>
+              </div>
+              </>}
+
+              {/* ════════ STEP 3 — Justification ════════ */}
+              {step === 3 && <>
+              <div className={Z_CARD}>
+                <h3 className={Z_HEAD}>Justification &amp; Notes</h3>
+                <div className="p-4 space-y-3.5">
+                  <ZField label="Reason / Justification *">
+                    <textarea rows={3} className={clsx(Z_INP, 'h-auto py-2 resize-none')}
+                      placeholder="Why are these materials required?"
+                      value={formData.justification}
+                      onChange={e => setFormData(p => ({ ...p, justification: e.target.value }))} />
+                  </ZField>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    <ZField label="Linked Activity / Milestone">
+                      <input className={Z_INP} placeholder="e.g. L3 Slab Casting – Block A"
+                        value={formData.linked_activity}
+                        onChange={e => setFormData(p => ({ ...p, linked_activity: e.target.value }))} />
+                    </ZField>
+                    <ZField label="Planned Usage Date">
+                      <input type="date" className={Z_INP} value={formData.planned_usage_date}
+                        onChange={e => setFormData(p => ({ ...p, planned_usage_date: e.target.value }))} />
+                    </ZField>
+                  </div>
+                  <ZField label="Special Handling / Instructions">
+                    <textarea rows={2} className={clsx(Z_INP, 'h-auto py-2 resize-none')}
+                      placeholder="Any special storage, safety, or handling notes…"
+                      value={formData.special_handling}
+                      onChange={e => setFormData(p => ({ ...p, special_handling: e.target.value }))} />
+                  </ZField>
+                  <ZField label="Remarks">
+                    <textarea rows={2} className={clsx(Z_INP, 'h-auto py-2 resize-none')}
+                      placeholder="Additional notes…"
+                      value={formData.remarks}
+                      onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))} />
+                  </ZField>
                 </div>
               </div>
 
-              {/* Remarks */}
+              {/* Attachments */}
               <div className={Z_CARD}>
-                <h3 className={Z_HEAD}>Remarks</h3>
-                <div className="p-4">
-                  <textarea
-                    rows={3}
-                    placeholder="Additional notes or special instructions…"
-                    className={clsx(Z_INP, 'h-auto py-2 resize-none')}
-                    value={formData.remarks}
-                    onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))}
-                  />
-                </div>
-
-                <h3 className={Z_HEAD}>Attachments</h3>
+                <h3 className={Z_HEAD}>Supporting Documents</h3>
                 <div className="p-4">
                   <label
                     onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -1426,95 +1672,162 @@ export default function MRSPage() {
                       const files = Array.from(e.dataTransfer.files || []);
                       if (files.length) setAttachments(a => [...a, ...files]);
                     }}
-                    className={clsx(
-                      'flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors',
-                      dragOver ? 'border-blue-400 bg-blue-50/60' : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/30'
-                    )}
-                  >
+                    className={clsx('flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors',
+                      dragOver ? 'border-blue-400 bg-blue-50/60' : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/30')}>
                     <Upload className="w-5 h-5 text-blue-500" />
-                    <span className="text-sm font-medium text-slate-700">Drag &amp; drop files here, or click to browse</span>
-                    <span className="text-xs text-slate-400">Supported formats: PDF, JPG, PNG, XLSX</span>
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png,.xlsx"
-                      className="hidden"
-                      onChange={e => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length) setAttachments(a => [...a, ...files]);
-                        e.target.value = '';
-                      }}
-                    />
+                    <span className="text-sm font-medium text-slate-700">Drag &amp; drop BOQ extracts, drawings, or site photos here</span>
+                    <span className="text-xs text-slate-400">PDF, JPG, PNG, XLSX, DWG – max 10MB each</span>
+                    <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.dwg" className="hidden"
+                      onChange={e => { const files = Array.from(e.target.files || []); if (files.length) setAttachments(a => [...a, ...files]); e.target.value = ''; }} />
                   </label>
                   {attachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
                       {attachments.map((f, i) => (
-                        <span key={i} className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
-                          <FileText className="w-3 h-3 text-slate-400" />
-                          {f.name}
+                        <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-md bg-slate-50 border border-slate-200">
+                          <FileText className="w-4 h-4 text-rose-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
+                            <p className="text-[10px] text-slate-400">{(f.size / 1024).toFixed(0)} KB</p>
+                          </div>
                           <button onClick={() => setAttachments(a => a.filter((_, j) => j !== i))} className="text-slate-400 hover:text-rose-500">
-                            <X className="w-3 h-3" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
-                        </span>
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
+              </>}
+
+              {/* ════════ STEP 4 — Review & Submit ════════ */}
+              {step === 4 && <>
+              <div className={Z_CARD}>
+                <h3 className={Z_HEAD}>Request Header</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 p-4 text-sm">
+                  {[
+                    ['Project', visibleProjects.find(p => p.id === formData.project_id)?.name || '—'],
+                    ['MR Type', formData.mr_type],
+                    ['Request Date', formData.request_date ? dayjs(formData.request_date).format('DD MMM YYYY') : '—'],
+                    ['Required By', formData.required_by ? dayjs(formData.required_by).format('DD MMM YYYY') : '—'],
+                    ['Cost Center', formData.cost_center || '—'],
+                    ['WO / BOQ Ref', formData.wo_boq_reference || '—'],
+                    ['Department', formData.department || '—'],
+                    ['Priority', `${PRIORITY_CONFIG[normalizePriority(formData.priority)].emoji} ${PRIORITY_CONFIG[normalizePriority(formData.priority)].label}`],
+                  ].map(([l, v]) => (
+                    <div key={l}><p className="text-[11px] text-slate-400 uppercase tracking-wide">{l}</p><p className="font-semibold text-slate-800 truncate">{v}</p></div>
+                  ))}
+                </div>
               </div>
 
-              {/* ── Sidebar ── */}
-              <div className="w-full lg:w-[280px] shrink-0 space-y-4">
-                {/* Request Summary */}
+              <div className={Z_CARD}>
+                <h3 className={Z_HEAD}>Requested By</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 p-4 text-sm">
+                  {[
+                    ['Requester', formData.requester_name || '—'],
+                    ['Employee ID', formData.requester_employee_id || '—'],
+                    ['Contact', formData.requester_contact || '—'],
+                    ['Email', formData.requester_email || '—'],
+                    ['Delivery Location', formData.delivery_location || '—'],
+                    ['Site Incharge', formData.site_incharge || '—'],
+                  ].map(([l, v]) => (
+                    <div key={l}><p className="text-[11px] text-slate-400 uppercase tracking-wide">{l}</p><p className="font-semibold text-slate-800 truncate">{v}</p></div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={Z_CARD}>
+                <h3 className={Z_HEAD}>Material Items ({readyItems.length})</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 uppercase tracking-wide text-[10.5px]">
+                        <th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Material</th>
+                        <th className="text-right px-3 py-2">Qty</th><th className="text-left px-3 py-2">Unit</th>
+                        <th className="text-right px-3 py-2">Rate</th><th className="text-right px-3 py-2">Value</th>
+                        <th className="text-center px-3 py-2">Stock</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemsWithValue.map((i, idx) => (
+                        <tr key={idx} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-mono text-slate-400">{idx + 1}</td>
+                          <td className="px-3 py-2 font-medium text-slate-800">{i.material}</td>
+                          <td className="px-3 py-2 text-right font-mono">{i.qty}</td>
+                          <td className="px-3 py-2">{i.unit}</td>
+                          <td className="px-3 py-2 text-right font-mono">{i.est_rate ? parseFloat(i.est_rate).toLocaleString('en-IN') : '—'}</td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold">{i.estValue ? i.estValue.toLocaleString('en-IN') : '—'}</td>
+                          <td className="px-3 py-2 text-center">{!i.stock ? 'New' : i.stock.state === 'out' ? 'Nil' : i.stock.state === 'low' ? `Low` : 'OK'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {formData.justification && (
                 <div className={Z_CARD}>
-                  <h3 className={Z_HEAD}>Request Summary</h3>
-                  <div className="p-4 pt-3">
-                  {(() => {
-                    const ready = items.filter(i => i.material && i.qty);
-                    const stats = ready.reduce((acc, i) => {
-                      const s = itemStockStatus(i.material);
-                      if (!s) acc.unknown++;
-                      else acc[s.state]++;
-                      return acc;
-                    }, { ok: 0, low: 0, out: 0, unknown: 0 });
-                    const days = formData.required_by ? dayjs(formData.required_by).startOf('day').diff(dayjs().startOf('day'), 'day') : null;
-                    return (
-                      <div className="space-y-1.5 text-sm">
-                        <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-500 font-medium">Total Items</span>
-                          <span className="font-bold text-slate-900">{ready.length}</span>
+                  <h3 className={Z_HEAD}>Justification</h3>
+                  <div className="p-4 text-sm text-slate-700 whitespace-pre-wrap">{formData.justification}</div>
+                </div>
+              )}
+
+              {/* Approval Workflow chain */}
+              <div className={Z_CARD}>
+                <h3 className={Z_HEAD}>Approval Workflow</h3>
+                <div className="p-4">
+                  <p className="text-xs text-slate-400 mb-3">After submission, this MR will be routed through the approval chain below:</p>
+                  <div className="flex items-center overflow-x-auto pb-2">
+                    {[{ label: 'Requester', short: requesterInitials, status: 'Submitted', state: 'approved' },
+                      ...ACTIVE_STAGES.map((s, i) => ({ label: s.short, short: s.short.replace(/[^A-Z]/g, '').slice(0, 2) || s.short.slice(0, 2).toUpperCase(), status: i === 0 ? 'Pending' : 'Waiting', state: i === 0 ? 'pending' : '' }))
+                    ].map((node, i, arr) => (
+                      <React.Fragment key={i}>
+                        <div className="flex flex-col items-center gap-1 flex-1 min-w-[80px]">
+                          <div className={clsx('w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold border-2',
+                            node.state === 'approved' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' :
+                            node.state === 'pending' ? 'border-amber-500 bg-amber-50 text-amber-700' :
+                            'border-slate-200 bg-slate-50 text-slate-400')}>{node.short}</div>
+                          <span className="text-[11px] text-slate-500 text-center">{node.label}</span>
+                          <span className={clsx('text-[10.5px] font-semibold',
+                            node.state === 'approved' ? 'text-emerald-600' : node.state === 'pending' ? 'text-amber-600' : 'text-slate-400')}>{node.status}</span>
                         </div>
-                        <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-500 font-medium">In Stock</span>
-                          <span className="font-bold text-emerald-600">{stats.ok}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-500 font-medium">Out of Stock</span>
-                          <span className="font-bold text-rose-600">{stats.out}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-500 font-medium">Low Stock</span>
-                          <span className="font-bold text-amber-600">{stats.low}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-500 font-medium">Priority</span>
-                          <span className={clsx('font-bold capitalize',
-                            formData.priority === 'critical' ? 'text-rose-600' : formData.priority === 'urgent' ? 'text-amber-600' : 'text-slate-700'
-                          )}>{formData.priority}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                          <span className="text-slate-500 font-medium">Required By</span>
-                          <span className="font-bold text-slate-900">{formData.required_by ? dayjs(formData.required_by).format('DD MMM YYYY') : '—'}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-1">
-                          <span className="text-slate-500 font-medium">Days Remaining</span>
-                          <span className={clsx('font-bold',
-                            days === null ? 'text-slate-400' : days < 0 ? 'text-rose-600' : days <= 2 ? 'text-amber-600' : 'text-slate-900'
-                          )}>{days === null ? '—' : days < 0 ? `${Math.abs(days)}d overdue` : `${days} days`}</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                        {i < arr.length - 1 && <div className="w-8 h-0.5 bg-slate-200 flex-shrink-0" />}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              </>}
+
+              </div>
+
+              {/* ── Sidebar (visible all steps) ── */}
+              <div className="w-full lg:w-[300px] shrink-0 space-y-4">
+                {/* MR Summary panel */}
+                <div className="rounded-md border border-slate-200 overflow-hidden bg-white">
+                  <div className="px-4 py-2.5 bg-blue-600 text-white text-xs font-semibold uppercase tracking-wide">📋 MR Summary</div>
+                  {[
+                    ['Total Items', readyItems.length, ''],
+                    ['Need Purchase', `${needPurchaseCount} items`, 'text-rose-600'],
+                    ['Available in Stock', `${inStockCount} item${inStockCount === 1 ? '' : 's'}`, 'text-emerald-600'],
+                    ['Est. Total Value', fmtINR(estTotalValue), ''],
+                    ['Priority', `${PRIORITY_CONFIG[normalizePriority(formData.priority)].emoji} ${PRIORITY_CONFIG[normalizePriority(formData.priority)].label}`, ''],
+                    ['Required By', formData.required_by ? dayjs(formData.required_by).format('DD MMM YYYY') : '—', ''],
+                  ].map(([l, v, c]) => (
+                    <div key={l} className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 text-xs">
+                      <span className="text-slate-500">{l}</span>
+                      <span className={clsx('font-mono font-semibold', c || 'text-slate-800')}>{v}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-blue-50 text-xs">
+                    <span className="text-blue-700 font-semibold">Budget Available</span>
+                    <span className="font-mono font-bold text-blue-700">{budgetAvailable !== null ? fmtINR(budgetAvailable) : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5 text-xs">
+                    <span className="text-slate-500">After This MR</span>
+                    <span className={clsx('font-mono font-semibold', afterThisMr !== null && afterThisMr < 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                      {afterThisMr !== null ? `${fmtINR(afterThisMr)} left` : '—'}
+                    </span>
                   </div>
                 </div>
 
@@ -1526,64 +1839,20 @@ export default function MRSPage() {
                       { label: 'Request Created', sub: 'On submission', state: 'done' },
                       ...ACTIVE_STAGES.map(s => ({ label: s.label, sub: 'Pending', state: 'pending' })),
                       { label: 'Issue from Store', sub: 'Pending', state: 'pending' },
-                    ].map((step, i, arr) => (
+                    ].map((s, i, arr) => (
                       <li key={i} className="relative flex gap-3 pb-4 last:pb-0">
                         {i < arr.length - 1 && <span className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-200" />}
-                        <span className={clsx(
-                          'relative z-10 flex items-center justify-center w-6 h-6 rounded-full shrink-0',
-                          step.state === 'done' ? 'bg-blue-600 text-white' :
-                          i === 1 ? 'bg-white text-blue-600 border-2 border-blue-400' :
-                          'bg-slate-100 text-slate-400 border border-slate-200'
-                        )}>
-                          {step.state === 'done' ? <Check className="w-3.5 h-3.5" /> : i === 1 ? <Clock className="w-3 h-3" /> : <span className="w-1.5 h-1.5 rounded-full bg-current" />}
+                        <span className={clsx('relative z-10 flex items-center justify-center w-6 h-6 rounded-full shrink-0',
+                          s.state === 'done' ? 'bg-blue-600 text-white' : i === 1 ? 'bg-white text-blue-600 border-2 border-blue-400' : 'bg-slate-100 text-slate-400 border border-slate-200')}>
+                          {s.state === 'done' ? <Check className="w-3.5 h-3.5" /> : i === 1 ? <Clock className="w-3 h-3" /> : <span className="w-1.5 h-1.5 rounded-full bg-current" />}
                         </span>
                         <div className="pt-0.5">
-                          <p className={clsx('text-xs font-semibold', step.state === 'done' || i === 1 ? 'text-slate-900' : 'text-slate-400')}>{step.label}</p>
-                          <p className={clsx('text-[11px] mt-0.5', i === 1 ? 'text-blue-600 font-medium' : 'text-slate-400')}>{step.sub}</p>
+                          <p className={clsx('text-xs font-semibold', s.state === 'done' || i === 1 ? 'text-slate-900' : 'text-slate-400')}>{s.label}</p>
+                          <p className={clsx('text-[11px] mt-0.5', i === 1 ? 'text-blue-600 font-medium' : 'text-slate-400')}>{s.sub}</p>
                         </div>
                       </li>
                     ))}
                   </ul>
-                </div>
-
-                {/* Submission Checklist */}
-                <div className={Z_CARD}>
-                  <h3 className={Z_HEAD}>Submission Checklist</h3>
-                  <div className="p-4 pt-3">
-                  {(() => {
-                    const ready = items.filter(i => i.material && i.qty);
-                    const hasOutOfStock = ready.some(i => itemStockStatus(i.material)?.state === 'out');
-                    const checks = [
-                      { label: 'Required by date filled', done: !!formData.required_by },
-                      { label: 'Project & site incharge added', done: !!formData.project_id && !!formData.site_incharge },
-                      { label: 'All quantities entered', done: items.length > 0 && items.every(i => !i.material || (!!i.qty && parseFloat(i.qty) > 0)) },
-                      { label: 'Out-of-stock items acknowledged', done: !hasOutOfStock || !!formData.remarks },
-                      { label: 'Attachments uploaded', done: attachments.length > 0 },
-                      { label: 'Remarks / notes added', done: !!formData.remarks?.trim() },
-                    ];
-                    return (
-                      <div className="space-y-2.5">
-                        {checks.map((c, i) => (
-                          <label key={i} className="flex items-start gap-2 text-xs font-medium text-slate-700 cursor-default">
-                            <span className={clsx(
-                              'mt-0.5 flex items-center justify-center w-4 h-4 rounded border shrink-0',
-                              c.done ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
-                            )}>
-                              {c.done && <Check className="w-3 h-3" />}
-                            </span>
-                            <span className={c.done ? '' : 'text-slate-400'}>{c.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                  </div>
-                </div>
-
-                {/* Info box */}
-                <div className="flex gap-2.5 rounded-md border border-blue-100 bg-blue-50 p-3.5 text-xs text-blue-800 leading-relaxed">
-                  <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                  <span>Items marked <strong>Out of Stock</strong> will automatically generate a Purchase Request once this requisition is approved by the Project Manager.</span>
                 </div>
 
                 {/* Recent MRs */}
@@ -1592,9 +1861,7 @@ export default function MRSPage() {
                   <div className="p-4 pt-3">
                   {(() => {
                     const recent = (formData.project_id ? rawMRS.filter(m => m.project_id === formData.project_id) : rawMRS)
-                      .slice()
-                      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                      .slice(0, 3);
+                      .slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 3);
                     if (!recent.length) return <p className="text-xs text-slate-400">No previous requisitions yet.</p>;
                     return (
                       <div className="space-y-2.5">
@@ -1617,37 +1884,43 @@ export default function MRSPage() {
               </div>
             </div>
 
-            {/* Modal footer */}
+            {/* Bottom action bar */}
             <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-white flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md bg-slate-100 text-xs font-medium text-slate-600">
-                  <Package className="w-3.5 h-3.5" />
-                  {items.filter(i => i.material && i.qty).length} item(s) ready
-                </span>
-                {formData.priority !== 'normal' && (
-                  <span className={clsx(
-                    'inline-flex items-center px-2.5 h-7 rounded-md text-xs font-medium capitalize',
-                    formData.priority === 'critical' ? 'bg-rose-50 text-rose-700 border border-rose-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                  )}>
-                    {formData.priority} priority
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <span>{readyItems.length} items &nbsp;|&nbsp; Est. Value: <strong className="font-mono">{fmtINR(estTotalValue)}</strong></span>
+                {needPurchaseCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 font-medium">
+                    <AlertCircle className="w-3 h-3" /> {needPurchaseCount} need purchase
+                  </span>
+                )}
+                {inStockCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                    <Check className="w-3 h-3" /> {inStockCount} in store
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={resetForm}
-                  className="px-4 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
+                <button onClick={resetForm} className="px-4 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Discard</button>
+                <button onClick={saveDraft} className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md border border-blue-300 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors">
+                  <Download className="w-4 h-4" /> Save Draft
                 </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={createMutation.isPending}
-                  className="inline-flex items-center gap-2 px-5 h-9 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  <Send className="w-4 h-4" />
-                  {createMutation.isPending ? 'Submitting…' : 'Submit Requisition'}
+                <button title="Coming soon" disabled className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md border border-slate-200 text-sm font-medium text-slate-400 cursor-not-allowed">
+                  Preview PDF
                 </button>
+                {step > 1 && (
+                  <button onClick={goBack} className="px-4 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
+                )}
+                {step < WIZARD_STEPS.length ? (
+                  <button onClick={goNext} className="inline-flex items-center gap-2 px-5 h-9 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button onClick={handleSubmit} disabled={createMutation.isPending}
+                    className="inline-flex items-center gap-2 px-5 h-9 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50">
+                    <Send className="w-4 h-4" />
+                    {createMutation.isPending ? 'Submitting…' : 'Submit for Approval'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
