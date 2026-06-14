@@ -1,5 +1,6 @@
 // src/controllers/raBill.controller.js
 const { query, withTransaction } = require('../config/database');
+const { postAutoJournal } = require('../services/journalAutoPost');
 
 // Calculate RA Bill totals
 const calculateRaBill = (data) => {
@@ -186,6 +187,22 @@ const approveBill = async (req, res) => {
         [transition.to, req.user.id, req.params.id]
       );
       message = `Bill approved. Status: ${transition.to}`;
+
+      // ── Auto-post journal entry on certification: Dr AR, Cr Revenue + Output GST ──
+      if (transition.to === 'certified') {
+        await postAutoJournal(client, {
+          companyId: req.user.company_id,
+          userId: req.user.id,
+          entryDate: b.bill_date,
+          reference: b.bill_number,
+          narration: `RA Bill ${b.bill_number} certified`,
+          lines: [
+            { code: '1100', debit: b.gross_with_gst, description: `RA Bill ${b.bill_number}` },
+            { code: '4000', credit: b.gross_amount, description: `RA Bill ${b.bill_number} — contract revenue` },
+            { code: '2100', credit: b.gst_amount, description: `RA Bill ${b.bill_number} — output GST` },
+          ],
+        });
+      }
     });
 
     res.json({ message });

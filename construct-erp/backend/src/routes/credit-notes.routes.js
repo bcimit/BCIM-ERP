@@ -2,6 +2,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
+const { postAutoJournal } = require('../services/journalAutoPost');
 const router = express.Router();
 
 // ── Auto-migrate ─────────────────────────────────────────────────────────────
@@ -217,6 +218,21 @@ router.post('/', authenticate, async (req, res) => {
            n(it.amount) || amt, it.grn_item_id || null, it.po_item_id || null, i + 1]
         );
       }
+
+      // ── Auto-post journal entry: Dr Accounts Payable, Cr Material Cost + Input GST ──
+      await postAutoJournal(client, {
+        companyId: req.user.company_id,
+        userId: req.user.id,
+        entryDate: cn_date,
+        reference: cn_number,
+        narration: `Credit Note ${cn_number} — ${vendor_name}`,
+        lines: [
+          { code: '2000', debit: total_amount, description: `Credit Note ${cn_number}` },
+          { code: '5000', credit: n(basic_amount), description: `Credit Note ${cn_number} — material cost reversal` },
+          { code: '1300', credit: gst_amount, description: `Credit Note ${cn_number} — ITC reversal` },
+        ],
+      });
+
       return r.rows[0];
     });
 

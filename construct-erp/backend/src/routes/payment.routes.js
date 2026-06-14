@@ -5,6 +5,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { notifyPaymentRecorded } = require('../services/notif.helper');
+const { postAutoJournal } = require('../services/journalAutoPost');
 
 router.use(authenticate);
 
@@ -237,6 +238,24 @@ router.post('/', authorize('super_admin', 'admin', 'accountant'), async (req, re
           );
         }
       }
+
+      // ── Auto-post journal entry: Dr Accounts Payable / Expense, Cr Bank (+ TDS Payable) ──
+      const debitCode = payment_type === 'vendor' ? '2000' : '6100';
+      const tds = parseFloat(tds_deducted || 0);
+      const jeLines = [
+        { code: debitCode, debit: paid, description: `Payment to ${entity_name}` },
+        { code: '1010', credit: net, description: `Bank payment to ${entity_name}` },
+      ];
+      if (tds > 0) jeLines.push({ code: '2200', credit: tds, description: 'TDS deducted' });
+
+      await postAutoJournal(client, {
+        companyId: req.user.company_id,
+        userId: req.user.id,
+        entryDate: payment_date,
+        reference: reference_number || payment.id,
+        narration: `Payment to ${entity_name}`,
+        lines: jeLines,
+      });
 
       return payment;
     });
