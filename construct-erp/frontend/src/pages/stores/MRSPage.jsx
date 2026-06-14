@@ -428,6 +428,9 @@ export default function MRSPage() {
 
   const visibleProjects = projectsData ?? [];
 
+  // Highlight style for editable inputs/selects (blue border + light blue fill + soft glow)
+  const FIELD_HL = 'border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] focus:border-[#2569b3]';
+
   // ── Stock lookup helpers for the requisition item table ─────
   const stockOf = (materialName) => inventoryItems.find(i => i.material_name === materialName);
   const itemStockStatus = (materialName) => {
@@ -1209,7 +1212,7 @@ export default function MRSPage() {
               <div className="flex-1 min-w-0 space-y-5">
 
               {/* Project Details */}
-              <div className="border border-indigo-100 rounded-xl p-5 bg-indigo-50/30 shadow-sm">
+              <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                     <Building2 className="w-3.5 h-3.5 text-indigo-600" />
@@ -1219,10 +1222,7 @@ export default function MRSPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   <Field label="Project *">
                     <select
-                      className={clsx(
-                        'w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all border',
-                        formData.project_id ? 'bg-white border-indigo-200' : 'bg-amber-50 border-amber-300'
-                      )}
+                      className={clsx('w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none transition-all border', FIELD_HL)}
                       value={formData.project_id}
                       onChange={e => setFormData(p => ({ ...p, project_id: e.target.value }))}
                     >
@@ -1232,7 +1232,7 @@ export default function MRSPage() {
                   </Field>
                   <Field label="Department">
                     <select
-                      className="w-full h-10 bg-white border border-indigo-200 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all"
+                      className={clsx('w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none transition-all border', FIELD_HL)}
                       value={formData.department}
                       onChange={e => setFormData(p => ({ ...p, department: e.target.value }))}
                     >
@@ -1260,7 +1260,7 @@ export default function MRSPage() {
                   </Field>
                   <Field label="HO Project Name">
                     <input
-                      className="w-full h-10 bg-white border border-indigo-200 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all"
+                      className={clsx('w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none transition-all border', FIELD_HL)}
                       placeholder="HO project name"
                       value={formData.head_office_project_name}
                       onChange={e => setFormData(p => ({ ...p, head_office_project_name: e.target.value }))}
@@ -1268,7 +1268,7 @@ export default function MRSPage() {
                   </Field>
                   <Field label="Site Incharge">
                     <input
-                      className="w-full h-10 bg-white border border-indigo-200 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all"
+                      className={clsx('w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none transition-all border', FIELD_HL)}
                       placeholder="Enter name"
                       value={formData.site_incharge}
                       onChange={e => setFormData(p => ({ ...p, site_incharge: e.target.value }))}
@@ -1277,10 +1277,7 @@ export default function MRSPage() {
                   <Field label="Required By *">
                     <input
                       type="date"
-                      className={clsx(
-                        'w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all border',
-                        formData.required_by ? 'bg-white border-indigo-200' : 'bg-amber-50 border-amber-300'
-                      )}
+                      className={clsx('w-full h-10 rounded-xl px-3.5 text-sm font-medium text-slate-900 outline-none transition-all border', FIELD_HL)}
                       value={formData.required_by}
                       onChange={e => setFormData(p => ({ ...p, required_by: e.target.value }))}
                     />
@@ -1288,9 +1285,9 @@ export default function MRSPage() {
                   <Field label="Priority">
                     <div className="flex gap-1.5 h-10">
                       {[
-                        { v: 'normal',   label: 'Normal',   on: 'bg-slate-800 text-white border-slate-800',   off: 'bg-white text-slate-500 border-indigo-200 hover:border-slate-300' },
-                        { v: 'urgent',   label: 'Urgent',   on: 'bg-amber-500 text-white border-amber-500',   off: 'bg-white text-slate-500 border-indigo-200 hover:border-amber-300' },
-                        { v: 'critical', label: 'Critical', on: 'bg-rose-600 text-white border-rose-600 shadow-sm shadow-rose-200', off: 'bg-white text-slate-500 border-indigo-200 hover:border-rose-300' },
+                        { v: 'normal',   label: 'Normal',   on: 'bg-slate-800 text-white border-slate-800',   off: 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300' },
+                        { v: 'urgent',   label: 'Urgent',   on: 'bg-amber-500 text-white border-amber-500',   off: 'bg-slate-50 text-slate-500 border-slate-200 hover:border-amber-300' },
+                        { v: 'critical', label: 'Critical', on: 'bg-rose-600 text-white border-rose-600 shadow-sm shadow-rose-200', off: 'bg-slate-50 text-slate-500 border-slate-200 hover:border-rose-300' },
                       ].map(p => (
                         <button
                           key={p.v}
@@ -1310,7 +1307,7 @@ export default function MRSPage() {
               </div>
 
               {/* Material Items */}
-              <div className="border border-indigo-100 rounded-xl p-5 bg-indigo-50/30 shadow-sm">
+              <div className="border border-[#378ADD] rounded-xl p-5 bg-white shadow-[0_0_0_4px_rgba(55,138,221,0.1)]">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
@@ -1337,8 +1334,8 @@ export default function MRSPage() {
                   {items.map((item, idx) => {
                     const stock = itemStockStatus(item.material);
                     return (
-                    <div key={idx} className="grid grid-cols-1 lg:grid-cols-[32px_minmax(260px,2fr)_110px_100px_90px_minmax(200px,2fr)_44px] gap-2 items-center rounded-xl border border-indigo-100 lg:border-indigo-100 p-3 lg:px-2 lg:py-2 bg-white lg:bg-white hover:lg:bg-indigo-50/40 transition-colors">
-                      <div className="hidden lg:flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-50 border border-indigo-100 text-xs font-black text-indigo-400">{idx + 1}</div>
+                    <div key={idx} className="grid grid-cols-1 lg:grid-cols-[32px_minmax(260px,2fr)_110px_100px_90px_minmax(200px,2fr)_44px] gap-2 items-center rounded-xl border border-slate-200 lg:border-slate-100 p-3 lg:px-2 lg:py-2 bg-slate-50/70 lg:bg-slate-50/40 hover:lg:bg-indigo-50/30 transition-colors">
+                      <div className="hidden lg:flex items-center justify-center h-7 w-7 rounded-lg bg-white border border-slate-200 text-xs font-black text-slate-400">{idx + 1}</div>
                       <MaterialCombobox
                         value={item.material}
                         inventoryItems={inventoryItems}
@@ -1358,15 +1355,12 @@ export default function MRSPage() {
                       <input
                         type="number"
                         placeholder="0"
-                        className={clsx(
-                          'h-9 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-400 font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-right border',
-                          item.material && !item.qty ? 'bg-amber-50 border-amber-300' : 'bg-white border-indigo-200'
-                        )}
+                        className={clsx('h-9 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-400 font-semibold outline-none transition-all text-right border', FIELD_HL)}
                         value={item.qty}
                         onChange={e => { const n = [...items]; n[idx].qty = e.target.value; setItems(n); }}
                       />
                       <select
-                        className="h-9 bg-white border border-indigo-200 rounded-lg px-2 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+                        className={clsx('h-9 rounded-lg px-2 text-sm font-medium text-slate-900 outline-none transition-all border', FIELD_HL)}
                         value={item.unit}
                         onChange={e => { const n = [...items]; n[idx].unit = e.target.value; setItems(n); }}
                       >
@@ -1385,7 +1379,7 @@ export default function MRSPage() {
                       <input
                         type="text"
                         placeholder="Intended use"
-                        className="h-9 bg-white border border-indigo-200 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+                        className={clsx('h-9 rounded-lg px-3 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none transition-all border', FIELD_HL)}
                         value={item.purpose}
                         onChange={e => { const n = [...items]; n[idx].purpose = e.target.value; setItems(n); }}
                       />
@@ -1412,7 +1406,7 @@ export default function MRSPage() {
               </div>
 
               {/* Remarks */}
-              <div className="border border-indigo-100 rounded-xl p-5 bg-indigo-50/30 shadow-sm">
+              <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                     <FileText className="w-3.5 h-3.5 text-indigo-600" />
@@ -1422,7 +1416,7 @@ export default function MRSPage() {
                 <textarea
                   rows={3}
                   placeholder="Additional notes or special instructions…"
-                  className="w-full bg-white border border-indigo-200 rounded-lg p-3 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none focus:border-indigo-400 transition-all resize-none"
+                  className={clsx('w-full rounded-lg p-3 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none transition-all resize-none border', FIELD_HL)}
                   value={formData.remarks}
                   onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))}
                 />
@@ -1445,7 +1439,7 @@ export default function MRSPage() {
                     }}
                     className={clsx(
                       'flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors',
-                      dragOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-indigo-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
+                      dragOver ? 'border-indigo-400 bg-indigo-50/60' : 'border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/30'
                     )}
                   >
                     <Upload className="w-5 h-5 text-indigo-500" />
@@ -2028,7 +2022,7 @@ function MaterialCombobox({ value, inventoryItems, onChange, onNewItem }) {
         <input
           type="text"
           placeholder="Search store ledger…"
-          className="h-9 w-full bg-white border border-slate-200 rounded-lg pl-8 pr-8 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+          className="h-9 w-full border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] rounded-lg pl-8 pr-8 text-sm text-slate-900 placeholder:text-slate-400 font-medium outline-none focus:border-[#2569b3] transition-all border"
           value={q}
           onChange={handleInputChange}
           onFocus={() => setOpen(true)}
