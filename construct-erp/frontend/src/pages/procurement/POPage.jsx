@@ -466,8 +466,8 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white border border-slate-200 w-full max-w-6xl rounded-2xl flex flex-col max-h-[92vh] shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+      <div className="w-full h-full flex flex-col overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">

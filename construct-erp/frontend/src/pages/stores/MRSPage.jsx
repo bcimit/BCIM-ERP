@@ -1179,8 +1179,8 @@ export default function MRSPage() {
       {/* ── Detail Slide-over ── */}
       {/* ── New MRS Form Modal ── */}
       {showForm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white border border-slate-200 w-full max-w-6xl rounded-2xl flex flex-col max-h-[92vh] shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+          <div className="w-full h-full flex flex-col overflow-hidden">
 
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 flex-shrink-0 bg-gradient-to-r from-indigo-600 to-indigo-700">
