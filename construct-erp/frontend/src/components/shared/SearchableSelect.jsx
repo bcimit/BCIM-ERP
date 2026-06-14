@@ -46,9 +46,9 @@ export default function SearchableSelect({ value, options = [], onChange, placeh
       </button>
       <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
       {open && (
-        <div className="absolute z-[80] top-11 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-80 overflow-y-auto p-1.5">
-          <div className="relative mb-1.5">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+        <div className="absolute z-[80] top-11 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden">
+          <div className="relative p-1.5 border-b border-slate-100">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <input
               type="text"
               autoFocus
@@ -58,24 +58,41 @@ export default function SearchableSelect({ value, options = [], onChange, placeh
               onChange={e => setQ(e.target.value)}
             />
           </div>
-          {filtered.length === 0 ? (
-            <div className="px-3 py-3 text-xs text-slate-500 italic text-center">No match for "{q}"</div>
-          ) : (
-            filtered.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
-                className="w-full text-left px-2.5 py-2.5 rounded-lg text-sm hover:bg-indigo-50 flex items-center gap-2.5 group transition-colors"
-              >
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold text-slate-800 group-hover:text-indigo-700 truncate">{opt.label}</span>
-                  {opt.sublabel && <span className="block text-[11px] text-slate-500 truncate">{opt.sublabel}</span>}
-                </span>
-                {String(opt.value) === String(value) && <Check className="w-4 h-4 text-indigo-600 flex-shrink-0" />}
-              </button>
-            ))
+          <div className="ss-scroll max-h-64 overflow-y-auto p-1.5">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-slate-500 italic text-center">No match for "{q}"</div>
+            ) : (
+              filtered.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
+                  className={clsx(
+                    'w-full text-left px-2.5 py-2.5 rounded-lg text-sm hover:bg-indigo-50 flex items-center gap-2.5 group transition-colors',
+                    String(opt.value) === String(value) && 'bg-indigo-50/70',
+                  )}
+                >
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-semibold text-slate-800 group-hover:text-indigo-700 truncate">{opt.label}</span>
+                    {opt.sublabel && <span className="block text-[11px] text-slate-500 truncate">{opt.sublabel}</span>}
+                  </span>
+                  {String(opt.value) === String(value) && <Check className="w-4 h-4 text-indigo-600 flex-shrink-0" />}
+                </button>
+              ))
+            )}
+          </div>
+          {filtered.length > 0 && (
+            <div className="px-3 py-1.5 border-t border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-50/60">
+              {filtered.length} {filtered.length === 1 ? 'option' : 'options'}
+            </div>
           )}
+          <style>{`
+            .ss-scroll::-webkit-scrollbar { width: 6px; }
+            .ss-scroll::-webkit-scrollbar-track { background: transparent; }
+            .ss-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+            .ss-scroll::-webkit-scrollbar-thumb:hover { background: #378ADD; }
+            .ss-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+          `}</style>
         </div>
       )}
     </div>
