@@ -1205,7 +1205,21 @@ export default function MRSPage() {
             </div>
 
             {/* Modal body */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-100">
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-100 mr-form-bold-black">
+              <style>{`
+                .mr-form-bold-black, .mr-form-bold-black p, .mr-form-bold-black span,
+                .mr-form-bold-black label, .mr-form-bold-black h3, .mr-form-bold-black div,
+                .mr-form-bold-black button, .mr-form-bold-black input, .mr-form-bold-black select,
+                .mr-form-bold-black textarea, .mr-form-bold-black option {
+                  color: #000 !important;
+                  font-weight: 700 !important;
+                }
+                .mr-form-bold-black input::placeholder,
+                .mr-form-bold-black textarea::placeholder {
+                  color: #000 !important;
+                  opacity: 0.55;
+                }
+              `}</style>
               <div className="flex flex-col lg:flex-row gap-5">
 
               {/* ── Main column ── */}
