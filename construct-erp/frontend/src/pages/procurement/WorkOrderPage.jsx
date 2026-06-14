@@ -7,9 +7,9 @@ import useAuthStore from '../../store/authStore';
 import {
   Hammer, Plus, X, Search, FileText, Download,
   Printer, Building2, Clock, CheckCircle2,
-  ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Upload, IndianRupee, Calendar,
+  ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Upload, IndianRupee,
   AlertCircle, RefreshCw, FileSpreadsheet,
-  MapPin, User, Briefcase, Package, Percent, ClipboardList, Phone, Mail, Hash,
+  MapPin, User, Package, Phone, Mail, Hash,
   Activity, Check, UserCheck, Edit2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -18,6 +18,8 @@ import { subcontractorAPI, vendorAPI, projectAPI } from '../../api/client';
 import { FIELD_HL } from '../../constants/fieldStyles';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import VendorSelect from '../../components/shared/VendorSelect';
+import ZField from '../../components/shared/ZField';
+import { Z_INP, Z_CARD, Z_HEAD, Z_LABEL } from '../../constants/zohoStyles';
 import toast from 'react-hot-toast';
 import WOPrintTemplate from './WOPrintTemplate';
 
@@ -516,33 +518,6 @@ function PdfImportModal({ onClose, vendors, projects, onImported }) {
 }
 
 /* ── Create WO Modal ─────────────────────────────────────────────────────── */
-/* ── Section shell — consistent card with header + icon ─────────────────── */
-function FormSection({ icon: Icon, title, subtitle, right, children }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-            <Icon className="w-3.5 h-3.5 text-indigo-600" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">{title}</p>
-            {subtitle && <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>}
-          </div>
-        </div>
-        {right}
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-const Lbl = ({ children, req }) => (
-  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
-    {children}{req && <span className="text-red-500 ml-0.5">*</span>}
-  </label>
-);
-
 function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPending, editingWO }) {
   const isEditing = !!editingWO;
   const [form, setForm] = useState({
@@ -651,32 +626,27 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
   const valid = form.project_id && form.vendor_id && form.subject;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-slate-50 w-full max-w-5xl rounded-2xl flex flex-col max-h-[94vh] shadow-2xl overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-white" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
+      <div className="w-full h-full flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
-              <Hammer className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-base font-bold text-white">{isEditing ? `Edit Work Order — ${editingWO.wo_number}` : 'New Work Order'}</p>
-              <p className="text-xs text-white/60">{isEditing ? 'Edit draft details before submitting for approval' : 'Procurement · engage a contractor for works & services'}</p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-3.5 flex-shrink-0 bg-white border-b border-slate-200">
+          <div>
+            <p className="text-[15px] font-semibold text-slate-800">{isEditing ? `Edit Work Order — ${editingWO.wo_number}` : 'Create Work Order'}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{isEditing ? 'Edit draft details before submitting for approval' : 'Procurement · engage a contractor for works & services'}</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all">
-            <X className="w-4.5 h-4.5" />
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50">
 
           {/* ── 1. Work Order Information ── */}
-          <FormSection icon={ClipboardList} title="Work Order Information" subtitle="Project, reference & contractor">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="col-span-2">
-                <Lbl req>Project</Lbl>
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Work Order Information</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 p-4">
+              <ZField label="Project *" className="col-span-2">
                 <SearchableSelect
                   value={form.project_id}
                   onChange={v => f('project_id', v)}
@@ -685,23 +655,20 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                   searchPlaceholder="Search projects…"
                   footerLabel="projects"
                 />
-              </div>
-              <div>
-                <Lbl>WO Number</Lbl>
+              </ZField>
+              <ZField label="WO Number">
                 <div className="relative">
                   <Hash className="w-3.5 h-3.5 text-slate-300 absolute left-2.5 top-1/2 -translate-y-1/2" />
                   {isEditing
-                    ? <input className={`${inp} pl-8 font-mono text-indigo-700`} value={form.wo_number} onChange={e => f('wo_number', e.target.value)} />
-                    : <input className={`${inp} pl-8 bg-slate-100 font-mono text-indigo-700`} value={form.wo_number || 'Auto WO-###'} readOnly />
+                    ? <input className={clsx(Z_INP, 'pl-8 font-mono text-blue-700')} value={form.wo_number} onChange={e => f('wo_number', e.target.value)} />
+                    : <input className={clsx(Z_INP, 'pl-8 bg-slate-100 font-mono text-blue-700')} value={form.wo_number || 'Auto WO-###'} readOnly />
                   }
                 </div>
-              </div>
-              <div>
-                <Lbl>WO Date</Lbl>
-                <input type="date" className={inp} value={form.wo_date} onChange={e => f('wo_date', e.target.value)} />
-              </div>
-              <div className="col-span-2 md:col-span-2">
-                <Lbl req>Contractor / Vendor</Lbl>
+              </ZField>
+              <ZField label="WO Date">
+                <input type="date" className={Z_INP} value={form.wo_date} onChange={e => f('wo_date', e.target.value)} />
+              </ZField>
+              <ZField label="Contractor / Vendor *" className="col-span-2 md:col-span-2">
                 <VendorSelect
                   value={form.vendor_id}
                   onChange={v => f('vendor_id', v)}
@@ -712,27 +679,25 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                   onAddNew={handleAddVendor}
                   addNewLabel="contractor"
                 />
-              </div>
-              <div>
-                <Lbl>Work Category</Lbl>
-                <select className={inp} value={form.work_category} onChange={e => f('work_category', e.target.value)}>
+              </ZField>
+              <ZField label="Work Category">
+                <select className={Z_INP} value={form.work_category} onChange={e => f('work_category', e.target.value)}>
                   <option value="">Select…</option>
                   {WORK_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
-              </div>
-              <div>
-                <Lbl>Cost Head</Lbl>
-                <input className={inp} placeholder="e.g. Civil Works" value={form.cost_head} onChange={e => f('cost_head', e.target.value)} />
-              </div>
+              </ZField>
+              <ZField label="Cost Head">
+                <input className={Z_INP} placeholder="e.g. Civil Works" value={form.cost_head} onChange={e => f('cost_head', e.target.value)} />
+              </ZField>
             </div>
 
             {/* Vendor auto-detail card */}
             {vendor && (
-              <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+              <div className="mx-4 mb-4 rounded-md border border-blue-100 bg-blue-50/50 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  <Building2 className="w-4 h-4 text-blue-600" />
                   <p className="text-sm font-bold text-slate-800">{vendor.name}</p>
-                  {vendor.vendor_type && <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{vendor.vendor_type.replace(/_/g,' ')}</span>}
+                  {vendor.vendor_type && <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{vendor.vendor_type.replace(/_/g,' ')}</span>}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   {vendor.contact_person && <div className="flex items-center gap-1.5 text-slate-600"><User className="w-3.5 h-3.5 text-slate-400" /> {vendor.contact_person}</div>}
@@ -743,156 +708,132 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                 </div>
               </div>
             )}
-          </FormSection>
+          </div>
 
           {/* ── 2. Scope & Location ── */}
-          <FormSection icon={MapPin} title="Scope & Location" subtitle="What work, where">
-            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-              <div className="col-span-2 md:col-span-1">
-                <Lbl req>Subject / Title of Work</Lbl>
-                <input className={inp} placeholder="e.g. Supply & erection of structural steel – Tower A" value={form.subject} onChange={e => f('subject', e.target.value)} />
-              </div>
-              <div className="col-span-2 md:col-span-1">
-                <Lbl>Tower / Block / Location</Lbl>
-                <input className={inp} placeholder="e.g. Tower A / Block 1 / Basement" value={form.tower_block} onChange={e => f('tower_block', e.target.value)} />
-              </div>
-              <div className="col-span-2">
-                <Lbl>Detailed Scope of Work</Lbl>
-                <textarea rows={3} className={inp} placeholder="Describe the full scope, deliverables, specifications, materials in scope / out of scope…" value={form.scope_of_work} onChange={e => f('scope_of_work', e.target.value)} />
-              </div>
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Scope & Location</h3>
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-3.5 p-4">
+              <ZField label="Subject / Title of Work *" className="col-span-2 md:col-span-1">
+                <input className={Z_INP} placeholder="e.g. Supply & erection of structural steel – Tower A" value={form.subject} onChange={e => f('subject', e.target.value)} />
+              </ZField>
+              <ZField label="Tower / Block / Location" className="col-span-2 md:col-span-1">
+                <input className={Z_INP} placeholder="e.g. Tower A / Block 1 / Basement" value={form.tower_block} onChange={e => f('tower_block', e.target.value)} />
+              </ZField>
+              <ZField label="Detailed Scope of Work" className="col-span-2">
+                <textarea rows={3} className={clsx(Z_INP, 'h-auto py-2 resize-none')} placeholder="Describe the full scope, deliverables, specifications, materials in scope / out of scope…" value={form.scope_of_work} onChange={e => f('scope_of_work', e.target.value)} />
+              </ZField>
             </div>
-          </FormSection>
+          </div>
 
           {/* ── 3. Execution Timeline ── */}
-          <FormSection icon={Calendar} title="Execution Timeline"
-            right={durationDays != null && <span className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">{durationDays} days duration</span>}>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div>
-                <Lbl>Start Date</Lbl>
-                <input type="date" className={inp} value={form.start_date} onChange={e => f('start_date', e.target.value)} />
-              </div>
-              <div>
-                <Lbl>Completion Date</Lbl>
-                <input type="date" className={inp} value={form.end_date} onChange={e => f('end_date', e.target.value)} />
-              </div>
+          <div className={Z_CARD}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h3 className="text-[13px] font-semibold text-slate-700">Execution Timeline</h3>
+              {durationDays != null && <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">{durationDays} days duration</span>}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 p-4">
+              <ZField label="Start Date">
+                <input type="date" className={Z_INP} value={form.start_date} onChange={e => f('start_date', e.target.value)} />
+              </ZField>
+              <ZField label="Completion Date">
+                <input type="date" className={Z_INP} value={form.end_date} onChange={e => f('end_date', e.target.value)} />
+              </ZField>
               <div className="flex items-end">
-                <div className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500">
-                  {durationDays != null ? <><span className="font-semibold text-slate-700">{durationDays}</span> calendar days</> : 'Set both dates to see duration'}
+                <div className="w-full h-9 px-3 flex items-center rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                  {durationDays != null ? <><span className="font-semibold text-slate-700">{durationDays}</span>&nbsp;calendar days</> : 'Set both dates to see duration'}
                 </div>
               </div>
             </div>
-          </FormSection>
+          </div>
 
           {/* ── 4. Scope of Work / BOQ Items ── */}
-          <FormSection icon={Package} title="Scope of Work — Line Items" subtitle="Itemised work with quantities & rates"
-            right={
+          <div className={Z_CARD}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h3 className="text-[13px] font-semibold text-slate-700">Scope of Work — Line Items</h3>
               <button onClick={() => setItems(p => [...p, { description:'', quantity:'', unit:'SQM', rate:'', gst_rate: String(form.gst_pct ?? '18'), remarks:'' }])}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-sm">
+                className="flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-medium text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors">
                 <Plus className="w-3 h-3" /> Add Item
               </button>
-            }>
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-8">#</th>
-                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description of Work</th>
-                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Unit</th>
-                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Qty</th>
-                    <th className="pb-2 px-1 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32">Rate (₹)</th>
-                    <th className="pb-2 px-1 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider w-20">GST%</th>
-                    <th className="pb-2 px-1 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32">Amount</th>
-                    <th className="pb-2 px-1 w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, i) => (
-                    <tr key={i} className="border-b border-slate-50">
-                      <td className="px-1 py-1.5 text-xs text-slate-400 font-mono">{i + 1}</td>
-                      <td className="px-1 py-1.5">
-                        <input className={inp} placeholder="Description of work item" value={it.description}
-                          onChange={e => setItems(p => p.map((x,j) => j===i?{...x,description:e.target.value}:x))} />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <select className={inp} value={it.unit} onChange={e => setItems(p => p.map((x,j) => j===i?{...x,unit:e.target.value}:x))}>
-                          {UNITS.map(u => <option key={u}>{u}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <input type="number" min="0" className={`${inp} text-right`} placeholder="0" value={it.quantity}
-                          onChange={e => setItems(p => p.map((x,j) => j===i?{...x,quantity:e.target.value}:x))} />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <input type="number" min="0" className={`${inp} text-right`} placeholder="0.00" value={it.rate}
-                          onChange={e => setItems(p => p.map((x,j) => j===i?{...x,rate:e.target.value}:x))} />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <input type="number" min="0" max="100" className={`${inp} text-center`} placeholder="18" value={it.gst_rate}
-                          onChange={e => setItems(p => p.map((x,j) => j===i?{...x,gst_rate:e.target.value}:x))} />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono text-right text-slate-700 font-semibold">
-                          {inr(parseFloat(it.quantity||0)*parseFloat(it.rate||0))}
-                        </div>
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <button onClick={() => setItems(p => p.filter((_,j) => j!==i))} disabled={items.length===1}
-                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-all disabled:opacity-30">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
-          </FormSection>
+            <div className="overflow-x-auto">
+              <div className="min-w-[820px]">
+                <div className="grid gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100" style={{ gridTemplateColumns: '32px 2.5fr 100px 100px 120px 80px 130px 40px' }}>
+                  {['#', 'Description of Work', 'Unit', 'Qty', 'Rate (₹)', 'GST%', 'Amount', ''].map(h => (
+                    <div key={h} className={Z_LABEL}>{h}</div>
+                  ))}
+                </div>
+                <div>
+                  {items.map((it, i) => (
+                    <div key={i} className={clsx('grid gap-2 items-center px-4 py-2 border-b border-slate-100 last:border-b-0', i % 2 === 1 && 'bg-slate-50/50')} style={{ gridTemplateColumns: '32px 2.5fr 100px 100px 120px 80px 130px 40px' }}>
+                      <span className="text-xs text-slate-400 font-mono">{i + 1}</span>
+                      <input className={Z_INP} placeholder="Description of work item" value={it.description}
+                        onChange={e => setItems(p => p.map((x,j) => j===i?{...x,description:e.target.value}:x))} />
+                      <select className={Z_INP} value={it.unit} onChange={e => setItems(p => p.map((x,j) => j===i?{...x,unit:e.target.value}:x))}>
+                        {UNITS.map(u => <option key={u}>{u}</option>)}
+                      </select>
+                      <input type="number" min="0" className={clsx(Z_INP, 'text-right')} placeholder="0" value={it.quantity}
+                        onChange={e => setItems(p => p.map((x,j) => j===i?{...x,quantity:e.target.value}:x))} />
+                      <input type="number" min="0" className={clsx(Z_INP, 'text-right')} placeholder="0.00" value={it.rate}
+                        onChange={e => setItems(p => p.map((x,j) => j===i?{...x,rate:e.target.value}:x))} />
+                      <input type="number" min="0" max="100" className={clsx(Z_INP, 'text-center px-1')} placeholder="18" value={it.gst_rate}
+                        onChange={e => setItems(p => p.map((x,j) => j===i?{...x,gst_rate:e.target.value}:x))} />
+                      <div className="h-9 px-3 flex items-center justify-end bg-slate-50 border border-slate-200 rounded-md text-sm font-mono text-slate-700 font-semibold">
+                        {inr(parseFloat(it.quantity||0)*parseFloat(it.rate||0))}
+                      </div>
+                      <button onClick={() => setItems(p => p.filter((_,j) => j!==i))} disabled={items.length===1}
+                        className="w-9 h-9 flex items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-all disabled:opacity-30">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* ── 5. Commercial & Tax Terms ── */}
-          <FormSection icon={Percent} title="Commercial & Tax Terms">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <Lbl>GST %</Lbl>
-                <input type="number" min="0" max="100" className={inp} value={form.gst_pct} onChange={e => f('gst_pct', e.target.value)} />
-              </div>
-              <div>
-                <Lbl>TDS %</Lbl>
-                <input type="number" min="0" max="100" className={inp} value={form.tds_pct} onChange={e => f('tds_pct', e.target.value)} />
-              </div>
-              <div>
-                <Lbl>Retention %</Lbl>
-                <input type="number" min="0" max="100" className={inp} value={form.retention_pct} onChange={e => f('retention_pct', e.target.value)} />
-              </div>
-              <div>
-                <Lbl>Advance Recovery %</Lbl>
-                <input type="number" min="0" max="100" className={inp} value={form.advance_recovery_pct} onChange={e => f('advance_recovery_pct', e.target.value)} />
-              </div>
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Commercial & Tax Terms</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 p-4">
+              <ZField label="GST %">
+                <input type="number" min="0" max="100" className={Z_INP} value={form.gst_pct} onChange={e => f('gst_pct', e.target.value)} />
+              </ZField>
+              <ZField label="TDS %">
+                <input type="number" min="0" max="100" className={Z_INP} value={form.tds_pct} onChange={e => f('tds_pct', e.target.value)} />
+              </ZField>
+              <ZField label="Retention %">
+                <input type="number" min="0" max="100" className={Z_INP} value={form.retention_pct} onChange={e => f('retention_pct', e.target.value)} />
+              </ZField>
+              <ZField label="Advance Recovery %">
+                <input type="number" min="0" max="100" className={Z_INP} value={form.advance_recovery_pct} onChange={e => f('advance_recovery_pct', e.target.value)} />
+              </ZField>
             </div>
 
             {/* Commercial summary */}
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Work Value</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pb-4">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className={clsx(Z_LABEL, 'mb-1')}>Work Value</p>
                 <p className="text-sm font-mono font-bold text-slate-800">₹{inr(formTotal)}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className={clsx(Z_LABEL, 'mb-1')}>
                   {gstRates.length > 1 ? 'Total GST' : `GST (${gstRates[0] ?? form.gst_pct ?? 0}%)`}
                 </p>
                 <p className="text-sm font-mono font-bold text-slate-800">₹{inr(gstAmt)}</p>
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-1">Retention ({form.retention_pct||0}%)</p>
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-medium text-amber-600 mb-1">Retention ({form.retention_pct||0}%)</p>
                 <p className="text-sm font-mono font-bold text-amber-700">₹{inr(retentionAmt)}</p>
               </div>
-              <div className="rounded-xl border-2 border-indigo-300 bg-indigo-600 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-100 mb-1">Grand Total</p>
+              <div className="rounded-md border border-blue-600 bg-blue-600 p-3">
+                <p className="text-xs font-medium text-blue-100 mb-1">Grand Total</p>
                 <p className="text-base font-mono font-bold text-white">₹{inr(grandTotal)}</p>
               </div>
             </div>
             {gstRates.length > 1 && (
-              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">GST Break-up</p>
+              <div className="mx-4 mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 space-y-1">
+                <p className={clsx(Z_LABEL, 'mb-1')}>GST Break-up</p>
                 {gstRates.map(r => (
                   <div key={r} className="flex justify-between gap-3 text-xs text-slate-500">
                     <span className="leading-snug">GST @ {r}% on item no. {fmtNos(gstByRate[r].nums)}</span>
@@ -901,29 +842,32 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                 ))}
               </div>
             )}
-            <p className="mt-2 text-[11px] text-slate-400">TDS deduction on payment ≈ <span className="font-mono">₹{inr(tdsAmt)}</span> ({form.tds_pct||0}% of work value).</p>
-          </FormSection>
+            <p className="px-4 pb-4 text-[11px] text-slate-400">TDS deduction on payment ≈ <span className="font-mono">₹{inr(tdsAmt)}</span> ({form.tds_pct||0}% of work value).</p>
+          </div>
 
           {/* ── 6. Terms & Conditions ── */}
-          <FormSection icon={FileText} title="Terms & Conditions" subtitle="Edit per work order before issuing">
-            <textarea
-              rows={12}
-              className={clsx(inp, 'h-auto py-3 font-mono text-xs leading-relaxed resize-y')}
-              value={form.terms_conditions}
-              onChange={e => f('terms_conditions', e.target.value)}
-            />
-          </FormSection>
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Terms & Conditions</h3>
+            <div className="p-4">
+              <textarea
+                rows={12}
+                className={clsx(Z_INP, 'h-auto py-3 font-mono text-xs leading-relaxed resize-y')}
+                value={form.terms_conditions}
+                onChange={e => f('terms_conditions', e.target.value)}
+              />
+            </div>
+          </div>
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-white flex-shrink-0 flex items-center justify-between gap-3">
-          <div className="text-xs text-slate-500">
-            {project && <span className="font-medium text-slate-700">{project.name}</span>}
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-white flex-shrink-0">
+          <div className="text-xs text-slate-400">
+            {project && <span className="font-medium text-slate-600">{project.name}</span>}
             {vendor && <span> · {vendor.name}</span>}
-            <span className="ml-2 font-mono font-bold text-indigo-700">₹{inr(grandTotal)}</span>
+            <span className="ml-2 font-mono font-bold text-blue-700">₹{inr(grandTotal)}</span>
           </div>
-          <div className="flex gap-3">
-            <button onClick={onClose} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-5 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
             <button
               onClick={() => {
                 const payload = { ...form, items, total_value: formTotal };
@@ -931,7 +875,7 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                 else onCreate(payload);
               }}
               disabled={!valid || isPending}
-              className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-all flex items-center gap-2">
+              className="px-6 h-9 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" /> {isPending ? 'Saving…' : isEditing ? 'Save Changes' : 'Issue Work Order'}
             </button>
           </div>

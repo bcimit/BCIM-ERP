@@ -24,13 +24,9 @@ import MRSPrintTemplate from './MRSPrintTemplate';
 import { useReactToPrint } from 'react-to-print';
 
 import { CONSTRUCTION_UNITS as UNITS } from '../../constants/units';
+import { Z_INP, Z_CARD, Z_HEAD } from '../../constants/zohoStyles';
+import ZField from '../../components/shared/ZField';
 const DEFAULT_CATEGORIES = ['Masonry Works'];
-
-// Zoho-style flat field input/label classes (used in the New MRS form)
-const Z_INP = 'w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30';
-const Z_LABEL = 'text-xs font-medium text-slate-500';
-const Z_CARD = 'border border-slate-200 rounded-md bg-white';
-const Z_HEAD = 'text-[13px] font-semibold text-slate-700 px-4 py-3 border-b border-slate-100';
 
 const DEPARTMENT_OPTIONS = [
   { value: 'Projects', label: 'Projects' },
@@ -54,15 +50,6 @@ const DEPARTMENT_OPTIONS = [
   { value: 'Security', label: 'Security' },
   { value: 'Other', label: 'Other' },
 ];
-
-function ZField({ label, children }) {
-  return (
-    <div className="space-y-1">
-      <label className={Z_LABEL}>{label}</label>
-      {children}
-    </div>
-  );
-}
 
 const STATUS_CONFIG = {
   pending:         { label: 'Pending Store Manager', short: 'Pending',    color: 'bg-yellow-50 text-yellow-700 border-yellow-200',   dot: 'bg-yellow-500',  icon: Clock,       stage: 1 },
