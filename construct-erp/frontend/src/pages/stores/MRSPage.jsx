@@ -544,8 +544,11 @@ export default function MRSPage() {
     if (!showForm || formData.requester_name) return;
     setFormData(p => ({
       ...p,
-      requester_name: user?.name || user?.email || '',
-      requester_email: user?.email || '',
+      requester_name:        user?.name        || user?.email || '',
+      requester_email:       user?.email       || '',
+      requester_employee_id: user?.employee_code || '',
+      requester_contact:     user?.phone        || '',
+      department:            p.department       || user?.department || '',
     }));
   }, [showForm]);
 
