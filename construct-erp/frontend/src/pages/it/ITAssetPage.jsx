@@ -101,11 +101,6 @@ function itAssetQrPayload(asset) {
   ].join('\n');
 }
 
-function chunkItems(items, size) {
-  const pages = [];
-  for (let i = 0; i < items.length; i += size) pages.push(items.slice(i, i + size));
-  return pages;
-}
 
 /* ─── Main Component ─────────────────────────────────────────── */
 export default function ITAssetPage() {
@@ -159,8 +154,7 @@ export default function ITAssetPage() {
     if (search && !`${a.asset_tag} ${a.brand} ${a.model} ${a.serial_number || ''} ${a.location_description || ''}`.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
-  const selectedAssets = filtered.filter(a => selectedAssetIds.has(a.id));
-  const qrPrintPages = useMemo(() => chunkItems(selectedAssets, 4), [selectedAssets]);
+  const selectedAssets = useMemo(() => filtered.filter(a => selectedAssetIds.has(a.id)), [filtered, selectedAssetIds]);
   const allFilteredSelected = filtered.length > 0 && filtered.every(a => selectedAssetIds.has(a.id));
 
   const toggleAssetSelection = (id) => {
@@ -283,27 +277,16 @@ export default function ITAssetPage() {
           .bulk-it-qr-print {
             display: block !important;
             position: absolute;
-            inset: 0 auto auto 0;
+            top: 0;
+            left: 0;
             width: 100%;
             background: #fff;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .bulk-it-qr-page {
-            display: block !important;
-            width: 100%;
-            min-height: 285mm;
-            break-after: page;
-            page-break-after: always;
-          }
-          .bulk-it-qr-page:last-child {
-            break-after: auto;
-            page-break-after: auto;
-          }
           .bulk-it-qr-grid {
             display: grid !important;
             grid-template-columns: repeat(2, 94mm);
-            grid-auto-rows: 62mm;
             gap: 2.5mm;
             align-items: start;
           }
@@ -718,53 +701,49 @@ export default function ITAssetPage() {
       {selectedAsset && <ITAssetBarcodeModal asset={selectedAsset} onClose={() => setSelectedAsset(null)} />}
 
       <div className="bulk-it-qr-print hidden">
-        {qrPrintPages.map((pageAssets, pageIndex) => (
-          <div key={pageIndex} className="bulk-it-qr-page">
-            <div className="bulk-it-qr-grid">
-              {pageAssets.map(asset => {
-                const assetType = TYPE_ICON[asset.asset_type]?.label || 'IT Asset';
-                const title = itAssetTitle(asset);
-                return (
-                  <div key={asset.id} className="bulk-it-qr-label border-2 border-[#0f2d6b] rounded-md overflow-hidden bg-white">
-                    <div className="flex items-center gap-2 bg-[#0f2d6b] px-3 py-2">
-                      <img src="/bcim-logo.png" alt="BCIM" className="h-7 w-7 rounded bg-white object-contain p-1" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[10px] font-black uppercase tracking-wide text-white">BCIM Engineering Pvt Ltd</div>
-                        <div className="text-[8px] font-bold text-white/75">IT Asset Management</div>
-                      </div>
-                      <div className="rounded bg-white px-2 py-1 text-[8px] font-black uppercase tracking-widest text-[#0f2d6b]">
-                        IT ASSET
-                      </div>
+        <div className="bulk-it-qr-grid">
+          {selectedAssets.map(asset => {
+            const assetType = TYPE_ICON[asset.asset_type]?.label || 'IT Asset';
+            const title = itAssetTitle(asset);
+            return (
+              <div key={asset.id} className="bulk-it-qr-label border-2 border-[#0f2d6b] rounded-md overflow-hidden bg-white">
+                <div className="flex items-center gap-2 bg-[#0f2d6b] px-3 py-2">
+                  <img src="/bcim-logo.png" alt="BCIM" className="h-7 w-7 rounded bg-white object-contain p-1" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-black uppercase tracking-wide text-white">BCIM Engineering Pvt Ltd</div>
+                    <div className="text-[8px] font-bold text-white/75">IT Asset Management</div>
+                  </div>
+                  <div className="rounded bg-white px-2 py-1 text-[8px] font-black uppercase tracking-widest text-[#0f2d6b]">
+                    IT ASSET
+                  </div>
+                </div>
+                <div className="grid grid-cols-[45mm_1fr] min-h-[51mm]">
+                  <div className="flex flex-col items-center justify-center gap-1 border-r-2 border-dashed border-blue-200 bg-[#eef2ff] p-2">
+                    <div className="rounded bg-white p-1 shadow">
+                      <QRCodeSVG value={itAssetQrPayload(asset)} size={148} includeMargin={false} fgColor="#0f2d6b" level="M" />
                     </div>
-                    <div className="grid grid-cols-[45mm_1fr] min-h-[51mm]">
-                      <div className="flex flex-col items-center justify-center gap-1 border-r-2 border-dashed border-blue-200 bg-[#eef2ff] p-2">
-                        <div className="rounded bg-white p-1 shadow">
-                          <QRCodeSVG value={itAssetQrPayload(asset)} size={148} includeMargin={false} fgColor="#0f2d6b" level="M" />
-                        </div>
-                        <div className="text-[8px] font-bold uppercase tracking-widest text-slate-600">Scan to identify</div>
-                      </div>
-                      <div className="flex min-w-0 flex-col justify-center gap-1 px-3 py-2">
-                        <div className="font-mono text-[15px] font-black leading-none tracking-wide text-[#0f2d6b] break-all">{asset.asset_tag || '-'}</div>
-                        <div className="text-[10px] font-black text-slate-950 break-words">{title}</div>
-                        <div className="text-[8px] font-bold uppercase tracking-wide text-slate-600">{assetType}</div>
-                        <div className="my-1 border-t border-slate-300" />
-                        <div className="grid grid-cols-[24mm_1fr] gap-y-1 text-[8px]">
-                          <span className="font-black uppercase text-slate-500">Company</span><span className="font-bold text-slate-900">BCIM Engineering Pvt Ltd</span>
-                          <span className="font-black uppercase text-slate-500">Serial No</span><span className="font-bold text-slate-900 break-all">{asset.serial_number || '-'}</span>
-                          <span className="font-black uppercase text-slate-500">Asset ID</span><span className="font-bold text-slate-900 break-all">{asset.asset_tag || '-'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex justify-between bg-[#0f2d6b] px-3 py-1 text-[7px] font-bold text-white/80">
-                      <span>Scan QR to view IT asset details</span>
-                      <span>Property of BCIM Engineering Pvt Ltd</span>
+                    <div className="text-[8px] font-bold uppercase tracking-widest text-slate-600">Scan to identify</div>
+                  </div>
+                  <div className="flex min-w-0 flex-col justify-center gap-1 px-3 py-2">
+                    <div className="font-mono text-[15px] font-black leading-none tracking-wide text-[#0f2d6b] break-all">{asset.asset_tag || '-'}</div>
+                    <div className="text-[10px] font-black text-slate-950 break-words">{title}</div>
+                    <div className="text-[8px] font-bold uppercase tracking-wide text-slate-600">{assetType}</div>
+                    <div className="my-1 border-t border-slate-300" />
+                    <div className="grid grid-cols-[24mm_1fr] gap-y-1 text-[8px]">
+                      <span className="font-black uppercase text-slate-500">Company</span><span className="font-bold text-slate-900">BCIM Engineering Pvt Ltd</span>
+                      <span className="font-black uppercase text-slate-500">Serial No</span><span className="font-bold text-slate-900 break-all">{asset.serial_number || '-'}</span>
+                      <span className="font-black uppercase text-slate-500">Asset ID</span><span className="font-bold text-slate-900 break-all">{asset.asset_tag || '-'}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+                </div>
+                <div className="flex justify-between bg-[#0f2d6b] px-3 py-1 text-[7px] font-bold text-white/80">
+                  <span>Scan QR to view IT asset details</span>
+                  <span>Property of BCIM Engineering Pvt Ltd</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
