@@ -2126,25 +2126,70 @@ export default function ReportsPage() {
     if (first) setSelectedReport(first);
   };
 
+  const activeDeptMeta = DEPTS.find(d => d.key === dept);
+
   return (
-    <div className="flex h-full min-h-0 bg-slate-50 overflow-hidden max-xl:flex-col">
+    <div className="flex flex-col h-full min-h-0 bg-slate-50 overflow-hidden">
 
-      {/* ── Department sidebar ─────────────────────────────────────────────── */}
-      <aside className="report-hub-dept-sidebar w-60 flex-shrink-0 flex flex-col overflow-hidden bg-white border-r border-slate-200 max-xl:w-full max-xl:max-h-[200px]">
+      {/* ── Hero header ──────────────────────────────────────────────────────── */}
+      <div
+        className="report-hub-hero relative flex-shrink-0 overflow-hidden px-6 py-5 max-md:px-4 max-md:py-4"
+        style={{ background: 'linear-gradient(120deg, #0f1f4d 0%, #1e3a8a 55%, #2563eb 100%)' }}
+      >
+        {/* decorative pattern */}
+        <div className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, #fff 0, transparent 35%), radial-gradient(circle at 85% 80%, #fff 0, transparent 40%)' }} />
 
-        {/* Header */}
-        <div className="px-4 pt-4 pb-3.5 flex-shrink-0 border-b border-slate-100 max-xl:pt-3 max-xl:pb-2.5">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-                 style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)' }}>
-              <FileBarChart className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20 shadow-lg backdrop-blur-sm">
+              <FileBarChart className="h-6 w-6 text-white" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-900 leading-tight">Reports Hub</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{REPORTS.length} reports · {DEPTS.length - 1} departments</p>
+              <h1 className="text-lg font-semibold leading-tight text-white max-md:text-base">Reports &amp; Analytics</h1>
+              <p className="mt-0.5 text-xs text-white/60">
+                Centralized reporting hub · {REPORTS.length} reports across {DEPTS.length - 1} departments
+              </p>
+            </div>
+          </div>
+
+          {/* KPI chips */}
+          <div className="flex flex-wrap items-center gap-2.5 max-md:w-full">
+            <div className="flex min-w-[110px] flex-1 items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+                <Layers className="h-4 w-4 text-white" />
+              </div>
+              <div className="leading-tight">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Total Reports</p>
+                <p className="text-sm font-bold text-white tabular-nums">{REPORTS.length}</p>
+              </div>
+            </div>
+            <div className="flex min-w-[110px] flex-1 items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+                <Building2 className="h-4 w-4 text-white" />
+              </div>
+              <div className="leading-tight">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Departments</p>
+                <p className="text-sm font-bold text-white tabular-nums">{DEPTS.length - 1}</p>
+              </div>
+            </div>
+            <div className="flex min-w-[150px] flex-1 items-center gap-2.5 rounded-xl bg-white/10 px-3.5 py-2 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className={clsx('flex h-8 w-8 items-center justify-center rounded-lg', activeDeptMeta?.icon ? 'bg-white/15' : 'bg-white/15')}>
+                {activeDeptMeta?.icon ? React.createElement(activeDeptMeta.icon, { className: 'h-4 w-4 text-white' }) : <BarChart3 className="h-4 w-4 text-white" />}
+              </div>
+              <div className="min-w-0 leading-tight">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-white/55">Viewing</p>
+                <p className="truncate text-sm font-bold text-white">{activeDeptMeta?.label || 'All Reports'}</p>
+              </div>
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-1 min-h-0 overflow-hidden max-xl:flex-col">
+
+      {/* ── Department sidebar ─────────────────────────────────────────────── */}
+      <aside className="report-hub-dept-sidebar w-60 flex-shrink-0 flex flex-col overflow-hidden bg-white border-r border-slate-200 max-xl:w-full max-xl:max-h-[200px]">
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-2.5 py-2.5 space-y-0.5 max-xl:flex max-xl:gap-1.5 max-xl:space-y-0 max-xl:overflow-x-auto max-xl:overflow-y-hidden max-xl:pb-3
@@ -2152,7 +2197,7 @@ export default function ReportsPage() {
                         [&::-webkit-scrollbar-track]:transparent
                         [&::-webkit-scrollbar-thumb]:rounded-full
                         [&::-webkit-scrollbar-thumb]:bg-slate-200">
-          <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest max-xl:hidden">Departments</p>
+          <p className="px-2.5 pt-2.5 pb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest max-xl:hidden">Departments</p>
           {DEPTS.map((d, idx) => {
             const Icon = d.icon;
             const active = dept === d.key;
@@ -2299,6 +2344,7 @@ export default function ReportsPage() {
           )
         }
       </div>
+      </div>
     </div>
   );
 }
@@ -2404,7 +2450,8 @@ export function ReportGenerator({ report }) {
         .report-hub-dept-sidebar,
         .report-hub-list-panel,
         .report-hub-filter-bar,
-        .report-hub-header { display: none !important; }
+        .report-hub-header,
+        .report-hub-hero { display: none !important; }
 
         /* ── 3. Report output card ── */
         #report-output {
