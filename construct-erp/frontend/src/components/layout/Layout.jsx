@@ -70,6 +70,8 @@ const navGroups = [
     { to: '/procurement/inventory',        icon: Package,       label: 'Inventory' },
     { to: '/procurement/documents',        icon: FolderSearch,  label: 'Documents' },
     { to: '/procurement/reports',          icon: FileBarChart,  label: 'Reports' },
+    { to: '/procurement/tenders',          icon: Gavel,         label: 'Tenders (BD)' },
+    { to: '/procurement/bid-opportunities',icon: Target,        label: 'Bid Opportunities' },
   ]},
   { label: 'Tender Management', items: [
     { to: '/tender-management',           icon: Gavel,         label: 'Tender Register' },
@@ -294,6 +296,8 @@ const NAV_SECTIONS = {
     { label: 'Stock',            paths: ['/procurement/inventory'] },
     { label: 'Documents',        paths: ['/procurement/documents'] },
     { label: 'Reports',          paths: ['/procurement/reports'] },
+    { label: 'Tenders (BD)',      paths: ['/procurement/tenders'] },
+    { label: 'Bid Opportunities', paths: ['/procurement/bid-opportunities'] },
   ],
   'Stores': [
     { label: 'Overview',        paths: ['/stores'] },
