@@ -394,10 +394,32 @@ router.patch('/accounts/:id', async (req, res) => {
 // ── MASTERS: Custodians ────────────────────────────────────────────────────────
 router.get('/custodians', async (req, res) => {
   try {
-    const { rows } = await query(
+    const cid = req.user.company_id;
+    let { rows } = await query(
       `SELECT c.*, p.name AS project_name FROM pc_custodians c
        LEFT JOIN projects p ON p.id = c.project_id
-       WHERE c.company_id=$1 ORDER BY c.custodian_name`, [req.user.company_id]);
+       WHERE c.company_id=$1 ORDER BY c.custodian_name`, [cid]);
+
+    // Auto-seed from active users when no custodians exist yet
+    if (rows.length === 0) {
+      const users = await query(
+        `SELECT id, employee_code, name, designation, department, phone
+         FROM users WHERE company_id=$1 AND is_active=true ORDER BY name`, [cid]);
+      for (const u of users.rows) {
+        await query(
+          `INSERT INTO pc_custodians (company_id, custodian_name, employee_code, designation, contact_number, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT DO NOTHING`,
+          [cid, u.name, u.employee_code || null, u.designation || u.department || null, u.phone || null, req.user.id]
+        ).catch(() => {});
+      }
+      const refreshed = await query(
+        `SELECT c.*, p.name AS project_name FROM pc_custodians c
+         LEFT JOIN projects p ON p.id = c.project_id
+         WHERE c.company_id=$1 ORDER BY c.custodian_name`, [cid]);
+      rows = refreshed.rows;
+    }
+
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
