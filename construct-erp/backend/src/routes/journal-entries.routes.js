@@ -77,6 +77,10 @@ const router = express.Router();
   await safe(`CREATE INDEX IF NOT EXISTS idx_jel_entry     ON journal_entry_lines(journal_entry_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_jel_account   ON journal_entry_lines(account_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_jvt_company   ON jv_templates(company_id)`);
+  // Speeds up the Day Book / list queries which filter on company+status+date
+  // range and sort by entry_date — without this Postgres falls back to a
+  // sequential scan + sort as journal_entries grows.
+  await safe(`CREATE INDEX IF NOT EXISTS idx_je_company_status_date ON journal_entries(company_id, status, entry_date, created_at)`);
 
   console.log('[JournalEntries] Schema OK');
 })();
@@ -154,6 +158,13 @@ router.get('/day-book', authenticate, async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const from = req.query.from || today;
     const to = req.query.to || from;
+
+    // Cap the range to avoid loading huge result sets for wide date ranges.
+    const MAX_DAYS = 92; // ~3 months
+    const spanDays = (new Date(to) - new Date(from)) / (1000 * 60 * 60 * 24);
+    if (spanDays > MAX_DAYS) {
+      return res.status(400).json({ error: `Date range too wide for Day Book — please select up to ${MAX_DAYS} days at a time.` });
+    }
 
     const entries = await query(
       `SELECT je.*, u.name AS created_by_name
