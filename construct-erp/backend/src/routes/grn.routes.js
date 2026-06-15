@@ -381,9 +381,31 @@ router.post('/', async (req, res) => {
       return { grn: grnRow, bill: billRow };
     });
 
+    // Rate variance check — warn if any item deviates >5% from PO item rate
+    const rateVariances = [];
+    if (po_id && items?.length) {
+      const poItems = await query(`SELECT id, material_name, rate FROM po_items WHERE po_id = $1`, [po_id]);
+      const poRateMap = {};
+      for (const pi of poItems.rows) poRateMap[pi.id] = { name: pi.material_name, rate: parseFloat(pi.rate || 0) };
+      for (const it of items) {
+        if (it.po_item_id && it.rate && poRateMap[it.po_item_id]) {
+          const poRate = poRateMap[it.po_item_id].rate;
+          const grnRate = parseFloat(it.rate);
+          if (poRate > 0 && Math.abs(grnRate - poRate) / poRate > 0.05) {
+            rateVariances.push({
+              material: it.material_name,
+              po_rate: poRate,
+              grn_rate: grnRate,
+              variance_pct: ((grnRate - poRate) / poRate * 100).toFixed(1),
+            });
+          }
+        }
+      }
+    }
+
     // Fire-and-forget push notification to stores team
     notifyGrnSubmitted(req.user.company_id, result.grn);
-    res.status(201).json({ data: result.grn, bill: result.bill || null });
+    res.status(201).json({ data: result.grn, bill: result.bill || null, rate_variances: rateVariances });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -478,6 +500,32 @@ router.patch('/:id/approve-qc', async (req, res) => {
           [grn.project_id, inventoryId, it.quantity_received, grn.grn_number, 'Industrial QC Approved', req.user.id]
         );
       }
+      // Auto-close PO when all items are fully received
+      if (grn.po_id) {
+        const poCheck = await client.query(
+          `SELECT
+             SUM(poi.quantity) AS total_ordered,
+             COALESCE(SUM(
+               (SELECT COALESCE(SUM(gi2.quantity_received), 0)
+                FROM grn_items gi2
+                JOIN grn g2 ON g2.id = gi2.grn_id
+                WHERE g2.po_id = poi.po_id AND g2.quality_status = 'approved'
+                  AND gi2.po_item_id = poi.id)
+             ), 0) AS total_received
+           FROM po_items poi WHERE poi.po_id = $1`,
+          [grn.po_id]
+        );
+        const row = poCheck.rows[0];
+        const ordered  = parseFloat(row?.total_ordered  || 0);
+        const received = parseFloat(row?.total_received || 0);
+        if (ordered > 0 && received >= ordered) {
+          await client.query(
+            `UPDATE purchase_orders SET status = 'received' WHERE id = $1 AND status NOT IN ('received','cancelled','rejected')`,
+            [grn.po_id]
+          );
+        }
+      }
+
       // Notify GRN creator + accounts
       const grnFull = await query(`SELECT g.*, v.name AS vendor_name, p.name AS project_name FROM grn g LEFT JOIN vendors v ON v.id=g.vendor_id JOIN projects p ON p.id=g.project_id WHERE g.id=$1`, [req.params.id]);
       if (grnFull.rows.length) notifyGrnApproved(req.user.company_id, grnFull.rows[0], req.user.name);

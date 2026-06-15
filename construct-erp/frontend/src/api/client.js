@@ -1657,6 +1657,14 @@ export const rateContractAPI = {
   delete: (id)    => api.delete(`/procurement/rate-contracts/${id}`),
 };
 
+export const procurementAlertsAPI = {
+  summary:      (params) => api.get('/procurement/alerts/summary',      { params }),
+  overdue:      (params) => api.get('/procurement/alerts/overdue',      { params }),
+  partial:      (params) => api.get('/procurement/alerts/partial',      { params }),
+  rateVariance: (params) => api.get('/procurement/alerts/rate-variance',{ params }),
+  orphanBills:  (params) => api.get('/procurement/alerts/orphan-bills', { params }),
+};
+
 export const stockVerifAPI = {
   list:      (params)    => api.get('/stock-verifications', { params }),
   get:       (id)        => api.get(`/stock-verifications/${id}`),
