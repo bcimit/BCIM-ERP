@@ -62,7 +62,7 @@ runSchemaInit('petty_cash_v2', async () => {
     created_at       TIMESTAMPTZ DEFAULT NOW()
   )`);
 
-  // Seed default categories once
+  // Seed default categories once — check any row with that code exists (nil or real company)
   await safe(`INSERT INTO pc_expense_categories (company_id, category_code, category_name, construction_type, requires_receipt)
     SELECT '00000000-0000-0000-0000-000000000000'::uuid, code, name, ctype, req FROM (VALUES
       ('FUEL',  'Fuel & Lubricants',        'Vehicle',   true),
@@ -76,8 +76,15 @@ runSchemaInit('petty_cash_v2', async () => {
       ('UTIL',  'Utilities & Services',     'General',   false),
       ('MISC',  'Miscellaneous',            'General',   false)
     ) AS t(code,name,ctype,req)
-    WHERE NOT EXISTS (SELECT 1 FROM pc_expense_categories WHERE category_code = t.code AND company_id != '00000000-0000-0000-0000-000000000000'::uuid)
-    ON CONFLICT DO NOTHING`);
+    WHERE NOT EXISTS (SELECT 1 FROM pc_expense_categories WHERE category_code = t.code)`);
+
+  // Clean up any duplicate default categories created by prior bug
+  await safe(`DELETE FROM pc_expense_categories a
+    USING pc_expense_categories b
+    WHERE a.company_id = '00000000-0000-0000-0000-000000000000'
+      AND b.company_id = '00000000-0000-0000-0000-000000000000'
+      AND a.category_code = b.category_code
+      AND a.created_at > b.created_at`);
 
   // Transaction: Requests
   await safe(`CREATE TABLE IF NOT EXISTS pc_requests (
@@ -428,10 +435,17 @@ router.patch('/custodians/:id', async (req, res) => {
 // ── MASTERS: Categories ────────────────────────────────────────────────────────
 router.get('/categories', async (req, res) => {
   try {
+    // DISTINCT ON category_code: prefer company-owned rows over nil-UUID defaults
+    // ORDER BY company_id DESC puts real UUIDs before the nil UUID
     const { rows } = await query(
-      `SELECT * FROM pc_expense_categories
-       WHERE company_id=$1 OR company_id='00000000-0000-0000-0000-000000000000'
-       ORDER BY category_name`, [req.user.company_id]);
+      `SELECT DISTINCT ON (COALESCE(category_code, category_name)) *
+       FROM pc_expense_categories
+       WHERE (company_id=$1 OR company_id='00000000-0000-0000-0000-000000000000')
+         AND is_active = true
+       ORDER BY COALESCE(category_code, category_name),
+                (company_id = $1)::int DESC,
+                created_at ASC`,
+      [req.user.company_id]);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
