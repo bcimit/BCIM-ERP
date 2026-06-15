@@ -91,6 +91,7 @@ const navGroups = [
     { to: '/stores/ledger',            icon: BookOpen,        label: 'Store Ledger' },
     { to: '/stores/issue',             icon: ArrowUpRight,    label: 'Issue Notes (MIN)' },
     { to: '/stores/mtr',               icon: Truck,           label: 'Material Transfer' },
+    { to: '/stores/stock-verification', icon: ClipboardCheck, label: 'Stock Verification' },
     { to: '/stores/credit-notes',      icon: TrendingDown,    label: 'Credit Notes' },
     { to: '/stores/documents',         icon: FolderSearch,    label: 'Documents' },
   ]},
