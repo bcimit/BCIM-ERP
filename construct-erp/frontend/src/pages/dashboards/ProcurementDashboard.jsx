@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { poAPI, quotationAPI, vendorAPI, subcontractorAPI, mrsAPI, inventoryAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
-import { FlatKPI, DashSection, DashTable, Badge, inr } from './DashKPI';
+import { FlatKPI, DashSection, DashTable, Badge, inr, inrCompact } from './DashKPI';
 import dayjs from 'dayjs';
 
 const PO_CLS = {
@@ -148,9 +148,9 @@ export default function ProcurementDashboard() {
 
       {/* Overview */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <FlatKPI icon={ShoppingCart} label="POs This Month"  value={thisMonthPOs.length} sub={inr(poValueMonth)} color="blue"    loading={loadP} to="/procurement/po" />
-        <FlatKPI icon={IndianRupee}  label="Total PO Value"  value={inr(poValueTotal)}   sub={`${pos.length} purchase orders`} color="indigo" loading={loadP} to="/procurement/po-register" />
-        <FlatKPI icon={Hammer}       label="Total WO Value"  value={inr(woValueTotal)}   sub={`${wos.length} work orders`} color="violet" loading={loadW} to="/procurement/work-orders" />
+        <FlatKPI icon={ShoppingCart} label="POs This Month"  value={thisMonthPOs.length} sub={inrCompact(poValueMonth)} color="blue"    loading={loadP} to="/procurement/po" />
+        <FlatKPI icon={IndianRupee}  label="Total PO Value"  value={inrCompact(poValueTotal)}   sub={`${pos.length} purchase orders`} color="indigo" loading={loadP} to="/procurement/po-register" />
+        <FlatKPI icon={Hammer}       label="Total WO Value"  value={inrCompact(woValueTotal)}   sub={`${wos.length} work orders`} color="violet" loading={loadW} to="/procurement/work-orders" />
         <FlatKPI icon={TrendingUp}   label="Quotes Open"     value={pendingQuotes.length} sub="RFQ / evaluation" color="cyan"   loading={loadQ} to="/procurement/quotations" />
         <FlatKPI icon={ClipboardList} label="MRS Pending"    value={pendingMRS.length}   sub="Awaiting approval" color="amber"  loading={loadM} to="/procurement/material-request" />
         <FlatKPI icon={Users}        label="Vendors"         value={vendors.length}      sub="Registered"        color="emerald" loading={loadV} to="/procurement/vendors" />

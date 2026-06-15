@@ -25,7 +25,7 @@ export function DashKPI({ label, value, sub, icon: Icon, color = 'indigo', loadi
       <div className="min-w-0">
         {loading
           ? <div className="h-7 w-24 bg-slate-100 rounded animate-pulse mb-1" />
-          : <p className={`text-2xl font-medium leading-tight ${c.val}`}>{value ?? '—'}</p>
+          : <p className={`text-2xl font-medium leading-tight truncate ${c.val}`}>{value ?? '—'}</p>
         }
         <p className="text-xs font-medium text-slate-900 font-medium mt-0.5">{label}</p>
         {sub && <p className="text-[11px] text-slate-900 font-medium mt-0.5">{sub}</p>}
@@ -55,7 +55,7 @@ export function FlatKPI({ label, value, sub, icon: Icon, color = 'blue', loading
   const wrapperProps = to ? { to } : (onClick ? { onClick, role: 'button' } : {});
   return (
     <Wrapper {...wrapperProps}
-      className={`bg-white border rounded-md p-4 text-left transition-colors block ${active ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200 hover:border-slate-300'} ${(to || onClick) ? 'cursor-pointer' : ''}`}>
+      className={`bg-white border rounded-md p-4 text-left transition-colors block overflow-hidden min-w-0 ${active ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200 hover:border-slate-300'} ${(to || onClick) ? 'cursor-pointer' : ''}`}>
       <div className={`w-8 h-8 rounded-md flex items-center justify-center mb-3 ${c.bg}`}>
         {loading
           ? <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin text-slate-300" />
@@ -63,10 +63,10 @@ export function FlatKPI({ label, value, sub, icon: Icon, color = 'blue', loading
       </div>
       {loading
         ? <div className="h-7 w-16 bg-slate-100 rounded animate-pulse mb-1" />
-        : <div className="text-2xl font-semibold text-slate-800 leading-tight">{value ?? '—'}</div>
+        : <div className="text-2xl font-semibold text-slate-800 leading-tight truncate">{value ?? '—'}</div>
       }
-      <div className="text-xs text-slate-400 mt-0.5">{label}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-1">{sub}</div>}
+      <div className="text-xs text-slate-400 mt-0.5 truncate">{label}</div>
+      {sub && <div className="text-[11px] text-slate-400 mt-1 truncate">{sub}</div>}
     </Wrapper>
   );
 }
@@ -118,6 +118,14 @@ export function DashTable({ cols, rows, empty = 'No records found' }) {
 export const inr = (v) => {
   const n = parseFloat(v || 0);
   return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+export const inrCompact = (v) => {
+  const n = parseFloat(v || 0);
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
+  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
+  if (n >= 1_000)       return `₹${(n / 1_000).toFixed(1)} K`;
+  return `₹${n.toFixed(0)}`;
 };
 
 export const Badge = ({ label, cls }) => (

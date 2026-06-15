@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Briefcase, FileText, AlertTriangle, CalendarClock, ArrowRight } from 'lucide-react';
 import { projectAPI, tqsBillsAPI, raBillAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
-import { DashKPI, DashSection, DashTable, inr, Badge } from './DashKPI';
+import { DashKPI, DashSection, DashTable, inr, inrCompact, Badge } from './DashKPI';
 import dayjs from 'dayjs';
 
 const STATUS_CLS = {
@@ -76,7 +76,7 @@ export default function PMDashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <DashKPI icon={Briefcase}    label="Active Projects"    value={active}              color="indigo"  loading={loadP} />
-        <DashKPI icon={FileText}     label="Total Contract Value" value={inr(totalValue)}   color="emerald" loading={loadP} />
+        <DashKPI icon={FileText}     label="Total Contract Value" value={inrCompact(totalValue)} sub={inr(totalValue)} color="emerald" loading={loadP} />
         <DashKPI icon={AlertTriangle} label="Bills Awaiting Approval" value={pendingBills.length} color="amber" loading={loadB} />
         <DashKPI icon={CalendarClock} label="Closing in 60 Days" value={upcoming.length}   color="blue"    loading={loadP} />
       </div>
