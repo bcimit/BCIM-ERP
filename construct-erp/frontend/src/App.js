@@ -66,6 +66,7 @@ const ClientAdvanceRequestsPage = lazy(() => import('./pages/finance/ClientAdvan
 const AccountsDashboard   = lazy(() => import('./pages/dashboards/AccountsDashboard'));
 const ChartOfAccountsPage     = lazy(() => import('./pages/accounts/ChartOfAccountsPage'));
 const JournalEntryPage        = lazy(() => import('./pages/accounts/JournalEntryPage'));
+const BillAccountsPage        = lazy(() => import('./pages/accounts/BillAccountsPage'));
 const AccountTransactionsPage = lazy(() => import('./pages/accounts/AccountTransactionsPage'));
 const AccountingReportsPage   = lazy(() => import('./pages/accounts/AccountingReportsPage'));
 const AccountSettingsPage     = lazy(() => import('./pages/accounts/AccountSettingsPage'));
@@ -496,6 +497,7 @@ export default function App() {
                 {/* Accountant */}
                 <Route path="accounts/accountant/chart-of-accounts" element={<RequireModule module="Finance"><ChartOfAccountsPage /></RequireModule>} />
                 <Route path="accounts/accountant/journal-entries" element={<RequireModule module="Finance"><JournalEntryPage /></RequireModule>} />
+                <Route path="accounts/accountant/bill-automation" element={<RequireModule module="Finance"><BillAccountsPage /></RequireModule>} />
                 <Route path="accounts/accountant/transactions" element={<RequireModule module="Finance"><AccountTransactionsPage /></RequireModule>} />
                 {/* Reports */}
                 <Route path="accounts/reports/financial" element={<RequireModule module="Finance"><AccountingReportsPage /></RequireModule>} />

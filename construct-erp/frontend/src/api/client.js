@@ -477,6 +477,19 @@ export const journalEntryAPI = {
   dueTemplates:     ()       => api.get('/journal-entries/templates/due'),
 };
 
+// Bill-tracker accounts automation (ITC / TDS / retention)
+export const billAccountsAPI = {
+  itcRegister:       (params) => api.get('/bill-accounts/itc-register', { params }),
+  tdsRegister:       (params) => api.get('/bill-accounts/tds-register', { params }),
+  tdsDeposit:        (data)   => api.post('/bill-accounts/tds-deposit', data),
+  tdsDeposits:       ()       => api.get('/bill-accounts/tds-deposits'),
+  retentionRegister: (params) => api.get('/bill-accounts/retention-register', { params }),
+  retentionRelease:  (billId, data) => api.post(`/bill-accounts/retention-release/${billId}`, data || {}),
+  // reused from the bill tracker
+  vendorLedger:      (params) => api.get('/tqs/bills/vendor-ledger', { params }),
+  apAging:           (params) => api.get('/tqs/bills/ap-aging', { params }),
+};
+
 export const bankAccountAPI = {
   list:   (params) => api.get('/bank-accounts', { params }),
   create: (data)   => api.post('/bank-accounts', data),

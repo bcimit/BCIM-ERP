@@ -29,6 +29,8 @@ const SOURCE_LABELS = {
   auto_debit_note:  { label: 'Debit Note',   cls: 'bg-orange-100 text-orange-700' },
   auto_client_advance: { label: 'Client Advance', cls: 'bg-cyan-100 text-cyan-700' },
   auto_tqs_bill:    { label: 'Bill Tracker', cls: 'bg-indigo-100 text-indigo-700' },
+  auto_tds_deposit: { label: 'TDS Deposit',  cls: 'bg-violet-100 text-violet-700' },
+  auto_retention_release: { label: 'Retention', cls: 'bg-fuchsia-100 text-fuchsia-700' },
   auto:             { label: 'Auto',         cls: 'bg-teal-100 text-teal-700' },
 };
 
@@ -415,6 +417,8 @@ function AutomationLogTab() {
           <option value="auto_debit_note">Debit Note</option>
           <option value="auto_client_advance">Client Advance</option>
           <option value="auto_tqs_bill">Bill Tracker</option>
+          <option value="auto_tds_deposit">TDS Deposit</option>
+          <option value="auto_retention_release">Retention</option>
         </select>
         <input type="date" className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none"
           value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} />

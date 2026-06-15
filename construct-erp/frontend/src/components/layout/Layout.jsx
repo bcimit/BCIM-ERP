@@ -128,6 +128,7 @@ const navGroups = [
     { to: '/accounts/purchases/debit-notes',    icon: ArrowUpRight,    label: 'Debit Notes' },
     { to: '/accounts/accountant/chart-of-accounts', icon: BookOpen,    label: 'Chart of Accounts' },
     { to: '/accounts/accountant/journal-entries',   icon: ScrollText,  label: 'Journal Entries' },
+    { to: '/accounts/accountant/bill-automation',   icon: Receipt,     label: 'Bill Accounts Auto' },
     { to: '/accounts/accountant/transactions',      icon: Activity,    label: 'Account Transactions' },
     { to: '/accounts/reports/financial',        icon: FileBarChart,    label: 'Financial Reports' },
     { to: '/accounts/reports/billing',          icon: BarChart3,       label: 'Billing Reports' },
