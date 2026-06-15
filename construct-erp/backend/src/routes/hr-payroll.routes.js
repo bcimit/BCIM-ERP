@@ -5,6 +5,7 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
+const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 
 router.use(authenticate);
 
@@ -365,6 +366,12 @@ router.post('/bulk-pay', async (req, res) => {
     }
 
     const results = [];
+    const totals = {
+      gross: 0, netPay: 0, tds: 0,
+      pfEmp: 0, pfEr: 0, esiEmp: 0, esiEr: 0, pt: 0,
+      loanAdv: 0,
+    };
+
     for (const p of approved.rows) {
       // Mark payroll as paid
       await query(
@@ -372,6 +379,19 @@ router.post('/bulk-pay', async (req, res) => {
          WHERE id=$4`,
         [payment_date, payment_mode || 'bank_transfer', payment_ref || null, p.id]
       );
+
+      // Accumulate totals for consolidated JV
+      totals.gross   += parseFloat(p.gross_earnings  || 0);
+      totals.netPay  += parseFloat(p.net_pay         || 0);
+      totals.tds     += parseFloat(p.tds             || 0);
+      totals.pfEmp   += parseFloat(p.pf_employee     || 0);
+      totals.pfEr    += parseFloat(p.pf_employer     || 0);
+      totals.esiEmp  += parseFloat(p.esi_employee    || 0);
+      totals.esiEr   += parseFloat(p.esi_employer    || 0);
+      totals.pt      += parseFloat(p.pt              || 0);
+      totals.loanAdv += parseFloat(p.loan_deduction  || 0)
+                      + parseFloat(p.advance_deduction || 0)
+                      + parseFloat(p.other_deductions  || 0);
 
       // Auto-create Finance payment record
       try {
@@ -385,10 +405,38 @@ router.post('/bulk-pay', async (req, res) => {
            `Salary ${new Date(y, m-1).toLocaleString('default',{month:'long'})} ${y}`]
         );
       } catch (e) {
-        // Don't fail the whole batch if payments table schema differs
         console.warn('Finance payment insert skipped:', e.message);
       }
       results.push({ id: p.id, employee_name: p.employee_name, net_pay: p.net_pay });
+    }
+
+    // ── Consolidated monthly salary JV ────────────────────────────────────────
+    if (totals.gross > 0) {
+      const monthLabel = new Date(y, m - 1).toLocaleString('default', { month: 'long' }) + ' ' + y;
+      const reference  = `SALARY-${y}-${String(m).padStart(2, '0')}`;
+      const lines = [
+        { code: '6000', debit: Math.round(totals.gross * 100) / 100, description: `Salaries ${monthLabel}` },
+      ];
+      if (totals.pfEr   > 0) lines.push({ code: '6010', debit: Math.round(totals.pfEr  * 100) / 100, description: 'EPF Employer Contribution' });
+      if (totals.esiEr  > 0) lines.push({ code: '6020', debit: Math.round(totals.esiEr * 100) / 100, description: 'ESI Employer Contribution' });
+      if (totals.netPay > 0) lines.push({ code: '2400', credit: Math.round(totals.netPay * 100) / 100, description: 'Net Salary Payable' });
+      if (totals.tds    > 0) lines.push({ code: '2200', credit: Math.round(totals.tds   * 100) / 100, description: 'TDS on Salary (192B)' });
+      const totalPf = totals.pfEmp + totals.pfEr;
+      if (totalPf       > 0) lines.push({ code: '2410', credit: Math.round(totalPf      * 100) / 100, description: 'EPF Payable' });
+      const totalEsi = totals.esiEmp + totals.esiEr;
+      if (totalEsi      > 0) lines.push({ code: '2420', credit: Math.round(totalEsi     * 100) / 100, description: 'ESI Payable' });
+      if (totals.pt     > 0) lines.push({ code: '2430', credit: Math.round(totals.pt    * 100) / 100, description: 'Professional Tax Payable' });
+      if (totals.loanAdv > 0) lines.push({ code: '2440', credit: Math.round(totals.loanAdv * 100) / 100, description: 'Loan / Advance Recovery' });
+
+      postAutoJournalStandalone({
+        companyId: req.user.company_id,
+        userId:    req.user.id,
+        entryDate: payment_date || new Date().toISOString().slice(0, 10),
+        reference,
+        narration: `Salary payroll — ${monthLabel} (${results.length} employees)`,
+        source:    'auto_hr_salary',
+        lines,
+      }).catch(() => {});
     }
 
     res.json({ data: results, count: results.length });

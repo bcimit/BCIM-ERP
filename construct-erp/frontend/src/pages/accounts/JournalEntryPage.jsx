@@ -31,6 +31,7 @@ const SOURCE_LABELS = {
   auto_tqs_bill:    { label: 'Bill Tracker', cls: 'bg-indigo-100 text-indigo-700' },
   auto_tds_deposit: { label: 'TDS Deposit',  cls: 'bg-violet-100 text-violet-700' },
   auto_retention_release: { label: 'Retention', cls: 'bg-fuchsia-100 text-fuchsia-700' },
+  auto_hr_salary:   { label: 'Salary Payroll', cls: 'bg-pink-100 text-pink-700' },
   auto:             { label: 'Auto',         cls: 'bg-teal-100 text-teal-700' },
 };
 

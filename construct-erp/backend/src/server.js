@@ -630,7 +630,23 @@ async function runAutoMigrations() {
     await client.query(`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS major_head VARCHAR(50)`);
     await client.query(`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS dc_idc     VARCHAR(10)`);
     await client.query(`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS remarks    TEXT`);
-    logger.info('✅ Auto-migrations complete (003, 004, 005, 033, 034, 035, 036, 037, 038)');
+    // 039 Payroll COA codes — salary/PF/ESI liability and expense accounts
+    await client.query(`
+      INSERT INTO chart_of_accounts (company_id, code, name, account_type, sub_type)
+      SELECT c.id, v.code, v.name, v.account_type, v.sub_type
+      FROM companies c
+      CROSS JOIN (VALUES
+        ('2400','Salary Payable',            'liability','Current Liability'),
+        ('2410','EPF Payable',               'liability','Current Liability'),
+        ('2420','ESI Payable',               'liability','Current Liability'),
+        ('2430','Professional Tax Payable',  'liability','Current Liability'),
+        ('2440','Employee Deductions Payable','liability','Current Liability'),
+        ('6010','EPF Employer Contribution', 'expense',  'Indirect Expense'),
+        ('6020','ESI Employer Contribution', 'expense',  'Indirect Expense')
+      ) AS v(code, name, account_type, sub_type)
+      ON CONFLICT (company_id, code) DO NOTHING
+    `);
+    logger.info('✅ Auto-migrations complete (003–039)');
   } catch (err) {
     logger.warn('⚠️  Auto-migration warning:', err.message);
   } finally {
