@@ -122,7 +122,10 @@ async function ensureDmsSchema() {
           ADD COLUMN IF NOT EXISTS ocr_text TEXT,
           ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb,
           ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',
-          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW(),
+          ADD COLUMN IF NOT EXISTS onedrive_url TEXT,
+          ADD COLUMN IF NOT EXISTS onedrive_id TEXT,
+          ADD COLUMN IF NOT EXISTS onedrive_web_url TEXT
       `);
     } catch (e) {
       if (!e.message.includes('already exists')) throw e;
