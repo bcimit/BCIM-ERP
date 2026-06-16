@@ -711,39 +711,43 @@ router.get('/:id([0-9a-fA-F-]{36})/preview', async (req, res) => {
     if (!localPath || !fs.existsSync(localPath)) return res.status(404).json({ error: 'Document file not found on server' });
 
     const ext = path.extname(doc.file_name || doc.local_url || '').toLowerCase();
-    if (!previewableExcel.has(ext)) {
+
+    // Handle Excel files with sheet data
+    if (previewableExcel.has(ext)) {
+      const workbook = xlsx.readFile(localPath, { cellDates: true });
+      const sheetName = req.query.sheet && workbook.SheetNames.includes(req.query.sheet)
+        ? req.query.sheet
+        : workbook.SheetNames[0];
+      const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
+        header: 1,
+        blankrows: false,
+        defval: '',
+        raw: false,
+      }).slice(0, 80);
+      await db().query(`INSERT INTO document_access_logs (document_id,user_id,action,ip_address,metadata) VALUES ($1,$2,'view',$3,$4)`,
+        [req.params.id, req.user.id, req.ip, JSON.stringify({ preview: 'excel', sheet: sheetName })]);
       return res.json({
         data: {
-          kind: ext === '.pdf' ? 'pdf' : ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext) ? 'image' : 'download',
+          kind: 'excel',
           file_name: doc.file_name,
           file_type: doc.file_type,
-          message: 'Use the file endpoint for inline preview or download.',
+          sheets: workbook.SheetNames,
+          sheet: sheetName,
+          rows,
         },
       });
     }
 
-    const workbook = xlsx.readFile(localPath, { cellDates: true });
-    const sheetName = req.query.sheet && workbook.SheetNames.includes(req.query.sheet)
-      ? req.query.sheet
-      : workbook.SheetNames[0];
-    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
-      header: 1,
-      blankrows: false,
-      defval: '',
-      raw: false,
-    }).slice(0, 80);
-    await db().query(`INSERT INTO document_access_logs (document_id,user_id,action,ip_address,metadata) VALUES ($1,$2,'view',$3,$4)`,
-      [req.params.id, req.user.id, req.ip, JSON.stringify({ preview: 'excel', sheet: sheetName })]);
-    res.json({
-      data: {
-        kind: 'excel',
-        file_name: doc.file_name,
-        file_type: doc.file_type,
-        sheets: workbook.SheetNames,
-        sheet: sheetName,
-        rows,
-      },
-    });
+    // For PDFs and images, send file directly as blob
+    if (ext === '.pdf') res.setHeader('Content-Type', 'application/pdf');
+    else if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
+      const mimeTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+    }
+    res.setHeader('Content-Disposition', 'inline');
+    await db().query(`INSERT INTO document_access_logs (document_id,user_id,action,ip_address) VALUES ($1,$2,'view',$3)`,
+      [req.params.id, req.user.id, req.ip]).catch(()=>{});
+    res.sendFile(localPath);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1101,21 +1105,6 @@ router.get('/:id([0-9a-fA-F-]{36})/download', async (req, res) => {
       [req.params.id, req.user.id]);
     res.setHeader('Content-Disposition', `attachment; filename="${doc.file_name}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.sendFile(filePath);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-router.get('/:id([0-9a-fA-F-]{36})/preview', async (req, res) => {
-  try {
-    const doc = await getAccessibleDocument(req, req.params.id);
-    const filePath = resolveLocalDocumentPath(doc.local_url);
-    if (!filePath || !fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-    await db().query(`INSERT INTO document_access_logs (document_id,user_id,action) VALUES ($1,$2,'preview')`,
-      [req.params.id, req.user.id]);
-    res.setHeader('Content-Type', doc.file_type === 'pdf' ? 'application/pdf' : 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'inline');
     res.sendFile(filePath);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
