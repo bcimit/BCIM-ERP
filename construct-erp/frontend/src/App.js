@@ -104,6 +104,11 @@ const WOBulkImportPage      = lazy(() => import('./pages/procurement/WOBulkImpor
 const ProcurementReportsPage = lazy(() => import('./pages/procurement/ProcurementReportsPage'));
 const ProcurementAlertsPage  = lazy(() => import('./pages/procurement/ProcurementAlertsPage'));
 const ProcurementDashboardPage = lazy(() => import('./pages/dashboards/ProcurementDashboard'));
+const TenderListPage         = lazy(() => import('./pages/procurement/TenderListPage'));
+const TenderDetailPage       = lazy(() => import('./pages/procurement/TenderDetailPage'));
+const TenderBidEntryPage     = lazy(() => import('./pages/procurement/TenderBidEntryPage'));
+const BidOpportunityPage       = lazy(() => import('./pages/procurement/BidOpportunityPage'));
+const BidOpportunityDetailPage = lazy(() => import('./pages/procurement/BidOpportunityDetailPage'));
 const TenderRegisterPage          = lazy(() => import('./pages/tender-mgmt/TenderRegisterPage'));
 const TenderManagementPage        = lazy(() => import('./pages/tender-mgmt/TenderManagementPage'));
 const DMSPage                     = lazy(() => import('./pages/documents/DMSPage'));
@@ -277,19 +282,30 @@ const APPROVER_ROLES = [
   'md', 'ceo', 'cfo', 'director', 'managing_director',
 ];
 
+// Roles considered "admin/manager" — get module-based home, not ESS
+const ADMIN_ROLES = [
+  'admin', 'super_admin', 'hr_admin', 'hr_manager',
+  'site_engineer', 'qs_engineer', 'project_manager',
+  'accounts', 'management', 'finance_head', 'procurement_manager',
+  'md', 'ceo', 'cfo', 'director', 'managing_director',
+];
+
 function getHomeRoute(user) {
   if (!user) return '/login';
   const role = String(user.role || '').toLowerCase();
   // Super admin & admin → full dashboard
   if (['admin', 'super_admin'].includes(role)) return '/dashboard';
-  // Approver roles → My Approvals page as home
+  // Approver / manager roles → My Approvals page as home
   if (APPROVER_ROLES.includes(role)) return '/approvals';
   const mods = user.accessible_modules;
-  if (!mods || mods.length === 0) return '/approvals'; // unconfigured → approvals
+  // Staff with no admin modules → ESS Portal (like GreytHR)
+  if (!mods || mods.length === 0) return '/ess';
+  const hasAdminModule = mods.some(m => MODULE_HOME[m]);
+  if (!hasAdminModule) return '/ess';
   for (const mod of mods) {
     if (MODULE_HOME[mod]) return MODULE_HOME[mod];
   }
-  return '/approvals';
+  return '/ess';
 }
 
 // Global roles bypass project selection (they see all projects company-wide)
@@ -453,6 +469,7 @@ export default function App() {
                 <Route path="projects" element={<RequireModule module="Overview"><ProjectList /></RequireModule>} />
                 <Route path="projects/new" element={<RequireModule module="Overview"><ProjectCreate /></RequireModule>} />
                 <Route path="projects/:id" element={<RequireModule module="Overview"><ProjectDetail /></RequireModule>} />
+                <Route path="projects/:id/edit" element={<RequireModule module="Overview"><ProjectCreate /></RequireModule>} />
 
                 {/* QS & Billing */}
                 <Route path="qs" element={<RequireModule module="QS & Billing"><QSDashboardPage /></RequireModule>} />
@@ -558,6 +575,12 @@ export default function App() {
                 <Route path="procurement/wo-bulk-import" element={<RequireModule module="Procurement"><WOBulkImportPage /></RequireModule>} />
                 <Route path="procurement/reports" element={<RequireModule module="Procurement"><ProcurementReportsPage /></RequireModule>} />
                 <Route path="procurement/alerts" element={<RequireModule module="Procurement"><ProcurementAlertsPage /></RequireModule>} />
+                <Route path="procurement/tenders" element={<RequireModule module="Procurement"><TenderListPage /></RequireModule>} />
+                <Route path="procurement/tenders/:id" element={<RequireModule module="Procurement"><TenderDetailPage /></RequireModule>} />
+                <Route path="procurement/tenders/:id/bid-entry" element={<RequireModule module="Procurement"><TenderBidEntryPage /></RequireModule>} />
+                <Route path="procurement/bid-opportunities" element={<RequireModule module="Procurement"><BidOpportunityPage /></RequireModule>} />
+                <Route path="procurement/bid-opportunities/:id" element={<RequireModule module="Procurement"><BidOpportunityDetailPage /></RequireModule>} />
+                <Route path="procurement/budget-control" element={<RequireAnyModule modules={['Procurement', 'Finance']}><BudgetPage /></RequireAnyModule>} />
 
                 {/* Stores */}
                 <Route path="stores" element={<RequireModule module="Stores"><StoresDashboard /></RequireModule>} />

@@ -14,7 +14,7 @@ import {
   Briefcase, UploadCloud, Upload, ChevronUp, Flag, CalendarDays, GanttChartSquare, Hammer,
   CalendarOff, FileBarChart, Star, UserCheck, Fingerprint, PackageCheck, ArrowLeftRight,
   Landmark, FileSignature, CircleSlash, ShieldCheck, Clock3, Lightbulb,
-  Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, IndianRupee
+  Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, IndianRupee, UserRound
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
@@ -60,6 +60,7 @@ const navGroups = [
     { to: '/procurement/po',               icon: ShoppingCart,  label: 'Purchase Orders' },
     { to: '/procurement/po-amendments',    icon: FileSignature, label: 'PO Amendments' },
     { to: '/procurement/po-register',      icon: ClipboardList, label: 'PO Register' },
+    { to: '/procurement/budget-control',   icon: PieChart,      label: 'Budget & Cost Control' },
     { to: '/procurement/po-bulk-import',   icon: Upload,        label: 'Import POs (Bulk)' },
     { to: '/procurement/work-orders',      icon: Hammer,        label: 'Work Orders' },
     { to: '/procurement/wo-register',      icon: ClipboardList, label: 'WO Register' },
@@ -71,6 +72,8 @@ const navGroups = [
     { to: '/procurement/documents',        icon: FolderSearch,  label: 'Documents' },
     { to: '/procurement/reports',          icon: FileBarChart,  label: 'Reports' },
     { to: '/procurement/alerts',           icon: AlertTriangle, label: 'Alerts' },
+    { to: '/procurement/tenders',          icon: Gavel,         label: 'Tenders (BD)' },
+    { to: '/procurement/bid-opportunities',icon: Target,        label: 'Bid Opportunities' },
   ]},
   { label: 'Tender Management', items: [
     { to: '/tender-management',           icon: Gavel,         label: 'Tender Register' },
@@ -89,6 +92,7 @@ const navGroups = [
     { to: '/stores/ledger',            icon: BookOpen,        label: 'Store Ledger' },
     { to: '/stores/issue',             icon: ArrowUpRight,    label: 'Issue Notes (MIN)' },
     { to: '/stores/mtr',               icon: Truck,           label: 'Material Transfer' },
+    { to: '/stores/stock-verification', icon: ClipboardCheck, label: 'Stock Verification' },
     { to: '/stores/credit-notes',      icon: TrendingDown,    label: 'Credit Notes' },
     { to: '/stores/documents',         icon: FolderSearch,    label: 'Documents' },
   ]},
@@ -144,22 +148,25 @@ const navGroups = [
   ]},
   { label: 'HR & Admin', items: [
     { to: '/hr-admin',                   icon: LayoutDashboard, label: 'HR Dashboard' },
-    { to: '/ess',                        icon: UserCheck,       label: 'ESS Portal' },
-    { to: '/hr-admin/advanced',          icon: Briefcase,       label: 'Advanced HR' },
     { to: '/hr-admin/employees',         icon: Users,           label: 'Employees' },
     { to: '/hr-admin/attendance',        icon: Clock,           label: 'Attendance' },
     { to: '/hr-admin/leaves',            icon: CalendarOff,     label: 'Leave Management' },
+    { to: '/hr-admin/holidays',          icon: CalendarDays,    label: 'Holiday Calendar' },
     { to: '/hr-admin/payroll',           icon: CreditCard,      label: 'Payroll' },
     { to: '/hr-admin/salary-structures', icon: Banknote,        label: 'Salary Structures' },
     { to: '/hr-admin/employee-salaries',  icon: IndianRupee,     label: 'Employee Salaries' },
-    { to: '/hr-admin/departments',       icon: Building2,       label: 'Departments' },
     { to: '/hr-admin/loans',             icon: Wallet,          label: 'Loans & Advances' },
     { to: '/hr-admin/expenses',          icon: Receipt,         label: 'Expense Claims' },
+    { to: '/hr-admin/departments',       icon: Building2,       label: 'Departments' },
     { to: '/hr-admin/appraisals',        icon: Star,            label: 'Appraisals' },
-    { to: '/hr-admin/holidays',          icon: CalendarDays,    label: 'Holiday Calendar' },
+    { to: '/hr-admin/advanced',          icon: Briefcase,       label: 'Advanced HR' },
+    { to: '/hr/workers',                 icon: HardHat,         label: 'Site Workers' },
+    { to: '/hr/attendance',              icon: Clock3,          label: 'Worker Attendance' },
+    { to: '/hr/payroll',                 icon: Banknote,        label: 'Worker Payroll' },
     { to: '/hr-admin/essl-sync',         icon: Fingerprint,     label: 'ESSL Biometric' },
     { to: '/hr-admin/import',            icon: Upload,          label: 'Import Data' },
     { to: '/hr-admin/reports',           icon: FileBarChart,    label: 'HR Reports' },
+    { to: '/ess',                        icon: UserCheck,       label: 'ESS Portal' },
     { to: '/hr-admin/documents',         icon: FolderSearch,    label: 'Documents' },
   ]},
   { label: 'Bill Tracker', items: [
@@ -292,10 +299,13 @@ const NAV_SECTIONS = {
     { label: 'Purchase Orders',  paths: ['/procurement/po','/procurement/po-register','/procurement/po-bulk-import','/procurement/po-amendments'] },
     { label: 'Work Orders',      paths: ['/procurement/work-orders','/procurement/wo-register','/procurement/wo-bulk-import'] },
     { label: 'Performance & Payment', paths: ['/procurement/vendor-performance','/procurement/vendor-payments'] },
+    { label: 'Budget & Cost Control', paths: ['/procurement/budget-control'] },
     { label: 'Stock',            paths: ['/procurement/inventory'] },
     { label: 'Documents',        paths: ['/procurement/documents'] },
     { label: 'Reports',          paths: ['/procurement/reports'] },
     { label: 'Alerts',           paths: ['/procurement/alerts'] },
+    { label: 'Tenders (BD)',      paths: ['/procurement/tenders'] },
+    { label: 'Bid Opportunities', paths: ['/procurement/bid-opportunities'] },
   ],
   'Stores': [
     { label: 'Overview',        paths: ['/stores'] },
@@ -321,13 +331,14 @@ const NAV_SECTIONS = {
     { label: 'Settings',   paths: ['/accounts/settings'] },
   ],
   'HR & Admin': [
-    { label: 'People',     paths: ['/hr-admin','/hr-admin/employees','/ess'] },
-    { label: 'Time',       paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays'] },
-    { label: 'Payroll',    paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses'] },
-    { label: 'Admin',      paths: ['/hr-admin/departments','/hr-admin/appraisals','/hr-admin/advanced'] },
-    { label: 'Integrate',  paths: ['/hr-admin/essl-sync','/hr-admin/import'] },
-    { label: 'Reports',    paths: ['/hr-admin/reports'] },
-    { label: 'Documents',  paths: ['/hr-admin/documents'] },
+    { label: 'People',       paths: ['/hr-admin','/hr-admin/employees','/ess'] },
+    { label: 'Time',         paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays'] },
+    { label: 'Payroll',      paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses'] },
+    { label: 'Admin',        paths: ['/hr-admin/departments','/hr-admin/appraisals','/hr-admin/advanced'] },
+    { label: 'Site Workers', paths: ['/hr/workers','/hr/attendance','/hr/payroll'] },
+    { label: 'Integrate',    paths: ['/hr-admin/essl-sync','/hr-admin/import'] },
+    { label: 'Reports',      paths: ['/hr-admin/reports'] },
+    { label: 'Documents',    paths: ['/hr-admin/documents'] },
   ],
   'Bill Tracker': [
     { label: 'Bills',      paths: ['/tqs','/tqs/bills','/tqs/transmittal'] },
@@ -1816,6 +1827,25 @@ export default function Layout() {
 
           {/* Current Project chip — switches project for the session */}
           <ProjectChip />
+
+          {/* My ESS Portal — quick access for all employees */}
+          <NavLink
+            to="/ess"
+            title="My ESS Portal"
+            style={({ isActive }) => ({
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 10px', borderRadius: 8, textDecoration: 'none',
+              background: isActive ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.08)',
+              border: isActive ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.12)',
+              color: isActive ? '#86efac' : 'rgba(255,255,255,0.85)',
+              fontSize: 12, fontWeight: 700, flexShrink: 0,
+            })}
+            onMouseEnter={e => { if (!e.currentTarget.getAttribute('data-active')) e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; }}
+            onMouseLeave={e => { if (!e.currentTarget.getAttribute('data-active')) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          >
+            <UserRound size={14} />
+            <span className="sm-show" style={{ display: 'none' }}>My ESS</span>
+          </NavLink>
 
           {/* Notifications */}
           <div style={{ position: 'relative' }}>
