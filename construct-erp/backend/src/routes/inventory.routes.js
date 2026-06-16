@@ -253,17 +253,20 @@ router.get('/categories', async (req, res) => {
   }
 });
 
-// GET /inventory/items-lookup — all material names with their category & unit for DQS bill autocomplete
+// GET /inventory/items-lookup — material names with category, unit & stock for autocomplete.
+// Pass ?project_id= to get stock totals scoped to one project (sums across site_location rows);
+// without it, stock figures are whatever single row matches first — fine for name/unit autocomplete only.
 router.get('/items-lookup', async (req, res) => {
   try {
+    const { project_id } = req.query;
     let sql = `
       SELECT
         TRIM(i.material_name) AS material_name,
-        TRIM(COALESCE(i.category, '')) AS category,
-        TRIM(COALESCE(i.unit, ''))     AS unit,
-        i.closing_stock,
-        i.reorder_level,
-        i.minimum_level AS min_stock
+        TRIM(COALESCE(MAX(i.category), '')) AS category,
+        TRIM(COALESCE(MAX(i.unit), ''))     AS unit,
+        SUM(i.closing_stock)  AS closing_stock,
+        MAX(i.reorder_level)  AS reorder_level,
+        MAX(i.minimum_level)  AS min_stock
       FROM inventory i
       JOIN projects p ON i.project_id = p.id
       WHERE p.company_id = $1
@@ -271,7 +274,11 @@ router.get('/items-lookup', async (req, res) => {
         AND TRIM(i.material_name) <> ''`;
     let params = [req.user.company_id];
     ({ sql, params } = appendProjectScope(req, sql, params, 'i'));
-    sql += ` ORDER BY i.category ASC, i.material_name ASC`;
+    if (project_id) {
+      params.push(project_id);
+      sql += ` AND i.project_id = $${params.length}`;
+    }
+    sql += ` GROUP BY i.material_name ORDER BY i.material_name ASC`;
     const result = await query(sql, params);
     res.json({ data: result.rows });
   } catch (err) {

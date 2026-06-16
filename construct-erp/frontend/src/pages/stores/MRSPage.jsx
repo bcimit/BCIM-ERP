@@ -390,11 +390,12 @@ export default function MRSPage() {
     }
   }, [location.state, mrsData]);
 
-  // Inventory lookup — for material name combobox
+  // Inventory lookup — for material name combobox & current stock check.
+  // Scoped to the selected project so "Stock" reflects that project's store, not a mix of all projects.
   const { data: inventoryItems = [] } = useQuery({
-    queryKey: ['inventory-lookup'],
-    queryFn: () => inventoryAPI.itemsLookup().then(r => r.data?.data ?? []),
-    staleTime: 5 * 60 * 1000,
+    queryKey: ['inventory-lookup', formData.project_id],
+    queryFn: () => inventoryAPI.itemsLookup({ project_id: formData.project_id || undefined }).then(r => r.data?.data ?? []),
+    staleTime: 60 * 1000,
   });
   const { data: existingCategories = [] } = useQuery({
     queryKey: ['inventory-categories'],
