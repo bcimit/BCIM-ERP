@@ -1,98 +1,69 @@
-// Azure/SharePoint integration service
+// Azure/OneDrive integration service — uploads files to user's OneDrive
 const { ClientSecretCredential } = require('@azure/identity');
-const { Client } = require('@microsoft/microsoft-graph-client');
-const { TokenCredentialAuthenticationProvider } = require('@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials');
+const fetch = require('node-fetch');
 
 const TENANT_ID = process.env.ONEDRIVE_TENANT_ID;
 const CLIENT_ID = process.env.ONEDRIVE_CLIENT_ID;
 const CLIENT_SECRET = process.env.ONEDRIVE_CLIENT_SECRET;
 const USER_EMAIL = process.env.ONEDRIVE_USER_EMAIL;
 
-let graphClient = null;
+let cachedToken = null;
+let tokenExpiry = 0;
 
-async function initGraphClient() {
-  if (graphClient) return graphClient;
+async function getAccessToken() {
+  // Return cached token if still valid
+  if (cachedToken && Date.now() < tokenExpiry) {
+    return cachedToken;
+  }
 
-  const credential = new ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET);
-  const authProvider = new TokenCredentialAuthenticationProvider(credential, {
-    scopes: ['https://graph.microsoft.com/.default'],
-  });
-
-  graphClient = Client.initWithMiddleware({ authProvider });
-  return graphClient;
+  try {
+    const credential = new ClientSecretCredential(TENANT_ID, CLIENT_ID, CLIENT_SECRET);
+    const token = await credential.getToken('https://graph.microsoft.com/.default');
+    cachedToken = token.token;
+    tokenExpiry = token.expiresOnTimestamp * 1000 - 60000; // Refresh 1 min before expiry
+    return cachedToken;
+  } catch (e) {
+    console.error('Azure token error:', e.message);
+    throw new Error('Failed to get Azure access token: ' + e.message);
+  }
 }
 
 async function uploadToSharePoint(fileName, fileBuffer, folderPath = 'Vendor Invoices') {
   try {
-    const client = await initGraphClient();
-
-    // Get user's OneDrive root
-    const user = await client.api(`/users/${USER_EMAIL}`).get();
-
-    // Create folder path if it doesn't exist
+    const token = await getAccessToken();
+    const sanitizedFileName = String(fileName).replace(/[<>:"|?*]/g, '_').trim();
     const sanitizedFolder = String(folderPath).replace(/[<>:"|?*]/g, '_').trim();
-    const driveItemPath = `/users/${USER_EMAIL}/drive/root:/${sanitizedFolder}`;
 
-    // Upload file to SharePoint
-    const uploadPath = `${driveItemPath}/${fileName}`;
-    const driveItem = await client
-      .api(uploadPath)
-      .put(fileBuffer);
+    // Upload file to OneDrive (using /users/{email}/drive root)
+    // Path: /users/{email}/drive/root:/{folderPath}/{fileName}:/content
+    const uploadUrl = `https://graph.microsoft.com/v1.0/users/${USER_EMAIL}/drive/root:/${sanitizedFolder}/${sanitizedFileName}:/content`;
 
-    // Return the shareable link
-    const sharingLink = await client
-      .api(`/users/${USER_EMAIL}/drive/items/${driveItem.id}/createLink`)
-      .post({
-        type: 'view',
-        scope: 'organization',
-      });
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: fileBuffer,
+    });
 
+    if (!uploadRes.ok) {
+      const error = await uploadRes.text();
+      throw new Error(`Upload failed: ${uploadRes.status} ${error}`);
+    }
+
+    const driveItem = await uploadRes.json();
     return {
       id: driveItem.id,
       webUrl: driveItem.webUrl,
       downloadUrl: driveItem['@microsoft.graph.downloadUrl'],
-      sharingLink: sharingLink.link?.webUrl,
     };
   } catch (e) {
-    console.error('SharePoint upload error:', e.message);
-    throw new Error(`Failed to upload to SharePoint: ${e.message}`);
-  }
-}
-
-async function createFolderInSharePoint(folderName, parentPath = '') {
-  try {
-    const client = await initGraphClient();
-    const sanitizedFolder = String(folderName).replace(/[<>:"|?*]/g, '_').trim();
-
-    let parentId = 'root';
-    if (parentPath) {
-      const parent = await client
-        .api(`/users/${USER_EMAIL}/drive/root:/${parentPath}`)
-        .get();
-      parentId = parent.id;
-    }
-
-    const folder = await client
-      .api(`/users/${USER_EMAIL}/drive/items/${parentId}/children`)
-      .post({
-        name: sanitizedFolder,
-        folder: {},
-        '@microsoft.graph.conflictBehavior': 'rename',
-      });
-
-    return {
-      id: folder.id,
-      name: folder.name,
-      webUrl: folder.webUrl,
-    };
-  } catch (e) {
-    console.error('SharePoint folder creation error:', e.message);
-    throw new Error(`Failed to create folder: ${e.message}`);
+    console.error('OneDrive upload error:', e.message);
+    throw new Error(`Failed to upload to OneDrive: ${e.message}`);
   }
 }
 
 module.exports = {
-  initGraphClient,
   uploadToSharePoint,
-  createFolderInSharePoint,
 };

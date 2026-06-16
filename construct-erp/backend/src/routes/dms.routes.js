@@ -11,7 +11,7 @@ const { loadProjectScope, userCanAccessProject } = require('../middleware/projec
 const db = () => require('../config/database').pool;
 const xlsx    = require('xlsx');
 const mammoth = require('mammoth');
-const { uploadToSharePoint, createFolderInSharePoint } = require('../services/azureService');
+const { uploadToSharePoint } = require('../services/azureService');
 
 router.use(authenticate);
 router.use(loadProjectScope);
