@@ -7,7 +7,7 @@ import {
   Eye, Download, Share2, GitBranch, X, Bell, BarChart3, RefreshCw, Filter, Plus,
   Archive, PenTool, History, ScrollText, ChevronRight, ChevronDown, HardDrive,
   Building2, Users2, Briefcase, UserCircle, FileSignature, Activity, Trash2, Link2,
-  Send, UploadCloud, FileSpreadsheet,
+  Send, UploadCloud, FileSpreadsheet, Tag, Layers,
 } from 'lucide-react';
 import { dmsAPI, projectAPI } from '../../api/client';
 import api from '../../api/client';
@@ -41,6 +41,23 @@ function fmtSize(bytes) {
   if (bytes < 1024*1024) return `${(bytes/1024).toFixed(0)} KB`;
   if (bytes < 1024*1024*1024) return `${(bytes/1024/1024).toFixed(1)} MB`;
   return `${(bytes/1024/1024/1024).toFixed(2)} GB`;
+}
+
+// Derive a vendor / party name for auto-segregation. Prefers an explicit tag
+// (uploads stamp tags like ['vendor-invoice', 'SCP CONCRETE']); falls back to
+// the part of the title/filename after the last " - " (e.g. "02272-2025-2026 - SCP CONCRETE").
+const VENDOR_TAG_STOPWORDS = new Set(['vendor-invoice', 'invoice', 'store invoices', 'store invoice']);
+function vendorOf(doc) {
+  const tags = Array.isArray(doc?.tags) ? doc.tags : [];
+  const tagVendor = tags.find(t => t && !VENDOR_TAG_STOPWORDS.has(String(t).trim().toLowerCase()));
+  if (tagVendor) return String(tagVendor).trim();
+  const base = String(doc?.doc_title || doc?.file_name || '').replace(/\.[a-z0-9]+$/i, '');
+  const idx = base.lastIndexOf(' - ');
+  if (idx !== -1) {
+    const v = base.slice(idx + 3).trim().replace(/[.,]+$/, '').trim();
+    if (v && !/^\d+$/.test(v)) return v;
+  }
+  return '';
 }
 
 const fileExt = (name = '') => String(name).split('.').pop()?.toLowerCase() || '';
@@ -532,7 +549,8 @@ export default function DMSPage() {
   const [typeFilter, setType] = useState('');
   const [statusFilter, setStatus] = useState('');
   const [projectFilter, setProjFilter] = useState('');
-  const [folderFilter, setFolder] = useState('');
+  const [cat, setCat]         = useState({ kind: 'all' });   // {kind:'all'|'type'|'vendor'|'folder', value}
+  const [openSec, setOpenSec] = useState({ type: true, vendor: true, folder: true });
   const [modal, setModal]     = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [reportTab, setReportTab] = useState('register');
@@ -567,7 +585,30 @@ export default function DMSPage() {
     onSuccess: () => { toast.success('Archived'); qc.invalidateQueries({queryKey:['dms-docs']}); },
   });
 
-  const folderDocs = useMemo(() => folderFilter ? docs.filter(d => d.folder_id === folderFilter) : docs, [docs, folderFilter]);
+  // Auto-segregation groups derived from the loaded docs (no backend change needed)
+  const typeGroups = useMemo(() => {
+    const m = {};
+    docs.forEach(d => { const t = d.doc_type || 'general'; m[t] = (m[t] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [docs]);
+
+  const vendorGroups = useMemo(() => {
+    const m = {};
+    docs.forEach(d => { const v = vendorOf(d); if (v) m[v] = (m[v] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [docs]);
+
+  const visibleDocs = useMemo(() => {
+    if (cat.kind === 'type')   return docs.filter(d => (d.doc_type || 'general') === cat.value);
+    if (cat.kind === 'vendor') return docs.filter(d => vendorOf(d) === cat.value);
+    if (cat.kind === 'folder') return docs.filter(d => d.folder_id === cat.value);
+    return docs;
+  }, [docs, cat]);
+
+  const catLabel = cat.kind === 'all' ? 'All Documents'
+    : cat.kind === 'type' ? titleCase(cat.value)
+    : cat.kind === 'vendor' ? cat.value
+    : (folders.find(f => f.id === cat.value)?.folder_name || 'Folder');
   const s = dash?.stats;
 
   return (
@@ -727,31 +768,80 @@ export default function DMSPage() {
       {/* ── REPOSITORY ── */}
       {tab === 'repository' && (
         <div className="flex gap-5">
-          {/* Folder sidebar */}
-          <div className="w-56 flex-shrink-0 hidden lg:block">
+          {/* Browse / segregation sidebar */}
+          <div className="w-60 flex-shrink-0 hidden lg:block">
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b">
-                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Folders</span>
-                <button onClick={()=>setModal('folder')} className="text-slate-400 hover:text-indigo-600"><Plus className="w-4 h-4" /></button>
+                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Browse</span>
+                <button onClick={()=>setModal('folder')} title="New folder" className="text-slate-400 hover:text-indigo-600"><Plus className="w-4 h-4" /></button>
               </div>
-              <div className="p-2">
-                <button onClick={()=>setFolder('')}
-                  className={clsx('flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs', !folderFilter ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50')}>
+              <div className="p-2 max-h-[70vh] overflow-y-auto">
+                {/* All */}
+                <button onClick={()=>setCat({ kind:'all' })}
+                  className={clsx('flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs', cat.kind==='all' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}>
                   <FolderOpen className="w-4 h-4" /> All Documents
                   <span className="ml-auto text-slate-400">{docs.length}</span>
                 </button>
-                {folders.map(f => {
-                  const Icon = FOLDER_TYPE_ICON[f.folder_type] || Folder;
-                  return (
-                    <button key={f.id} onClick={()=>setFolder(f.id)}
-                      className={clsx('flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs group', folderFilter===f.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50')}>
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{f.folder_name}</span>
-                      <span className="ml-auto text-slate-400 flex-shrink-0">{f.doc_count}</span>
+
+                {/* By Type */}
+                {typeGroups.length > 0 && (
+                  <div className="mt-1">
+                    <button onClick={()=>setOpenSec(o=>({...o, type:!o.type}))}
+                      className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600">
+                      {openSec.type ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      <Layers className="w-3.5 h-3.5" /> By Type
+                      <span className="ml-auto">{typeGroups.length}</span>
                     </button>
-                  );
-                })}
-                {folders.length === 0 && <p className="text-[10px] text-slate-400 text-center py-3">No folders yet</p>}
+                    {openSec.type && typeGroups.map(([t, n]) => (
+                      <button key={t} onClick={()=>setCat({ kind:'type', value:t })}
+                        className={clsx('flex items-center gap-2 w-full pl-7 pr-2 py-1.5 rounded-lg text-xs', cat.kind==='type'&&cat.value===t ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}>
+                        <span className="truncate">{titleCase(t)}</span>
+                        <span className="ml-auto text-slate-400 flex-shrink-0">{n}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* By Vendor / Party */}
+                {vendorGroups.length > 0 && (
+                  <div className="mt-1">
+                    <button onClick={()=>setOpenSec(o=>({...o, vendor:!o.vendor}))}
+                      className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600">
+                      {openSec.vendor ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      <Tag className="w-3.5 h-3.5" /> By Vendor
+                      <span className="ml-auto">{vendorGroups.length}</span>
+                    </button>
+                    {openSec.vendor && vendorGroups.map(([v, n]) => (
+                      <button key={v} onClick={()=>setCat({ kind:'vendor', value:v })} title={v}
+                        className={clsx('flex items-center gap-2 w-full pl-7 pr-2 py-1.5 rounded-lg text-xs', cat.kind==='vendor'&&cat.value===v ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}>
+                        <span className="truncate">{v}</span>
+                        <span className="ml-auto text-slate-400 flex-shrink-0">{n}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Manual folders */}
+                <div className="mt-1">
+                  <button onClick={()=>setOpenSec(o=>({...o, folder:!o.folder}))}
+                    className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600">
+                    {openSec.folder ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                    <Folder className="w-3.5 h-3.5" /> Folders
+                    <span className="ml-auto">{folders.length}</span>
+                  </button>
+                  {openSec.folder && folders.map(f => {
+                    const Icon = FOLDER_TYPE_ICON[f.folder_type] || Folder;
+                    return (
+                      <button key={f.id} onClick={()=>setCat({ kind:'folder', value:f.id })}
+                        className={clsx('flex items-center gap-2 w-full pl-7 pr-2 py-1.5 rounded-lg text-xs', cat.kind==='folder'&&cat.value===f.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}>
+                        <Icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{f.folder_name}</span>
+                        <span className="ml-auto text-slate-400 flex-shrink-0">{f.doc_count}</span>
+                      </button>
+                    );
+                  })}
+                  {openSec.folder && folders.length === 0 && <p className="text-[10px] text-slate-400 pl-7 py-1.5">No folders yet</p>}
+                </div>
               </div>
             </div>
           </div>
@@ -777,6 +867,19 @@ export default function DMSPage() {
               </select>
             </div>
 
+            {/* Active category chip */}
+            {cat.kind !== 'all' && (
+              <div className="flex items-center gap-2 mb-3 text-xs">
+                <span className="text-slate-400">Showing:</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full font-medium">
+                  {cat.kind === 'type' ? <Layers className="w-3 h-3" /> : cat.kind === 'vendor' ? <Tag className="w-3 h-3" /> : <Folder className="w-3 h-3" />}
+                  {catLabel}
+                  <span className="text-indigo-400">· {visibleDocs.length}</span>
+                  <button onClick={()=>setCat({ kind:'all' })} className="hover:text-indigo-900"><X className="w-3 h-3" /></button>
+                </span>
+              </div>
+            )}
+
             {isLoading ? <div className="text-center py-12 text-slate-400"><RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />Loading…</div> : (
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
@@ -787,7 +890,7 @@ export default function DMSPage() {
                       ))}</tr>
                     </thead>
                     <tbody>
-                      {folderDocs.map(d => {
+                      {visibleDocs.map(d => {
                         const cfg = STATUS_CFG[d.status] || STATUS_CFG.draft;
                         const expDays = d.expiry_date ? dayjs(d.expiry_date).diff(dayjs(),'day') : null;
                         return (
@@ -825,7 +928,7 @@ export default function DMSPage() {
                           </tr>
                         );
                       })}
-                      {folderDocs.length === 0 && (
+                      {visibleDocs.length === 0 && (
                         <tr><td colSpan={9} className="text-center py-10 text-slate-400">
                           <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />No documents found
                         </td></tr>
