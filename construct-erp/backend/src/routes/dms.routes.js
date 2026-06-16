@@ -84,131 +84,153 @@ const previewableExcel = new Set(['.xlsx', '.xls', '.xlsm']);
 let schemaReady = false;
 async function ensureDmsSchema() {
   if (schemaReady) return;
-  await db().query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-  await db().query(`
-    ALTER TABLE documents
-      ADD COLUMN IF NOT EXISTS folder_id UUID,
-      ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'general',
-      ADD COLUMN IF NOT EXISTS doc_number VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS doc_title TEXT,
-      ADD COLUMN IF NOT EXISTS discipline VARCHAR(80),
-      ADD COLUMN IF NOT EXISTS description TEXT,
-      ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[],
-      ADD COLUMN IF NOT EXISTS expiry_date DATE,
-      ADD COLUMN IF NOT EXISTS access_level VARCHAR(30) DEFAULT 'internal',
-      ADD COLUMN IF NOT EXISTS is_confidential BOOLEAN DEFAULT false,
-      ADD COLUMN IF NOT EXISTS parent_doc_id UUID,
-      ADD COLUMN IF NOT EXISTS revision VARCHAR(20) DEFAULT 'A',
-      ADD COLUMN IF NOT EXISTS revision_no INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS approved_by UUID,
-      ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS is_signed BOOLEAN DEFAULT false,
-      ADD COLUMN IF NOT EXISTS signature_count INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS ocr_text TEXT,
-      ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb,
-      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
-  `);
-  await db().query(`
-    CREATE TABLE IF NOT EXISTS document_folders (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
-      parent_id UUID REFERENCES document_folders(id) ON DELETE CASCADE,
-      folder_name TEXT NOT NULL,
-      folder_type VARCHAR(30) DEFAULT 'general',
-      project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
-      path TEXT,
-      description TEXT,
-      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await db().query(`
-    CREATE TABLE IF NOT EXISTS document_versions (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-      version_no INTEGER NOT NULL,
-      revision VARCHAR(20),
-      file_name TEXT,
-      file_url TEXT,
-      onedrive_id TEXT,
-      file_size BIGINT,
-      change_summary TEXT,
-      uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(document_id, version_no)
-    )
-  `);
-  await db().query(`
-    CREATE TABLE IF NOT EXISTS document_approvals (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-      sequence_no INTEGER NOT NULL DEFAULT 1,
-      approver_id UUID REFERENCES users(id) ON DELETE SET NULL,
-      approval_type VARCHAR(30) DEFAULT 'review',
-      status VARCHAR(20) DEFAULT 'pending',
-      comments TEXT,
-      actioned_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(document_id, sequence_no, approver_id)
-    )
-  `);
-  await db().query(`
-    CREATE TABLE IF NOT EXISTS document_access_logs (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-      action VARCHAR(30) NOT NULL,
-      ip_address TEXT,
-      metadata JSONB DEFAULT '{}'::jsonb,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await db().query(`
-    CREATE TABLE IF NOT EXISTS document_shares (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-      share_token TEXT UNIQUE NOT NULL,
-      shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
-      recipient_email TEXT,
-      recipient_name TEXT,
-      purpose TEXT,
-      permissions VARCHAR(20) DEFAULT 'view',
-      expires_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await db().query(`
-    CREATE TABLE IF NOT EXISTS document_signatures (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-      signer_id UUID REFERENCES users(id) ON DELETE SET NULL,
-      signer_name TEXT,
-      signer_role TEXT,
-      signature_type VARCHAR(20) DEFAULT 'approval',
-      signature_data TEXT,
-      signature_method VARCHAR(20) DEFAULT 'typed',
-      hash_value TEXT,
-      is_valid BOOLEAN DEFAULT true,
-      signed_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_documents_company ON documents(company_id, status)`);
-  await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_documents_folder ON documents(folder_id)`);
-  await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_folders_company ON document_folders(company_id)`);
-  await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_approvals_user ON document_approvals(approver_id, status)`);
-  await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_logs_document ON document_access_logs(document_id, created_at)`);
-  await db().query(`DROP VIEW IF EXISTS document_register`);
-  await db().query(`
-    CREATE OR REPLACE VIEW document_register AS
-    SELECT d.*, p.name AS project_name, u.name AS uploaded_by_name,
-      (SELECT COUNT(*) FROM document_versions dv WHERE dv.document_id = d.id) AS version_count,
-      (SELECT COUNT(*) FROM document_access_logs dal WHERE dal.document_id = d.id) AS access_count
-    FROM documents d
-    LEFT JOIN projects p ON p.id = d.project_id
-    LEFT JOIN users u ON u.id = d.uploaded_by
-  `);
-  schemaReady = true;
+  try {
+    await db().query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
+    // Ensure uploaded_by column exists (critical for upload function)
+    try {
+      await db().query(`
+        ALTER TABLE documents
+        ADD COLUMN uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL
+      `);
+    } catch (e) {
+      if (!e.message.includes('already exists')) throw e;
+    }
+
+    // Add all other DMS columns
+    try {
+      await db().query(`
+        ALTER TABLE documents
+          ADD COLUMN IF NOT EXISTS folder_id UUID,
+          ADD COLUMN IF NOT EXISTS doc_type VARCHAR(50) DEFAULT 'general',
+          ADD COLUMN IF NOT EXISTS doc_number VARCHAR(120),
+          ADD COLUMN IF NOT EXISTS doc_title TEXT,
+          ADD COLUMN IF NOT EXISTS discipline VARCHAR(80),
+          ADD COLUMN IF NOT EXISTS description TEXT,
+          ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+          ADD COLUMN IF NOT EXISTS expiry_date DATE,
+          ADD COLUMN IF NOT EXISTS access_level VARCHAR(30) DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS is_confidential BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS parent_doc_id UUID,
+          ADD COLUMN IF NOT EXISTS revision VARCHAR(20) DEFAULT 'A',
+          ADD COLUMN IF NOT EXISTS revision_no INTEGER DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS approved_by UUID,
+          ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS is_signed BOOLEAN DEFAULT false,
+          ADD COLUMN IF NOT EXISTS signature_count INTEGER DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS ocr_text TEXT,
+          ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb,
+          ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',
+          ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+      `);
+    } catch (e) {
+      if (!e.message.includes('already exists')) throw e;
+    }
+
+    await db().query(`
+      CREATE TABLE IF NOT EXISTS document_folders (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+        parent_id UUID REFERENCES document_folders(id) ON DELETE CASCADE,
+        folder_name TEXT NOT NULL,
+        folder_type VARCHAR(30) DEFAULT 'general',
+        project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+        path TEXT,
+        description TEXT,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db().query(`
+      CREATE TABLE IF NOT EXISTS document_versions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        version_no INTEGER NOT NULL,
+        revision VARCHAR(20),
+        file_name TEXT,
+        file_url TEXT,
+        onedrive_id TEXT,
+        file_size BIGINT,
+        change_summary TEXT,
+        uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(document_id, version_no)
+      )
+    `);
+    await db().query(`
+      CREATE TABLE IF NOT EXISTS document_approvals (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        sequence_no INTEGER NOT NULL DEFAULT 1,
+        approver_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        approval_type VARCHAR(30) DEFAULT 'review',
+        status VARCHAR(20) DEFAULT 'pending',
+        comments TEXT,
+        actioned_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(document_id, sequence_no, approver_id)
+      )
+    `);
+    await db().query(`
+      CREATE TABLE IF NOT EXISTS document_access_logs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        action VARCHAR(30) NOT NULL,
+        ip_address TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db().query(`
+      CREATE TABLE IF NOT EXISTS document_shares (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        share_token TEXT UNIQUE NOT NULL,
+        shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        recipient_email TEXT,
+        recipient_name TEXT,
+        purpose TEXT,
+        permissions VARCHAR(20) DEFAULT 'view',
+        expires_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db().query(`
+      CREATE TABLE IF NOT EXISTS document_signatures (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        signer_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        signer_name TEXT,
+        signer_role TEXT,
+        signature_type VARCHAR(20) DEFAULT 'approval',
+        signature_data TEXT,
+        signature_method VARCHAR(20) DEFAULT 'typed',
+        hash_value TEXT,
+        is_valid BOOLEAN DEFAULT true,
+        signed_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_documents_company ON documents(company_id, status)`);
+    await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_documents_folder ON documents(folder_id)`);
+    await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_folders_company ON document_folders(company_id)`);
+    await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_approvals_user ON document_approvals(approver_id, status)`);
+    await db().query(`CREATE INDEX IF NOT EXISTS idx_dms_logs_document ON document_access_logs(document_id, created_at)`);
+    await db().query(`DROP VIEW IF EXISTS document_register`);
+    await db().query(`
+      CREATE OR REPLACE VIEW document_register AS
+      SELECT d.*, p.name AS project_name, u.name AS uploaded_by_name,
+        (SELECT COUNT(*) FROM document_versions dv WHERE dv.document_id = d.id) AS version_count,
+        (SELECT COUNT(*) FROM document_access_logs dal WHERE dal.document_id = d.id) AS access_count
+      FROM documents d
+      LEFT JOIN projects p ON p.id = d.project_id
+      LEFT JOIN users u ON u.id = d.uploaded_by
+    `);
+    schemaReady = true;
+  } catch (err) {
+    console.error('Fatal DMS schema error:', err.message);
+    throw err;
+  }
 }
 
 router.use(async (req, res, next) => {
