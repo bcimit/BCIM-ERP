@@ -3,11 +3,13 @@ import React from 'react';
 import dayjs from 'dayjs';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { projectAPI, variationAPI, raBillAPI, clientAdvanceAPI } from '../../api/client';
+import { projectAPI, variationAPI, raBillAPI, clientAdvanceAPI, dmsAPI } from '../../api/client';
 import {
   ArrowLeft, Building2, FileText, UploadCloud, Trash2,
   TrendingUp, Wallet, Receipt, ShieldCheck, History,
-  MapPin, Activity, Users, CalendarDays, Hash, Coins, Check, X as XIcon, Pencil
+  MapPin, CalendarDays, Hash, Coins, Check, X as XIcon, Pencil,
+  HardHat, AlertTriangle, BarChart3, BookOpen, Package, ClipboardList,
+  ShoppingCart, Users, Activity, ExternalLink, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -34,6 +36,10 @@ const crore = v => {
 };
 
 const fullInr = v => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const FILE_ICON_COLOR = { pdf: 'text-red-500 bg-red-50 border-red-100', xlsx: 'text-green-600 bg-green-50 border-green-100', xls: 'text-green-600 bg-green-50 border-green-100', docx: 'text-blue-600 bg-blue-50 border-blue-100', doc: 'text-blue-600 bg-blue-50 border-blue-100', dwg: 'text-purple-600 bg-purple-50 border-purple-100' };
+const fileColor = (ext) => FILE_ICON_COLOR[ext?.toLowerCase()] || 'text-slate-500 bg-slate-50 border-slate-100';
+const fileSize = (bytes) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -68,7 +74,38 @@ export default function ProjectDetail() {
     queryFn: () => clientAdvanceAPI.stats({ project_id: id }).then(r => r.data?.data || {}),
   });
 
-  const [docs, setDocs] = React.useState([]);
+  // Real DMS documents for this project
+  const { data: docsData, refetch: refetchDocs } = useQuery({
+    queryKey: ['project-docs', id],
+    queryFn: () => dmsAPI.list({ project_id: id, module: 'general' }).then(r => r.data?.data || r.data || []),
+  });
+  const docs = Array.isArray(docsData) ? docsData : [];
+
+  const uploadDocMut = useMutation({
+    mutationFn: (file) => {
+      const fd = new FormData();
+      fd.append('files', file);
+      fd.append('project_id', id);
+      fd.append('module', 'general');
+      fd.append('doc_title', file.name);
+      return dmsAPI.upload(fd);
+    },
+    onSuccess: () => { toast.success('Document uploaded'); refetchDocs(); },
+    onError: (e) => toast.error(e.response?.data?.error || 'Upload failed'),
+  });
+
+  const deleteDocMut = useMutation({
+    mutationFn: (docId) => dmsAPI.delete(docId),
+    onSuccess: () => { toast.success('Document removed'); refetchDocs(); },
+    onError: () => toast.error('Failed to delete'),
+  });
+
+  const handleUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadDocMut.mutate(file);
+    e.target.value = null;
+  };
 
   const totalVariations = variations.reduce((s, v) => s + parseFloat(v.total_variation_amount || 0), 0);
   const totalBilled = bills
@@ -81,19 +118,8 @@ export default function ProjectDetail() {
   const revisedContract = parseFloat(project.contract_value || 0) + totalVariations;
   const balanceToExecute = revisedContract - totalBilled;
   const progress = parseFloat(project.progress_pct || 0);
-
-  const handleUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setDocs(prev => [...prev, {
-      id: Date.now(),
-      name: file.name,
-      size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-      date: dayjs().format('DD MMM YYYY'),
-    }]);
-    toast.success('Document added to project');
-    e.target.value = null;
-  };
+  const openIncidents = parseInt(project.open_incidents || 0);
+  const workerCount = parseInt(project.worker_count || 0);
 
   if (isLoading) {
     return (
@@ -114,7 +140,7 @@ export default function ProjectDetail() {
       <div className="flex items-start gap-4">
         <Link
           to="/projects"
-          className="mt-1 w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-900 font-medium hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all shrink-0"
+          className="mt-1 w-9 h-9 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-900 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
         </Link>
@@ -133,32 +159,41 @@ export default function ProjectDetail() {
             <span className={clsx('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border capitalize', STATUS_STYLE[project.status] || STATUS_STYLE.active)}>
               {project.status?.replace('_', ' ')}
             </span>
+            {openIncidents > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 border border-red-200 text-red-700">
+                <AlertTriangle className="w-3 h-3" /> {openIncidents} open incident{openIncidents > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-2 shrink-0 flex-wrap justify-end">
-          <Link to={`/qs/boq?project_id=${id}`} className="px-4 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all">
+          <Link to={`/qs/boq?project_id=${id}`} className="px-3 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all">
             Master BOQ
           </Link>
-          <Link to={`/qs/ra-bills?project_id=${id}`} className="px-4 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all">
+          <Link to={`/qs/ra-bills?project_id=${id}`} className="px-3 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all">
             RA Bills
           </Link>
-          <Link to={`/hse?project_id=${id}`} className="px-4 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all">
+          <Link to={`/reports/360`} className="px-3 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all flex items-center gap-1">
+            <BarChart3 className="w-3.5 h-3.5" /> 360° Report
+          </Link>
+          <Link to={`/hse?project_id=${id}`} className="px-3 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-medium rounded-lg hover:border-indigo-300 hover:text-indigo-600 shadow-sm transition-all">
             Safety Desk
           </Link>
           <button onClick={() => navigate(`/projects/${id}/edit`)} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 shadow-sm transition-all">
-            <Pencil className="w-3.5 h-3.5" /> Edit Project
+            <Pencil className="w-3.5 h-3.5" /> Edit
           </button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         {[
-          { label: 'Baseline BOQ',         value: inr(project.contract_value), sub: 'Original order value',       color: 'text-indigo-600',  border: 'border-indigo-100' },
-          { label: 'Approved Variations',  value: inr(totalVariations),        sub: 'Extras certified',           color: 'text-amber-600',   border: 'border-amber-100' },
-          { label: 'Total Certified',      value: inr(totalBilled),            sub: 'Certified & paid bills',     color: 'text-emerald-600', border: 'border-emerald-100' },
-          { label: 'Net Retention',        value: inr(totalRetention),         sub: 'Held back from payments',    color: 'text-blue-600',    border: 'border-blue-100' },
-          { label: 'Client Advance',       value: inr(clientAdvance),          sub: parseFloat(advStats.total_pending || 0) > 0.01 ? `${crore(advStats.total_pending)} due from client` : (parseFloat(advStats.total_requested || 0) > 0 ? 'Fully received' : 'No advance requested'), color: 'text-orange-600', border: 'border-orange-100' },
+          { label: 'Baseline BOQ',         value: crore(project.contract_value), sub: 'Original order value',       color: 'text-indigo-600',  border: 'border-indigo-100' },
+          { label: 'Approved Variations',  value: crore(totalVariations),        sub: 'Extras certified',           color: 'text-amber-600',   border: 'border-amber-100' },
+          { label: 'Total Certified',      value: crore(totalBilled),            sub: 'Certified & paid bills',     color: 'text-emerald-600', border: 'border-emerald-100' },
+          { label: 'Net Retention',        value: crore(totalRetention),         sub: 'Held back from payments',    color: 'text-blue-600',    border: 'border-blue-100' },
+          { label: 'Workers on Site',      value: workerCount,                    sub: 'Active headcount',           color: workerCount > 0 ? 'text-teal-600' : 'text-slate-400', border: 'border-teal-100' },
+          { label: 'Open Incidents',       value: openIncidents,                  sub: openIncidents > 0 ? 'Requires attention' : 'All clear', color: openIncidents > 0 ? 'text-red-600' : 'text-emerald-600', border: openIncidents > 0 ? 'border-red-100' : 'border-emerald-100' },
         ].map(m => (
           <div key={m.label} className={clsx('bg-white border rounded-xl p-4 shadow-sm', m.border)}>
             <div className={clsx('text-lg font-semibold tracking-tight font-mono mb-1 truncate', m.color)}>{m.value}</div>
@@ -175,16 +210,16 @@ export default function ProjectDetail() {
 
           {/* Admin Info */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-900 uppercase tracking-wider mb-4">
               <Building2 className="w-4 h-4 text-indigo-500" /> Administrative Profile
             </div>
             <div className="space-y-3">
               {[
-                ['Client',       project.client_name],
+                ['Client',          project.client_name],
                 ['Project Manager', project.pm_name],
-                ['Site Lead',    project.se_name],
-                ['QS Lead',      project.qs_name],
-                ['RERA No.',     project.rera_number || '—'],
+                ['Site Lead',       project.se_name],
+                ['QS Lead',         project.qs_name],
+                ['RERA No.',        project.rera_number || '—'],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between items-start gap-3 py-2 border-b border-slate-50 last:border-0">
                   <span className="text-xs text-slate-900 font-medium shrink-0">{k}</span>
@@ -197,7 +232,7 @@ export default function ProjectDetail() {
           {/* Progress */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">Construction Progress</span>
+              <span className="text-xs font-medium text-slate-900 uppercase tracking-wider">Construction Progress</span>
               <span className={clsx('text-lg font-bold', progress >= 90 ? 'text-emerald-600' : 'text-indigo-600')}>
                 {progress.toFixed(1)}%
               </span>
@@ -223,7 +258,7 @@ export default function ProjectDetail() {
           {/* Key Dates */}
           {(project.start_date || project.end_date) && (
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-900 font-medium uppercase tracking-wider mb-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-900 uppercase tracking-wider mb-4">
                 <CalendarDays className="w-4 h-4 text-indigo-500" /> Project Timeline
               </div>
               <div className="space-y-3">
@@ -235,19 +270,40 @@ export default function ProjectDetail() {
                 )}
                 {project.end_date && (
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-400">End Date</span>
-                    <span className="text-xs font-medium text-slate-800">{dayjs(project.end_date).format('DD MMM YYYY')}</span>
-                  </div>
-                )}
-                {project.worker_count > 0 && (
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                    <span className="text-xs text-slate-900 font-medium flex items-center gap-1.5"><Users className="w-3 h-3" /> Workers on site</span>
-                    <span className="text-xs font-medium text-slate-800">{project.worker_count}</span>
+                    <span className="text-xs text-slate-400">Planned End Date</span>
+                    <span className={clsx('text-xs font-medium', dayjs(project.end_date).isBefore(dayjs()) && project.status !== 'completed' ? 'text-red-600' : 'text-slate-800')}>
+                      {dayjs(project.end_date).format('DD MMM YYYY')}
+                      {dayjs(project.end_date).isBefore(dayjs()) && project.status !== 'completed' && <span className="ml-1 text-red-500">(overdue)</span>}
+                    </span>
                   </div>
                 )}
               </div>
             </div>
           )}
+
+          {/* Quick Links */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-900 uppercase tracking-wider mb-4">
+              <ExternalLink className="w-4 h-4 text-indigo-500" /> Quick Navigation
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Budget & Cost',    icon: BarChart3,     to: `/procurement/budget-control`,          color: 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100' },
+                { label: 'Store Ledger',     icon: BookOpen,      to: `/stores/ledger`,                       color: 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100' },
+                { label: 'Material Request', icon: ClipboardList, to: `/stores/mrs`,                          color: 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100' },
+                { label: 'Purchase Orders',  icon: ShoppingCart,  to: `/procurement/po`,                      color: 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' },
+                { label: 'Stock Verify',     icon: Package,       to: `/stores/stock-verification`,           color: 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' },
+                { label: 'HSE / Safety',     icon: Activity,      to: `/hse?project_id=${id}`,                color: 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100' },
+                { label: 'HR Workforce',     icon: Users,         to: `/hr/workers`,                          color: 'bg-purple-50 text-purple-700 border-purple-100 hover:bg-purple-100' },
+                { label: 'Project 360°',     icon: BarChart3,     to: `/reports/360`,                         color: 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100' },
+              ].map(({ label, icon: Icon, to, color }) => (
+                <Link key={label} to={to} className={clsx('flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition-all', color)}>
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Right Column */}
@@ -384,7 +440,7 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {/* Document Repository */}
+          {/* Document Repository — persisted via DMS */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -393,12 +449,12 @@ export default function ProjectDetail() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-slate-800">Project Repository</h3>
-                  <p className="text-xs text-slate-400">PDF documents & drawings</p>
+                  <p className="text-xs text-slate-400">{docs.length > 0 ? `${docs.length} document${docs.length > 1 ? 's' : ''}` : 'PDF, DOCX, DWG files'}</p>
                 </div>
               </div>
-              <label className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-medium rounded-lg hover:bg-indigo-100 cursor-pointer transition-all">
-                <UploadCloud size={13} /> Upload PDF
-                <input type="file" accept=".pdf" className="hidden" onChange={handleUpload} />
+              <label className={clsx('flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-medium rounded-lg hover:bg-indigo-100 cursor-pointer transition-all', uploadDocMut.isPending && 'opacity-50 pointer-events-none')}>
+                <UploadCloud size={13} /> {uploadDocMut.isPending ? 'Uploading…' : 'Upload'}
+                <input type="file" className="hidden" onChange={handleUpload} accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.png,.jpg" />
               </label>
             </div>
 
@@ -406,28 +462,43 @@ export default function ProjectDetail() {
               <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-lg">
                 <UploadCloud size={28} className="mb-2 text-slate-300" />
                 <p className="text-xs text-slate-400">No documents uploaded yet</p>
+                <p className="text-[11px] text-slate-300 mt-1">PDF, DOCX, DWG, Excel supported</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {docs.map(doc => (
-                  <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all group">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-red-500">
-                        <FileText size={15} />
+                {docs.map(doc => {
+                  const ext = doc.file_type || doc.file_name?.split('.').pop();
+                  const cls = fileColor(ext);
+                  return (
+                    <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100 hover:border-slate-200 transition-all group">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={clsx('w-9 h-9 rounded-lg border flex items-center justify-center text-xs font-bold uppercase shrink-0', cls)}>
+                          {(ext || '?').slice(0, 3)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-800 truncate">{doc.doc_title || doc.file_name}</div>
+                          <div className="text-[10px] text-slate-400">
+                            {doc.file_size ? fileSize(doc.file_size) : ''}{doc.created_at ? ` · ${dayjs(doc.created_at).format('DD MMM YYYY')}` : ''}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-xs font-medium text-slate-800">{doc.name}</div>
-                        <div className="text-[10px] text-slate-400">{doc.size} · {doc.date}</div>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {doc.local_url && (
+                          <a href={`/api/v1${doc.local_url}`} target="_blank" rel="noreferrer"
+                             className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-all opacity-0 group-hover:opacity-100">
+                            <Download size={12} />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => deleteDocMut.mutate(doc.id)}
+                          className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-300 hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => { setDocs(prev => prev.filter(d => d.id !== doc.id)); toast.success('Document removed'); }}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
