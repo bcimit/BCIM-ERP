@@ -14,7 +14,7 @@ import {
   Briefcase, UploadCloud, Upload, ChevronUp, Flag, CalendarDays, GanttChartSquare, Hammer,
   CalendarOff, FileBarChart, Star, UserCheck, Fingerprint, PackageCheck, ArrowLeftRight,
   Landmark, FileSignature, CircleSlash, ShieldCheck, Clock3, Lightbulb,
-  Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, IndianRupee
+  Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, IndianRupee, UserRound
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
@@ -1827,6 +1827,25 @@ export default function Layout() {
 
           {/* Current Project chip — switches project for the session */}
           <ProjectChip />
+
+          {/* My ESS Portal — quick access for all employees */}
+          <NavLink
+            to="/ess"
+            title="My ESS Portal"
+            style={({ isActive }) => ({
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 10px', borderRadius: 8, textDecoration: 'none',
+              background: isActive ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.08)',
+              border: isActive ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(255,255,255,0.12)',
+              color: isActive ? '#86efac' : 'rgba(255,255,255,0.85)',
+              fontSize: 12, fontWeight: 700, flexShrink: 0,
+            })}
+            onMouseEnter={e => { if (!e.currentTarget.getAttribute('data-active')) e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; }}
+            onMouseLeave={e => { if (!e.currentTarget.getAttribute('data-active')) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          >
+            <UserRound size={14} />
+            <span className="sm-show" style={{ display: 'none' }}>My ESS</span>
+          </NavLink>
 
           {/* Notifications */}
           <div style={{ position: 'relative' }}>

@@ -282,19 +282,30 @@ const APPROVER_ROLES = [
   'md', 'ceo', 'cfo', 'director', 'managing_director',
 ];
 
+// Roles considered "admin/manager" — get module-based home, not ESS
+const ADMIN_ROLES = [
+  'admin', 'super_admin', 'hr_admin', 'hr_manager',
+  'site_engineer', 'qs_engineer', 'project_manager',
+  'accounts', 'management', 'finance_head', 'procurement_manager',
+  'md', 'ceo', 'cfo', 'director', 'managing_director',
+];
+
 function getHomeRoute(user) {
   if (!user) return '/login';
   const role = String(user.role || '').toLowerCase();
   // Super admin & admin → full dashboard
   if (['admin', 'super_admin'].includes(role)) return '/dashboard';
-  // Approver roles → My Approvals page as home
+  // Approver / manager roles → My Approvals page as home
   if (APPROVER_ROLES.includes(role)) return '/approvals';
   const mods = user.accessible_modules;
-  if (!mods || mods.length === 0) return '/approvals'; // unconfigured → approvals
+  // Staff with no admin modules → ESS Portal (like GreytHR)
+  if (!mods || mods.length === 0) return '/ess';
+  const hasAdminModule = mods.some(m => MODULE_HOME[m]);
+  if (!hasAdminModule) return '/ess';
   for (const mod of mods) {
     if (MODULE_HOME[mod]) return MODULE_HOME[mod];
   }
-  return '/approvals';
+  return '/ess';
 }
 
 // Global roles bypass project selection (they see all projects company-wide)
