@@ -1088,6 +1088,39 @@ router.patch('/:id([0-9a-fA-F-]{36})/ocr', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════
+// DOWNLOAD / PREVIEW (authenticated)
+// ══════════════════════════════════════════════════════════════════
+router.get('/:id([0-9a-fA-F-]{36})/download', async (req, res) => {
+  try {
+    const doc = await getAccessibleDocument(req, req.params.id);
+    const filePath = resolveLocalDocumentPath(doc.local_url);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    await db().query(`INSERT INTO document_access_logs (document_id,user_id,action) VALUES ($1,$2,'download')`,
+      [req.params.id, req.user.id]);
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.file_name}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.sendFile(filePath);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/:id([0-9a-fA-F-]{36})/preview', async (req, res) => {
+  try {
+    const doc = await getAccessibleDocument(req, req.params.id);
+    const filePath = resolveLocalDocumentPath(doc.local_url);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    await db().query(`INSERT INTO document_access_logs (document_id,user_id,action) VALUES ($1,$2,'preview')`,
+      [req.params.id, req.user.id]);
+    res.setHeader('Content-Type', doc.file_type === 'pdf' ? 'application/pdf' : 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(filePath);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════════
 // DELETE
 // ══════════════════════════════════════════════════════════════════
 router.delete('/:id([0-9a-fA-F-]{36})', authorize(...ADMINS), async (req, res) => {
