@@ -89,9 +89,9 @@ function DocumentPreview({ doc }) {
   const excel = isExcelDoc(doc);
   const word  = isWordDoc(doc);
 
-  // For PDF: use direct URL with JWT token in query param — most reliable
+  // For PDF: fetch with Authorization header and create blob URL
   const token      = sessionStorage.getItem('accessToken');
-  const pdfUrl     = isPDF && doc?.id ? `/api/v1/dms/${doc.id}/file?token=${token}` : '';
+  const [pdfBlobUrl, setPdfBlobUrl] = useState('');
 
   const preview = useQuery({
     queryKey: ['dms-preview', doc?.id],
@@ -102,6 +102,13 @@ function DocumentPreview({ doc }) {
   useEffect(() => {
     let alive = true;
     let url   = '';
+    // PDF — fetch with auth header, create blob URL
+    if (doc?.id && isPDF) {
+      fetch(`/api/v1/dms/${doc.id}/preview`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(blob => { if (!alive) return; url = URL.createObjectURL(blob); setPdfBlobUrl(url); })
+        .catch(e => toast.error('Unable to load PDF: ' + (e?.message || 'Unknown error')));
+    }
     // Image — fetch blob for display
     if (doc?.id && isImg) {
       dmsAPI.fileBlob(doc.id)
@@ -118,18 +125,24 @@ function DocumentPreview({ doc }) {
         .finally(() => { if (alive) setLoadingDocx(false); });
     }
     return () => { alive = false; if (url) URL.revokeObjectURL(url); };
-  }, [doc?.id, isImg, word]);
+  }, [doc?.id, isPDF, isImg, word, token]);
 
-  // PDF — direct URL with JWT token in query (no blob, no CORS issues)
+  // PDF — blob URL from authenticated endpoint
   if (isPDF) {
     return (
       <div className="space-y-3">
-        <iframe
-          key={pdfUrl}
-          title={doc.file_name}
-          src={pdfUrl}
-          className="w-full h-[620px] rounded-xl border border-slate-200 bg-white"
-        />
+        {!pdfBlobUrl ? (
+          <div className="h-[620px] flex items-center justify-center border rounded-xl text-slate-400">
+            <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Loading PDF…
+          </div>
+        ) : (
+          <iframe
+            key={pdfBlobUrl}
+            title={doc.file_name}
+            src={pdfBlobUrl}
+            className="w-full h-[620px] rounded-xl border border-slate-200 bg-white"
+          />
+        )}
       </div>
     );
   }
