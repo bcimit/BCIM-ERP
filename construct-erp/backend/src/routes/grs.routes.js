@@ -1,8 +1,10 @@
 // src/routes/grs.routes.js — Goods Receipt by Security
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject, appendProjectScope } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
+
+const STORES_WRITE = ['security_guard','store_keeper','stores_manager','stores_officer','admin','super_admin'];
 const router = express.Router();
 
 // ── Auto-migrate ──────────────────────────────────────────────────────────────
@@ -120,7 +122,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ── POST /grs ─────────────────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', authorize(...STORES_WRITE), async (req, res) => {
   try {
     const { project_id, vehicle_no, date_time, security_incharge, items = [], remarks } = req.body;
     if (!project_id) return res.status(400).json({ error: 'Project is required' });

@@ -304,11 +304,15 @@ const ADMIN_ROLES = [
   'site_engineer', 'qs_engineer', 'project_manager',
   'accounts', 'management', 'finance_head', 'procurement_manager',
   'md', 'ceo', 'cfo', 'director', 'managing_director',
+  'stores_manager', 'store_keeper', 'security_guard',
 ];
 
 function getHomeRoute(user) {
   if (!user) return '/login';
   const role = String(user.role || '').toLowerCase();
+  // Stores-specific roles → direct to their section
+  if (role === 'security_guard') return '/stores/grs';
+  if (role === 'store_keeper')   return '/stores';
   // Super admin & admin → full dashboard
   if (['admin', 'super_admin'].includes(role)) return '/dashboard';
   // Approver / manager roles → My Approvals page as home

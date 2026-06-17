@@ -1,8 +1,10 @@
 // src/routes/gate-pass.routes.js — Gate Pass (Returnable / Non-Returnable)
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject, appendProjectScope } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
+
+const STORES_WRITE = ['store_keeper','stores_manager','stores_officer','admin','super_admin'];
 const router = express.Router();
 
 // ── Auto-migrate ──────────────────────────────────────────────────────────────
@@ -117,7 +119,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ── POST /gate-passes ─────────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', authorize(...STORES_WRITE), async (req, res) => {
   try {
     const {
       project_id, pass_type, vehicle_no, date_time,

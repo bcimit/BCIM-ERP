@@ -1,8 +1,10 @@
 // src/routes/ign.routes.js — Inward Goods Note
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject, appendProjectScope } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
+
+const STORES_WRITE = ['store_keeper','stores_manager','stores_officer','admin','super_admin'];
 const router = express.Router();
 
 // ── Auto-migrate ──────────────────────────────────────────────────────────────
@@ -126,7 +128,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ── POST /ign ─────────────────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', authorize(...STORES_WRITE), async (req, res) => {
   try {
     const {
       project_id, supplier_name, po_id, po_number,

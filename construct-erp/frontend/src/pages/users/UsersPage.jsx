@@ -48,6 +48,7 @@ const ROLES = [
   { value: 'sc_coordinator',        label: 'SC Coordinator',         color: '#F97316', bg: '#FFF7ED', border: '#FED7AA' },
   { value: 'tender_manager',        label: 'Tender Manager',         color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC' },
   { value: 'it_admin',              label: 'IT Admin',               color: '#0284C7', bg: '#F0F9FF', border: '#BAE6FD' },
+  { value: 'security_guard',        label: 'Security Guard',         color: '#64748B', bg: '#F1F5F9', border: '#CBD5E1' },
   { value: 'employee',              label: 'Employee',               color: '#0F766E', bg: '#F0FDFA', border: '#99F6E4' },
   { value: 'viewer',                label: 'Viewer',                  color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' },
 ];
