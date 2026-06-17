@@ -1186,7 +1186,7 @@ function GRNForm({ onClose, projects, qc }) {
                       <select value={billForm.gst_pct}
                         onChange={e => setBillForm(p => ({ ...p, gst_pct: e.target.value }))}
                         className={inp}>
-                        {['5','12','18','28'].map(v => <option key={v} value={v}>{v}%</option>)}
+                        {['0','5','12','18','28'].map(v => <option key={v} value={v}>{v}%</option>)}
                       </select>
                     </div>
                   </div>
@@ -1223,7 +1223,7 @@ function GRNForm({ onClose, projects, qc }) {
                                     <select value={gstVal}
                                       onChange={e => setItemGstOverrides(p => ({ ...p, [String(idx)]: e.target.value }))}
                                       className={clsx('w-full h-8 rounded px-2 text-xs outline-none transition-all border', FIELD_HL)}>
-                                      {['5','12','18','28'].map(v => <option key={v} value={v}>{v}%</option>)}
+                                      {['0','5','12','18','28'].map(v => <option key={v} value={v}>{v}%</option>)}
                                     </select>
                                   </td>
                                 </tr>
