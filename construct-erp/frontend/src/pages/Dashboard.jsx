@@ -29,6 +29,10 @@ const HRDashboard           = lazy(() => import('./dashboards/HRDashboard'));
 const HSEDashboard          = lazy(() => import('./dashboards/HSEDashboard'));
 const StoresDashboard       = lazy(() => import('./dashboards/StoresDashboard'));
 const ProcurementDashboard  = lazy(() => import('./dashboards/ProcurementDashboard'));
+const ApprovalsPage         = lazy(() => import('./approvals/ApprovalsPage'));
+
+// Managing-director roles see the unified approvals view AS their main dashboard.
+const MD_DASHBOARD_ROLES = ['md', 'managing_director'];
 
 const PIE_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444'];
 
@@ -316,6 +320,11 @@ export default function Dashboard() {
   const { user } = useAuthStore();
   const role = user?.role || '';
   const dept = (user?.department || '').toLowerCase();
+
+  // Managing director → unified approvals list is the main dashboard.
+  if (MD_DASHBOARD_ROLES.includes(String(role).toLowerCase())) {
+    return <Suspense fallback={<DashLoader />}><ApprovalsPage /></Suspense>;
+  }
 
   if (!['super_admin', 'admin'].includes(role)) {
     let RoleDash = null;
