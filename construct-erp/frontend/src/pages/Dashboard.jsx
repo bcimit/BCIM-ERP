@@ -321,12 +321,11 @@ export default function Dashboard() {
   const role = user?.role || '';
   const dept = (user?.department || '').toLowerCase();
 
-  // Managing director → unified approvals list is the main dashboard.
-  if (MD_DASHBOARD_ROLES.includes(String(role).toLowerCase())) {
-    return <Suspense fallback={<DashLoader />}><ApprovalsPage /></Suspense>;
-  }
+  // Managing director sees the full executive dashboard with their pending
+  // approvals embedded as a section near the top (see isMdRole usage below).
+  const isMdRole = MD_DASHBOARD_ROLES.includes(String(role).toLowerCase());
 
-  if (!['super_admin', 'admin'].includes(role)) {
+  if (!['super_admin', 'admin'].includes(role) && !isMdRole) {
     let RoleDash = null;
     if (role === 'project_manager') RoleDash = PMDashboard;
     else if (role === 'site_engineer') RoleDash = SiteEngineerDashboard;
@@ -601,6 +600,15 @@ export default function Dashboard() {
               style={{ padding: '3px 8px', border: '1px solid #e5e7eb', background: '#fff', color: '#64748b', borderRadius: 999, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
               Clear all
             </button>
+          </div>
+        )}
+
+        {/* Managing Director — pending approvals embedded at top of dashboard */}
+        {isMdRole && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e8edf3', padding: '16px 18px', marginBottom: 18, boxShadow: '0 1px 3px rgba(15,23,42,0.04)' }}>
+            <Suspense fallback={<DashLoader />}>
+              <ApprovalsPage embedded />
+            </Suspense>
           </div>
         )}
 

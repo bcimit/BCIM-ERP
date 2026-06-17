@@ -1723,10 +1723,6 @@ export default function Layout() {
                      '/stores/issue', '/stores/ledger', '/stores/mtr', '/stores/stock-verification'],
   };
 
-  // Managing director: the main Dashboard already renders all approvals inline,
-  // so the standalone "My Approvals" sidebar item is redundant and hidden.
-  const isMdRole = ['md', 'managing_director'].includes(String(user?.role || '').toLowerCase());
-
   const filteredGroups = navGroups
     .filter(g => {
       if (['admin', 'super_admin'].includes(user?.role)) return true;
@@ -1741,8 +1737,7 @@ export default function Layout() {
         const allowed = STORES_ROLE_NAV[user?.role];
         return { ...g, items: g.items.filter(item => allowed.includes(item.to)) };
       }
-      // Managing director → hide the redundant standalone "My Approvals" item
-      return isMdRole ? { ...g, items: g.items.filter(i => i.to !== '/approvals') } : g;
+      return g;
     })
     .filter(g => g.items.length > 0);
 
