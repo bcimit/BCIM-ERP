@@ -90,7 +90,7 @@ export default function IssuePage() {
 
       <PageHeader
         title="Stock Consumption"
-        subtitle="Material Issue Notes (MIN) & Site Logistics"
+        subtitle="Issue Slip — Material issue to site &amp; logistics"
         breadcrumbs={[{ label: 'Stores' }, { label: 'Issues' }]}
         actions={
           <button onClick={() => setShowForm(true)}
@@ -105,7 +105,7 @@ export default function IssuePage() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <ThemeKpiCard icon={Clock}        label="Pending Issues" value={draftCount}    sub="Draft MINs"     color="amber"   />
+        <ThemeKpiCard icon={Clock}        label="Pending Issues" value={draftCount}    sub="Draft"          color="amber"   />
         <ThemeKpiCard icon={CheckCircle2} label="Finalized"      value={issuedCount}   sub="Total Issued"   color="emerald" />
         <div className="md:col-span-2">
           <ThemeKpiCard label="Cumulative Consumption Value" value={`₹${inr(totalValue)}`} sub="Audit Verified" color="blue" />
@@ -119,7 +119,7 @@ export default function IssuePage() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search MIN number, project, activity…"
+            placeholder="Search issue slip, project, activity…"
             className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-900 font-medium outline-none focus:border-indigo-400 transition-all"
           />
         </div>
@@ -155,7 +155,7 @@ export default function IssuePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">MIN Document</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">Issue Slip</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">Work Activity</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">Recipient</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-slate-900 font-medium uppercase tracking-wider">Status</th>

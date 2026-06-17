@@ -94,7 +94,7 @@ const navGroups = [
     { to: '/stores/grn',               icon: PackageCheck,    label: 'GRN Receiving' },
     { to: '/stores/gate-pass',         icon: LogOut,          label: 'Gate Pass' },
     { to: '/stores/ledger',            icon: BookOpen,        label: 'Store Ledger' },
-    { to: '/stores/issue',             icon: ArrowUpRight,    label: 'Issue Notes (MIN)' },
+    { to: '/stores/issue',             icon: ArrowUpRight,    label: 'Issue Slip' },
     { to: '/stores/mtr',               icon: Truck,           label: 'Material Transfer' },
     { to: '/stores/stock-verification', icon: ClipboardCheck, label: 'Stock Verification' },
     { to: '/stores/credit-notes',      icon: TrendingDown,    label: 'Credit Notes' },
