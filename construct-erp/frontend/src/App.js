@@ -90,6 +90,7 @@ const RateContractPage    = lazy(() => import('./pages/procurement/RateContractP
 const VendorPaymentsPage  = lazy(() => import('./pages/procurement/VendorPaymentsPage'));
 const POPage              = lazy(() => import('./pages/procurement/POPage'));
 const GRNPage             = lazy(() => import('./pages/stores/GRNPage'));
+const GRSPage             = lazy(() => import('./pages/stores/GRSPage'));
 const InventoryPage       = lazy(() => import('./pages/procurement/InventoryPage'));
 const QuotationPage       = lazy(() => import('./pages/procurement/QuotationPage'));
 const RFQPage             = lazy(() => import('./pages/procurement/RFQPage'));
@@ -601,6 +602,7 @@ export default function App() {
                 <Route path="stores/po-register" element={<RequireModule module="Stores"><PORegisterPage /></RequireModule>} />
                 <Route path="stores/work-orders" element={<RequireModule module="Stores"><WorkOrderPage /></RequireModule>} />
                 <Route path="stores/wo-register" element={<RequireModule module="Stores"><WORegisterPage /></RequireModule>} />
+                <Route path="stores/grs" element={<RequireModule module="Stores"><GRSPage /></RequireModule>} />
                 <Route path="stores/grn" element={<RequireModule module="Stores"><GRNPage /></RequireModule>} />
 
                 {/* Tender Management */}

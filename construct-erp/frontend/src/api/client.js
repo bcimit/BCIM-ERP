@@ -432,6 +432,13 @@ export const grnAPI = {
   approve: (id, stage) => api.patch(`/grn/${id}/${stage}`),
 };
 
+export const grsAPI = {
+  list:        (params) => api.get('/grs', { params }),
+  get:         (id)     => api.get(`/grs/${id}`),
+  create:      (data)   => api.post('/grs', data),
+  acknowledge: (id)     => api.patch(`/grs/${id}/acknowledge`),
+};
+
 export const creditNoteAPI = {
   list:         (params) => api.get('/credit-notes', { params }),
   get:          (id)     => api.get(`/credit-notes/${id}`),
