@@ -13,7 +13,7 @@ import {
   ChevronRight, AlertCircle, FileText, Trash2, Activity,
   ChevronDown, Tag, CalendarDays, Filter, Eye, Rows3,
   UserRound, Layers3, Send, ClipboardCheck, Settings, GripVertical, RefreshCw,
-  ShoppingCart, Upload, Paperclip, History, Info, MapPin,
+  ShoppingCart, Upload, Paperclip, History, Info, MapPin, RotateCcw,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -343,6 +343,9 @@ export default function MRSPage() {
   const handlePrint = useReactToPrint({ contentRef: printRef });
   const location = useLocation();
   const [showForm, setShowForm] = useState(false);
+  const [hasDraft, setHasDraft] = useState(() => {
+    try { return !!localStorage.getItem(MRS_DRAFT_KEY); } catch { return false; }
+  });
   const [selectedMRS, setSelectedMRS] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -714,7 +717,8 @@ export default function MRSPage() {
 
   const saveDraft = () => {
     try {
-      localStorage.setItem(MRS_DRAFT_KEY, JSON.stringify({ formData, items }));
+      localStorage.setItem(MRS_DRAFT_KEY, JSON.stringify({ formData, items, savedAt: Date.now() }));
+      setHasDraft(true);
       toast.success('Draft saved locally');
     } catch {
       toast.error('Could not save draft');
@@ -724,14 +728,20 @@ export default function MRSPage() {
   const loadDraft = () => {
     try {
       const raw = localStorage.getItem(MRS_DRAFT_KEY);
-      if (!raw) return toast.error('No saved draft found');
+      if (!raw) { setHasDraft(false); return toast.error('No saved draft found'); }
       const { formData: fd, items: it } = JSON.parse(raw);
-      if (fd) setFormData(fd);
+      if (fd) setFormData(d => ({ ...d, ...fd }));
       if (it?.length) setItems(it);
       toast.success('Draft restored');
     } catch {
       toast.error('Could not restore draft');
     }
+  };
+
+  const discardDraft = () => {
+    try { localStorage.removeItem(MRS_DRAFT_KEY); } catch {}
+    setHasDraft(false);
+    toast.success('Draft discarded');
   };
 
   const handleSubmit = () => {
@@ -746,6 +756,7 @@ export default function MRSPage() {
       planned_usage_date: formData.planned_usage_date ? dayjs(formData.planned_usage_date).format('YYYY-MM-DD') : null,
     });
     localStorage.removeItem(MRS_DRAFT_KEY);
+    setHasDraft(false);
   };
 
   const [showMDModal, setShowMDModal] = useState(false);
@@ -1914,6 +1925,11 @@ export default function MRSPage() {
                 <button onClick={saveDraft} className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md border border-blue-300 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors">
                   <Download className="w-4 h-4" /> Save Draft
                 </button>
+                {hasDraft && (
+                  <button onClick={loadDraft} className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md border border-amber-300 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+                    <RotateCcw className="w-4 h-4" /> Resume Draft
+                  </button>
+                )}
                 <button title="Coming soon" disabled className="inline-flex items-center gap-1.5 px-4 h-9 rounded-md border border-slate-200 text-sm font-medium text-slate-400 cursor-not-allowed">
                   Preview PDF
                 </button>

@@ -422,6 +422,10 @@ router.use(loadProjectScope);
   await safe(`ALTER TABLE material_requisitions ADD COLUMN IF NOT EXISTS stores_sig_img TEXT`);
   // Per-project workflow config stored on the projects table
   await safe(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS mrs_workflow JSONB`);
+  // Optional per-project starting sequence (e.g. continue legacy paper numbering at 053)
+  await safe(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS mrs_start_seq INTEGER`);
+  // mrs_number now mirrors the project-scoped serial which can be longer than 30 chars
+  await safe(`ALTER TABLE material_requisitions ALTER COLUMN mrs_number TYPE VARCHAR(60)`);
   // MD item-level authorization: which items to proceed, at what quantity
   await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS md_approved_qty NUMERIC(12,3)`);
   await safe(`ALTER TABLE mrs_items ADD COLUMN IF NOT EXISTS md_included BOOLEAN DEFAULT TRUE`);
@@ -702,82 +706,99 @@ router.post('/', async (req, res) => {
       return res.status(403).json({ error: 'You do not have access to this project.' });
     }
 
-    const result = await withTransaction(async (client) => {
-      // Verify project belongs to company
-      const proj = await client.query(
-        `SELECT id, name, project_code, mrs_prefix FROM projects WHERE id = $1 AND company_id = $2`,
-        [project_id, req.user.company_id]
-      );
-      if (!proj.rows.length) throw Object.assign(new Error('Project not found'), { status: 404 });
+    // mrs_number carries a GLOBAL unique constraint, but each project's serial restarts
+    // at -001. The old code set mrs_number = "MRS-<yr>-<seq>", so the first MR of every
+    // project produced "MRS-<yr>-001" and collided across projects. We now use the
+    // project-scoped serial (which embeds the project code) as the unique number, and
+    // retry on the rare race where two concurrent submits grab the same sequence.
+    let result;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        result = await withTransaction(async (client) => {
+          // Verify project belongs to company
+          const proj = await client.query(
+            `SELECT id, name, project_code, mrs_prefix, mrs_start_seq FROM projects WHERE id = $1 AND company_id = $2`,
+            [project_id, req.user.company_id]
+          );
+          if (!proj.rows.length) throw Object.assign(new Error('Project not found'), { status: 404 });
 
-      // Per-project sequence: find the highest trailing number used so far for this project
-      const seqRes = await client.query(
-        `SELECT COALESCE(MAX(
-           CASE
-             WHEN serial_no_formatted ~ '-[0-9]+$'
-             THEN CAST(REGEXP_REPLACE(serial_no_formatted, '^.*-([0-9]+)$', '\\1') AS INTEGER)
-             ELSE 0
-           END
-         ), 0) AS last_seq
-         FROM material_requisitions
-         WHERE project_id = $1`,
-        [project_id]
-      );
-      const nextSeq = parseInt(seqRes.rows[0].last_seq) + 1;
-      const seq     = String(nextSeq).padStart(3, '0');
+          // Per-project sequence: find the highest trailing number used so far for this project
+          const seqRes = await client.query(
+            `SELECT COALESCE(MAX(
+               CASE
+                 WHEN serial_no_formatted ~ '-[0-9]+$'
+                 THEN CAST(REGEXP_REPLACE(serial_no_formatted, '^.*-([0-9]+)$', '\\1') AS INTEGER)
+                 ELSE 0
+               END
+             ), 0) AS last_seq
+             FROM material_requisitions
+             WHERE project_id = $1`,
+            [project_id]
+          );
+          // Continue from a configured starting number (legacy paper numbering) if it is
+          // higher than what's already in the table; +attempt bumps forward on a unique clash.
+          const startSeq = parseInt(proj.rows[0].mrs_start_seq) || 0;
+          const nextSeq  = Math.max(parseInt(seqRes.rows[0].last_seq) + 1, startSeq) + attempt;
+          const seq      = String(nextSeq).padStart(3, '0');
 
-      const yr          = new Date().getFullYear();
-      const mrs_number  = `MRS-${yr}-${seq}`;
+          // Use project-specific prefix if configured, otherwise fall back to default format
+          const mrsPrefix = proj.rows[0].mrs_prefix;
+          const deptCode  = (department || 'GEN').substring(0, 3).toUpperCase();
+          const projectCode = proj.rows[0].project_code || 'PRJ';
+          const serial_no_formatted = mrsPrefix
+            ? `${mrsPrefix}-${seq}`
+            : `BCIM-${projectCode}-${deptCode}-MR-${seq}`;
+          // Globally-unique key = the project-scoped serial (embeds project identity)
+          const mrs_number = serial_no_formatted;
 
-      // Use project-specific prefix if configured, otherwise fall back to default format
-      const mrsPrefix = proj.rows[0].mrs_prefix;
-      const deptCode  = (department || 'GEN').substring(0, 3).toUpperCase();
-      const projectCode = proj.rows[0].project_code || 'PRJ';
-      const serial_no_formatted = mrsPrefix
-        ? `${mrsPrefix}-${seq}`
-        : `BCIM-${projectCode}-${deptCode}-MR-${seq}`;
+          const mrs = await client.query(
+            `INSERT INTO material_requisitions (
+               project_id, mrs_number, serial_no_formatted, department,
+               head_office_project_name, site_incharge, required_by,
+               priority, remarks, raised_by, status,
+               mr_type, cost_center, wo_boq_reference, delivery_location,
+               requester_employee_id, requester_contact, requester_email,
+               justification, linked_activity, planned_usage_date, special_handling
+             )
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
+            [
+              project_id, mrs_number, serial_no_formatted, department,
+              head_office_project_name || proj.rows[0].name,
+              site_incharge, required_by, priority || 'medium', remarks, req.user.id,
+              mr_type || null, cost_center || null, wo_boq_reference || null, delivery_location || null,
+              requester_employee_id || null, requester_contact || null, requester_email || null,
+              justification || null, linked_activity || null, planned_usage_date || null, special_handling || null,
+            ]
+          );
 
-      const mrs = await client.query(
-        `INSERT INTO material_requisitions (
-           project_id, mrs_number, serial_no_formatted, department,
-           head_office_project_name, site_incharge, required_by,
-           priority, remarks, raised_by, status,
-           mr_type, cost_center, wo_boq_reference, delivery_location,
-           requester_employee_id, requester_contact, requester_email,
-           justification, linked_activity, planned_usage_date, special_handling
-         )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
-        [
-          project_id, mrs_number, serial_no_formatted, department,
-          head_office_project_name || proj.rows[0].name,
-          site_incharge, required_by, priority || 'medium', remarks, req.user.id,
-          mr_type || null, cost_center || null, wo_boq_reference || null, delivery_location || null,
-          requester_employee_id || null, requester_contact || null, requester_email || null,
-          justification || null, linked_activity || null, planned_usage_date || null, special_handling || null,
-        ]
-      );
+          // Insert items
+          const inserted = [];
+          for (let i = 0; i < items.length; i++) {
+            const { material, qty, unit, purpose, item_code, category, est_rate, preferred_vendor_id } = items[i];
+            if (!material || !qty || !unit) continue;
+            const it = await client.query(
+              `INSERT INTO mrs_items (mrs_id, material_name, quantity, unit, purpose, sort_order, item_code, category, est_rate, preferred_vendor_id)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+              [mrs.rows[0].id, material, parseFloat(qty), unit, purpose, i + 1, item_code || null, category || null, est_rate ? parseFloat(est_rate) : null, preferred_vendor_id || null]
+            );
+            inserted.push(it.rows[0]);
+          }
 
-      // Insert items
-      const inserted = [];
-      for (let i = 0; i < items.length; i++) {
-        const { material, qty, unit, purpose, item_code, category, est_rate, preferred_vendor_id } = items[i];
-        if (!material || !qty || !unit) continue;
-        const it = await client.query(
-          `INSERT INTO mrs_items (mrs_id, material_name, quantity, unit, purpose, sort_order, item_code, category, est_rate, preferred_vendor_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-          [mrs.rows[0].id, material, parseFloat(qty), unit, purpose, i + 1, item_code || null, category || null, est_rate ? parseFloat(est_rate) : null, preferred_vendor_id || null]
-        );
-        inserted.push(it.rows[0]);
+          return {
+            ...mrs.rows[0],
+            project_name: proj.rows[0].name,
+            raised_by_name: req.user.name || req.user.email,
+            raised_by_email: req.user.email,
+            items: inserted,
+          };
+        });
+        break; // success
+      } catch (err) {
+        // 23505 = unique_violation on mrs_number — bump the sequence and retry a few times
+        if (err.code === '23505' && attempt < 5) continue;
+        throw err;
       }
-
-      return {
-        ...mrs.rows[0],
-        project_name: proj.rows[0].name,
-        raised_by_name: req.user.name || req.user.email,
-        raised_by_email: req.user.email,
-        items: inserted,
-      };
-    });
+    }
 
     notifyStoresForNewMRS({ companyId: req.user.company_id, mrs: result });
     notifyProcurementForNewMRS({ companyId: req.user.company_id, mrs: result });
