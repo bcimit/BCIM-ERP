@@ -59,11 +59,16 @@ async function run() {
                OR project_code ILIKE '%DQS%BLR%' OR project_code ILIKE '%DQS-BLR%' OR project_code ILIKE '%DQSTWR%')
           AND mrs_start_seq = 1`,
         'Projects: mrs_start_seq = 53 for DQS Towers/Yelahanka (physical MRs 001–052 pre-date ERP)'],
-      [`DELETE FROM material_requisitions
+      // Renumber the two pre-existing Yelahanka MRs from the dashed -001/-002 format
+      // to the legacy continuous serials 053/054 (kept, not deleted).
+      [`UPDATE material_requisitions SET serial_no_formatted = 'BCIM-DQS-BLR-MR053', mrs_number = 'BCIM-DQS-BLR-MR053', updated_at = NOW()
         WHERE serial_no_formatted = 'BCIM-DQS-BLR-MR-001'
-          AND status = 'pending'
-          AND project_id IN (SELECT id FROM projects WHERE name ILIKE '%yelahanka%' OR name ILIKE '%yelkhan%' OR project_code ILIKE '%DQS%BLR%')`,
-        'MRS: Remove incorrectly-numbered BCIM-DQS-BLR-MR-001 (Yelahanka, restart from 053)'],
+          AND NOT EXISTS (SELECT 1 FROM material_requisitions m2 WHERE m2.serial_no_formatted = 'BCIM-DQS-BLR-MR053')`,
+        'MRS: BCIM-DQS-BLR-MR-001 → BCIM-DQS-BLR-MR053 (Yelahanka)'],
+      [`UPDATE material_requisitions SET serial_no_formatted = 'BCIM-DQS-BLR-MR054', mrs_number = 'BCIM-DQS-BLR-MR054', updated_at = NOW()
+        WHERE serial_no_formatted = 'BCIM-DQS-BLR-MR-002'
+          AND NOT EXISTS (SELECT 1 FROM material_requisitions m2 WHERE m2.serial_no_formatted = 'BCIM-DQS-BLR-MR054')`,
+        'MRS: BCIM-DQS-BLR-MR-002 → BCIM-DQS-BLR-MR054 (Yelahanka)'],
 
       // ── Finance columns (already in route guards, belt-and-suspenders) ───
       [`ALTER TABLE payments ADD COLUMN IF NOT EXISTS cost_head VARCHAR(100)`,        'Payments: cost_head'],
