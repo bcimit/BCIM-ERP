@@ -165,7 +165,7 @@ async function run() {
         mrs_number VARCHAR(30) UNIQUE NOT NULL,
         site_incharge VARCHAR(100),
         required_by DATE NOT NULL,
-        priority VARCHAR(10) DEFAULT 'normal' CHECK (priority IN ('normal','urgent')),
+        priority VARCHAR(10) DEFAULT 'medium' CHECK (priority IN ('low','medium','high','urgent')),
         status VARCHAR(20) DEFAULT 'pending',
         raised_by UUID REFERENCES users(id),
         approved_by UUID REFERENCES users(id),
