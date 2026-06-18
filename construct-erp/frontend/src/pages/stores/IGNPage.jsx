@@ -527,17 +527,35 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
     enabled: !!form.project_id,
   });
 
-  // Pre-fill from GRS when opened via quick-link
+  // Pre-fill from GRS when opened via quick-link — call API directly, no grsList dependency
   useEffect(() => {
-    if (!fromGrsId || !grsList.length) return;
-    const grs = grsList.find(g => g.id === fromGrsId);
-    if (grs) {
-      setField('grs_id', grs.id);
-      setField('grs_number', grs.grs_number || '');
-      if (grs.vehicle_no) setField('vehicle_no', grs.vehicle_no);
-      if (grs.supplier_name) setField('supplier_name', grs.supplier_name);
-    }
-  }, [fromGrsId, grsList]);
+    if (!fromGrsId) return;
+    (async () => {
+      try {
+        const res = await grsAPI.get(fromGrsId);
+        const detail = res.data?.data ?? res.data;
+        setField('grs_id', detail.id);
+        setField('grs_number', detail.grs_number || '');
+        if (detail.project_id) setField('project_id', detail.project_id);
+        if (detail.vehicle_no) setField('vehicle_no', detail.vehicle_no);
+        if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
+        if (detail.po_number) setField('po_number', detail.po_number);
+        if (detail.po_id) setField('po_id', detail.po_id);
+        const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
+        if (grsItems.length > 0) {
+          setItems(grsItems.map(it => ({
+            invoice_no: '',
+            material_name: it.particulars || '',
+            unit: it.unit || '',
+            qty_as_per_dc: it.quantity ? String(it.quantity) : '',
+            qty_inspected: '',
+            qty_rejected: '',
+            remarks: it.remarks || '',
+          })));
+        }
+      } catch (_) {}
+    })();
+  }, [fromGrsId]);
 
   const createMutation = useMutation({
     mutationFn: (d) => ignAPI.create(d),
@@ -554,12 +572,33 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   const addRow    = () => setItems(p => [...p, emptyItem()]);
   const removeRow = (idx) => { if (items.length > 1) setItems(p => p.filter((_, i) => i !== idx)); };
 
-  // When GRS is selected, auto-fill vehicle no. and items
-  const handleGrsSelect = (grsId) => {
-    const grs = grsList.find(g => g.id === grsId);
+  // When GRS is selected, fetch full detail to load PO number, supplier, and items
+  const handleGrsSelect = async (grsId) => {
     setField('grs_id', grsId);
+    if (!grsId) { setField('grs_number', ''); return; }
+    const grs = grsList.find(g => g.id === grsId);
     setField('grs_number', grs?.grs_number || '');
     if (grs?.vehicle_no) setField('vehicle_no', grs.vehicle_no);
+    try {
+      const res = await grsAPI.get(grsId);
+      const detail = res.data?.data ?? res.data;
+      if (detail.po_number) setField('po_number', detail.po_number);
+      if (detail.po_id) setField('po_id', detail.po_id);
+      if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
+      const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
+      if (grsItems.length > 0) {
+        setItems(grsItems.map(it => ({
+          invoice_no: '',
+          material_name: it.particulars || '',
+          unit: it.unit || '',
+          qty_as_per_dc: it.quantity ? String(it.quantity) : '',
+          qty_inspected: '',
+          qty_rejected: '',
+          remarks: it.remarks || '',
+        })));
+        toast.success(`${grsItems.length} item(s) loaded from GRS`);
+      }
+    } catch (_) {}
   };
 
   const submit = () => {
