@@ -3,7 +3,7 @@
 // Stores staff register POs and add per-load delivery entries.
 const express = require('express');
 const router  = express.Router();
-const { query } = require('../database/db');
+const { query } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope } = require('../middleware/projectScope');
 
