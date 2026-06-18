@@ -388,17 +388,13 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
             </ol>
           )}
         </div>
-
-        <div style={{ borderTop: '2px solid #000', paddingTop: '6px', marginTop: '10px' }}>
-          {approvalGrid}
-        </div>
         </div>{/* /po-footer-block */}
 
             </td></tr>
           </tbody>
         </table>
 
-        {/* Fixed footer — placed in the @page bottom margin on every printed page */}
+        {/* Signature — fixed at the bottom of every printed page (single render) */}
         <div className="po-page-footer">
           {approvalGrid}
         </div>
