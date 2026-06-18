@@ -494,22 +494,25 @@ function GatePassForm({ onClose, projects, qc }) {
   const inp = `w-full h-10 rounded-lg px-3 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-3xl rounded-2xl flex flex-col max-h-[92vh] shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[60] bg-white flex flex-col overflow-hidden">
 
         <div className="bg-slate-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <LogOut size={16} className="text-orange-400" /> New Gate Pass
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">Outgoing material — returnable or non-returnable</p>
+          <div className="flex items-center gap-4">
+            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition">
+              <X size={16} />
+            </button>
+            <div>
+              <div className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mb-0.5">New Entry</div>
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <LogOut size={16} className="text-orange-400" /> New Gate Pass
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Outgoing material — returnable or non-returnable</p>
+            </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition">
-            <X size={16} />
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="max-w-4xl mx-auto p-6 space-y-5">
 
           {/* Pass type selector */}
           <div className="flex items-center gap-3">
@@ -635,19 +638,23 @@ function GatePassForm({ onClose, projects, qc }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0">
-          <span className="text-xs text-slate-500 font-semibold">
-            {items.filter(i => i.particulars?.trim()).length} item(s) · {form.pass_type === 'returnable' ? 'Returnable' : 'Non-Returnable'}
-          </span>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-5 h-9 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-white transition">Cancel</button>
-            <button onClick={submit} disabled={createMutation.isPending}
-              className="px-6 h-9 rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition disabled:opacity-50 shadow-sm">
-              {createMutation.isPending ? 'Saving…' : 'Create Gate Pass →'}
-            </button>
+        </div>
+        </div>
+
+        <div className="border-t bg-white flex-shrink-0 px-6 py-4">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-semibold">
+              {items.filter(i => i.particulars?.trim()).length} item(s) · {form.pass_type === 'returnable' ? 'Returnable' : 'Non-Returnable'}
+            </span>
+            <div className="flex items-center gap-2">
+              <button onClick={onClose} className="px-5 h-9 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+              <button onClick={submit} disabled={createMutation.isPending}
+                className="px-6 h-9 rounded-lg bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 transition disabled:opacity-50 shadow-sm">
+                {createMutation.isPending ? 'Saving…' : 'Create Gate Pass →'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }

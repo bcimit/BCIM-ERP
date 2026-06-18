@@ -483,24 +483,27 @@ function GRSForm({ onClose, projects, qc }) {
   const inp = `w-full h-10 rounded-lg px-3 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-3xl rounded-2xl flex flex-col max-h-[92vh] shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[60] bg-white flex flex-col overflow-hidden">
 
         {/* Header */}
         <div className="bg-slate-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <ShieldCheck size={16} className="text-teal-400" /> New Goods Receipt by Security
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">Security gate entry for incoming material delivery</p>
+          <div className="flex items-center gap-4">
+            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition">
+              <X size={16} />
+            </button>
+            <div>
+              <div className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mb-0.5">New Entry</div>
+              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                <ShieldCheck size={16} className="text-teal-400" /> New Goods Receipt by Security
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Security gate entry for incoming material delivery</p>
+            </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition">
-            <X size={16} />
-          </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="max-w-4xl mx-auto p-6 space-y-5">
 
           {/* Header fields */}
           <div className="border border-slate-200 rounded-xl p-5">
@@ -611,24 +614,26 @@ function GRSForm({ onClose, projects, qc }) {
             </p>
           </div>
         </div>
+        </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0">
-          <span className="text-xs text-slate-500 font-semibold">
-            {items.filter(i => i.particulars?.trim()).length} item(s) ready
-          </span>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose}
-              className="px-5 h-9 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-white transition">
-              Cancel
-            </button>
-            <button onClick={submit} disabled={createMutation.isPending}
-              className="px-6 h-9 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition disabled:opacity-50 shadow-sm">
-              {createMutation.isPending ? 'Saving…' : 'Create GRS →'}
-            </button>
+        <div className="border-t bg-white flex-shrink-0 px-6 py-4">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-semibold">
+              {items.filter(i => i.particulars?.trim()).length} item(s) ready
+            </span>
+            <div className="flex items-center gap-2">
+              <button onClick={onClose}
+                className="px-5 h-9 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                Cancel
+              </button>
+              <button onClick={submit} disabled={createMutation.isPending}
+                className="px-6 h-9 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition disabled:opacity-50 shadow-sm">
+                {createMutation.isPending ? 'Saving…' : 'Create GRS →'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
