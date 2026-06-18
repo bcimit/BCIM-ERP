@@ -91,7 +91,12 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
     || [data.project_location, data.project_city, data.project_state].filter(Boolean).join(', ')
     || '—';
 
-  const termsLines = String(data.terms_conditions || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  // Split terms; strip any leading "1 ", "1. ", "1) " etc. because the <ol> below
+  // adds its own numbering (otherwise we get "1. 1 All Bills…").
+  const termsLines = String(data.terms_conditions || '')
+    .split(/\r?\n/)
+    .map(l => l.trim().replace(/^\d+[.)]?\s+/, ''))
+    .filter(Boolean);
 
   // ── Totals ──────────────────────────────────────────────────────────────────
   const subTotal   = parseFloat(data.sub_total || items.reduce((s, it) => s + parseFloat(it.quantity||0) * parseFloat(it.rate||0), 0));
