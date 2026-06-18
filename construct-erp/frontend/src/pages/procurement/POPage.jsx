@@ -277,7 +277,7 @@ function Field({ label, children }) {
 const INP = Z_INP;
 
 /* ─── New PO Modal ─── */
-function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpdate, isPending, prefill, editingPO }) {
+function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpdate, isPending, prefill, editingPO, company }) {
   const queryClient = useQueryClient();
   const isEditing = !!editingPO;
   const [form, setForm] = useState({
@@ -373,9 +373,25 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
     if (!form.project_id) return;
     const proj = projects.find(p => p.id === form.project_id);
     if (!proj) return;
+    // Build billing address from live company settings, fall back to hardcoded default
+    const BAD_ADDRESSES = ['jayanagar', 'bcim office', '29aaxcb2929p1z1'];
+    const isLancoProject = proj.project_code === 'LH-10';
+    let billingAddr;
+    if (isLancoProject) {
+      billingAddr = getBillingAddress('LH-10');
+    } else if (company?.name && !BAD_ADDRESSES.some(b => (company.address || '').toLowerCase().includes(b))) {
+      const lines = [company.name];
+      if (company.address) lines.push(company.address);
+      const cityState = [company.city, company.state && company.pincode ? `${company.state} – ${company.pincode}` : company.state].filter(Boolean).join(', ');
+      if (cityState) lines.push(cityState);
+      if (company.gstin) lines.push(`GSTIN: ${company.gstin}`);
+      billingAddr = lines.join('\n');
+    } else {
+      billingAddr = getBillingAddress(proj.project_code);
+    }
     setForm(p => ({
       ...p,
-      billing_address:  p.billing_address  || getBillingAddress(proj.project_code),
+      billing_address:  p.billing_address  || billingAddr,
       delivery_address: p.delivery_address || getDeliveryAddress(proj),
     }));
   }, [form.project_id]);
@@ -1086,11 +1102,11 @@ function PODetailPanel({ po, detailedPO, company, onClose, onEdit, onApprove, on
     tbody tr { page-break-inside: avoid; }
     .po-items-table thead { display: table-header-group; }
     .po-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
-    /* Signature strip fixed to bottom of every printed page */
-    .po-page-footer { position: fixed; bottom: -38mm; left: 0; right: 0; background: white; }
+    /* tfoot repeats signature at the bottom of every printed page */
+    .po-layout-footer { display: table-footer-group; }
     /* Keep totals block together; let T&C flow naturally across pages */
     .po-totals-block { page-break-inside: avoid; break-inside: avoid; }
-    @page { size: A4 portrait; margin: 8mm 8mm 48mm 8mm; }
+    @page { size: A4 portrait; margin: 8mm 8mm 20mm 8mm; }
     @media print { body { margin: 0; } }
   </style>
 </head>
@@ -1488,7 +1504,7 @@ function PODetailPanel({ po, detailedPO, company, onClose, onEdit, onApprove, on
 
     {/* Hidden print zone — content captured via ref, printed in new window */}
     <div ref={printZoneRef} style={{ display: 'none' }} aria-hidden="true">
-      <POPrintTemplate data={detailedPO} company={company} />
+      <POPrintTemplate data={detailedPO} company={companyData} />
     </div>
     </>
   );
@@ -2403,6 +2419,7 @@ export default function POPage() {
           onCreate={d => createMutation.mutate(d)}
           isPending={createMutation.isPending}
           prefill={prefillData}
+          company={companyData}
         />
       )}
 
@@ -2416,6 +2433,7 @@ export default function POPage() {
           onUpdate={d => updateMutation.mutate({ id: editingPO.id, data: d })}
           isPending={updateMutation.isPending}
           editingPO={editingPO}
+          company={companyData}
         />
       )}
 

@@ -15,10 +15,10 @@ PLOT NO 26 & 27, SRI LAKSHMI NAGAR COLONY,
 HYDERABAD, RANGAREDDY DIST, TELANGANA – 500089
 GSTIN: 36AAHCB6485A1ZQ`;
 
-export const BCIM_BILLING_ADDRESS_DEFAULT = `BCIM Engineering Private Limited
-No 579, 1st 'A' Main Road, Jayanagar 8th Block, Bangalore – 560070
-GSTIN: 29AAXCB2929P1Z1 | Tel: +91 80 26650194
-Email: procurement@bcimengineering.in`;
+export const BCIM_BILLING_ADDRESS_DEFAULT = `BCIM ENGINEERING PRIVATE LIMITED
+#11, B Wing, Divyasree Chambers, O'Shaughnessy Road
+Bangalore, Karnataka – 560025
+GSTIN: 29AAHCB6485A1ZL`;
 
 // Billing address (BCIM's own address, as the buyer) — varies per project/company entity.
 export function getBillingAddress(projectCode) {
