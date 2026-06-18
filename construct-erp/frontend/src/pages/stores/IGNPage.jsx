@@ -725,7 +725,6 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
         </div>
 
         </div>
-        </div>
 
         <div className="border-t bg-white flex-shrink-0 px-6 py-4">
           <div className="max-w-5xl mx-auto flex items-center justify-between">

@@ -637,8 +637,6 @@ function GatePassForm({ onClose, projects, qc }) {
             </div>
           </div>
         </div>
-
-        </div>
         </div>
 
         <div className="border-t bg-white flex-shrink-0 px-6 py-4">

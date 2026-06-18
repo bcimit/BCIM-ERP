@@ -1395,8 +1395,6 @@ function GRNForm({ onClose, projects, qc }) {
               )}
             </div>
         </div>
-
-        </div>
         </div>
 
         {/* Footer */}
