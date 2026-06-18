@@ -146,6 +146,13 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
           </tr>
         </thead>
 
+        {/* ── Footer SPACER: reserves the signature band on EVERY page so flowing
+            content never hides behind the position:fixed .po-sig-footer below.
+            Height here must match .po-sig-footer's height in the print CSS. */}
+        <tfoot className="po-doc-foot-spacer" style={{ display: 'table-footer-group' }}>
+          <tr><td style={{ border: 'none', padding: 0, height: '36mm' }} /></tr>
+        </tfoot>
+
         {/* ── Flowing body ───────────────────────────────────────────────────── */}
         <tbody>
           <tr><td style={{ border: 'none', padding: 0 }}>
