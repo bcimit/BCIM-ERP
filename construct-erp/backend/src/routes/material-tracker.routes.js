@@ -74,6 +74,12 @@ const WRITE_ROLES = ['store_keeper','stores_manager','stores_officer','admin','s
   await safe(`CREATE INDEX IF NOT EXISTS idx_mtl_entry     ON material_tracker_loads(entry_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_mtsd_load     ON material_tracker_steel_dia(load_id)`);
 
+  // Auto-import dedup columns
+  await safe(`ALTER TABLE material_tracker_loads ADD COLUMN IF NOT EXISTS source_grn_id  UUID`);
+  await safe(`ALTER TABLE material_tracker_loads ADD COLUMN IF NOT EXISTS source_bill_id UUID`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_mtl_src_grn  ON material_tracker_loads(source_grn_id)  WHERE source_grn_id  IS NOT NULL`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_mtl_src_bill ON material_tracker_loads(source_bill_id) WHERE source_bill_id IS NOT NULL`);
+
   console.log('[MaterialTracker] Schema migration OK');
 })();
 
@@ -426,6 +432,278 @@ router.delete('/:id/loads/:loadId', authorize(...WRITE_ROLES), async (req, res) 
     await query(`DELETE FROM material_tracker_loads WHERE id=$1`, [req.params.loadId]);
     res.json({ success: true });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Keyword sets per material type ───────────────────────────────────────────
+const MATERIAL_KEYWORDS = {
+  cement:   ['cement'],
+  concrete: ['concrete', 'rmc', 'ready mix'],
+  steel:    ['steel', 'tmt', 'rebar', 'ms rod'],
+};
+
+function kwCondition(kws, alias, col, startIdx) {
+  return kws.map((_, i) => `LOWER(${alias}.${col}) LIKE $${startIdx + i}`).join(' OR ');
+}
+
+// ── GET /auto-import/preview ──────────────────────────────────────────────────
+router.get('/auto-import/preview', async (req, res) => {
+  try {
+    const { project_id, material_type = 'cement' } = req.query;
+    const companyId = req.user.company_id;
+    const kws = MATERIAL_KEYWORDS[material_type] || MATERIAL_KEYWORDS.cement;
+    const kwPats = kws.map(k => `%${k}%`);
+
+    // params: [companyId, ...kwPats, ?project_id]
+    let params = [companyId, ...kwPats];
+    let projFilter = '';
+    if (project_id) { projFilter = ` AND po.project_id = $${params.length + 1}`; params.push(project_id); }
+
+    const kwCond = kwCondition(kws, 'pi', 'material_name', 2);
+
+    const pos = await query(`
+      SELECT DISTINCT po.id, po.po_number, po.serial_no_formatted, po.po_date,
+        po.project_id, v.name AS vendor_name
+      FROM purchase_orders po
+      JOIN po_items pi ON pi.po_id = po.id
+      JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.company_id = $1
+        AND COALESCE(po.status,'') NOT IN ('cancelled','draft')
+        ${projFilter}
+        AND (${kwCond})
+      ORDER BY po.po_date
+    `, params);
+
+    const existing = await query(
+      `SELECT po_id FROM material_tracker_entries WHERE company_id = $1 AND material_type = $2`,
+      [companyId, material_type]
+    );
+    const existingPoIds = new Set(existing.rows.map(r => r.po_id).filter(Boolean));
+
+    const poIds = pos.rows.map(r => r.id);
+    let grnsNew = 0, billsNew = 0;
+
+    if (poIds.length) {
+      const importedGrns = await query(
+        `SELECT source_grn_id FROM material_tracker_loads WHERE source_grn_id IS NOT NULL`
+      );
+      const importedGrnSet = new Set(importedGrns.rows.map(r => r.source_grn_id));
+
+      const kwCond2 = kwCondition(kws, 'gi', 'material_name', 2);
+      const grns = await query(`
+        SELECT DISTINCT g.id
+        FROM grn g
+        JOIN grn_items gi ON gi.grn_id = g.id
+        WHERE g.po_id = ANY($1)
+          AND (${kwCond2})
+      `, [poIds, ...kwPats]);
+      grnsNew = grns.rows.filter(r => !importedGrnSet.has(r.id)).length;
+
+      const importedBills = await query(
+        `SELECT source_bill_id FROM material_tracker_loads WHERE source_bill_id IS NOT NULL`
+      );
+      const importedBillSet = new Set(importedBills.rows.map(r => r.source_bill_id));
+
+      // Bills with no linked GRN (so we don't double-count)
+      const bills = await query(`
+        SELECT DISTINCT b.id
+        FROM tqs_bills b
+        LEFT JOIN tqs_bill_line_items li ON li.bill_id = b.id
+        WHERE b.po_id = ANY($1)
+          AND b.grn_id IS NULL
+          AND b.is_deleted = FALSE
+          AND (li.item_name IS NULL OR (${kwCondition(kws, 'li', 'item_name', 2)}))
+      `, [poIds, ...kwPats]);
+      billsNew = bills.rows.filter(r => !importedBillSet.has(r.id)).length;
+    }
+
+    res.json({
+      data: {
+        pos_found: pos.rows.length,
+        pos_new: pos.rows.filter(p => !existingPoIds.has(p.id)).length,
+        loads_new: grnsNew + billsNew,
+        grns_new: grnsNew,
+        bills_new: billsNew,
+        pos: pos.rows.map(p => ({ ...p, already_imported: existingPoIds.has(p.id) })),
+      }
+    });
+  } catch (err) {
+    console.error('[MaterialTracker] preview error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /auto-import/run ─────────────────────────────────────────────────────
+router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
+  try {
+    const { project_id, material_type = 'cement' } = req.body;
+    const companyId = req.user.company_id;
+    const kws = MATERIAL_KEYWORDS[material_type] || MATERIAL_KEYWORDS.cement;
+    const kwPats = kws.map(k => `%${k}%`);
+
+    let params = [companyId, ...kwPats];
+    let projFilter = '';
+    if (project_id) { projFilter = ` AND po.project_id = $${params.length + 1}`; params.push(project_id); }
+
+    const kwCond = kwCondition(kws, 'pi', 'material_name', 2);
+
+    // Find all matching POs with aggregated cement item totals
+    const pos = await query(`
+      SELECT
+        po.id, po.po_number, po.serial_no_formatted, po.po_date, po.project_id,
+        v.name AS vendor_name,
+        SUM(pi.quantity)      AS ordered_qty,
+        MAX(pi.unit)          AS unit,
+        MAX(pi.material_name) AS grade,
+        MAX(pi.rate)          AS unit_price
+      FROM purchase_orders po
+      JOIN po_items pi ON pi.po_id = po.id
+      JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.company_id = $1
+        AND COALESCE(po.status,'') NOT IN ('cancelled','draft')
+        ${projFilter}
+        AND (${kwCond})
+      GROUP BY po.id, v.name
+      ORDER BY po.po_date
+    `, params);
+
+    let entries_created = 0, loads_created = 0;
+
+    for (const po of pos.rows) {
+      // Upsert entry
+      let entryRes = await query(
+        `SELECT id FROM material_tracker_entries WHERE company_id=$1 AND po_id=$2 AND material_type=$3`,
+        [companyId, po.id, material_type]
+      );
+      let entryId;
+      if (!entryRes.rows.length) {
+        const ins = await query(`
+          INSERT INTO material_tracker_entries
+            (company_id, project_id, material_type, po_id, po_number, vendor_name,
+             grade, ordered_qty, unit, created_by)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          RETURNING id
+        `, [companyId, po.project_id, material_type,
+            po.id, po.po_number || po.serial_no_formatted,
+            po.vendor_name, po.grade || null,
+            po.ordered_qty || null, po.unit || null, req.user.id]);
+        entryId = ins.rows[0].id;
+        entries_created++;
+      } else {
+        entryId = entryRes.rows[0].id;
+      }
+
+      // ── Import from GRNs ────────────────────────────────────────────────────
+      const kwCond2 = kwCondition(kws, 'gi', 'material_name', 2);
+      const grns = await query(`
+        SELECT
+          g.id AS grn_id, g.grn_date, g.invoice_number, g.grn_number,
+          g.challan_number, g.vehicle_number, g.wb_slip_no,
+          SUM(gi.quantity_received) AS qty,
+          MAX(gi.rate)              AS rate,
+          MAX(gi.unit)              AS unit
+        FROM grn g
+        JOIN grn_items gi ON gi.grn_id = g.id
+        WHERE g.po_id = $1
+          AND (${kwCond2})
+        GROUP BY g.id
+        ORDER BY g.grn_date
+      `, [po.id, ...kwPats]);
+
+      for (const grn of grns.rows) {
+        const dup = await query(
+          `SELECT id FROM material_tracker_loads WHERE source_grn_id=$1`, [grn.grn_id]
+        );
+        if (dup.rows.length) continue;
+
+        // Try to find linked bill for GST/grand_total
+        const bill = await query(`
+          SELECT b.gst_amount, b.total_amount,
+            (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate
+          FROM tqs_bills b
+          WHERE (b.grn_id = $1 OR (b.po_id = $2 AND LOWER(TRIM(b.inv_number)) = LOWER(TRIM($3))))
+            AND b.is_deleted = FALSE
+          LIMIT 1
+        `, [grn.grn_id, po.id, grn.invoice_number || '']);
+
+        const billRow = bill.rows[0];
+        const rate     = parseFloat(grn.rate  || 0);
+        const qty      = parseFloat(grn.qty   || 0);
+        const basic    = qty * rate;
+        const gstRate  = parseFloat(billRow?.gst_rate || 28);
+        const gstAmt   = billRow?.gst_amount   != null ? parseFloat(billRow.gst_amount)   : (basic * gstRate / 100);
+        const grandTot = billRow?.total_amount  != null ? parseFloat(billRow.total_amount) : (basic + gstAmt);
+
+        await query(`
+          INSERT INTO material_tracker_loads
+            (entry_id, received_date, invoice_no, ign_no, grs_no, vehicle_no,
+             invoice_qty, rate, gst_rate, gst_amount, grand_total, created_by, source_grn_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        `, [entryId, grn.grn_date,
+            grn.invoice_number || null,
+            grn.grn_number || grn.wb_slip_no || null,
+            grn.challan_number || null,
+            grn.vehicle_number || null,
+            qty || null, rate || null,
+            gstRate, gstAmt || null, grandTot || null,
+            req.user.id, grn.grn_id]);
+
+        loads_created++;
+      }
+
+      // ── Import from bills that have NO GRN (direct invoice entry) ───────────
+      const kwCond3 = kwCondition(kws, 'li', 'item_name', 2);
+      const bills = await query(`
+        SELECT
+          b.id, b.inv_number, b.inv_date, b.vehicle_number,
+          b.gst_amount, b.total_amount,
+          (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate,
+          COALESCE(SUM(li.quantity),0)  AS qty,
+          MAX(li.rate)                  AS rate,
+          MAX(li.unit)                  AS unit
+        FROM tqs_bills b
+        LEFT JOIN tqs_bill_line_items li ON li.bill_id = b.id
+        WHERE b.po_id = $1
+          AND b.grn_id IS NULL
+          AND b.is_deleted = FALSE
+          AND (li.item_name IS NULL OR (${kwCond3}))
+        GROUP BY b.id
+        ORDER BY b.inv_date
+      `, [po.id, ...kwPats]);
+
+      for (const bill of bills.rows) {
+        const dup = await query(
+          `SELECT id FROM material_tracker_loads WHERE source_bill_id=$1`, [bill.id]
+        );
+        if (dup.rows.length) continue;
+
+        const rate     = parseFloat(bill.rate  || 0);
+        const qty      = parseFloat(bill.qty   || 0);
+        const basic    = qty * rate;
+        const gstRate  = parseFloat(bill.gst_rate || 28);
+        const gstAmt   = bill.gst_amount  != null ? parseFloat(bill.gst_amount)  : (basic * gstRate / 100);
+        const grandTot = bill.total_amount != null ? parseFloat(bill.total_amount): (basic + gstAmt);
+
+        await query(`
+          INSERT INTO material_tracker_loads
+            (entry_id, received_date, invoice_no, vehicle_no,
+             invoice_qty, rate, gst_rate, gst_amount, grand_total, created_by, source_bill_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        `, [entryId, bill.inv_date,
+            bill.inv_number || null,
+            bill.vehicle_number || null,
+            qty || null, rate || null,
+            gstRate, gstAmt || null, grandTot || null,
+            req.user.id, bill.id]);
+
+        loads_created++;
+      }
+    }
+
+    res.json({ data: { entries_created, loads_created, total_pos: pos.rows.length } });
+  } catch (err) {
+    console.error('[MaterialTracker] auto-import run error:', err);
     res.status(500).json({ error: err.message });
   }
 });

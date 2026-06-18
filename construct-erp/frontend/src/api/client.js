@@ -564,8 +564,10 @@ export const materialTrackerAPI = {
   addLoad:     (id, data)         => api.post(`/material-tracker/${id}/loads`, data),
   updateLoad:  (id, loadId, data) => api.put(`/material-tracker/${id}/loads/${loadId}`, data),
   deleteLoad:  (id, loadId)       => api.delete(`/material-tracker/${id}/loads/${loadId}`),
-  abstract:    (params)           => api.get('/material-tracker/report/abstract', { params }),
-  loadwise:    (params)           => api.get('/material-tracker/report/loadwise', { params }),
+  abstract:          (params)           => api.get('/material-tracker/report/abstract', { params }),
+  loadwise:          (params)           => api.get('/material-tracker/report/loadwise', { params }),
+  autoImportPreview: (params)           => api.get('/material-tracker/auto-import/preview', { params }),
+  autoImportRun:     (data)             => api.post('/material-tracker/auto-import/run', data),
 };
 
 export const gatePassAPI = {

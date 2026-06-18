@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Pencil, Trash2, ChevronRight,
   Package, Truck, Search, RefreshCw,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Zap,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -707,13 +707,160 @@ function AbstractTab({ materialType, projectId }) {
   );
 }
 
+// ── Sync Modal — auto-import from existing GRNs/Bills ─────────────────────────
+function SyncModal({ materialType, projectId, onClose, onSynced }) {
+  const qc = useQueryClient();
+  const [step, setStep] = useState('preview'); // 'preview' | 'running' | 'done'
+  const [result, setResult] = useState(null);
+
+  const { data: preview, isLoading, error } = useQuery({
+    queryKey: ['mt-sync-preview', materialType, projectId],
+    queryFn: () => materialTrackerAPI.autoImportPreview({
+      material_type: materialType,
+      project_id: projectId || undefined,
+    }).then(r => r.data?.data),
+  });
+
+  const runMut = useMutation({
+    mutationFn: () => materialTrackerAPI.autoImportRun({
+      material_type: materialType,
+      project_id: projectId || undefined,
+    }),
+    onSuccess: (r) => {
+      setResult(r.data?.data);
+      setStep('done');
+      qc.invalidateQueries({ queryKey: ['mt-list', materialType, projectId] });
+      qc.invalidateQueries({ queryKey: ['mt-abstract', materialType, projectId] });
+      onSynced?.();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Import failed'),
+  });
+
+  const materialLabel = materialType.charAt(0).toUpperCase() + materialType.slice(1);
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Zap size={16} className="text-yellow-500" />
+            <h3 className="text-sm font-semibold">Sync {materialLabel} from GRNs & Bills</h3>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+            <X size={14} className="text-slate-500" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {step === 'preview' && (
+            <>
+              {isLoading && (
+                <div className="flex items-center justify-center py-8 text-slate-400 text-sm">
+                  <RefreshCw size={18} className="animate-spin mr-2" /> Scanning existing records…
+                </div>
+              )}
+              {error && (
+                <div className="text-red-600 text-sm py-4">Failed to scan: {error.message}</div>
+              )}
+              {preview && !isLoading && (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500">
+                    Found existing {materialLabel.toLowerCase()} records in your Purchase Orders, GRNs and
+                    Bills Tracker. The following will be auto-imported into the {materialLabel} tab.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: `${materialLabel} POs found`, value: preview.pos_found, color: 'blue' },
+                      { label: 'New POs to register', value: preview.pos_new, color: preview.pos_new > 0 ? 'emerald' : 'slate' },
+                      { label: 'From GRNs (loads)', value: preview.grns_new, color: preview.grns_new > 0 ? 'emerald' : 'slate' },
+                      { label: 'From Bills (loads)', value: preview.bills_new, color: preview.bills_new > 0 ? 'blue' : 'slate' },
+                    ].map(k => (
+                      <div key={k.label} className={`bg-${k.color}-50 border border-${k.color}-100 rounded-xl p-3`}>
+                        <div className={`text-2xl font-bold text-${k.color}-700`}>{k.value}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{k.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {preview.pos_found > 0 && (
+                    <div className="bg-slate-50 rounded-xl p-3 max-h-40 overflow-y-auto">
+                      <div className="text-[11px] font-medium text-slate-500 mb-2">POs detected:</div>
+                      {preview.pos.map(p => (
+                        <div key={p.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-slate-100 last:border-0">
+                          <span className="font-mono font-semibold text-slate-700 flex-1">{p.po_number || p.serial_no_formatted}</span>
+                          <span className="text-slate-400 truncate max-w-[120px]">{p.vendor_name}</span>
+                          {p.already_imported
+                            ? <span className="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">imported</span>
+                            : <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">new</span>
+                          }
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {preview.loads_new === 0 && preview.pos_new === 0 && (
+                    <div className="text-center text-slate-500 text-sm py-2">
+                      Everything is already up to date. Nothing new to import.
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {step === 'done' && result && (
+            <div className="text-center space-y-3 py-4">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                <Zap size={26} className="text-emerald-600" />
+              </div>
+              <div className="font-semibold text-slate-800">Import complete!</div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <div className="text-xl font-bold text-blue-700">{result.total_pos}</div>
+                  <div className="text-[11px] text-slate-500">POs found</div>
+                </div>
+                <div className="bg-emerald-50 rounded-xl p-3">
+                  <div className="text-xl font-bold text-emerald-700">{result.entries_created}</div>
+                  <div className="text-[11px] text-slate-500">POs registered</div>
+                </div>
+                <div className="bg-purple-50 rounded-xl p-3">
+                  <div className="text-xl font-bold text-purple-700">{result.loads_created}</div>
+                  <div className="text-[11px] text-slate-500">Loads imported</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
+          <button onClick={onClose}
+            className="h-9 px-4 rounded-xl border border-slate-200 text-xs text-slate-600 hover:bg-slate-50">
+            {step === 'done' ? 'Close' : 'Cancel'}
+          </button>
+          {step === 'preview' && preview && (preview.loads_new > 0 || preview.pos_new > 0) && (
+            <button
+              onClick={() => { setStep('running'); runMut.mutate(); }}
+              disabled={runMut.isPending}
+              className="h-9 px-5 rounded-xl bg-yellow-500 text-white text-xs font-semibold hover:bg-yellow-600 disabled:opacity-50 flex items-center gap-2">
+              <Zap size={13} />
+              {runMut.isPending ? 'Importing…' : `Import ${preview.loads_new} load${preview.loads_new !== 1 ? 's' : ''}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Material Tab Content ──────────────────────────────────────────────────────
 function MaterialTabContent({ materialType, projectId, projects, canWrite }) {
   const qc = useQueryClient();
-  const [subTab, setSubTab]         = useState('Loadwise Entry');
+  const [subTab, setSubTab]               = useState('Loadwise Entry');
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [showRegister, setShowRegister]   = useState(false);
-  const [search, setSearch] = useState('');
+  const [showSync, setShowSync]           = useState(false);
+  const [search, setSearch]               = useState('');
 
   const { data: entries = [], isLoading, refetch } = useQuery({
     queryKey: ['mt-list', materialType, projectId],
@@ -746,8 +893,8 @@ function MaterialTabContent({ materialType, projectId, projects, canWrite }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Sub-tabs */}
-      <div className="flex gap-1 px-4 pt-3 pb-0 border-b border-slate-200 flex-shrink-0">
+      {/* Sub-tabs + Sync button */}
+      <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-slate-200 flex-shrink-0">
         {SUB_TABS.map(t => (
           <button key={t} onClick={() => setSubTab(t)}
             className={clsx('px-4 py-2 text-xs font-medium rounded-t-lg border-b-2 -mb-px transition-colors',
@@ -757,6 +904,13 @@ function MaterialTabContent({ materialType, projectId, projects, canWrite }) {
             {t}
           </button>
         ))}
+        <div className="flex-1" />
+        {canWrite && (
+          <button onClick={() => setShowSync(true)}
+            className="mb-0.5 h-7 px-3 flex items-center gap-1.5 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-[11px] font-semibold hover:bg-yellow-100">
+            <Zap size={12} /> Sync from GRNs/Bills
+          </button>
+        )}
       </div>
 
       {subTab === 'Abstract' && (
@@ -863,6 +1017,19 @@ function MaterialTabContent({ materialType, projectId, projects, canWrite }) {
           projects={projects}
           onClose={() => setShowRegister(false)}
           onSaved={() => {
+            refetch();
+            qc.invalidateQueries({ queryKey: ['mt-abstract', materialType, projectId] });
+          }}
+        />
+      )}
+
+      {/* Sync from GRNs/Bills modal */}
+      {showSync && (
+        <SyncModal
+          materialType={materialType}
+          projectId={projectId}
+          onClose={() => setShowSync(false)}
+          onSynced={() => {
             refetch();
             qc.invalidateQueries({ queryKey: ['mt-abstract', materialType, projectId] });
           }}
