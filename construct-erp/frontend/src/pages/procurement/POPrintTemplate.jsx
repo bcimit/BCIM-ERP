@@ -60,14 +60,21 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
   const verifyUrl    = `${window.location.origin}/verify/po/${data.id}`;
   const termsLines   = String(data.terms_conditions || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-  // Company header — DB values take precedence only when they exist AND differ from defaults
-  const coName    = company.name    || 'BCIM ENGINEERING PRIVATE LIMITED';
-  const coAddr    = company.address || '#11, B Wing, Divyasree Chambers, O\'Shaughnessy Road';
-  const coCity    = company.city    || 'Bangalore';
-  const coState   = company.state   || 'Karnataka';
-  const coPincode = company.pincode || '560025';
-  const coGstin   = company.gstin   || '29AAHCB6485A1ZL';
-  const coPhone   = company.phone   || '';
+  // Company header — always use correct BCIM values; DB overrides only if meaningfully different
+  const BCIM_DEFAULTS = {
+    name: 'BCIM ENGINEERING PRIVATE LIMITED',
+    address: '#11, B Wing, Divyasree Chambers, O\'Shaughnessy Road',
+    city: 'Bangalore', state: 'Karnataka', pincode: '560025',
+    gstin: '29AAHCB6485A1ZL',
+  };
+  const BAD_PHONES = ['9999999999', '1234567890', '0000000000'];
+  const coName    = (company.name    && !company.name.toLowerCase().includes('pvt ltd') && company.name !== 'BCIM Engineering Pvt Ltd') ? company.name : BCIM_DEFAULTS.name;
+  const coAddr    = (company.address && !company.address.toLowerCase().includes('bcim office')) ? company.address : BCIM_DEFAULTS.address;
+  const coCity    = company.city    || BCIM_DEFAULTS.city;
+  const coState   = company.state   || BCIM_DEFAULTS.state;
+  const coPincode = company.pincode || BCIM_DEFAULTS.pincode;
+  const coGstin   = (company.gstin  && company.gstin !== '29AABCB1234C1Z5') ? company.gstin : BCIM_DEFAULTS.gstin;
+  const coPhone   = (!company.phone || BAD_PHONES.includes(company.phone)) ? '' : company.phone;
   const coEmail   = company.email   || '';
   const coStatePin = (coState && coPincode) ? `${coState} – ${coPincode}` : (coState || coPincode);
 
