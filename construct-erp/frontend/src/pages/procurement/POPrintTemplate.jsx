@@ -165,6 +165,8 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
 
   return (
     <div ref={ref} className="po-print-wrapper">
+      {/* Push content down from the top on page 2+ — div padding-top only applies once */}
+      <style>{`@media print { @page { margin-top: 15mm; } @page :first { margin-top: 0mm; } }`}</style>
       {/* po-page: no fixed minHeight — content determines height, allows multi-page */}
       <div className="po-page bg-white text-black"
         style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4', fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif" }}>
