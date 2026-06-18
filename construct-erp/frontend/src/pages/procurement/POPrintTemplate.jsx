@@ -1,6 +1,8 @@
 // src/pages/procurement/POPrintTemplate.jsx
+// Layout matches the official BCIM-PUR-F-03 Purchase Order format.
+// Header (doc code) repeats on every printed page via <thead>; the signature
+// row + registered-office footer repeat on every page via <tfoot>.
 import React from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import dayjs from 'dayjs';
 
 // ─── Amount to words ─────────────────────────────────────────────────────────
@@ -31,7 +33,10 @@ function amountInWords(amount) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Rate — always two decimals (e.g. 31,500.00)
 const f2 = v => parseFloat(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Amount / totals — Indian grouping, no decimals (e.g. 2,48,089)
+const inr0 = v => Math.round(parseFloat(v || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 // Collapse a list of item numbers into compact ranges, e.g.
 // [1,2,5,6,...,20,23,25,26] -> "1-2, 5-20, 23, 25-26"
@@ -48,6 +53,8 @@ const formatItemNos = (nums) => {
   return out.join(', ');
 };
 
+const DOC_CODE = 'BCIM-PUR-F-03';
+
 const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
   if (!data) return (
     <div ref={ref} className="p-10 text-center font-bold text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
@@ -55,55 +62,48 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
     </div>
   );
 
-  const items        = data.items || [];
-  const isTaxIncl    = Boolean(data.gst_inclusive);
-  const verifyUrl    = `${window.location.origin}/verify/po/${data.id}`;
+  const items     = data.items || [];
+  const isTaxIncl = Boolean(data.gst_inclusive);
 
-  // Company header — use live data from company-settings, fall back to known-good BCIM values
+  // ── Company header (left block) — live company settings, BCIM fallback ──────
   const BCIM = {
     name: 'BCIM ENGINEERING PRIVATE LIMITED',
     address: '#11, B Wing, Divyasree Chambers, O\'Shaughnessy Road',
     city: 'Bangalore', state: 'Karnataka', pincode: '560025',
     gstin: '29AAHCB6485A1ZL',
   };
-  const BAD_PHONES = ['9999999999', '1234567890', '0000000000'];
-  const coName    = (company.name && !company.name.toLowerCase().includes('pvt ltd') && company.name !== 'BCIM Engineering Pvt Ltd') ? company.name : BCIM.name;
-  const coAddr    = (company.address && !company.address.toLowerCase().includes('bcim office') && !company.address.toLowerCase().includes('jayanagar')) ? company.address : BCIM.address;
-  const coCity    = company.city    || BCIM.city;
-  const coState   = company.state   || BCIM.state;
-  const coPincode = company.pincode || BCIM.pincode;
-  const coGstin   = (company.gstin  && !['29AABCB1234C1Z5','29AAXCB2929P1Z1'].includes(company.gstin)) ? company.gstin : BCIM.gstin;
-  const coPhone   = (!company.phone || BAD_PHONES.includes(company.phone)) ? '' : company.phone;
-  const coEmail   = company.email || '';
-  const coStatePin = (coState && coPincode) ? `${coState} – ${coPincode}` : (coState || coPincode);
+  const coName  = (company.name && !company.name.toLowerCase().includes('pvt ltd') && company.name !== 'BCIM Engineering Pvt Ltd') ? company.name : BCIM.name;
+  const coAddr  = (company.address && !company.address.toLowerCase().includes('bcim office') && !company.address.toLowerCase().includes('jayanagar')) ? company.address : BCIM.address;
+  const coCity  = company.city    || BCIM.city;
+  const coState = company.state   || BCIM.state;
+  const coPin   = company.pincode || BCIM.pincode;
+  const coGstin = (company.gstin  && !['29AABCB1234C1Z5','29AAXCB2929P1Z1'].includes(company.gstin)) ? company.gstin : BCIM.gstin;
+  const coStatePin = [coState, coPin].filter(Boolean).join(' – ');
 
-  // Vendor full address — combine street, city, state–pincode
+  // ── Vendor full address ─────────────────────────────────────────────────────
   const vendorCityStatePin = [
     data.vendor_city,
     [data.vendor_state, data.vendor_pincode].filter(Boolean).join(' – '),
   ].filter(Boolean).join(', ');
   const vendorFullAddr = [data.vendor_address, vendorCityStatePin].filter(Boolean).join(', ');
-  const termsLines   = String(data.terms_conditions || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const deliveryAddr = data.delivery_address
+    || [data.project_location, data.project_city, data.project_state].filter(Boolean).join(', ')
+    || '—';
+
+  const termsLines = String(data.terms_conditions || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   // ── Totals ──────────────────────────────────────────────────────────────────
-  const subTotal   = parseFloat(data.sub_total  || items.reduce((s, it) => s + parseFloat(it.quantity||0) * parseFloat(it.rate||0), 0));
-  const totalGst   = isTaxIncl ? 0 : parseFloat(data.total_gst  || items.reduce((s, it) => s + parseFloat(it.gst_amount||0), 0));
+  const subTotal   = parseFloat(data.sub_total || items.reduce((s, it) => s + parseFloat(it.quantity||0) * parseFloat(it.rate||0), 0));
+  const totalGst   = isTaxIncl ? 0 : parseFloat(data.total_gst || items.reduce((s, it) => s + parseFloat(it.gst_amount||0), 0));
   const tcsAmt     = parseFloat(data.tcs_amount || 0);
-  const freightAmt   = parseFloat(data.freight_charges || 0);
-  const loadingAmt   = parseFloat(data.loading_unloading_charges || 0);
-  const insuranceAmt = parseFloat(data.insurance_charges || 0);
-  const freightGst   = freightAmt * 0.18;
-  const tdsAmt       = subTotal * (parseFloat(data.tds_percent || 0) / 100);
-  const grandTotal = parseFloat(data.grand_total || (
-    subTotal + totalGst + tcsAmt + freightAmt + loadingAmt + insuranceAmt + freightGst - tdsAmt
-  ));
+  const grandTotal = parseFloat(data.grand_total || (subTotal + totalGst + tcsAmt));
 
-  // GST break-up by rate — items may carry different GST % (5 / 12 / 18 / 28).
-  // Track both the tax amount and the item numbers that fall under each rate.
-  const gstByRate = {}; // rate -> { amount, nums: [] }
+  // GST break-up by rate, tracking which item numbers fall under each rate.
+  const gstByRate = {};
   if (!isTaxIncl) {
     items.forEach((it, idx) => {
-      const r   = parseFloat(it.gst_rate || 0);
+      const r = parseFloat(it.gst_rate || 0);
       const stored = parseFloat(it.gst_amount || 0);
       const amt = stored > 0 ? stored : (parseFloat(it.quantity||0) * parseFloat(it.rate||0) * r / 100);
       if (!gstByRate[r]) gstByRate[r] = { amount: 0, nums: [] };
@@ -113,293 +113,222 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
   }
   const gstRates = Object.keys(gstByRate).map(Number).filter(r => r > 0).sort((a, b) => a - b);
 
-  // ── Signature / approval grid — rendered in a tfoot so it repeats at the
-  //    bottom of EVERY printed page (table-footer-group behaviour) ───────────
-  const approvalGrid = (
-    <div className="po-approval-block" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #000', fontSize: '8px', height: '24mm' }}>
-      {/* Col 1: Prepared By */}
-      <div style={{ borderRight: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          {data.prepared_by_sig
-            ? <img src={data.prepared_by_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-            : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Digitally Signed</span>
-          }
-        </div>
-        <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-          Prepared By
-        </div>
-        <p style={{ margin: 0, fontSize: '7px' }}>{data.prepared_by_name || 'Procurement'}</p>
-      </div>
+  const TD = { border: '1px solid #000', padding: '3px 5px', verticalAlign: 'top' };
+  const TH = { border: '1px solid #000', padding: '4px 5px', fontWeight: 700, background: '#f0f0f0', textAlign: 'center' };
 
-      {/* Col 2: Director */}
-      <div style={{ borderRight: '1px solid #000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          {data.released_mgmt_sig
-            ? <img src={data.released_mgmt_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-            : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>{data.released_mgmt_name ? 'Approved' : 'Pending'}</span>
-          }
-        </div>
-        <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-          Director
-        </div>
-        <p style={{ margin: 0, fontSize: '7px', fontWeight: 600 }}>{data.released_mgmt_name || 'Pending'}</p>
+  // ── Signature row + registered-office footer — repeats on EVERY page ────────
+  const sigCell = (label, sigUrl) => (
+    <td style={{ width: '33.33%', textAlign: 'center', verticalAlign: 'bottom', padding: '2px 6px' }}>
+      <div style={{ height: '34px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+        {sigUrl ? <img src={sigUrl} alt="" style={{ maxHeight: '32px', maxWidth: '100%' }} /> : null}
       </div>
-
-      {/* Col 3: Managing Director */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px', textAlign: 'center' }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          {data.authorized_md_sig
-            ? <img src={data.authorized_md_sig} alt="Sig" style={{ maxHeight: '36px', maxWidth: '100%' }} />
-            : data.authorized_md_name
-              ? <div style={{ border: '3px solid #16a34a', color: '#16a34a', borderRadius: '50%', padding: '2px 4px', fontWeight: 900, fontSize: '6px', transform: 'rotate(-12deg)' }}>BCIM AUTHORIZED</div>
-              : <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '7px' }}>Pending</span>
-          }
-        </div>
-        <div style={{ borderTop: '1px solid #000', width: '100%', paddingTop: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Managing Director
-        </div>
-        <p style={{ margin: 0, fontSize: '7px', fontWeight: 600 }}>{data.authorized_md_name || 'BCIM Engineering'}</p>
-      </div>
-    </div>
+      <div style={{ fontWeight: 700, fontSize: '10px', borderTop: '1px solid #000', paddingTop: '2px', marginTop: '2px' }}>{label}</div>
+    </td>
   );
 
   return (
-    <div ref={ref} className="po-print-wrapper">
-      {/* po-page: no fixed minHeight — content determines height, allows multi-page */}
-      <div className="po-page bg-white text-black"
-        style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4', fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif" }}>
+    <div ref={ref} className="po-print-wrapper" style={{ fontFamily: "'Times New Roman', Times, serif", color: '#000' }}>
+      <table className="po-doc" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
 
-        <table className="po-layout" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tfoot className="po-layout-footer" />
-          <tbody className="po-layout-body">
-            <tr><td style={{ padding: 0 }}>
+        {/* ── Repeating page header: doc code ────────────────────────────────── */}
+        <thead className="po-doc-head" style={{ display: 'table-header-group' }}>
+          <tr>
+            <td style={{ padding: '0 0 4px', border: 'none' }}>
+              <div style={{ textAlign: 'right', fontWeight: 700, fontSize: '11px' }}>{DOC_CODE}</div>
+            </td>
+          </tr>
+        </thead>
 
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* HEADER                                                              */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={{ textAlign: 'center', marginBottom: '6px', marginTop: '30px' }}>
-          <h1 style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '1px', color: '#000', margin: 0 }}>PURCHASE ORDER</h1>
-        </div>
-        <div style={{ borderBottom: '2.5px solid #000', paddingBottom: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-          {/* Left: Logo + Company */}
-          <div>
-            <img src="/bcim-logo.png" alt="BCIM" style={{ height: '48px', objectFit: 'contain', marginBottom: '6px', display: 'block' }} />
-            <div style={{ fontSize: '9px', color: '#000', lineHeight: '1.5' }}>
-              <p style={{ fontWeight: 700, fontSize: '12px', color: '#000', margin: '0 0 2px' }}>{coName}</p>
-              <p style={{ margin: 0 }}>{coAddr}</p>
-              <p style={{ margin: 0 }}>{coCity}</p>
-              <p style={{ margin: 0 }}>{coStatePin}</p>
-              <p style={{ margin: 0 }}>GSTIN: {coGstin}{coPhone ? ` | Tel: ${coPhone}` : ''}</p>
-              {coEmail && <p style={{ margin: 0 }}>Email: {coEmail}</p>}
-            </div>
-          </div>
-
-          {/* Right: PO Number + QR */}
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ background: '#1e293b', color: '#fff', padding: '3px 10px', display: 'inline-block', fontWeight: 700, fontSize: '11px', borderRadius: '4px', marginBottom: '6px' }}>
-              {data.serial_no_formatted || data.po_number || '—'}
-            </div>
-            <div style={{ marginTop: '4px' }}>
-              <QRCodeSVG value={verifyUrl} size={52} />
-            </div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* INFO GRID: Vendor + PO Details                                     */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-          {/* Vendor */}
-          <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px' }}>
-            <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#000', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '5px' }}>
-              Vendor / Supplier
-            </p>
-            <p style={{ fontWeight: 700, fontSize: '11px', margin: '0 0 3px', color: '#000' }}>{data.vendor_name || '—'}</p>
-            {data.vendor_contact_person && <p style={{ margin: '0 0 3px', color: '#000', fontWeight: 600 }}>Kind Attn: {data.vendor_contact_person}</p>}
-            <p style={{ color: '#000', whiteSpace: 'pre-line', margin: '0 0 3px' }}>{vendorFullAddr || '—'}</p>
-            {data.vendor_phone && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Mobile: {data.vendor_phone}</p>}
-            {data.vendor_email && <p style={{ margin: '2px 0 0', color: '#000', fontWeight: 600 }}>Email: {data.vendor_email}</p>}
-            <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#000' }}>
-              GSTIN: <span style={{ fontFamily: 'inherit' }}>{data.vendor_gstin || data.vendor_gst || '—'}</span>
-            </p>
-            {data.vendor_pan && <p style={{ margin: '2px 0 0', fontWeight: 700, color: '#000' }}>PAN: <span style={{ fontFamily: 'inherit' }}>{data.vendor_pan}</span></p>}
-          </div>
-
-          {/* PO Summary */}
-          <div style={{ fontSize: '10px' }}>
-            {[
-              ['PO Number',       data.serial_no_formatted || data.po_number || '—'],
-              ['PO Date',         data.po_date ? dayjs(data.po_date).format('DD MMM YYYY') : '—'],
-              ['Expected Delivery', data.delivery_date ? dayjs(data.delivery_date).format('DD MMM YYYY') : 'As Per Terms'],
-              ['Project',         data.project_name || '—'],
-              ['PO Req. No.',     data.po_req_no || '—'],
-              ['PO Req. Date',    data.po_req_date ? dayjs(data.po_req_date).format('DD MMM YYYY') : '—'],
-              ['Approval No.',    data.approval_no || '—'],
-              ['Cost Head',       data.cost_head || '—'],
-            ].map(([label, value]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dotted #cbd5e1', padding: '3px 0', gap: '8px' }}>
-                <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '8px', letterSpacing: '0.04em', flexShrink: 0 }}>{label}</span>
-                <span style={{ fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>{value}</span>
+        {/* ── Repeating page footer: signature row + registered office ───────── */}
+        <tfoot className="po-doc-foot" style={{ display: 'table-footer-group' }}>
+          <tr>
+            <td style={{ padding: '6px 0 0', border: 'none' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                <tbody>
+                  <tr>
+                    {sigCell('Checked by', data.created_by_sig)}
+                    {sigCell('Director', data.released_mgmt_sig)}
+                    {sigCell('Managing Director', data.authorized_md_sig)}
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{ textAlign: 'center', marginTop: '8px', lineHeight: 1.4 }}>
+                <div style={{ fontWeight: 700, fontSize: '10px' }}>BCIM ENGINEERING PRIVATE LIMITED</div>
+                <div style={{ fontSize: '9px' }}>&ldquo;B&rdquo; Wing, DivyaSree Chambers, No. 11, O&rsquo;Shaugnessy Road, Bangalore-560 025.</div>
               </div>
-            ))}
-          </div>
-        </div>
+            </td>
+          </tr>
+        </tfoot>
 
-        {/* Delivery Address + Order Intro (stacked) */}
-        <div style={{ marginBottom: '10px', fontSize: '9px' }}>
-          <p style={{ fontWeight: 700, textDecoration: 'underline', marginBottom: '3px' }}>DELIVERY ADDRESS:</p>
-          <p style={{ color: '#000', whiteSpace: 'pre-line', marginBottom: '6px' }}>
-            {data.delivery_address ||
-              [data.project_location, data.project_city, data.project_state].filter(Boolean).join(', ') ||
-              '—'}
-          </p>
-          <p style={{ color: '#000', fontStyle: 'italic' }}>
-            {data.order_intro || 'We hereby place an order on you for supply of the following materials / services as per the terms and conditions below.'}
-          </p>
-        </div>
+        {/* ── Flowing body ───────────────────────────────────────────────────── */}
+        <tbody>
+          <tr><td style={{ border: 'none', padding: 0 }}>
 
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* ITEMS TABLE                                                         */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <table className="po-items-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px', fontSize: '9px' }}>
-          <thead>
-            <tr style={{ background: '#1e293b', color: '#fff' }}>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '22px', textAlign: 'center' }}>SL</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', textAlign: 'left' }}>Material Description</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '40px', textAlign: 'center' }}>Unit</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '44px', textAlign: 'center' }}>Qty</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '80px', textAlign: 'right' }}>{isTaxIncl ? 'Rate (Incl.GST)' : 'Rate (Rs)'}</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '40px', textAlign: 'center' }}>GST%</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '90px', textAlign: 'right' }}>Basic Value</th>
-              <th style={{ border: '1px solid #000', padding: '5px 4px', width: '56px', textAlign: 'center' }}>Req. Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length > 0 ? items.map((it, i) => {
-              const qty    = parseFloat(it.quantity || 0);
-              const rate   = parseFloat(it.rate || 0);
-              const basic  = qty * rate;
-              const rowBg  = i % 2 === 0 ? '#fff' : '#f8fafc';
-              return (
-                <tr key={it.id || i} style={{ background: rowBg, borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 600 }}>{i + 1}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px' }}>
-                    <p style={{ fontWeight: 700, margin: '0 0 1px', color: '#000' }}>{it.material_name}</p>
-                    {it.mix_design && <p style={{ color: '#000', fontSize: '8px', margin: '0 0 1px' }}>{it.mix_design}</p>}
-                    {it.purpose && <p style={{ color: '#000', fontSize: '8px', margin: '1px 0 0', fontStyle: 'italic' }}>{it.purpose}</p>}
+            {/* TITLE + LOGO */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <img src="/bcim-logo.png" alt="BCIM" style={{ height: '40px', objectFit: 'contain' }} />
+              <h1 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '0.5px', margin: 0, flex: 1, textAlign: 'center' }}>PURCHASE ORDER</h1>
+              <div style={{ width: '40px' }} />
+            </div>
+
+            {/* COMPANY + PO META */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '6px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '58%', verticalAlign: 'top', padding: 0 }}>
+                    <div style={{ fontWeight: 700 }}>{coName}</div>
+                    <div style={{ whiteSpace: 'pre-line', lineHeight: 1.4 }}>{coAddr}</div>
+                    <div>{coCity}</div>
+                    <div>{coStatePin}</div>
+                    <div style={{ fontWeight: 700, marginTop: '2px' }}>GSTIN : {coGstin}</div>
                   </td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', textTransform: 'uppercase' }}>{it.unit || '—'}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontWeight: 700 }}>{qty.toLocaleString('en-IN')}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontFamily: 'inherit' }}>{f2(rate)}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center' }}>{isTaxIncl ? 'Incl.' : `${parseFloat(it.gst_rate || 0)}%`}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'right', fontWeight: 700, fontFamily: 'inherit' }}>{f2(basic)}</td>
-                  <td style={{ border: '1px solid #000', padding: '4px', textAlign: 'center', fontSize: '8px' }}>
-                    {it.req_date ? dayjs(it.req_date).format('DD.MM.YY') : '—'}
+                  <td style={{ verticalAlign: 'top', padding: 0 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {[
+                          ['Project:',    data.project_name || '—', true],
+                          ['PO No:',      data.serial_no_formatted || data.po_number || '—'],
+                          ['Date:',       data.po_date ? dayjs(data.po_date).format('DD.MM.YYYY') : '—'],
+                          ['PO Req No:',  data.po_req_no || '—'],
+                          ['PO Req Date:', data.po_req_date ? dayjs(data.po_req_date).format('DD.MM.YYYY') : '—'],
+                        ].map(([label, value, bold]) => (
+                          <tr key={label}>
+                            <td style={{ fontWeight: 700, padding: '1px 8px 1px 0', whiteSpace: 'nowrap', verticalAlign: 'top' }}>{label}</td>
+                            <td style={{ padding: '1px 0', fontWeight: bold ? 700 : 400 }}>{value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </td>
                 </tr>
-              );
-            }) : (
-              /* Empty placeholder rows */
-              [...Array(6)].map((_, i) => (
-                <tr key={i} style={{ height: '24px' }}>
-                  {[...Array(8)].map((__, j) => (
-                    <td key={j} style={{ border: '1px solid #94a3b8', padding: '4px' }}>&nbsp;</td>
-                  ))}
+              </tbody>
+            </table>
+
+            {/* TO + DELIVERY ADDRESS */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000', marginBottom: '6px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '50%', borderRight: '1px solid #000', padding: '5px 6px', verticalAlign: 'top' }}>
+                    <div>To,</div>
+                    <div style={{ fontWeight: 700 }}>M/s. {data.vendor_name || '—'}</div>
+                    <div style={{ whiteSpace: 'pre-line', lineHeight: 1.4 }}>{vendorFullAddr || '—'}</div>
+                    {data.vendor_email && <div>Email: {data.vendor_email}</div>}
+                    {(data.vendor_contact_person || data.vendor_phone) && (
+                      <div>Contact person: {[data.vendor_contact_person, data.vendor_phone].filter(Boolean).join(' - ')}</div>
+                    )}
+                    <div style={{ fontWeight: 700 }}>GST: {data.vendor_gstin || data.vendor_gst || '—'}</div>
+                  </td>
+                  <td style={{ padding: '5px 6px', verticalAlign: 'top' }}>
+                    <div style={{ fontWeight: 700, textDecoration: 'underline' }}>DELIVERY ADDRESS:-</div>
+                    <div style={{ fontWeight: 700 }}>{data.project_name || ''}</div>
+                    <div style={{ whiteSpace: 'pre-line', lineHeight: 1.4 }}>{deliveryAddr}</div>
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
 
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* FOOTER: TOTALS + TERMS + APPROVAL — kept together, no page break  */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className="po-footer-block">
-        <div className="po-totals-block" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '16px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-          {/* Amount in Words */}
-          <div style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', background: '#f8fafc' }}>
-            <p style={{ fontSize: '8px', fontWeight: 700, textTransform: 'uppercase', color: '#000', letterSpacing: '0.05em', marginBottom: '4px' }}>Amount in Words</p>
-            <p style={{ fontWeight: 700, fontStyle: 'italic', color: '#0f172a', fontSize: '10px', lineHeight: '1.5' }}>
-              {amountInWords(grandTotal)}
-            </p>
-          </div>
-
-          {/* Totals table */}
-          <div style={{ minWidth: '300px', fontSize: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
-              <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Sub Total</span>
-              <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>₹ {f2(subTotal)}</span>
+            {/* INTRO LINE */}
+            <div style={{ marginBottom: '6px' }}>
+              {data.order_intro || 'We hereby place an order on you for supply of the following materials with same terms and conditions as per original order.'}
             </div>
-            {isTaxIncl ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
-                <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
-                <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Inclusive</span>
-              </div>
-            ) : (
-              <>
-                {gstRates.map(r => (
-                  <div key={r} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
-                    <span style={{ fontWeight: 700, color: '#000', fontSize: '8.5px', lineHeight: '1.35' }}>
-                      GST @ {r}% {gstRates.length > 1 ? `on item no. ${formatItemNos(gstByRate[r].nums)}` : ''}
-                    </span>
-                    <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>₹ {f2(gstByRate[r].amount)}</span>
-                  </div>
+
+            {/* ITEMS TABLE */}
+            <table className="po-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ display: 'table-header-group' }}>
+                <tr>
+                  <th style={{ ...TH, width: '34px' }}>Sl No</th>
+                  <th style={{ ...TH, textAlign: 'left' }}>Description</th>
+                  <th style={{ ...TH, width: '46px' }}>UOM</th>
+                  <th style={{ ...TH, width: '60px' }}>Quantity</th>
+                  <th style={{ ...TH, width: '74px' }}>Rate</th>
+                  <th style={{ ...TH, width: '84px' }}>Amount</th>
+                  <th style={{ ...TH, width: '64px' }}>Req Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const qty   = parseFloat(it.quantity || 0);
+                  const rate  = parseFloat(it.rate || 0);
+                  const basic = qty * rate;
+                  return (
+                    <tr key={it.id || i} style={{ pageBreakInside: 'avoid' }}>
+                      <td style={{ ...TD, textAlign: 'center' }}>{i + 1}</td>
+                      <td style={TD}>
+                        <div style={{ whiteSpace: 'pre-line', fontWeight: 600 }}>{it.material_name}</div>
+                        {it.mix_design && <div>{it.mix_design}</div>}
+                        {it.purpose && <div style={{ fontStyle: 'italic' }}>{it.purpose}</div>}
+                      </td>
+                      <td style={{ ...TD, textAlign: 'center' }}>{it.unit || '—'}</td>
+                      <td style={{ ...TD, textAlign: 'center' }}>{qty.toLocaleString('en-IN')}</td>
+                      <td style={{ ...TD, textAlign: 'right' }}>{isTaxIncl ? f2(rate) + ' (Incl.)' : f2(rate)}</td>
+                      <td style={{ ...TD, textAlign: 'right' }}>{inr0(basic)}</td>
+                      <td style={{ ...TD, textAlign: 'center' }}>{it.req_date ? dayjs(it.req_date).format('DD.MM.YY') : ''}</td>
+                    </tr>
+                  );
+                })}
+
+                {/* TOTALS — aligned under Rate/Amount columns */}
+                <tr style={{ pageBreakInside: 'avoid' }}>
+                  <td style={{ ...TD, border: 'none' }} colSpan={4} rowSpan={2 + gstRates.length + (isTaxIncl ? 1 : 0)} />
+                  <td style={{ ...TD, fontWeight: 700, textAlign: 'right' }} colSpan={1}>Sub Total</td>
+                  <td style={{ ...TD, fontWeight: 700, textAlign: 'right' }}>{inr0(subTotal)}</td>
+                  <td style={{ ...TD, border: 'none' }} />
+                </tr>
+                {isTaxIncl ? (
+                  <tr style={{ pageBreakInside: 'avoid' }}>
+                    <td style={{ ...TD, textAlign: 'right' }}>GST</td>
+                    <td style={{ ...TD, textAlign: 'right' }}>Inclusive</td>
+                    <td style={{ ...TD, border: 'none' }} />
+                  </tr>
+                ) : gstRates.map(r => (
+                  <tr key={r} style={{ pageBreakInside: 'avoid' }}>
+                    <td style={{ ...TD, textAlign: 'right', fontSize: '10px' }}>
+                      GST @ {r}%{gstRates.length > 1 ? ` on item no. ${formatItemNos(gstByRate[r].nums)}` : ''}
+                    </td>
+                    <td style={{ ...TD, textAlign: 'right' }}>{inr0(gstByRate[r].amount)}</td>
+                    <td style={{ ...TD, border: 'none' }} />
+                  </tr>
                 ))}
-                {gstRates.length !== 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0', gap: '10px' }}>
-                    <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>Total GST</span>
-                    <span style={{ fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>₹ {f2(totalGst)}</span>
-                  </div>
-                )}
-              </>
-            )}
-            {tcsAmt > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ fontWeight: 700, color: '#000', textTransform: 'uppercase', fontSize: '9px' }}>TCS / Other Tax</span>
-                <span style={{ fontWeight: 700, fontFamily: 'inherit' }}>₹ {f2(tcsAmt)}</span>
+                <tr style={{ pageBreakInside: 'avoid' }}>
+                  <td style={{ ...TD, fontWeight: 700, textAlign: 'right' }}>Grand Total</td>
+                  <td style={{ ...TD, fontWeight: 700, textAlign: 'right' }}>{inr0(grandTotal)}</td>
+                  <td style={{ ...TD, border: 'none' }} />
+                </tr>
+              </tbody>
+            </table>
+
+            {/* RUPEES IN WORDS */}
+            <div style={{ borderTop: '1.5px solid #000', paddingTop: '4px', marginTop: '6px', fontWeight: 700, textDecoration: 'underline' }}>
+              {amountInWords(grandTotal).replace(/^Rupees/, 'Rupees:')}
+            </div>
+
+            {/* NARRATION */}
+            {(data.notes || data.narration) && (
+              <div style={{ marginTop: '8px' }}>
+                <span style={{ fontWeight: 700, textDecoration: 'underline' }}>Narration:</span> {data.notes || data.narration}
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#1e293b', color: '#fff', borderRadius: '4px', marginTop: '4px' }}>
-              <span style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px' }}>Grand Total</span>
-              <span style={{ fontWeight: 800, fontFamily: 'inherit', fontSize: '12px' }}>₹ {f2(grandTotal)}</span>
+
+            {/* TERMS & CONDITIONS */}
+            <div className="po-terms-block" style={{ marginTop: '12px' }}>
+              <div style={{ fontWeight: 700, textDecoration: 'underline', marginBottom: '4px' }}>Terms &amp; Conditions:</div>
+              <ol style={{ paddingLeft: '18px', margin: 0, lineHeight: 1.5 }}>
+                {termsLines.length > 0 ? termsLines.map((line, idx) => (
+                  <li key={idx} style={{ pageBreakInside: 'avoid' }}>{line}</li>
+                )) : (
+                  <>
+                    <li>All Bills and DCs should contain the Reference of the Concerned PO.</li>
+                    <li>All materials supplied will be subject to inspections &amp; test when received at our site.</li>
+                    <li>Final Bill shall be cleared after Certification by the Concerned Engg &amp; on actual measurements taken at Site.</li>
+                    <li>If any Goods damaged or rejected must be replaced immediately at the suppliers own expenses.</li>
+                  </>
+                )}
+              </ol>
             </div>
-          </div>
-        </div>
 
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* TERMS & CONDITIONS                                                 */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div className="po-terms-block" style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px', marginBottom: '10px', fontSize: '8.5px' }}>
-          <p style={{ fontWeight: 700, textTransform: 'uppercase', color: '#0f172a', letterSpacing: '0.05em', marginBottom: '5px', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px' }}>
-            Terms &amp; Conditions
-          </p>
-          {termsLines.length > 0 ? (
-            <div style={{ color: '#000', lineHeight: '1.6' }}>
-              {termsLines.map((line, idx) => <p key={idx} style={{ margin: '1px 0' }}>{line}</p>)}
-            </div>
-          ) : (
-            <ol style={{ paddingLeft: '14px', color: '#000', lineHeight: '1.6', margin: 0 }}>
-              <li>{isTaxIncl ? 'Rates are inclusive of GST. No separate GST will be charged.' : 'Rates are basic rates. GST as applicable is shown separately.'}</li>
-              <li>Material should exactly match specifications. Deviations must be approved in writing.</li>
-              <li>Tax Invoice must reach Accounts within 2 working days of delivery with GRN copy.</li>
-              <li>BCIM Engineering Pvt. Ltd. reserves the right to reject sub-standard material.</li>
-              <li>Payment as per agreed credit terms. Short-supply to be notified immediately.</li>
-              <li>All bills and DCs must reference this PO number.</li>
-            </ol>
-          )}
-        </div>
-        </div>{/* /po-footer-block */}
-
-            </td></tr>
-          </tbody>
-        </table>
-
-        {/* Signature — fixed at the bottom of every printed page (single render) */}
-        <div className="po-page-footer">
-          {approvalGrid}
-        </div>
-
-      </div>
+          </td></tr>
+        </tbody>
+      </table>
     </div>
   );
 });

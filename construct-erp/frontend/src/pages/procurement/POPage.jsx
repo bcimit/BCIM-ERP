@@ -1096,30 +1096,16 @@ function PODetailPanel({ po, detailedPO, company, onClose, onEdit, onApprove, on
   <title>Purchase Order — ${detailedPO.po_number || po.po_number}</title>
   <style>
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
-    body { margin: 0; padding: 0; background: white; font-family: Arial, sans-serif; }
+    body { margin: 0; padding: 0; background: white; font-family: 'Times New Roman', Times, serif; color: #000; }
     table { border-collapse: collapse; }
-    thead { display: table-header-group; }
-    tbody tr { page-break-inside: avoid; }
+    /* po-doc.thead repeats the doc code; po-doc.tfoot repeats the signature
+       row + registered-office footer at the bottom of EVERY printed page. */
+    .po-doc > thead { display: table-header-group; }
+    .po-doc > tfoot { display: table-footer-group; }
     .po-items-table thead { display: table-header-group; }
-    .po-items-table tbody tr { page-break-inside: avoid; page-break-after: auto; }
-    .po-layout-footer { display: none; }
-    /* Keep totals block together; allow T&C to flow naturally across pages */
-    .po-totals-block { page-break-inside: avoid; break-inside: avoid; }
-    .po-terms-block li, .po-terms-block p { page-break-inside: avoid; break-inside: avoid; }
-    /* Signature pinned to the bottom of every page.
-       bottom:0 = base of the @page content area; @page margin-bottom:36mm reserves
-       that zone so rows break to the next page before entering the signature band. */
-    .po-page-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0; right: 0;
-      padding: 0 12mm;
-      background: white;
-      border-top: 2px solid #000;
-    }
-    /* Push last-page content up so it doesn't hide behind the signature */
-    .po-page { padding-bottom: 28mm !important; }
-    @page { size: A4 portrait; margin: 8mm 8mm 36mm 8mm; }
+    .po-items-table tbody tr { page-break-inside: avoid; }
+    .po-terms-block li { page-break-inside: avoid; break-inside: avoid; }
+    @page { size: A4 portrait; margin: 10mm; }
     @media print { body { margin: 0; } }
   </style>
 </head>
