@@ -1504,7 +1504,7 @@ function PODetailPanel({ po, detailedPO, company, onClose, onEdit, onApprove, on
 
     {/* Hidden print zone — content captured via ref, printed in new window */}
     <div ref={printZoneRef} style={{ display: 'none' }} aria-hidden="true">
-      <POPrintTemplate data={detailedPO} company={companyData} />
+      <POPrintTemplate data={detailedPO} company={company} />
     </div>
     </>
   );
