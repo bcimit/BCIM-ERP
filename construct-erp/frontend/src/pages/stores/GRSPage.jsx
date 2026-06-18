@@ -496,13 +496,35 @@ function GRSForm({ onClose, projects, qc }) {
   const addRow    = () => setItems(p => [...p, emptyItem()]);
   const removeRow = (idx) => { if (items.length > 1) setItems(p => p.filter((_, i) => i !== idx)); };
 
-  const handlePoSelect = (poId) => {
+  const handlePoSelect = async (poId) => {
     const po = poList.find(p => p.id === poId);
     setForm(prev => ({
       ...prev,
       po_id: poId,
       po_number: po ? (po.serial_no_formatted || po.po_number || '') : '',
     }));
+
+    if (!poId) {
+      setItems([emptyItem()]);
+      return;
+    }
+
+    try {
+      const res = await poAPI.get(poId);
+      const poDetail = res.data?.data ?? res.data;
+      const poItems = (poDetail?.items || []).filter(it => it.material_name?.trim());
+      if (poItems.length > 0) {
+        setItems(poItems.map(it => ({
+          particulars: it.material_name || '',
+          unit:        it.unit          || '',
+          quantity:    it.quantity ? String(it.quantity) : '',
+          remarks:     it.purpose       || '',
+        })));
+        toast.success(`${poItems.length} item${poItems.length > 1 ? 's' : ''} loaded from PO`);
+      }
+    } catch (_) {
+      // PO fetch failed — items stay as-is
+    }
   };
 
   const submit = () => {
