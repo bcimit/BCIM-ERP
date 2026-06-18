@@ -169,22 +169,14 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
       <div className="po-page bg-white text-black"
         style={{ width: '210mm', padding: '12mm', boxSizing: 'border-box', fontSize: '10px', lineHeight: '1.4', fontFamily: "'Book Antiqua','Palatino Linotype',Palatino,serif" }}>
 
-        {/* Layout table: tfoot repeats the signature at the bottom of every printed page */}
         <table className="po-layout" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <tfoot className="po-layout-footer">
-            <tr>
-              <td style={{ padding: '6px 0 0', borderTop: '2px solid #000' }}>
-                {approvalGrid}
-              </td>
-            </tr>
-          </tfoot>
           <tbody className="po-layout-body">
             <tr><td style={{ padding: 0 }}>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* HEADER                                                              */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '6px', marginTop: '30px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '1px', color: '#000', margin: 0 }}>PURCHASE ORDER</h1>
         </div>
         <div style={{ borderBottom: '2.5px solid #000', paddingBottom: '8px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
@@ -396,6 +388,9 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
           )}
         </div>
 
+        <div style={{ borderTop: '2px solid #000', paddingTop: '6px', marginTop: '10px' }}>
+          {approvalGrid}
+        </div>
         </div>{/* /po-footer-block */}
 
             </td></tr>
