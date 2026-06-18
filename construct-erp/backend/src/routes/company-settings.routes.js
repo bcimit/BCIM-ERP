@@ -8,6 +8,19 @@ const router = express.Router();
 (async () => {
   try {
     await query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb`);
+    // Correct BCIM registered address and GSTIN (runs if old/wrong values detected)
+    await query(`
+      UPDATE companies SET
+        address = '#11, B Wing, Divyasree Chambers, O''Shaughnessy Road',
+        city    = 'Bangalore',
+        state   = 'Karnataka',
+        pincode = '560025',
+        gstin   = '29AAHCB6485A1ZL'
+      WHERE gstin IN ('29AAXCB2929P1Z1', '36AAHCB6485A1ZQ')
+         OR (gstin IS NULL AND (name ILIKE '%BCIM%' OR address IS NULL))
+    `);
+    // Remove internal email mistakenly saved on vendor records
+    await query(`UPDATE vendors SET email = NULL WHERE email = 'dheenabcim@gmail.com'`);
     console.log('[CompanySettings] Schema OK');
   } catch (_) {}
 })();
