@@ -49,6 +49,8 @@ const router = express.Router();
   await safe(`CREATE INDEX IF NOT EXISTS idx_grs_items_grs ON grs_items(grs_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_grs_status ON grs(status)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_grs_date   ON grs(date_time)`);
+  await safe(`ALTER TABLE grs ADD COLUMN IF NOT EXISTS po_id     UUID REFERENCES purchase_orders(id)`);
+  await safe(`ALTER TABLE grs ADD COLUMN IF NOT EXISTS po_number VARCHAR(80)`);
 
   await safe(`ALTER TABLE grs DROP CONSTRAINT IF EXISTS grs_status_check`);
   await safe(`ALTER TABLE grs ADD CONSTRAINT grs_status_check CHECK (status IN ('pending','acknowledged','cancelled'))`);
@@ -107,11 +109,15 @@ router.get('/:id', async (req, res) => {
       `SELECT g.*,
               p.name  AS project_name, p.company_id,
               u.name  AS created_by_name,
-              ack.name AS acknowledged_by_name
+              ack.name AS acknowledged_by_name,
+              po.po_number AS po_ref_number, po.vendor_id,
+              v.name AS vendor_name
        FROM grs g
        JOIN projects p ON g.project_id = p.id
        LEFT JOIN users u   ON g.created_by = u.id
        LEFT JOIN users ack ON g.acknowledged_by = ack.id
+       LEFT JOIN purchase_orders po ON g.po_id = po.id
+       LEFT JOIN vendors v ON po.vendor_id = v.id
        WHERE g.id = $1`,
       [req.params.id]
     );
@@ -131,7 +137,7 @@ router.get('/:id', async (req, res) => {
 // ── POST /grs ─────────────────────────────────────────────────────────────────
 router.post('/', authorize(...STORES_WRITE), async (req, res) => {
   try {
-    const { project_id, vehicle_no, date_time, security_incharge, items = [], remarks } = req.body;
+    const { project_id, vehicle_no, date_time, security_incharge, items = [], remarks, po_id, po_number } = req.body;
     if (!project_id) return res.status(400).json({ error: 'Project is required' });
     if (!userCanAccessProject(req, project_id)) {
       return res.status(403).json({ error: 'You do not have access to this project.' });
@@ -144,11 +150,11 @@ router.post('/', authorize(...STORES_WRITE), async (req, res) => {
       const hdr = await client.query(
         `INSERT INTO grs
            (company_id, project_id, grs_number, vehicle_no, date_time,
-            security_incharge, remarks, status, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8) RETURNING *`,
+            security_incharge, remarks, status, created_by, po_id, po_number)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10) RETURNING *`,
         [req.user.company_id, project_id, grs_number, vehicle_no || null,
          date_time || new Date().toISOString(), security_incharge || null,
-         remarks || null, req.user.id]
+         remarks || null, req.user.id, po_id || null, po_number || null]
       );
       const grsId = hdr.rows[0].id;
 

@@ -10,7 +10,7 @@ import {
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import { useReactToPrint } from 'react-to-print';
-import { grsAPI, projectAPI } from '../../api/client';
+import { grsAPI, projectAPI, poAPI } from '../../api/client';
 import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
@@ -85,6 +85,20 @@ function GRSDetailPanel({ grs, onClose, onAcknowledge, ackLoading, onCancel, can
               </div>
             ))}
           </div>
+
+          {/* Linked PO */}
+          {(grs.po_number || grs.po_ref_number) && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex items-center gap-3">
+              <FileText size={16} className="text-indigo-500 flex-shrink-0" />
+              <div>
+                <div className="text-[10px] text-indigo-500 font-medium uppercase tracking-wider">Linked Purchase Order</div>
+                <div className="text-sm font-semibold text-indigo-800">
+                  {grs.po_number || grs.po_ref_number}
+                  {grs.vendor_name && <span className="ml-2 font-normal text-indigo-600">— {grs.vendor_name}</span>}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Items table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -454,8 +468,18 @@ function GRSForm({ onClose, projects, qc }) {
     date_time: dayjs().format('YYYY-MM-DDTHH:mm'),
     security_incharge: '',
     remarks: '',
+    po_id: '',
+    po_number: '',
   });
   const [items, setItems] = useState([emptyItem()]);
+
+  // Fetch approved POs for the selected project
+  const { data: poList = [] } = useQuery({
+    queryKey: ['po-list-grs', form.project_id],
+    queryFn: () => poAPI.list({ project_id: form.project_id, status: 'approved' })
+      .then(r => r.data?.data || r.data || []),
+    enabled: !!form.project_id,
+  });
 
   const createMutation = useMutation({
     mutationFn: (d) => grsAPI.create(d),
@@ -471,6 +495,15 @@ function GRSForm({ onClose, projects, qc }) {
   const updateItem = (idx, k, v) => setItems(p => p.map((it, i) => i === idx ? { ...it, [k]: v } : it));
   const addRow    = () => setItems(p => [...p, emptyItem()]);
   const removeRow = (idx) => { if (items.length > 1) setItems(p => p.filter((_, i) => i !== idx)); };
+
+  const handlePoSelect = (poId) => {
+    const po = poList.find(p => p.id === poId);
+    setForm(prev => ({
+      ...prev,
+      po_id: poId,
+      po_number: po ? (po.serial_no_formatted || po.po_number || '') : '',
+    }));
+  };
 
   const submit = () => {
     if (!form.project_id)  return toast.error('Select a project');
@@ -511,7 +544,7 @@ function GRSForm({ onClose, projects, qc }) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="col-span-2 md:col-span-1 space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">Project *</label>
-                <select value={form.project_id} onChange={e => setField('project_id', e.target.value)} className={inp}>
+                <select value={form.project_id} onChange={e => { setField('project_id', e.target.value); setField('po_id', ''); setField('po_number', ''); }} className={inp}>
                   <option value="">Select project…</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -527,6 +560,29 @@ function GRSForm({ onClose, projects, qc }) {
                 <input type="datetime-local" value={form.date_time}
                   onChange={e => setField('date_time', e.target.value)} className={inp} />
               </div>
+
+              {/* PO Link */}
+              <div className="col-span-2 md:col-span-3 space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Link Purchase Order
+                  <span className="ml-1 text-slate-400 font-normal">(optional — select the PO this delivery is against)</span>
+                </label>
+                <select
+                  value={form.po_id}
+                  onChange={e => handlePoSelect(e.target.value)}
+                  disabled={!form.project_id}
+                  className={`${inp} ${!form.project_id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <option value="">— No PO linked —</option>
+                  {poList.map(po => (
+                    <option key={po.id} value={po.id}>
+                      {po.serial_no_formatted || po.po_number} — {po.vendor_name}
+                    </option>
+                  ))}
+                </select>
+                {!form.project_id && <p className="text-xs text-slate-400">Select a project first to see its POs</p>}
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">Security In-charge</label>
                 <input type="text" value={form.security_incharge}
