@@ -6,7 +6,7 @@ const logger = require('./logger');
 const { query } = require('../config/database');
 const { sendMail } = require('../services/mail.service');
 
-const DEFAULT_RECIPIENTS = 'it@bcim.in,stephen@bcim.in';
+const DEFAULT_RECIPIENTS = 'it@bcim.in';
 const DEFAULT_CRON = '0 20 * * *'; // 8:00 PM IST daily
 
 const parseEmails = (value, fallback = '') =>
@@ -611,13 +611,7 @@ function initDailyActivityDigest() {
 
   logger.info(`Daily activity digest initialized (${schedule})`);
 
-  // One-time: send yesterday's digest to stephen@bcim.in on this deploy
-  setTimeout(() => {
-    logger.info('[digest] Sending yesterday\'s report to stephen@bcim.in');
-    runDailyActivityDigest({ manual: true, daysAgo: 1, overrideRecipients: 'stephen@bcim.in' })
-      .then(r => logger.info('[digest] One-time yesterday report sent', JSON.stringify(r)))
-      .catch(e => logger.error('[digest] One-time send failed:', e.message));
-  }, 15000); // 15 seconds after server starts
+
 }
 
 module.exports = { runDailyActivityDigest, initDailyActivityDigest };
