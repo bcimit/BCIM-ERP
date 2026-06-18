@@ -32,9 +32,9 @@ const trunc = (value, n = 70) => {
 };
 
 // ── Per-department queries (everything created "today" for this company) ────
-async function fetchDailyActivity(companyId, timezone) {
-  const today = (col) => `(${col} AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date`;
-  const params = [companyId, timezone];
+async function fetchDailyActivity(companyId, timezone, daysAgo = 0) {
+  const today = (col) => `(${col} AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2 - (INTERVAL '1 day' * $3))::date`;
+  const params = [companyId, timezone, daysAgo];
 
   const [
     pos, wos, grns, mins, mrses, measurements, raBills, vendorBills,
@@ -578,18 +578,22 @@ function buildMail({ companyName, data, dateLabel }) {
   return { subject, html, text };
 }
 
-async function runDailyActivityDigest({ manual = false } = {}) {
-  const recipients = parseEmails(process.env.DAILY_ACTIVITY_DIGEST_EMAILS, DEFAULT_RECIPIENTS);
+async function runDailyActivityDigest({ manual = false, daysAgo = 0, overrideRecipients } = {}) {
+  const recipients = overrideRecipients
+    ? parseEmails(overrideRecipients)
+    : parseEmails(process.env.DAILY_ACTIVITY_DIGEST_EMAILS, DEFAULT_RECIPIENTS);
   if (!recipients.length) return { ok: false, reason: 'No recipients configured' };
 
   const timezone = process.env.DAILY_ACTIVITY_DIGEST_TZ || process.env.TZ || 'Asia/Kolkata';
-  const dateLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: timezone });
+  const targetDate = new Date();
+  if (daysAgo) targetDate.setDate(targetDate.getDate() - daysAgo);
+  const dateLabel = targetDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: timezone });
 
   const companies = await query(`SELECT id, name FROM companies WHERE COALESCE(is_active, TRUE) = TRUE`);
 
   const results = [];
   for (const company of companies.rows) {
-    const data = await fetchDailyActivity(company.id, timezone);
+    const data = await fetchDailyActivity(company.id, timezone, daysAgo);
     const mail = await sendMail({ to: recipients, ...buildMail({ companyName: company.name, data, dateLabel }) });
     const totalItems = Object.values(data).reduce((s, arr) => s + (Array.isArray(arr) ? arr.length : 0), 0);
     results.push({ company_id: company.id, company_name: company.name, items: totalItems, recipients, mail, manual });
@@ -606,6 +610,14 @@ function initDailyActivityDigest() {
   }, { timezone: process.env.DAILY_ACTIVITY_DIGEST_TZ || process.env.TZ || 'Asia/Kolkata' });
 
   logger.info(`Daily activity digest initialized (${schedule})`);
+
+  // One-time: send yesterday's digest to stephen@bcim.in on this deploy
+  setTimeout(() => {
+    logger.info('[digest] Sending yesterday\'s report to stephen@bcim.in');
+    runDailyActivityDigest({ manual: true, daysAgo: 1, overrideRecipients: 'stephen@bcim.in' })
+      .then(r => logger.info('[digest] One-time yesterday report sent', JSON.stringify(r)))
+      .catch(e => logger.error('[digest] One-time send failed:', e.message));
+  }, 15000); // 15 seconds after server starts
 }
 
 module.exports = { runDailyActivityDigest, initDailyActivityDigest };
