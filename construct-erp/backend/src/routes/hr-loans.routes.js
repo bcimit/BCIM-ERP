@@ -2,12 +2,13 @@
 // Loan & Advance requests, EMI tracking, approval
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { notifyLoanRequested, notifyLoanApproved, notifyLoanRejected } = require('../services/notif.helper');
 
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'));
 
 // ─── Auto-create table ────────────────────────────────────────────────────────
 const initTable = async () => {

@@ -2,11 +2,12 @@
 // Salaried employee attendance (separate from site workers)
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'manager', 'department_head', 'project_manager', 'project_head'));
 
 // ─── Auto-create table ────────────────────────────────────────────────────────
 const initTable = async () => {
@@ -26,6 +27,14 @@ const initTable = async () => {
       remarks TEXT,
       UNIQUE(user_id, attendance_date)
     )
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_hr_attendance_user_date
+    ON hr_attendance(user_id, attendance_date)
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_hr_attendance_company_date
+    ON hr_attendance(company_id, attendance_date)
   `);
 };
 runSchemaInit('hr-attendance', initTable);
@@ -164,11 +173,33 @@ router.post('/month-baseline', async (req, res) => {
     const daysInMonth = new Date(y, m, 0).getDate();
     let changed = 0;
 
+    // Fetch all approved leaves for this month across all employees so baseline
+    // does not overwrite approved leave days with "present".
+    const leaveQ = await query(
+      `SELECT user_id, from_date::date AS from_date, to_date::date AS to_date
+       FROM hr_leave_requests
+       WHERE company_id = $1 AND status = 'approved'
+         AND from_date <= make_date($2, $3, $4) AND to_date >= make_date($2, $3, 1)`,
+      [req.user.company_id, y, m, daysInMonth]
+    );
+    const approvedLeaveSet = new Set();
+    for (const lr of leaveQ.rows) {
+      const from = new Date(lr.from_date);
+      const to   = new Date(lr.to_date);
+      for (const cur = new Date(from); cur <= to; cur.setDate(cur.getDate() + 1)) {
+        const ds = cur.toISOString().slice(0, 10);
+        if (ds.startsWith(`${y}-${String(m).padStart(2, '0')}`)) {
+          approvedLeaveSet.add(`${lr.user_id}|${ds}`);
+        }
+      }
+    }
+
     for (const emp of employees.rows) {
       for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const day = new Date(y, m - 1, d).getDay();
-        const status = day === 0 ? 'week_off' : holidaySet.has(dateStr) ? 'holiday' : 'present';
+        const onLeave = approvedLeaveSet.has(`${emp.id}|${dateStr}`);
+        const status = day === 0 ? 'week_off' : holidaySet.has(dateStr) ? 'holiday' : onLeave ? 'leave' : 'present';
         const inTime = status === 'present' ? '09:30' : null;
         const outTime = status === 'present' ? '18:00' : null;
 

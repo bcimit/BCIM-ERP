@@ -2,11 +2,12 @@
 // Salary structures, component templates, employee salary assignment
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr_admin', 'hr_manager'));
 
 // ─── Auto-create tables ───────────────────────────────────────────────────────
 const initTables = async () => {
@@ -201,6 +202,99 @@ router.post('/employee-salaries', async (req, res) => {
     );
     res.status(201).json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Professional Tax Slabs ────────────────────────────────────────────────────
+;(async () => {
+  const safe = async sql => { try { await query(sql); } catch(_) {} };
+  await safe(`CREATE TABLE IF NOT EXISTS hr_pt_slabs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL,
+    state VARCHAR(100) NOT NULL,
+    gender VARCHAR(10) DEFAULT 'all' CHECK (gender IN ('all','male','female')),
+    salary_from NUMERIC(12,2) NOT NULL DEFAULT 0,
+    salary_to NUMERIC(12,2),
+    pt_amount NUMERIC(8,2) NOT NULL DEFAULT 0,
+    effective_year INT NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  await safe(`CREATE TABLE IF NOT EXISTS hr_salary_revisions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id),
+    old_basic NUMERIC(12,2),
+    new_basic NUMERIC(12,2),
+    old_ctc NUMERIC(12,2),
+    new_ctc NUMERIC(12,2),
+    increment_pct NUMERIC(6,2),
+    effective_from DATE NOT NULL,
+    reason VARCHAR(50) DEFAULT 'annual_review'
+      CHECK (reason IN ('annual_review','promotion','correction','market_correction','performance')),
+    remarks TEXT,
+    approved_by UUID REFERENCES users(id),
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+})();
+
+router.get('/pt-slabs', async (req, res) => {
+  const { rows } = await query(
+    `SELECT * FROM hr_pt_slabs WHERE company_id=$1 ORDER BY state,salary_from`,
+    [req.user.company_id]
+  );
+  res.json({ data: rows });
+});
+
+router.post('/pt-slabs', async (req, res) => {
+  const { state,gender,salary_from,salary_to,pt_amount,effective_year } = req.body;
+  const { rows } = await query(
+    `INSERT INTO hr_pt_slabs(company_id,state,gender,salary_from,salary_to,pt_amount,effective_year)
+     VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [req.user.company_id,state,gender||'all',salary_from||0,salary_to||null,pt_amount,effective_year||new Date().getFullYear()]
+  );
+  res.json({ data: rows[0] });
+});
+
+router.put('/pt-slabs/:id', async (req, res) => {
+  const { state,gender,salary_from,salary_to,pt_amount,effective_year,active } = req.body;
+  const { rows } = await query(
+    `UPDATE hr_pt_slabs SET state=$1,gender=$2,salary_from=$3,salary_to=$4,pt_amount=$5,effective_year=$6,active=$7
+     WHERE id=$8 AND company_id=$9 RETURNING *`,
+    [state,gender,salary_from,salary_to||null,pt_amount,effective_year,active,req.params.id,req.user.company_id]
+  );
+  res.json({ data: rows[0] });
+});
+
+router.delete('/pt-slabs/:id', async (req, res) => {
+  await query(`DELETE FROM hr_pt_slabs WHERE id=$1 AND company_id=$2`,[req.params.id,req.user.company_id]);
+  res.json({ success: true });
+});
+
+// ── Salary Revisions ──────────────────────────────────────────────────────────
+router.get('/revisions', async (req, res) => {
+  const { user_id } = req.query;
+  const { rows } = await query(
+    `SELECT r.*, u.full_name, e.employee_id as emp_code, e.department, e.designation
+     FROM hr_salary_revisions r
+     JOIN users u ON u.id=r.user_id
+     LEFT JOIN hr_employees e ON e.user_id=r.user_id
+     WHERE r.company_id=$1 ${user_id ? 'AND r.user_id=$2' : ''}
+     ORDER BY r.effective_from DESC`,
+    user_id ? [req.user.company_id, user_id] : [req.user.company_id]
+  );
+  res.json({ data: rows });
+});
+
+router.post('/revisions', async (req, res) => {
+  const { user_id,old_basic,new_basic,old_ctc,new_ctc,effective_from,reason,remarks } = req.body;
+  const inc_pct = old_basic > 0 ? ((new_basic - old_basic) / old_basic * 100).toFixed(2) : 0;
+  const { rows } = await query(
+    `INSERT INTO hr_salary_revisions(company_id,user_id,old_basic,new_basic,old_ctc,new_ctc,increment_pct,effective_from,reason,remarks,created_by)
+     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [req.user.company_id,user_id,old_basic,new_basic,old_ctc||null,new_ctc||null,inc_pct,effective_from,reason||'annual_review',remarks,req.user.id]
+  );
+  res.json({ data: rows[0] });
 });
 
 module.exports = router;

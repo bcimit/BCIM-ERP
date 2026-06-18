@@ -12,7 +12,7 @@ import {
   UserCheck, ChevronRight, ArrowUpRight, ArrowDownRight,
   Fingerprint, FileBarChart, Upload, Award, ShieldCheck,
   Download, FileText, Zap, Bot, Send,
-  Bell, Sparkles, BrainCircuit,
+  Bell,
   AlertCircle, CheckCircle2, Briefcase,
   Rocket, HardHat,
   MessageSquare, Search, Banknote,
@@ -169,16 +169,16 @@ function AIAssistantPanel() {
       <div className="px-5 py-4 flex items-center gap-3 border-b border-white/10 flex-shrink-0"
         style={{background:`linear-gradient(135deg,${B.navy},#1e3a8a)`}}>
         <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-          <BrainCircuit className="w-5 h-5 text-white"/>
+          <Bot className="w-5 h-5 text-white"/>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-white text-sm">AI HR Assistant</p>
+          <p className="font-bold text-white text-sm">HR Quick Help</p>
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>
-            <span className="text-white/55 text-[11px]">Online · BCIM Intelligence</span>
+            <span className="text-white/55 text-[11px]">Module Navigator</span>
           </div>
         </div>
-        <Sparkles className="w-4 h-4 flex-shrink-0" style={{color:B.yellow}}/>
+        <Zap className="w-4 h-4 flex-shrink-0" style={{color:B.yellow}}/>
       </div>
 
       {/* Messages */}
@@ -395,8 +395,8 @@ export default function HRDashboardPage() {
               onClick={()=>setAiOpen(p=>!p)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-md"
               style={{background:`linear-gradient(135deg,${B.navy},${B.blue})`}}>
-              <Sparkles className="w-4 h-4" style={{color:B.yellow}}/>
-              AI Assistant
+              <Zap className="w-4 h-4" style={{color:B.yellow}}/>
+              HR Quick Help
             </motion.button>
             <button className="relative w-10 h-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center shadow-sm hover:bg-gray-50 transition-colors">
               <Bell className="w-[18px] h-[18px] text-gray-500"/>
@@ -872,7 +872,7 @@ export default function HRDashboardPage() {
         <motion.div {...fade(0.5)}
           className="flex items-center justify-between pt-4 border-t border-gray-200">
           <p className="text-xs text-gray-400 font-medium">
-            BCIM Engineering Pvt. Ltd. · HRMS v2026 · AI-Powered Workforce Platform
+            BCIM Engineering Pvt. Ltd. · HRMS v2026 · Integrated Workforce Platform
           </p>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400"/>

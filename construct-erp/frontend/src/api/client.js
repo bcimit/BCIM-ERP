@@ -453,6 +453,108 @@ export const ignAPI = {
   remove:  (id)     => api.delete(`/ign/${id}`),
 };
 
+// ── HR Extended APIs ──────────────────────────────────────────────────────────
+export const hrShiftsAPI = {
+  shifts:       (p)        => api.get('/hr-admin/shifts', { params: p }),
+  createShift:  (d)        => api.post('/hr-admin/shifts', d),
+  updateShift:  (id, d)    => api.put(`/hr-admin/shifts/${id}`, d),
+  deleteShift:  (id)       => api.delete(`/hr-admin/shifts/${id}`),
+  empShifts:    (p)        => api.get('/hr-admin/employee-shifts', { params: p }),
+  assignShift:  (d)        => api.post('/hr-admin/employee-shifts', d),
+  removeShift:  (id)       => api.delete(`/hr-admin/employee-shifts/${id}`),
+  overtime:     (p)        => api.get('/hr-admin/overtime', { params: p }),
+  addOT:        (d)        => api.post('/hr-admin/overtime', d),
+  approveOT:    (id)       => api.patch(`/hr-admin/overtime/${id}/approve`),
+  rejectOT:     (id)       => api.patch(`/hr-admin/overtime/${id}/reject`),
+  compOff:      (p)        => api.get('/hr-admin/comp-off', { params: p }),
+  addCompOff:   (d)        => api.post('/hr-admin/comp-off', d),
+  approveCompOff:(id)      => api.patch(`/hr-admin/comp-off/${id}/approve`),
+};
+
+export const hrFnfAPI = {
+  list:       (p)     => api.get('/hr-admin/fnf', { params: p }),
+  get:        (id)    => api.get(`/hr-admin/fnf/${id}`),
+  create:     (d)     => api.post('/hr-admin/fnf', d),
+  update:     (id,d)  => api.put(`/hr-admin/fnf/${id}`, d),
+  approve:    (id)    => api.patch(`/hr-admin/fnf/${id}/approve`),
+  pay:        (id,d)  => api.patch(`/hr-admin/fnf/${id}/pay`, d),
+  gratuity:   (p)     => api.get('/hr-admin/fnf/calculate-gratuity', { params: p }),
+};
+
+export const hrLettersAPI = {
+  templates:   (p)      => api.get('/hr-admin/letters/templates', { params: p }),
+  createTmpl:  (d)      => api.post('/hr-admin/letters/templates', d),
+  updateTmpl:  (id,d)   => api.put(`/hr-admin/letters/templates/${id}`, d),
+  generated:   (p)      => api.get('/hr-admin/letters/generated', { params: p }),
+  generate:    (d)      => api.post('/hr-admin/letters/generate', d),
+  getGenerated:(id)     => api.get(`/hr-admin/letters/generated/${id}`),
+};
+
+export const hrTrainingAPI = {
+  list:        (p)        => api.get('/hr-admin/training', { params: p }),
+  get:         (id)       => api.get(`/hr-admin/training/${id}`),
+  create:      (d)        => api.post('/hr-admin/training', d),
+  update:      (id,d)     => api.put(`/hr-admin/training/${id}`, d),
+  addParticipants:(id,d)  => api.post(`/hr-admin/training/${id}/participants`, d),
+  updateParticipant:(id,pid,d) => api.patch(`/hr-admin/training/${id}/participants/${pid}`, d),
+  removeParticipant:(id,pid)   => api.delete(`/hr-admin/training/${id}/participants/${pid}`),
+  empHistory:  (empId)    => api.get(`/hr-admin/training/employee/${empId}/history`),
+};
+
+export const hrEmpAssetsAPI = {
+  list:     (p)     => api.get('/hr-admin/emp-assets', { params: p }),
+  create:   (d)     => api.post('/hr-admin/emp-assets', d),
+  update:   (id,d)  => api.put(`/hr-admin/emp-assets/${id}`, d),
+  return:   (id,d)  => api.patch(`/hr-admin/emp-assets/${id}/return`, d),
+  remove:   (id)    => api.delete(`/hr-admin/emp-assets/${id}`),
+  byEmp:    (empId) => api.get(`/hr-admin/emp-assets/by-employee/${empId}`),
+};
+
+export const hrTravelAPI = {
+  list:     (p)     => api.get('/hr-admin/travel', { params: p }),
+  create:   (d)     => api.post('/hr-admin/travel', d),
+  update:   (id,d)  => api.put(`/hr-admin/travel/${id}`, d),
+  approve:  (id,d)  => api.patch(`/hr-admin/travel/${id}/approve`, d),
+  reject:   (id,d)  => api.patch(`/hr-admin/travel/${id}/reject`, d),
+  settle:   (id,d)  => api.patch(`/hr-admin/travel/${id}/settle`, d),
+};
+
+export const hrRecruitmentAPI = {
+  jobs:           (p)      => api.get('/hr-admin/recruitment/jobs', { params: p }),
+  createJob:      (d)      => api.post('/hr-admin/recruitment/jobs', d),
+  updateJob:      (id,d)   => api.put(`/hr-admin/recruitment/jobs/${id}`, d),
+  applicants:     (p)      => api.get('/hr-admin/recruitment/applicants', { params: p }),
+  getApplicant:   (id)     => api.get(`/hr-admin/recruitment/applicants/${id}`),
+  addApplicant:   (d)      => api.post('/hr-admin/recruitment/applicants', d),
+  updateStatus:   (id,d)   => api.patch(`/hr-admin/recruitment/applicants/${id}/status`, d),
+  addInterview:   (id,d)   => api.post(`/hr-admin/recruitment/applicants/${id}/interviews`, d),
+  updateInterview:(id,d)   => api.patch(`/hr-admin/recruitment/interviews/${id}`, d),
+  pipeline:       ()       => api.get('/hr-admin/recruitment/pipeline'),
+};
+
+export const hrSalaryExtAPI = {
+  ptSlabs:      (p)     => api.get('/hr-admin/salary/pt-slabs', { params: p }),
+  createPT:     (d)     => api.post('/hr-admin/salary/pt-slabs', d),
+  updatePT:     (id,d)  => api.put(`/hr-admin/salary/pt-slabs/${id}`, d),
+  deletePT:     (id)    => api.delete(`/hr-admin/salary/pt-slabs/${id}`),
+  revisions:    (p)     => api.get('/hr-admin/salary/revisions', { params: p }),
+  createRevision:(d)    => api.post('/hr-admin/salary/revisions', d),
+};
+
+export const hrLeaveExtAPI = {
+  encashment:     (p)    => api.get('/hr-admin/leave/encashment', { params: p }),
+  createEncash:   (d)    => api.post('/hr-admin/leave/encashment', d),
+  approveEncash:  (id)   => api.patch(`/hr-admin/leave/encashment/${id}/approve`),
+  payEncash:      (id,d) => api.patch(`/hr-admin/leave/encashment/${id}/pay`, d),
+  runCarryForward:(d)    => api.post('/hr-admin/leave/carry-forward/run', d),
+  carryHistory:   ()     => api.get('/hr-admin/leave/carry-forward/history'),
+};
+
+export const hrPayrollExtAPI = {
+  form16:    (p) => api.get('/hr-admin/payroll/reports/form16', { params: p }),
+  attrition: (p) => api.get('/hr-admin/payroll/reports/attrition', { params: p }),
+};
+
 export const materialTrackerAPI = {
   list:        (params)           => api.get('/material-tracker', { params }),
   register:    (data)             => api.post('/material-tracker', data),

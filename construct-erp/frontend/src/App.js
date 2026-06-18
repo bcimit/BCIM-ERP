@@ -268,7 +268,14 @@ const HRESSLSyncPage        = lazy(() => import('./pages/hr-admin/ESSLSyncPage')
 const HRImportPage          = lazy(() => import('./pages/hr-admin/HRImportPage'));
 const HRReportsPage         = lazy(() => import('./pages/hr-admin/HRReportsPage'));
 const HRAdvancedPage        = lazy(() => import('./pages/hr-admin/HRAdvancedPage'));
-const ESSPortalPage         = lazy(() => import('./pages/hr-admin/ESSPortalPage'));
+const ESSPortalPage           = lazy(() => import('./pages/hr-admin/ESSPortalPage'));
+const HRShiftManagementPage   = lazy(() => import('./pages/hr-admin/ShiftManagementPage'));
+const HRFnFSettlementPage     = lazy(() => import('./pages/hr-admin/FnFSettlementPage'));
+const HRLetterGenerationPage  = lazy(() => import('./pages/hr-admin/LetterGenerationPage'));
+const HRTrainingPage          = lazy(() => import('./pages/hr-admin/TrainingPage'));
+const HREmployeeAssetsPage    = lazy(() => import('./pages/hr-admin/EmployeeAssetsPage'));
+const HRTravelRequestPage     = lazy(() => import('./pages/hr-admin/TravelRequestPage'));
+const HRRecruitmentPage       = lazy(() => import('./pages/hr-admin/RecruitmentPage'));
 
 // ── Home route resolver — sends each user to their first accessible page ──────
 const MODULE_HOME = {
@@ -675,7 +682,14 @@ export default function App() {
                 <Route path="hr-admin/import" element={<RequireModule module="HR & Admin"><HRImportPage /></RequireModule>} />
                 <Route path="hr-admin/reports" element={<RequireModule module="HR & Admin"><HRReportsPage /></RequireModule>} />
                 <Route path="hr-admin/advanced" element={<RequireModule module="HR & Admin"><HRAdvancedPage /></RequireModule>} />
-                <Route path="hr-admin/documents" element={<RequireModule module="HR & Admin"><DocumentsPage /></RequireModule>} />
+                <Route path="hr-admin/documents"    element={<RequireModule module="HR & Admin"><DocumentsPage /></RequireModule>} />
+                <Route path="hr-admin/shifts"       element={<RequireModule module="HR & Admin"><HRShiftManagementPage /></RequireModule>} />
+                <Route path="hr-admin/fnf"          element={<RequireModule module="HR & Admin"><HRFnFSettlementPage /></RequireModule>} />
+                <Route path="hr-admin/letters"      element={<RequireModule module="HR & Admin"><HRLetterGenerationPage /></RequireModule>} />
+                <Route path="hr-admin/training"     element={<RequireModule module="HR & Admin"><HRTrainingPage /></RequireModule>} />
+                <Route path="hr-admin/emp-assets"   element={<RequireModule module="HR & Admin"><HREmployeeAssetsPage /></RequireModule>} />
+                <Route path="hr-admin/travel"       element={<RequireModule module="HR & Admin"><HRTravelRequestPage /></RequireModule>} />
+                <Route path="hr-admin/recruitment"  element={<RequireModule module="HR & Admin"><HRRecruitmentPage /></RequireModule>} />
 
                 {/* Site */}
                 <Route path="site/dpr" element={<DPRPage />} />

@@ -2,11 +2,12 @@
 // Departments, Designations, Leave Types, Holiday Calendar — simple CRUD
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr_admin', 'hr_manager'));
 
 // ─── Auto-create tables ───────────────────────────────────────────────────────
 const initTables = async () => {

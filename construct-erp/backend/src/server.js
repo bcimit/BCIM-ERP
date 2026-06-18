@@ -110,6 +110,13 @@ const hrAppraisalsRoutes  = require('./routes/hr-appraisals.routes');
 const hrImportRoutes      = require('./routes/hr-import.routes');
 const hrEsslRoutes        = require('./routes/hr-essl.routes');
 const hrAdvancedRoutes    = require('./routes/hr-advanced.routes');
+const hrShiftsRoutes      = require('./routes/hr-shifts.routes');
+const hrFnfRoutes         = require('./routes/hr-fnf.routes');
+const hrLettersRoutes     = require('./routes/hr-letters.routes');
+const hrTrainingRoutes    = require('./routes/hr-training.routes');
+const hrEmpAssetsRoutes   = require('./routes/hr-employee-assets.routes');
+const hrTravelRoutes      = require('./routes/hr-travel.routes');
+const hrRecruitmentRoutes = require('./routes/hr-recruitment.routes');
 const essRoutes           = require('./routes/ess.routes');
 const snagRoutes          = require('./routes/snag.routes');
 const { tenderRouter, bidRouter } = require('./routes/tender.routes');
@@ -411,6 +418,13 @@ app.use(`${API}/hr-admin/appraisals`,  hrAppraisalsRoutes);
 app.use(`${API}/hr-admin/import`,      hrImportRoutes);
 app.use(`${API}/hr-admin/essl`,        hrEsslRoutes);
 app.use(`${API}/hr-admin/advanced`,    hrAdvancedRoutes);
+app.use(`${API}/hr-admin/shifts`,      hrShiftsRoutes);
+app.use(`${API}/hr-admin/fnf`,         hrFnfRoutes);
+app.use(`${API}/hr-admin/letters`,     hrLettersRoutes);
+app.use(`${API}/hr-admin/training`,    hrTrainingRoutes);
+app.use(`${API}/hr-admin/emp-assets`,  hrEmpAssetsRoutes);
+app.use(`${API}/hr-admin/travel`,      hrTravelRoutes);
+app.use(`${API}/hr-admin/recruitment`, hrRecruitmentRoutes);
 app.use(`${API}/ess`,                  essRoutes);
 
 // Tender Management

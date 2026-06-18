@@ -5,11 +5,12 @@ const router = express.Router();
 const multer = require('multer');
 const path   = require('path');
 const fs     = require('fs');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'));
 
 // ─── Multer setup ─────────────────────────────────────────────────────────────
 const uploadDir = path.join(__dirname, '../../uploads/hr-docs');

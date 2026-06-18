@@ -3,11 +3,12 @@
 const express = require('express');
 const sql     = require('mssql');
 const { query, pool } = require('../config/database');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr_admin'));
 
 // ─── Auto-create settings table to persist MSSQL config per company ──────────
 async function initTable() {

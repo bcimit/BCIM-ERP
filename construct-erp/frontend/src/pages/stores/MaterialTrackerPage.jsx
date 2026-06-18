@@ -269,51 +269,51 @@ function LoadForm({ entryId, materialType, defaultRate, editLoad, onClose, onSav
 
 // ── Register PO Form ──────────────────────────────────────────────────────────
 function RegisterPOForm({ materialType, projects, onClose, onSaved }) {
-  const [f, setF] = useState({
-    project_id: '', po_id: '', po_number: '', vendor_name: '',
-    grade: '', mr_number: '', mr_qty: '', ordered_qty: '', unit: '',
-  });
-  const [poSearch, setPoSearch] = useState('');
-  const [poList, setPoList] = useState([]);
+  const [projectId, setProjectId] = useState('');
+  const [selectedPO, setSelectedPO] = useState(null);
+  const [grade, setGrade]           = useState('');
+  const [mrNumber, setMrNumber]     = useState('');
+  const [mrQty, setMrQty]           = useState('');
+  const [orderedQty, setOrderedQty] = useState('');
+  const [unit, setUnit]             = useState('');
 
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-
-  // Search POs
-  const { isFetching: loadingPOs } = useQuery({
-    queryKey: ['po-search', f.project_id, poSearch],
-    queryFn: async () => {
-      if (!f.project_id || poSearch.length < 2) return [];
-      const r = await poAPI.list({ project_id: f.project_id, search: poSearch, limit: 20 });
-      const list = r.data?.data || r.data || [];
-      setPoList(list);
-      return list;
-    },
-    enabled: !!f.project_id && poSearch.length >= 2,
+  // Load all POs for the selected project
+  const { data: poList = [], isFetching: loadingPOs } = useQuery({
+    queryKey: ['po-list-for-mt', projectId],
+    queryFn: () => poAPI.list({ project_id: projectId, limit: 200 })
+      .then(r => r.data?.data || r.data || []),
+    enabled: !!projectId,
   });
 
-  const selectPO = (po) => {
-    setF(p => ({
-      ...p,
-      po_id: po.id,
-      po_number: po.po_number || po.serial_no_formatted || '',
-      vendor_name: po.vendor_name || '',
-      ordered_qty: po.items?.[0]?.quantity || '',
-      unit: po.items?.[0]?.unit || '',
-    }));
-    setPoSearch(po.po_number || po.serial_no_formatted || '');
-    setPoList([]);
+  const handleSelectPO = (poId) => {
+    const po = poList.find(p => p.id === poId);
+    if (!po) { setSelectedPO(null); return; }
+    setSelectedPO(po);
+    // Auto-fill from PO data
+    const totalQty = po.items?.reduce((s, i) => s + parseFloat(i.quantity || 0), 0) || 0;
+    const firstItem = po.items?.[0];
+    setOrderedQty(totalQty > 0 ? String(totalQty) : '');
+    setUnit(firstItem?.unit || '');
   };
 
   const saveMutation = useMutation({
     mutationFn: (d) => materialTrackerAPI.register(d),
-    onSuccess: () => { toast.success('PO registered to tracker'); onSaved(); onClose(); },
+    onSuccess: () => { toast.success('PO added to tracker'); onSaved(); onClose(); },
     onError: e => toast.error(e?.response?.data?.error || 'Failed'),
   });
 
   const submit = () => {
-    if (!f.project_id) return toast.error('Select a project');
-    if (!f.po_number)  return toast.error('Enter or select a PO number');
-    saveMutation.mutate({ ...f, material_type: materialType });
+    if (!projectId)    return toast.error('Select a project');
+    if (!selectedPO)   return toast.error('Select a PO');
+    saveMutation.mutate({
+      project_id:  projectId,
+      po_id:       selectedPO.id,
+      po_number:   selectedPO.po_number || selectedPO.serial_no_formatted || '',
+      vendor_name: selectedPO.vendor_name || '',
+      material_type: materialType,
+      grade, mr_number: mrNumber, mr_qty: mrQty,
+      ordered_qty: orderedQty, unit,
+    });
   };
 
   return (
@@ -321,7 +321,7 @@ function RegisterPOForm({ materialType, projects, onClose, onSaved }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h3 className="text-sm font-semibold text-slate-800 capitalize">
-            Register {materialType} PO
+            Add {materialType} PO to Tracker
           </h3>
           <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center">
             <X size={14} className="text-slate-500" />
@@ -332,7 +332,7 @@ function RegisterPOForm({ materialType, projects, onClose, onSaved }) {
           {/* Project */}
           <div>
             <label className="block text-[11px] font-medium text-slate-500 mb-1">Project *</label>
-            <select value={f.project_id} onChange={e => set('project_id', e.target.value)}
+            <select value={projectId} onChange={e => { setProjectId(e.target.value); setSelectedPO(null); }}
               className={INP}>
               <option value="">Select project…</option>
               {(projects || []).map(p => (
@@ -341,72 +341,72 @@ function RegisterPOForm({ materialType, projects, onClose, onSaved }) {
             </select>
           </div>
 
-          {/* PO search */}
+          {/* PO dropdown — loads all POs for project */}
           <div>
-            <label className="block text-[11px] font-medium text-slate-500 mb-1">PO Number *</label>
-            <div className="relative">
-              <input value={poSearch}
-                onChange={e => { setPoSearch(e.target.value); set('po_number', e.target.value); set('po_id', ''); }}
-                placeholder="Type PO number to search…"
-                className={INP} />
-              {loadingPOs && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <RefreshCw size={12} className="animate-spin text-slate-400" />
-                </div>
-              )}
-              {poList.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                  {poList.map(po => (
-                    <button key={po.id} onClick={() => selectPO(po)}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-100 last:border-0">
-                      <div className="font-medium text-slate-700">{po.po_number || po.serial_no_formatted}</div>
-                      <div className="text-slate-400">{po.vendor_name}</div>
-                    </button>
-                  ))}
-                </div>
+            <label className="block text-[11px] font-medium text-slate-500 mb-1">
+              Select PO *
+              {loadingPOs && <span className="ml-2 text-slate-400">(loading…)</span>}
+            </label>
+            <select
+              value={selectedPO?.id || ''}
+              onChange={e => handleSelectPO(e.target.value)}
+              disabled={!projectId}
+              className={INP}>
+              <option value="">{projectId ? 'Select PO…' : 'Select project first'}</option>
+              {poList.map(po => (
+                <option key={po.id} value={po.id}>
+                  {po.po_number || po.serial_no_formatted} — {po.vendor_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Auto-filled PO details (read-only strip) */}
+          {selectedPO && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-[11px] space-y-1">
+              <div><span className="text-slate-500">Vendor: </span><strong>{selectedPO.vendor_name || '—'}</strong></div>
+              <div className="flex gap-4">
+                <span><span className="text-slate-500">Ordered Qty: </span><strong>{orderedQty || '—'} {unit}</strong></span>
+                <span><span className="text-slate-500">PO Date: </span><strong>{selectedPO.po_date ? dayjs(selectedPO.po_date).format('DD-MM-YYYY') : '—'}</strong></span>
+              </div>
+              {selectedPO.items?.length > 1 && (
+                <div className="text-slate-400 text-[10px]">{selectedPO.items.length} line items — ordered qty is total of all items</div>
               )}
             </div>
-          </div>
+          )}
 
-          {/* Vendor */}
-          <div>
-            <label className="block text-[11px] font-medium text-slate-500 mb-1">Vendor Name</label>
-            <input value={f.vendor_name} onChange={e => set('vendor_name', e.target.value)}
-              className={INP} />
-          </div>
-
-          {/* Grade + Unit */}
+          {/* Grade + Unit (editable, unit pre-filled) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">
-                {materialType === 'concrete' ? 'Grade (M10/M25…)' : 'Grade (optional)'}
+                {materialType === 'concrete' ? 'Grade (M10 / M25…)' : 'Grade (optional)'}
               </label>
-              <input value={f.grade} onChange={e => set('grade', e.target.value)}
-                placeholder={materialType === 'concrete' ? 'M25' : ''}
+              <input value={grade} onChange={e => setGrade(e.target.value)}
+                placeholder={materialType === 'concrete' ? 'M25' : 'e.g. OPC 53'}
                 className={INP} />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">Unit</label>
-              <input value={f.unit} onChange={e => set('unit', e.target.value)}
-                placeholder="MT / CUM" className={INP} />
+              <input value={unit} onChange={e => setUnit(e.target.value)}
+                placeholder="MT / CUM / BAG" className={INP} />
             </div>
           </div>
 
-          {/* MR + Ordered qty */}
+          {/* MR Number + MR Qty + Ordered Qty */}
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">MR Number</label>
-              <input value={f.mr_number} onChange={e => set('mr_number', e.target.value)}
-                className={INP} />
+              <input value={mrNumber} onChange={e => setMrNumber(e.target.value)}
+                placeholder="MR-001" className={INP} />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">MR Qty</label>
-              <input type="number" value={f.mr_qty} onChange={e => set('mr_qty', e.target.value)}
+              <input type="number" value={mrQty} onChange={e => setMrQty(e.target.value)}
                 className={INP} />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">Ordered Qty</label>
-              <input type="number" value={f.ordered_qty} onChange={e => set('ordered_qty', e.target.value)}
+              <input type="number" value={orderedQty} onChange={e => setOrderedQty(e.target.value)}
                 className={INP} />
             </div>
           </div>
@@ -417,9 +417,9 @@ function RegisterPOForm({ materialType, projects, onClose, onSaved }) {
             className="h-9 px-4 rounded-xl border border-slate-200 text-xs text-slate-600 hover:bg-slate-50">
             Cancel
           </button>
-          <button onClick={submit} disabled={saveMutation.isPending}
+          <button onClick={submit} disabled={saveMutation.isPending || !selectedPO}
             className="h-9 px-5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50">
-            {saveMutation.isPending ? 'Saving…' : 'Register PO'}
+            {saveMutation.isPending ? 'Saving…' : 'Add to Tracker'}
           </button>
         </div>
       </div>

@@ -2,12 +2,13 @@
 // Monthly payroll: generate draft, review, approve, pay → Finance linkage
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr_admin', 'hr_manager'));
 
 // ─── Auto-create table ────────────────────────────────────────────────────────
 const initTable = async () => {
@@ -48,6 +49,10 @@ const initTable = async () => {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(user_id, month, year)
     )
+  `);
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_hr_payroll_company_month_year
+    ON hr_monthly_payroll(company_id, month, year)
   `);
 };
 runSchemaInit('hr-payroll', initTable);
@@ -505,6 +510,57 @@ router.get('/reports/esi-return', async (req, res) => {
          AND p.esi_employee > 0 AND p.status IN ('approved','paid')
        ORDER BY u.name`,
       [req.user.company_id, month, year]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Form 16 / TDS Summary
+router.get('/reports/form16', async (req, res) => {
+  try {
+    const { year, user_id } = req.query;
+    const fy_start = `${parseInt(year)-1}-04-01`;
+    const fy_end   = `${year}-03-31`;
+    const conds = [`p.company_id=$1`, `p.pay_period_start>=$2`, `p.pay_period_end<=$3`, `p.status='approved'`];
+    const params = [req.user.company_id, fy_start, fy_end]; let i=4;
+    if (user_id) { conds.push(`p.user_id=$${i++}`); params.push(user_id); }
+    const { rows } = await query(
+      `SELECT p.user_id, u.full_name, e.employee_id as emp_code, e.pan_number,
+              SUM(p.basic_pay) as total_basic,
+              SUM(p.hra) as total_hra,
+              SUM(p.gross_pay) as total_gross,
+              SUM(COALESCE(p.pf_employee,0)) as total_pf,
+              SUM(COALESCE(p.professional_tax,0)) as total_pt,
+              SUM(COALESCE(p.tds,0)) as total_tds,
+              SUM(p.net_pay) as total_net,
+              COUNT(*) as months_paid
+       FROM hr_payroll_runs p
+       JOIN users u ON u.id=p.user_id
+       LEFT JOIN hr_employees e ON e.user_id=p.user_id
+       WHERE ${conds.join(' AND ')}
+       GROUP BY p.user_id, u.full_name, e.employee_id, e.pan_number
+       ORDER BY u.full_name`,
+      params
+    );
+    res.json({ data: rows, financial_year: `${parseInt(year)-1}-${year}` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Attrition & joining trend (monthly for last 12 months)
+router.get('/reports/attrition', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT to_char(series, 'YYYY-MM') as month,
+        (SELECT COUNT(*) FROM hr_employees WHERE company_id=$1
+          AND to_char(date_of_joining,'YYYY-MM')=to_char(series,'YYYY-MM')) as joined,
+        (SELECT COUNT(*) FROM hr_employees WHERE company_id=$1
+          AND to_char(date_of_leaving,'YYYY-MM')=to_char(series,'YYYY-MM')) as left_count
+       FROM generate_series(
+         date_trunc('month', NOW()) - INTERVAL '11 months',
+         date_trunc('month', NOW()), INTERVAL '1 month'
+       ) AS series
+       ORDER BY series`,
+      [req.user.company_id]
     );
     res.json({ data: rows });
   } catch (err) { res.status(500).json({ error: err.message }); }

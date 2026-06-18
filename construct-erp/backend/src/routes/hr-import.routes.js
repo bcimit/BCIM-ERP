@@ -5,10 +5,11 @@ const multer   = require('multer');
 const bcrypt   = require('bcryptjs');
 const { parse } = require('csv-parse');
 const { query, pool } = require('../config/database');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(authenticate);
+router.use(authorize('super_admin', 'admin', 'hr_admin'));
 
 // ─── multer: memory storage (we parse the buffer directly) ───────────────────
 const upload = multer({
