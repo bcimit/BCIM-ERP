@@ -7,6 +7,21 @@ const router = express.Router();
 router.use(authenticate);
 router.use(loadProjectScope);
 
+// Schema fix: add missing columns to budget_items
+;(async () => {
+  try {
+    await query(`ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS budget_pct NUMERIC(6,2)`);
+    await query(`ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS company_id UUID`);
+    // Backfill company_id from the projects table
+    await query(`
+      UPDATE budget_items bi
+      SET company_id = p.company_id
+      FROM projects p
+      WHERE bi.project_id = p.id AND bi.company_id IS NULL
+    `);
+  } catch (_) {}
+})();
+
 // One-time migration: normalize legacy cost_head names in budget_items to new DIPPL naming
 ;(async () => {
   try {
@@ -157,8 +172,8 @@ router.get('/', async (req, res) => {
 
     // Budget lines
     const budget = await query(
-      `SELECT * FROM budget_items WHERE project_id=$1 ORDER BY created_at`,
-      [project_id]
+      `SELECT * FROM budget_items WHERE project_id=$1 AND (company_id=$2 OR company_id IS NULL) ORDER BY created_at`,
+      [project_id, req.user.company_id]
     );
 
     // Actual spend from DQS Tracker paid bills
@@ -233,8 +248,8 @@ router.get('/commitment', async (req, res) => {
 
     // Budget lines
     const budget = await query(
-      `SELECT cost_head, budgeted_amount FROM budget_items WHERE project_id=$1`,
-      [project_id]
+      `SELECT cost_head, budgeted_amount FROM budget_items WHERE project_id=$1 AND (company_id=$2 OR company_id IS NULL)`,
+      [project_id, req.user.company_id]
     );
 
     // Actual paid from DQS Tracker (paid bills)
@@ -282,9 +297,9 @@ router.post('/', authorize('super_admin', 'admin', 'project_manager', 'accountan
     if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
 
     const result = await query(
-      `INSERT INTO budget_items (project_id, cost_head, budgeted_amount, budget_pct, actual_amount, remarks)
-       VALUES ($1,$2,$3,$4,0,$5) RETURNING *`,
-      [project_id, cost_head, budgeted_amount, budget_pct || null, remarks]
+      `INSERT INTO budget_items (project_id, company_id, cost_head, budgeted_amount, budget_pct, actual_amount, remarks)
+       VALUES ($1,$2,$3,$4,$5,0,$6) RETURNING *`,
+      [project_id, req.user.company_id, cost_head, budgeted_amount, budget_pct || null, remarks]
     );
     res.status(201).json({ data: result.rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
