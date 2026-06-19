@@ -448,15 +448,33 @@ router.delete('/:id/loads/:loadId', authorize(...WRITE_ROLES), async (req, res) 
   }
 });
 
-// ── Keyword sets per material type ───────────────────────────────────────────
-const MATERIAL_KEYWORDS = {
-  cement:   ['cement'],
-  concrete: ['concrete', 'rmc', 'ready mix'],
-  steel:    ['steel', 'tmt', 'rebar', 'ms rod'],
+// ── Material match rules ─────────────────────────────────────────────────────
+// cement   = bulk cement we purchase (OPC/PPC bags/bulk) — exclude concrete items
+//            that merely contain the word "cement" (PCC / RCC / cement concrete).
+// concrete = external ready-mix concrete (RMC) bought from outside suppliers.
+const MATERIAL_MATCH = {
+  cement:   { include: ['cement', 'opc', 'ppc'],
+              exclude: ['concrete', 'rmc', 'ready mix', 'ready-mix', 'pcc', 'rcc'] },
+  concrete: { include: ['concrete', 'rmc', 'ready mix', 'ready-mix'],
+              exclude: [] },
+  steel:    { include: ['steel', 'tmt', 'rebar', 'ms rod', 'reinforcement'],
+              exclude: [] },
 };
 
-function kwCondition(kws, alias, col, startIdx) {
-  return kws.map((_, i) => `LOWER(${alias}.${col}) LIKE $${startIdx + i}`).join(' OR ');
+// Build a material-match SQL fragment for `alias.col`, with bind params starting
+// at $startIdx. Returns { sql, params } where params = [...includePats, ...excludePats].
+// Callers must append `params` to their query's param list at that position.
+function matCond(material, alias, col, startIdx) {
+  const m = MATERIAL_MATCH[material] || MATERIAL_MATCH.cement;
+  const inc = m.include, exc = m.exclude || [];
+  const incSql = inc.map((_, i) => `LOWER(${alias}.${col}) LIKE $${startIdx + i}`).join(' OR ');
+  let sql = `(${incSql})`;
+  if (exc.length) {
+    const excSql = exc.map((_, i) => `LOWER(${alias}.${col}) LIKE $${startIdx + inc.length + i}`).join(' OR ');
+    sql += ` AND NOT (${excSql})`;
+  }
+  const params = [...inc.map(k => `%${k}%`), ...exc.map(k => `%${k}%`)];
+  return { sql, params };
 }
 
 // ── GET /auto-import/preview ──────────────────────────────────────────────────
@@ -464,15 +482,13 @@ router.get('/auto-import/preview', async (req, res) => {
   try {
     const { project_id, material_type = 'cement' } = req.query;
     const companyId = req.user.company_id;
-    const kws = MATERIAL_KEYWORDS[material_type] || MATERIAL_KEYWORDS.cement;
-    const kwPats = kws.map(k => `%${k}%`);
 
-    // params: [companyId, ...kwPats, ?project_id]
-    let params = [companyId, ...kwPats];
+    // pos query — material match params go LAST so indices stay predictable
+    const posParams = [companyId];
     let projFilter = '';
-    if (project_id) { projFilter = ` AND po.project_id = $${params.length + 1}`; params.push(project_id); }
-
-    const kwCond = kwCondition(kws, 'pi', 'material_name', 2);
+    if (project_id) { projFilter = ` AND po.project_id = $${posParams.length + 1}`; posParams.push(project_id); }
+    const mcPo = matCond(material_type, 'pi', 'material_name', posParams.length + 1);
+    posParams.push(...mcPo.params);
 
     const pos = await query(`
       SELECT DISTINCT po.id, po.po_number, po.serial_no_formatted, po.po_date,
@@ -484,9 +500,9 @@ router.get('/auto-import/preview', async (req, res) => {
       WHERE pr.company_id = $1
         AND COALESCE(po.status,'') NOT IN ('cancelled','draft','rejected')
         ${projFilter}
-        AND (${kwCond})
+        AND ${mcPo.sql}
       ORDER BY po.po_date
-    `, params);
+    `, posParams);
 
     const existing = await query(
       `SELECT po_id FROM material_tracker_entries WHERE company_id = $1 AND material_type = $2`,
@@ -503,14 +519,14 @@ router.get('/auto-import/preview', async (req, res) => {
       );
       const importedGrnSet = new Set(importedGrns.rows.map(r => r.source_grn_id));
 
-      const kwCond2 = kwCondition(kws, 'gi', 'material_name', 2);
+      const mcGi = matCond(material_type, 'gi', 'material_name', 2);
       const grns = await query(`
         SELECT DISTINCT g.id
         FROM grn g
         JOIN grn_items gi ON gi.grn_id = g.id
         WHERE g.po_id = ANY($1::uuid[])
-          AND (${kwCond2})
-      `, [poIds, ...kwPats]);
+          AND ${mcGi.sql}
+      `, [poIds, ...mcGi.params]);
       grnsNew = grns.rows.filter(r => !importedGrnSet.has(r.id)).length;
 
       const importedBills = await query(
@@ -519,6 +535,7 @@ router.get('/auto-import/preview', async (req, res) => {
       const importedBillSet = new Set(importedBills.rows.map(r => r.source_bill_id));
 
       // Bills with no linked GRN (so we don't double-count)
+      const mcLi = matCond(material_type, 'li', 'item_name', 2);
       const bills = await query(`
         SELECT DISTINCT b.id
         FROM tqs_bills b
@@ -526,8 +543,8 @@ router.get('/auto-import/preview', async (req, res) => {
         WHERE b.po_id = ANY($1::uuid[])
           AND b.grn_id IS NULL
           AND b.is_deleted = FALSE
-          AND (li.item_name IS NULL OR (${kwCondition(kws, 'li', 'item_name', 2)}))
-      `, [poIds, ...kwPats]);
+          AND (li.item_name IS NULL OR (${mcLi.sql}))
+      `, [poIds, ...mcLi.params]);
       billsNew = bills.rows.filter(r => !importedBillSet.has(r.id)).length;
     }
 
@@ -552,18 +569,18 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
   try {
     const { project_id, material_type = 'cement' } = req.body;
     const companyId = req.user.company_id;
-    const kws = MATERIAL_KEYWORDS[material_type] || MATERIAL_KEYWORDS.cement;
-    const kwPats = kws.map(k => `%${k}%`);
     const todayStr = new Date().toISOString().slice(0, 10);
     const trunc = (v, n = 150) => (v == null ? null : String(v).slice(0, n));
 
-    let params = [companyId, ...kwPats];
+    // pos query — material match params go LAST so indices stay predictable.
+    // The match on the joined po_items restricts aggregates to matching lines
+    // only and includes the PO only if it has at least one matching item.
+    const posParams = [companyId];
     let projFilter = '';
-    if (project_id) { projFilter = ` AND po.project_id = $${params.length + 1}`; params.push(project_id); }
+    if (project_id) { projFilter = ` AND po.project_id = $${posParams.length + 1}`; posParams.push(project_id); }
+    const mcPo = matCond(material_type, 'pi', 'material_name', posParams.length + 1);
+    posParams.push(...mcPo.params);
 
-    const kwCond = kwCondition(kws, 'pi', 'material_name', 2);
-
-    // Find all matching POs with aggregated cement item totals
     const pos = await query(`
       SELECT
         po.id, po.po_number, po.serial_no_formatted, po.po_date, po.project_id,
@@ -579,10 +596,10 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       WHERE pr.company_id = $1
         AND COALESCE(po.status,'') NOT IN ('cancelled','draft','rejected')
         ${projFilter}
-        AND (${kwCond})
+        AND ${mcPo.sql}
       GROUP BY po.id, v.name
       ORDER BY po.po_date
-    `, params);
+    `, posParams);
 
     let entries_created = 0, loads_created = 0;
     const poIds = pos.rows.map(p => p.id);
@@ -625,7 +642,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     const importedBillSet = new Set(imported.rows.map(r => r.source_bill_id).filter(Boolean));
 
     // ── Bulk fetch ALL matching GRNs for these POs in one query ──
-    const kwCond2 = kwCondition(kws, 'gi', 'material_name', 2);
+    const mcGi = matCond(material_type, 'gi', 'material_name', 2);
     const grns = await query(`
       SELECT
         g.po_id, g.id AS grn_id, g.grn_date, g.invoice_number, g.grn_number,
@@ -636,10 +653,10 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       FROM grn g
       JOIN grn_items gi ON gi.grn_id = g.id
       WHERE g.po_id = ANY($1::uuid[])
-        AND (${kwCond2})
+        AND ${mcGi.sql}
       GROUP BY g.po_id, g.id
       ORDER BY g.grn_date
-    `, [poIds, ...kwPats]);
+    `, [poIds, ...mcGi.params]);
 
     // ── Bulk fetch bills for GST/total lookup (by grn_id and po_id+inv_number) ──
     const gstBills = await query(`
@@ -685,7 +702,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     }
 
     // ── Bulk fetch ALL no-GRN bills for these POs in one query ──
-    const kwCond3 = kwCondition(kws, 'li', 'item_name', 2);
+    const mcLi = matCond(material_type, 'li', 'item_name', 2);
     const bills = await query(`
       SELECT
         b.po_id, b.id, b.inv_number, b.inv_date, b.created_at AS bill_created_at,
@@ -701,10 +718,10 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       WHERE b.po_id = ANY($1::uuid[])
         AND b.grn_id IS NULL
         AND b.is_deleted = FALSE
-        AND (li.item_name IS NULL OR (${kwCond3}))
+        AND (li.item_name IS NULL OR (${mcLi.sql}))
       GROUP BY b.po_id, b.id
       ORDER BY b.inv_date
-    `, [poIds, ...kwPats]);
+    `, [poIds, ...mcLi.params]);
 
     const billCols = ['entry_id','received_date','invoice_no','vehicle_no',
                       'invoice_qty','rate','gst_rate','gst_amount','grand_total','created_by','source_bill_id'];

@@ -19,9 +19,9 @@ import { FIELD_HL } from '../../constants/fieldStyles';
 const INP = `w-full h-9 rounded-lg px-3 text-xs font-medium outline-none transition-all border ${FIELD_HL}`;
 
 const MATERIAL_TABS = [
-  { id: 'cement',   label: 'Cement',   color: 'blue' },
-  { id: 'concrete', label: 'Concrete', color: 'emerald' },
-  { id: 'steel',    label: 'Steel',    color: 'orange' },
+  { id: 'cement',   label: 'Bulk Cement',    color: 'blue' },
+  { id: 'concrete', label: 'Ready-Mix Concrete', color: 'emerald' },
+  { id: 'steel',    label: 'Steel',          color: 'orange' },
 ];
 
 const SUB_TABS = ['Loadwise Entry', 'Abstract'];
@@ -1056,7 +1056,7 @@ export default function MaterialTrackerPage() {
     <div className="h-full flex flex-col overflow-hidden bg-[#f5f6fa]">
       <PageHeader
         title="Material Tracker"
-        subtitle="Track cement, concrete & steel delivery loads against POs"
+        subtitle="Bulk cement · external ready-mix concrete (RMC) · steel — delivery loads against POs"
         breadcrumbs={[{ label: 'Stores' }, { label: 'Material Tracker' }]}
         actions={
           <select value={projectId} onChange={e => setProjectId(e.target.value)}
