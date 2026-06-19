@@ -519,6 +519,10 @@ export default function App() {
                 <Route path="qs/ra-bills" element={<RequireModule module="QS & Billing"><RABillPage /></RequireModule>} />
                 <Route path="qs/ra-bills/new" element={<RequireModule module="QS & Billing"><RABillNewPage /></RequireModule>} />
                 <Route path="qs/ra-bills/:id" element={<RequireModule module="QS & Billing"><RABillDetail /></RequireModule>} />
+                <Route path="qs/po" element={<RequireModule module="QS & Billing"><POPage /></RequireModule>} />
+                <Route path="qs/po-register" element={<RequireModule module="QS & Billing"><PORegisterPage /></RequireModule>} />
+                <Route path="qs/work-orders" element={<RequireModule module="QS & Billing"><WorkOrderPage /></RequireModule>} />
+                <Route path="qs/wo-register" element={<RequireModule module="QS & Billing"><WORegisterPage /></RequireModule>} />
                 <Route path="qs/vendor-certifications" element={<RequireModule module="QS & Billing"><VendorQSCertificationPage /></RequireModule>} />
                 <Route path="qs/vendor-certifications/:id" element={<RequireModule module="QS & Billing"><VendorQSCertificationDetailPage /></RequireModule>} />
                 <Route path="qs/price-escalation" element={<RequireModule module="QS & Billing"><PriceEscalationPage /></RequireModule>} />
