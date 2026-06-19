@@ -54,7 +54,7 @@ describe('ProjectList rendering', () => {
     render(<Wrapper><ProjectList /></Wrapper>);
 
     await waitFor(() => {
-      expect(screen.getByText(/active/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/active/i).length).toBeGreaterThan(0);
     });
   });
 });

@@ -37,8 +37,8 @@ beforeEach(() => {
 describe('LoginPage rendering', () => {
   it('renders email and password fields', () => {
     render(<TestWrapper><LoginPage /></TestWrapper>);
-    expect(screen.getByLabelText(/email/i) || screen.getByPlaceholderText(/email/i) ||
-      screen.getByRole('textbox', { name: /email/i }) || document.querySelector('input[type="email"]')).toBeTruthy();
+    expect(document.querySelector('input[type="email"]') ||
+      screen.queryByPlaceholderText(/email/i)).toBeTruthy();
     expect(document.querySelector('input[type="password"]')).toBeTruthy();
   });
 

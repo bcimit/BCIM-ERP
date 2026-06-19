@@ -9,24 +9,24 @@ router.use(loadProjectScope);
 
 // Reusable: actual spend from DQS tqs_bills (paid) grouped by cost head.
 // vendor_id is NULL on tqs_bills — join by name (ILIKE) as fallback.
-// WO bills → Subcontracting - Civil by default; PO bills → vendor_type mapping.
+// WO bills → Subcontracting — Civil by default; PO bills → vendor_type mapping.
 const DQS_ACTUALS_SQL = `
   SELECT
     CASE b.bill_type
       WHEN 'wo' THEN COALESCE(
         CASE v.vendor_type
-          WHEN 'equipment_supplier' THEN 'Plant & Machinery - Hired'
-          WHEN 'labour_contractor'  THEN 'Labour - Skilled'
-          WHEN 'service_provider'   THEN 'Site Overhead'
-          ELSE 'Subcontracting - Civil'
-        END, 'Subcontracting - Civil')
+          WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
+          WHEN 'labour_contractor'  THEN 'Labour — Skilled'
+          WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
+          ELSE 'Subcontracting — Civil'
+        END, 'Subcontracting — Civil')
       ELSE COALESCE(po.cost_head,
         CASE v.vendor_type
-          WHEN 'subcontractor'      THEN 'Subcontracting - Civil'
-          WHEN 'equipment_supplier' THEN 'Plant & Machinery - Hired'
-          WHEN 'labour_contractor'  THEN 'Labour - Skilled'
-          WHEN 'service_provider'   THEN 'Site Overhead'
-          ELSE 'Material - Concrete & Aggregates'
+          WHEN 'subcontractor'      THEN 'Subcontracting — Civil'
+          WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
+          WHEN 'labour_contractor'  THEN 'Labour — Skilled'
+          WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
+          ELSE 'Material — Concrete & Aggregates'
         END
       )
     END AS cost_head,
@@ -63,18 +63,18 @@ router.get('/actuals', async (req, res) => {
         CASE b.bill_type
           WHEN 'wo' THEN COALESCE(
             CASE v.vendor_type
-              WHEN 'equipment_supplier' THEN 'Plant & Machinery - Hired'
-              WHEN 'labour_contractor'  THEN 'Labour - Skilled'
-              WHEN 'service_provider'   THEN 'Site Overhead'
-              ELSE 'Subcontracting - Civil'
-            END, 'Subcontracting - Civil')
+              WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
+              WHEN 'labour_contractor'  THEN 'Labour — Skilled'
+              WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
+              ELSE 'Subcontracting — Civil'
+            END, 'Subcontracting — Civil')
           ELSE COALESCE(po.cost_head,
             CASE v.vendor_type
-              WHEN 'subcontractor'      THEN 'Subcontracting - Civil'
-              WHEN 'equipment_supplier' THEN 'Plant & Machinery - Hired'
-              WHEN 'labour_contractor'  THEN 'Labour - Skilled'
-              WHEN 'service_provider'   THEN 'Site Overhead'
-              ELSE 'Material - Concrete & Aggregates'
+              WHEN 'subcontractor'      THEN 'Subcontracting — Civil'
+              WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
+              WHEN 'labour_contractor'  THEN 'Labour — Skilled'
+              WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
+              ELSE 'Material — Concrete & Aggregates'
             END
           )
         END AS resolved_cost_head
@@ -161,11 +161,11 @@ router.get('/commitment', async (req, res) => {
       SELECT
         COALESCE(po.cost_head,
           CASE v.vendor_type
-            WHEN 'subcontractor'      THEN 'Subcontracting'
-            WHEN 'equipment_supplier' THEN 'Plant & Machinery'
-            WHEN 'labour_contractor'  THEN 'Labour'
-            WHEN 'service_provider'   THEN 'Overhead — Site'
-            ELSE 'Material'
+            WHEN 'subcontractor'      THEN 'Subcontracting — Civil'
+            WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
+            WHEN 'labour_contractor'  THEN 'Labour — Skilled'
+            WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
+            ELSE 'Material — Other Materials'
           END
         ) AS cost_head,
         SUM(CASE WHEN po.status NOT IN ('cancelled','draft') THEN po.grand_total ELSE 0 END) AS committed,

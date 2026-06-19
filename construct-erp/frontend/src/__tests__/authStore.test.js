@@ -10,7 +10,7 @@ const resetStore = () => useAuthStore.setState({
 const originalLocation = window.location;
 beforeAll(() => {
   delete window.location;
-  window.location = { href: '', assign: jest.fn(), replace: jest.fn() };
+  window.location = { href: '', assign: vi.fn(), replace: vi.fn() };
 });
 afterAll(() => {
   window.location = originalLocation;

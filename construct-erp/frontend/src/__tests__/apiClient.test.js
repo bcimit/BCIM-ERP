@@ -8,7 +8,7 @@ describe('api/client.js interceptors', () => {
     localStorage.clear();
     sessionStorage.clear();
     // Re-import fresh to test interceptors
-    jest.resetModules();
+    vi.resetModules();
     api = (await import('../api/client')).default;
   });
 
@@ -17,7 +17,7 @@ describe('api/client.js interceptors', () => {
   describe('request interceptor', () => {
     it('adds Authorization header when token in sessionStorage', async () => {
       sessionStorage.setItem('accessToken', 'test-access-token');
-      jest.resetModules();
+      vi.resetModules();
       const freshApi = (await import('../api/client')).default;
 
       // Inspect the interceptor via a mock
@@ -37,7 +37,7 @@ describe('api/client.js interceptors', () => {
     it('does not add Authorization header when no token', async () => {
       localStorage.removeItem('accessToken');
       sessionStorage.removeItem('accessToken');
-      jest.resetModules();
+      vi.resetModules();
       const freshApi = (await import('../api/client')).default;
       const { handlers } = freshApi.interceptors.request;
       // Interceptor exists but token will be null → header not set
@@ -51,7 +51,7 @@ describe('api/client.js interceptors', () => {
     it('passes through successful responses unchanged', async () => {
       // MSW returns 200 for GET /api/v1/projects
       sessionStorage.setItem('accessToken', 'mock-access-token');
-      jest.resetModules();
+      vi.resetModules();
       const freshApi = (await import('../api/client')).default;
       const res = await freshApi.get('/projects');
       expect(res.status).toBe(200);
@@ -59,7 +59,7 @@ describe('api/client.js interceptors', () => {
     });
 
     it('has a response interceptor registered (demo token handled by interceptor)', async () => {
-      jest.resetModules();
+      vi.resetModules();
       const freshApi = (await import('../api/client')).default;
       // Verify response interceptors exist (demo-token logic lives in interceptor)
       expect(freshApi.interceptors.response.handlers.length).toBeGreaterThan(0);

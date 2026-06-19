@@ -12,11 +12,58 @@ const inr  = (v) => `₹${parseFloat(v || 0).toLocaleString('en-IN', { minimumFr
 const inrL = inr;
 
 const COST_HEADS = [
-  { group: 'Material',          items: ['Material — Concrete & Aggregates', 'Material — Steel & Reinforcement', 'Material — Cement & Masonry', 'Material — Finishing & Tiles'] },
-  { group: 'Labour',            items: ['Labour — Skilled', 'Labour — Unskilled', 'Labour — Supervisory'] },
-  { group: 'Plant & Machinery', items: ['Plant & Machinery — Owned', 'Plant & Machinery — Hired'] },
-  { group: 'Subcontracting',    items: ['Subcontracting — Civil', 'Subcontracting — MEP', 'Subcontracting — Structural'] },
-  { group: 'Overhead',          items: ['Site Overhead', 'Head Office Overhead', 'Contingency', 'Provisional Sum'] },
+  { group: 'Material', items: [
+    'Material — Formworks',
+    'Material — Reinforcement',
+    'Material — Concrete & Aggregates',
+    'Material — Other Materials',
+  ]},
+  { group: 'Plant & Machinery (P & M)', items: [
+    'P & M — Equipment (General)',
+    'P & M — Formwork Equipment',
+    'P & M — Reinforcement Equipment (Bar Bending / Cutting)',
+    'P & M — Survey Equipment',
+    'P & M — Lab Equipment (QAQC)',
+  ]},
+  { group: 'Safety', items: [
+    'Safety — PPE & Protective Gear',
+    'Safety — Signages & Barricading',
+    'Safety — Fire Fighting & First Aid',
+  ]},
+  { group: 'Electrical', items: [
+    'Electrical — Cables & Wiring',
+    'Electrical — Lighting (LED / Flood)',
+    'Electrical — Distribution & Switchgear',
+  ]},
+  { group: 'Consumables', items: [
+    'Consumables — Hand Tools',
+    'Consumables — Maintenance Tools',
+    'Consumables — Formwork Tools',
+  ]},
+  { group: 'Infra (Camp & Office)', items: [
+    'Infra — Labour Camp Construction',
+    'Infra — Camp Facilities & Maintenance',
+    'Infra — Site Office & Furniture',
+    'Infra — Utilities (Water & Power)',
+    'Infra — Security & Transport',
+  ]},
+  { group: 'Labour', items: [
+    'Labour — Skilled',
+    'Labour — Unskilled',
+    'Labour — Supervisory',
+  ]},
+  { group: 'Subcontracting', items: [
+    'Subcontracting — Civil',
+    'Subcontracting — MEP',
+    'Subcontracting — Structural',
+    'Subcontracting — Finishing',
+  ]},
+  { group: 'Overhead & Provisional', items: [
+    'Overhead — Site Overhead',
+    'Overhead — Head Office',
+    'Contingency',
+    'Provisional Sum',
+  ]},
 ];
 
 function UtilBar({ pct }) {
