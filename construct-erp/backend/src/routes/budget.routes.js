@@ -21,12 +21,18 @@ const DQS_ACTUALS_SQL = `
           ELSE 'Subcontracting — Civil'
         END, 'Subcontracting — Civil')
       ELSE COALESCE(po.cost_head,
-        CASE v.vendor_type
-          WHEN 'subcontractor'      THEN 'Subcontracting — Civil'
-          WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
-          WHEN 'labour_contractor'  THEN 'Labour — Skilled'
-          WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
-          ELSE 'Material — Concrete & Aggregates'
+        CASE
+          WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'steel|tmt|rebar|reinforc|fe[0-9]|bar.bend|bar.cut') THEN 'Material — Reinforcement'
+          WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cement|opc|ppc|concrete|rmc|ready.?mix|m.?sand|aggregate|crush|coarse') THEN 'Material — Concrete & Aggregates'
+          WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'formwork|shuttering|plywood|prop|soldier|waler') THEN 'Material — Formworks'
+          WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'safety|ppe|helmet|glove|harness|vest|boot|goggle|barricad') THEN 'Safety — PPE & Protective Gear'
+          WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cable|wire|electrical|switch|panel|mcb|breaker|conduit|light|led|flood') THEN 'Electrical — Cables & Wiring'
+          WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'excavat|jcb|crane|tipper|dump|dozer|grader|roller|compactor|pump|poclain|transit') THEN 'P & M — Equipment (General)'
+          WHEN v.vendor_type = 'subcontractor'      THEN 'Subcontracting — Civil'
+          WHEN v.vendor_type = 'equipment_supplier' THEN 'P & M — Equipment (General)'
+          WHEN v.vendor_type = 'labour_contractor'  THEN 'Labour — Skilled'
+          WHEN v.vendor_type = 'service_provider'   THEN 'Overhead — Site Overhead'
+          ELSE 'Material — Other Materials'
         END
       )
     END AS cost_head,
@@ -69,12 +75,18 @@ router.get('/actuals', async (req, res) => {
               ELSE 'Subcontracting — Civil'
             END, 'Subcontracting — Civil')
           ELSE COALESCE(po.cost_head,
-            CASE v.vendor_type
-              WHEN 'subcontractor'      THEN 'Subcontracting — Civil'
-              WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
-              WHEN 'labour_contractor'  THEN 'Labour — Skilled'
-              WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
-              ELSE 'Material — Concrete & Aggregates'
+            CASE
+              WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'steel|tmt|rebar|reinforc|fe[0-9]|bar.bend|bar.cut') THEN 'Material — Reinforcement'
+              WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cement|opc|ppc|concrete|rmc|ready.?mix|m.?sand|aggregate|crush|coarse') THEN 'Material — Concrete & Aggregates'
+              WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'formwork|shuttering|plywood|prop|soldier|waler') THEN 'Material — Formworks'
+              WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'safety|ppe|helmet|glove|harness|vest|boot|goggle|barricad') THEN 'Safety — PPE & Protective Gear'
+              WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cable|wire|electrical|switch|panel|mcb|breaker|conduit|light|led|flood') THEN 'Electrical — Cables & Wiring'
+              WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'excavat|jcb|crane|tipper|dump|dozer|grader|roller|compactor|pump|poclain|transit') THEN 'P & M — Equipment (General)'
+              WHEN v.vendor_type = 'subcontractor'      THEN 'Subcontracting — Civil'
+              WHEN v.vendor_type = 'equipment_supplier' THEN 'P & M — Equipment (General)'
+              WHEN v.vendor_type = 'labour_contractor'  THEN 'Labour — Skilled'
+              WHEN v.vendor_type = 'service_provider'   THEN 'Overhead — Site Overhead'
+              ELSE 'Material — Other Materials'
             END
           )
         END AS resolved_cost_head
@@ -160,11 +172,17 @@ router.get('/commitment', async (req, res) => {
     const pos = await query(`
       SELECT
         COALESCE(po.cost_head,
-          CASE v.vendor_type
-            WHEN 'subcontractor'      THEN 'Subcontracting — Civil'
-            WHEN 'equipment_supplier' THEN 'P & M — Equipment (General)'
-            WHEN 'labour_contractor'  THEN 'Labour — Skilled'
-            WHEN 'service_provider'   THEN 'Overhead — Site Overhead'
+          CASE
+            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'steel|tmt|rebar|reinforc|fe[0-9]|bar.bend|bar.cut') THEN 'Material — Reinforcement'
+            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cement|opc|ppc|concrete|rmc|ready.?mix|m.?sand|aggregate|crush|coarse') THEN 'Material — Concrete & Aggregates'
+            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'formwork|shuttering|plywood|prop|soldier|waler') THEN 'Material — Formworks'
+            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'safety|ppe|helmet|glove|harness|vest|boot|goggle|barricad') THEN 'Safety — PPE & Protective Gear'
+            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cable|wire|electrical|switch|panel|mcb|breaker|conduit|light|led|flood') THEN 'Electrical — Cables & Wiring'
+            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'excavat|jcb|crane|tipper|dump|dozer|grader|roller|compactor|pump|poclain|transit') THEN 'P & M — Equipment (General)'
+            WHEN v.vendor_type = 'subcontractor'      THEN 'Subcontracting — Civil'
+            WHEN v.vendor_type = 'equipment_supplier' THEN 'P & M — Equipment (General)'
+            WHEN v.vendor_type = 'labour_contractor'  THEN 'Labour — Skilled'
+            WHEN v.vendor_type = 'service_provider'   THEN 'Overhead — Site Overhead'
             ELSE 'Material — Other Materials'
           END
         ) AS cost_head,
