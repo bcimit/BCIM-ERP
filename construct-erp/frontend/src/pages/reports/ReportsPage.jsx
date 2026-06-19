@@ -425,6 +425,46 @@ export const REPORTS = [
     ],
   },
 
+  {
+    key:'procurement-mr-pending-po', dept:'procurement', category:'Purchase Requisition Reports', title:'Pending MR Report', icon:Clock, color:'amber',
+    desc:'MRS line items vs quantity already converted to PO — balance still to be ordered',
+    filters:['dateRange','project'],
+    endpoint:'/stores/mrs',
+    dataKey:null,
+    transform: rows => rows
+      .filter(r => r.status !== 'rejected')
+      .flatMap(r => (r.items || []).map(it => {
+        const required_qty = parseFloat(it.quantity) || 0;
+        const ordered_qty = parseFloat(it.ordered_qty) || 0;
+        return {
+          mrs_number: r.mrs_number,
+          serial_no_formatted: r.serial_no_formatted,
+          project_name: r.project_name,
+          requested_by: r.raised_by_name || r.requested_by,
+          material_name: it.material_name,
+          unit: it.unit,
+          required_qty,
+          ordered_qty,
+          balance_qty: Math.max(0, required_qty - ordered_qty),
+          status: r.status,
+          created_at: r.created_at,
+        };
+      }))
+      .filter(r => r.balance_qty > 0),
+    columns:[
+      { key:'mrs_number',    label:'MRS No',         mono:true, keys:['serial_no_formatted'] },
+      { key:'project_name',  label:'Project' },
+      { key:'requested_by',  label:'Requested By' },
+      { key:'material_name', label:'Material' },
+      { key:'unit',           label:'Unit' },
+      { key:'required_qty',  label:'Required Qty',   type:'number' },
+      { key:'ordered_qty',   label:'Ordered Qty',    type:'number' },
+      { key:'balance_qty',   label:'Balance to Order', type:'number' },
+      { key:'status',        label:'MRS Status',     type:'status' },
+      { key:'created_at',    label:'Date',           type:'date' },
+    ],
+  },
+
   // -- RFQ Reports --
   {
     key:'procurement-rfq-register', dept:'procurement', category:'RFQ Reports', title:'RFQ Register', icon:Send, color:'amber',
@@ -776,6 +816,32 @@ export const REPORTS = [
       { key:'remaining_quantity',  label:'Remaining Qty', type:'number' },
       { key:'delivery_date',       label:'Due Date',    type:'date' },
       { key:'delivery_status',     label:'Status',      type:'status' },
+    ],
+  },
+  {
+    key:'procurement-po-pending-supply', dept:'procurement', category:'Delivery Reports', title:'Pending PO Report', icon:PackageCheck, color:'amber',
+    desc:'PO line items vs quantity already supplied (GRN) — balance still to be supplied',
+    filters:['dateRange','project'],
+    endpoint:'/purchase-orders/items-report',
+    dataKey:'data',
+    transform: rows => rows
+      .filter(r => (parseFloat(r.remaining_quantity) || 0) > 0)
+      .map(r => ({
+        ...r,
+        supplied_qty: r.received_quantity,
+        balance_qty: r.remaining_quantity,
+      })),
+    columns:[
+      { key:'po_number',     label:'PO No',          mono:true, keys:['serial_no_formatted'] },
+      { key:'vendor_name',   label:'Vendor' },
+      { key:'project_name',  label:'Project' },
+      { key:'material_name', label:'Material' },
+      { key:'unit',           label:'Unit' },
+      { key:'quantity',       label:'Ordered Qty',    type:'number' },
+      { key:'supplied_qty',   label:'Supplied Qty',   type:'number' },
+      { key:'balance_qty',    label:'Balance to Supply', type:'number' },
+      { key:'delivery_status',label:'Status',         type:'status' },
+      { key:'po_date',        label:'PO Date',        type:'date' },
     ],
   },
   {

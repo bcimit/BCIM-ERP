@@ -140,7 +140,12 @@ function OverviewTab({ bill }) {
         <Field label="SGST" value={bill.sgst_pct ? `${bill.sgst_pct}% = ₹${inr(bill.sgst_amt)}` : null} />
         <Field label="IGST" value={bill.igst_pct ? `${bill.igst_pct}% = ₹${inr(bill.igst_amt)}` : null} />
         <Field label="Other Charges" value={bill.other_charges ? `₹${inr(bill.other_charges)}` : null} />
-        <Field label="Bill Type" value={bill.bill_type === 'wo' ? 'Work Order' : 'Purchase Order'} />
+        <Field label="Bill Type" value={bill.bill_type === 'wo' ? 'Work Order' : bill.bill_type === 'hire' ? 'Hire / Rental' : 'Purchase Order'} />
+        {bill.bill_type === 'hire' && <>
+          <Field label="Equipment / Plant" value={bill.equipment_type} />
+          <Field label="Hire Period From" value={fmt(bill.hire_period_from)} />
+          <Field label="Hire Period To"   value={fmt(bill.hire_period_to)} />
+        </>}
         <Field label="Invoice Month" value={bill.inv_month} />
         <Field label="Sent to HO" value={fmt(upd.sent_to_ho_date)} />
         <Field label="HO Received" value={fmt(upd.ho_received_date)} />
@@ -926,7 +931,7 @@ function PaymentTab({ bill, billId }) {
         <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
           <IndianRupee className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-blue-700">
-            Saving will automatically create a <strong>Finance payment record</strong> for ₹{inr(paid - tds)} — it will appear in TDS reports and cash flow under the <em>{bill.bill_type === 'wo' ? 'Subcontractor' : 'Vendor'}</em> category.
+            Saving will automatically create a <strong>Finance payment record</strong> for ₹{inr(paid - tds)} — it will appear in TDS reports and cash flow under the <em>{bill.bill_type === 'wo' ? 'Subcontractor' : bill.bill_type === 'hire' ? 'Hire/Rental' : 'Vendor'}</em> category.
           </p>
         </div>
       )}
@@ -1155,13 +1160,19 @@ const WORKFLOW_STEPS = [
   { id: 'qs_sign',             label: 'QS Sign'     },
   { id: 'paid',                label: 'Paid'        },
 ];
+const HIRE_WORKFLOW_STEPS = [
+  { id: 'accounts', label: 'Accounts' },
+  { id: 'paid',     label: 'Paid'     },
+];
 const STEP_ORDER = WORKFLOW_STEPS.map(s => s.id);
 
-function WorkflowStrip({ status }) {
-  const currentIdx = STEP_ORDER.indexOf(status);
+function WorkflowStrip({ status, billType }) {
+  const steps = billType === 'hire' ? HIRE_WORKFLOW_STEPS : WORKFLOW_STEPS;
+  const stepOrder = steps.map(s => s.id);
+  const currentIdx = stepOrder.indexOf(status);
   return (
     <div className="flex items-center gap-0">
-      {WORKFLOW_STEPS.map((step, i) => {
+      {steps.map((step, i) => {
         const done    = i < currentIdx;
         const active  = i === currentIdx;
         return (
@@ -1191,7 +1202,7 @@ function WorkflowStrip({ status }) {
                 {step.label}
               </span>
             </div>
-            {i < WORKFLOW_STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <div className="flex-1 mb-5 rounded-full"
                 style={{
                   height: 3,
@@ -1350,7 +1361,7 @@ export default function TQSBillDetailPage() {
 
         {/* ── Workflow Progress Strip ─────────────────────────── */}
         <div className="bg-white rounded-xl border border-[#c8d5e8] shadow-sm px-6 py-4">
-          <WorkflowStrip status={bill.workflow_status || 'pending'} />
+          <WorkflowStrip status={bill.workflow_status || 'pending'} billType={bill.bill_type} />
         </div>
 
         {/* ── Cross-module links ──────────────────────────────── */}
@@ -1389,7 +1400,7 @@ export default function TQSBillDetailPage() {
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wide"
                   style={{ background: 'rgba(255,255,255,0.10)', color: '#bfdbfe', border: '1px solid rgba(255,255,255,0.18)' }}>
-                  {bill.bill_type === 'wo' ? 'Work Order' : 'Purchase Order'}
+                  {bill.bill_type === 'wo' ? 'Work Order' : bill.bill_type === 'hire' ? 'Hire / Rental' : 'Purchase Order'}
                 </span>
               </div>
 
@@ -1469,7 +1480,7 @@ export default function TQSBillDetailPage() {
                             }
                           }}
                         >
-                          {['pending','stores','document_controller','qs','accounts','procurement','qs_sign','paid'].map(s => (
+                          {(bill.bill_type === 'hire' ? ['accounts','paid'] : ['pending','stores','document_controller','qs','accounts','procurement','qs_sign','paid']).map(s => (
                             <option key={s} value={s}>{s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>
                           ))}
                         </select>

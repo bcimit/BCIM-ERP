@@ -64,6 +64,8 @@ const EMPTY_FORM = {
   transport_charges: '', transport_gst_pct: '', transport_gst_amt: '', transport_desc: '',
   other_charges: '', other_charges_desc: '',
   credit_note_num: '', credit_note_val: '', remarks: '',
+  // hire/rental fields
+  hire_period_from: '', hire_period_to: '', equipment_type: '',
   // transient (not sent to backend)
   cgst_pct: '', sgst_pct: '', igst_pct: '',
 };
@@ -185,7 +187,7 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
       ...(form.vendor_id ? { vendor_id: form.vendor_id } : form.vendor_name ? { vendor_name: form.vendor_name } : {}),
     }).then(r => r.data?.data || []),
     staleTime: 5 * 60 * 1000,
-    enabled: form.bill_type === 'wo',
+    enabled: form.bill_type === 'wo' || form.bill_type === 'hire',
   });
 
   // When user picks a PO, auto-fill vendor, po_number, po_date AND fetch line items
@@ -398,8 +400,9 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
 
   const typeFilteredVendors = vendors.filter(v => {
     const vendorType = normalizeVendorType(v.vendor_type);
-    if (form.bill_type === 'wo') return WO_STRICT_TYPES.has(vendorType) || vendorType === 'service_provider';
-    if (form.bill_type === 'po') return !WO_STRICT_TYPES.has(vendorType); // includes service_provider, material, equipment, null
+    if (form.bill_type === 'wo')   return WO_STRICT_TYPES.has(vendorType) || vendorType === 'service_provider';
+    if (form.bill_type === 'hire') return ['equipment', 'plant', 'hire', 'rental', 'service_provider', 'supplier'].some(t => vendorType.includes(t)) || !WO_STRICT_TYPES.has(vendorType);
+    if (form.bill_type === 'po')   return !WO_STRICT_TYPES.has(vendorType);
     return true;
   });
 
@@ -495,6 +498,11 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
     if (!form.vendor_name?.trim()) return toast.error('Vendor is required');
     if (!form.inv_number?.trim()) return toast.error('Invoice number is required');
     if (!form.inv_date) return toast.error('Invoice date is required');
+    if (form.bill_type === 'hire') {
+      if (!form.equipment_type?.trim()) return toast.error('Equipment / Plant description is required');
+      if (!form.hire_period_from) return toast.error('Hire period start date is required');
+      if (!form.hire_period_to) return toast.error('Hire period end date is required');
+    }
 
     // ── Block if PO is fully consumed ────────────────────────────────────
     if (poWarning?.type === 'closed') {
@@ -598,6 +606,7 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
                 <select className={F} value={form.bill_type} onChange={e => { set('bill_type', e.target.value); setVendorSearch(''); set('vendor_name', ''); set('vendor_id', ''); }}>
                   <option value="po">Purchase Order (PO)</option>
                   <option value="wo">Work Order (WO)</option>
+                  <option value="hire">Hire / Rental</option>
                 </select>
               </div>
 
@@ -636,7 +645,7 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
                       <>
                         {filteredVendors.length > 0 && (
                           <div className="px-3 py-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-widest bg-slate-50 border-b border-slate-100">
-                            {form.bill_type === 'wo' ? 'Work Order Vendors' : 'Purchase Order Vendors'} ({filteredVendors.length})
+                            {form.bill_type === 'wo' ? 'Work Order Vendors' : form.bill_type === 'hire' ? 'Hire/Rental Vendors' : 'Purchase Order Vendors'} ({filteredVendors.length})
                           </div>
                         )}
                         {filteredVendors.map(v => {
@@ -680,6 +689,25 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
                 </div>
               )}
 
+              {/* Hire/Rental fields */}
+              {form.bill_type === 'hire' && (<>
+                <div className="col-span-2 md:col-span-3">
+                  <Lbl req>Equipment / Plant Description</Lbl>
+                  <input className={F} placeholder="e.g. JCB Excavator, Transit Mixer, Tower Crane"
+                    value={form.equipment_type} onChange={e => set('equipment_type', e.target.value)} />
+                </div>
+                <div>
+                  <Lbl req>Hire Period From</Lbl>
+                  <input type="date" className={F} value={form.hire_period_from}
+                    onChange={e => set('hire_period_from', e.target.value)} />
+                </div>
+                <div>
+                  <Lbl req>Hire Period To</Lbl>
+                  <input type="date" className={F} value={form.hire_period_to}
+                    onChange={e => set('hire_period_to', e.target.value)} />
+                </div>
+              </>)}
+
               {/* Link to Procurement PO (auto-fills vendor/po#/date) */}
               {form.bill_type === 'po' && (
                 <div className="col-span-2 md:col-span-3 space-y-2">
@@ -699,8 +727,8 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
                 </div>
               )}
 
-              {/* Link to Work Order — with same billing guard */}
-              {form.bill_type === 'wo' && (
+              {/* Link to Work Order — for WO and Hire bills */}
+              {(form.bill_type === 'wo' || form.bill_type === 'hire') && (
                 <div className="col-span-2 md:col-span-3 space-y-2">
                   <Lbl>Link to Work Order <span className="text-[10px] text-slate-400 font-normal">(auto-fills vendor & WO details)</span></Lbl>
                   <select className={F} value={form.po_number}
@@ -724,13 +752,17 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
 
               {/* PO/WO Number - editable but auto-filled from PO picker */}
               <div>
-                <Lbl>{form.bill_type === 'wo' ? 'WO Number' : 'PO Number'}<span className="text-red-500 ml-0.5">*</span></Lbl>
-                <input className={F} placeholder={form.bill_type === 'wo' ? 'WO-2025-001' : 'PO-2025-001'}
-                  list={form.bill_type === 'wo' ? 'wo-number-options' : 'po-number-options'}
+                <Lbl>
+                  {form.bill_type === 'hire' ? 'WO Number (Hire)' : form.bill_type === 'wo' ? 'WO Number' : 'PO Number'}
+                  {form.bill_type !== 'hire' && <span className="text-red-500 ml-0.5">*</span>}
+                </Lbl>
+                <input className={F}
+                  placeholder={form.bill_type === 'hire' ? 'WO-2025-001 (optional)' : form.bill_type === 'wo' ? 'WO-2025-001' : 'PO-2025-001'}
+                  list={form.bill_type === 'wo' || form.bill_type === 'hire' ? 'wo-number-options' : 'po-number-options'}
                   value={form.po_number}
                   onChange={e => {
                     const val = e.target.value;
-                    if (form.bill_type === 'wo') handleWOPick(val);
+                    if (form.bill_type === 'wo' || form.bill_type === 'hire') handleWOPick(val);
                     else {
                       const po = availablePOs.find(p => p.po_number === val);
                       if (po) handlePOPick(po.id);
@@ -748,7 +780,7 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
 
               {/* PO Date */}
               <div>
-                <Lbl>{form.bill_type === 'wo' ? 'WO Date' : 'PO Date'}</Lbl>
+                <Lbl>{form.bill_type === 'wo' || form.bill_type === 'hire' ? 'WO Date' : 'PO Date'}</Lbl>
                 <input type="date" className={F} value={form.po_date} onChange={e => set('po_date', e.target.value)} />
               </div>
 
@@ -2353,7 +2385,7 @@ export default function TQSBillsPage() {
 
           {[
             { val: projectFilter, set: setProjectFilter, opts: [['', 'All Projects'], ...projects.map(p => [p.id, p.name])] },
-            { val: billTypeFilter, set: setBillTypeFilter, opts: [['', 'All Types'], ['po', 'PO Bills'], ['wo', 'WO Bills']] },
+            { val: billTypeFilter, set: setBillTypeFilter, opts: [['', 'All Types'], ['po', 'PO Bills'], ['wo', 'WO Bills'], ['hire', 'Hire/Rental']] },
             { val: vendorFilter, set: setVendorFilter, opts: [['', 'All Vendors'], ...vendorOptions.map(v => [v, v])], cls: 'max-w-[180px]' },
           ].map((s, i) => (
             <select key={i} value={s.val} onChange={e => s.set(e.target.value)}
@@ -2522,8 +2554,8 @@ export default function TQSBillsPage() {
                     }
                     case 'bill_type':
                       return <td key={col.key} className={cls}>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${b.bill_type === 'wo' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {b.bill_type === 'wo' ? 'WO' : 'PO'}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${b.bill_type === 'wo' ? 'bg-orange-100 text-orange-700' : b.bill_type === 'hire' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {b.bill_type === 'wo' ? 'WO' : b.bill_type === 'hire' ? 'HIRE' : 'PO'}
                         </span>
                       </td>;
                     case 'vendor_name':

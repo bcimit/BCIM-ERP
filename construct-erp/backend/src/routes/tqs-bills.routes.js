@@ -310,6 +310,10 @@ async function ensureTables() {
     `ALTER TABLE tqs_bills ADD COLUMN IF NOT EXISTS grn_id UUID`,
     // ── Work order number ───────────────────────────────────────────
     `ALTER TABLE tqs_bills ADD COLUMN IF NOT EXISTS wo_number TEXT`,
+    // ── Hire/Rental bill fields ─────────────────────────────────────
+    `ALTER TABLE tqs_bills ADD COLUMN IF NOT EXISTS hire_period_from DATE`,
+    `ALTER TABLE tqs_bills ADD COLUMN IF NOT EXISTS hire_period_to DATE`,
+    `ALTER TABLE tqs_bills ADD COLUMN IF NOT EXISTS equipment_type TEXT`,
   ];
   const alterItems = [
     `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS category TEXT`,
@@ -439,7 +443,9 @@ async function nextSlNumber(billType = 'po', companyId) {
     companyId ? [companyId] : []
   );
   const next = (Number(res.rows[0]?.max_num) || 0) + 1;
-  return billType === 'wo' ? `WO-${next}` : `P0-${next}`;
+  if (billType === 'wo')   return `WO-${next}`;
+  if (billType === 'hire') return `HIRE-${next}`;
+  return `P0-${next}`;
 }
 
 // ── Helper: log history ────────────────────────────────────────────────────
@@ -1837,6 +1843,7 @@ router.post('/', async (req, res) => {
       po_id, grn_id, po_number, po_date,
       inv_number, inv_date, inv_month, received_date, bill_type = 'po',
       work_desc, tax_mode = 'intrastate',
+      hire_period_from, hire_period_to, equipment_type,
       basic_amount = 0, cgst_pct = 0, cgst_amt = 0,
       sgst_pct = 0, sgst_amt = 0, igst_pct = 0, igst_amt = 0,
       transport_charges = 0, transport_gst_pct = 0, transport_gst_amt = 0, transport_desc,
@@ -1867,8 +1874,8 @@ router.post('/', async (req, res) => {
         newTotalAmount: total_amount,
       });
 
-      // WO bills skip the "Pending" stage — they start directly at Stores
-      const initialStatus = bill_type === 'wo' ? 'stores' : 'pending';
+      // WO bills start at Stores; Hire bills go straight to Accounts (no GRN/QS needed)
+      const initialStatus = bill_type === 'wo' ? 'stores' : bill_type === 'hire' ? 'accounts' : 'pending';
 
       const bill = await client.query(`
         INSERT INTO tqs_bills (
@@ -1880,8 +1887,9 @@ router.post('/', async (req, res) => {
           transport_charges, transport_gst_pct, transport_gst_amt, transport_desc,
           other_charges, other_charges_desc,
           credit_note_num, credit_note_val,
-          total_amount, remarks, workflow_status, created_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36)
+          total_amount, remarks, workflow_status, created_by,
+          hire_period_from, hire_period_to, equipment_type
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
         RETURNING *
       `, [
         req.user.company_id, project_id, sl_number, vendor_id || null, vendor_name,
@@ -1895,6 +1903,7 @@ router.post('/', async (req, res) => {
         other_charges, other_charges_desc || null,
         credit_note_num || null, credit_note_val,
         total_amount, remarks || null, initialStatus, req.user.id,
+        hire_period_from || null, hire_period_to || null, equipment_type || null,
       ]);
 
       const billId = bill.rows[0].id;
@@ -2332,8 +2341,8 @@ router.post('/pc-payment', authenticate, async (req, res) => {
 
       // Record in Finance payments table
       if (payAmt > 0 && payment_date && bills[0].project_id) {
-        const payType  = bills[0].bill_type === 'wo' ? 'subcontractor' : 'vendor';
-        const costHead = bills[0].bill_type === 'wo' ? 'Subcontractor' : 'Material';
+        const payType  = bills[0].bill_type === 'wo' ? 'subcontractor' : bills[0].bill_type === 'hire' ? 'vendor' : 'vendor';
+        const costHead = bills[0].bill_type === 'wo' ? 'Subcontractor' : bills[0].bill_type === 'hire' ? 'Hire/Rental' : 'Material';
         const netPaid  = Math.max(0, payAmt - totalTds);
         await client.query(`
           INSERT INTO payments
@@ -2468,13 +2477,14 @@ router.get('/export/excel', async (req, res) => {
 });
 
 // ── PATCH /tqs/bills/:id/advance-stage — move bill to the next workflow stage ─
-const STAGE_ORDER = ['pending', 'stores', 'document_controller', 'qs', 'accounts', 'procurement', 'qs_sign', 'paid'];
+const STAGE_ORDER      = ['pending', 'stores', 'document_controller', 'qs', 'accounts', 'procurement', 'qs_sign', 'paid'];
+const HIRE_STAGE_ORDER = ['accounts', 'paid'];
 
 router.patch('/:id/advance-stage', async (req, res) => {
   try {
     await getAccessibleBill(req, req.params.id);
     const { rows } = await query(
-      `SELECT b.workflow_status, b.total_amount, u.bill_id
+      `SELECT b.workflow_status, b.bill_type, b.total_amount, u.bill_id
        FROM tqs_bills b
        LEFT JOIN tqs_bill_updates u ON u.bill_id = b.id
        WHERE b.id = $1 AND b.company_id = $2 AND b.is_deleted = FALSE`,
@@ -2482,13 +2492,14 @@ router.patch('/:id/advance-stage', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Bill not found' });
 
-    const current = rows[0].workflow_status;
-    const idx = STAGE_ORDER.indexOf(current);
-    if (idx === -1 || idx >= STAGE_ORDER.length - 1) {
+    const current    = rows[0].workflow_status;
+    const stageOrder = rows[0].bill_type === 'hire' ? HIRE_STAGE_ORDER : STAGE_ORDER;
+    const idx = stageOrder.indexOf(current);
+    if (idx === -1 || idx >= stageOrder.length - 1) {
       return res.status(400).json({ error: 'Bill is already at the final stage' });
     }
 
-    const nextStage = STAGE_ORDER[idx + 1];
+    const nextStage = stageOrder[idx + 1];
 
     // Update the bill stage
     await query(
