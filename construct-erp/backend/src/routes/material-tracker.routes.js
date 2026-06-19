@@ -542,6 +542,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     const companyId = req.user.company_id;
     const kws = MATERIAL_KEYWORDS[material_type] || MATERIAL_KEYWORDS.cement;
     const kwPats = kws.map(k => `%${k}%`);
+    const todayStr = new Date().toISOString().slice(0, 10);
 
     let params = [companyId, ...kwPats];
     let projFilter = '';
@@ -642,7 +643,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
             (entry_id, received_date, invoice_no, ign_no, grs_no, vehicle_no,
              invoice_qty, rate, gst_rate, gst_amount, grand_total, created_by, source_grn_id)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        `, [entryId, grn.grn_date,
+        `, [entryId, grn.grn_date || todayStr,
             grn.invoice_number || null,
             grn.grn_number || grn.wb_slip_no || null,
             grn.challan_number || null,
@@ -658,7 +659,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       const kwCond3 = kwCondition(kws, 'li', 'item_name', 2);
       const bills = await query(`
         SELECT
-          b.id, b.inv_number, b.inv_date,
+          b.id, b.inv_number, b.inv_date, b.created_at AS bill_created_at,
           b.gst_amount, b.total_amount,
           (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate,
           COALESCE(SUM(li.quantity),0)  AS qty,
@@ -694,7 +695,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
             (entry_id, received_date, invoice_no, vehicle_no,
              invoice_qty, rate, gst_rate, gst_amount, grand_total, created_by, source_bill_id)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-        `, [entryId, bill.inv_date,
+        `, [entryId, bill.inv_date || (bill.bill_created_at ? new Date(bill.bill_created_at).toISOString().slice(0,10) : todayStr),
             bill.inv_number || null,
             bill.vehicle_number || null,
             qty || null, rate || null,
