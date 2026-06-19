@@ -345,6 +345,12 @@ CREATE TABLE IF NOT EXISTS pm_equipment_daily_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Links a Plant & Machinery equipment row back to its source record in the
+-- single company-wide Asset Master (assets table) — Plant & Machinery never
+-- maintains its own separate equipment register; it mirrors the Asset Master.
+ALTER TABLE pm_equipment ADD COLUMN IF NOT EXISTS source_asset_id UUID REFERENCES assets(id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pm_equipment_source_asset ON pm_equipment(source_asset_id) WHERE source_asset_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_pm_equipment_company ON pm_equipment(company_id);
 CREATE INDEX IF NOT EXISTS idx_pm_deployment_equip ON pm_deployment(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_pm_fuel_equip ON pm_fuel_issues(equipment_id);
@@ -481,8 +487,25 @@ const EQUIP_FIELDS = [
   'useful_life_years', 'salvage_value', 'status', 'current_site_id', 'remarks',
 ];
 
+// Mirror any Asset Master (assets table) rows that don't yet have a linked
+// pm_equipment record. This is the ONLY way pm_equipment gains new rows from
+// the UI side — Plant & Machinery never maintains a separate manual register.
+async function syncEquipmentFromAssetMaster(companyId) {
+  await query(
+    `INSERT INTO pm_equipment (company_id, source_asset_id, code, name, make, model, status)
+     SELECT a.company_id, a.id, a.asset_code, a.asset_name, a.brand, a.model,
+            CASE WHEN a.status = 'disposed' THEN 'disposed' ELSE 'active' END
+     FROM assets a
+     WHERE a.company_id = $1
+       AND NOT EXISTS (SELECT 1 FROM pm_equipment pe WHERE pe.source_asset_id = a.id)
+     ON CONFLICT DO NOTHING`,
+    [companyId]
+  );
+}
+
 router.get('/equipment', async (req, res) => {
   try {
+    await syncEquipmentFromAssetMaster(CID(req));
     const { status, category_id, type, q } = req.query;
     let sql = `
       SELECT e.*, c.name AS category_name, m.name AS manufacturer_name,
