@@ -316,11 +316,41 @@ CREATE TABLE IF NOT EXISTS pm_cost_allocation (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Daily hour-meter / KM / diesel stock ledger per equipment (DG sets, JCBs, etc.)
+-- Generalised so any equipment in pm_equipment can have a daily log; KM and shift
+-- fields are optional (left blank for stationary equipment like generators).
+CREATE TABLE IF NOT EXISTS pm_equipment_daily_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID NOT NULL,
+  equipment_id UUID NOT NULL REFERENCES pm_equipment(id),
+  project_id UUID REFERENCES projects(id),
+  log_date DATE NOT NULL,
+  shift VARCHAR(10) DEFAULT 'Day',
+  break_hours NUMERIC(6,2) DEFAULT 0,
+  km_start NUMERIC(12,2),
+  km_end NUMERIC(12,2),
+  km_total NUMERIC(12,2) DEFAULT 0,
+  hr_start NUMERIC(12,2),
+  hr_end NUMERIC(12,2),
+  hr_total NUMERIC(12,2) DEFAULT 0,
+  opening_stock NUMERIC(12,2) DEFAULT 0,
+  diesel_issued NUMERIC(12,2) DEFAULT 0,
+  total_stock NUMERIC(12,2) DEFAULT 0,
+  consumption NUMERIC(12,2) DEFAULT 0,
+  closing_stock NUMERIC(12,2) DEFAULT 0,
+  description TEXT,
+  remarks TEXT,
+  created_by UUID,
+  is_deleted BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_pm_equipment_company ON pm_equipment(company_id);
 CREATE INDEX IF NOT EXISTS idx_pm_deployment_equip ON pm_deployment(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_pm_fuel_equip ON pm_fuel_issues(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_pm_wo_equip ON pm_work_orders(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_pm_docs_equip ON pm_equipment_documents(equipment_id);
+CREATE INDEX IF NOT EXISTS idx_pm_edl_equip_date ON pm_equipment_daily_logs(equipment_id, log_date);
 `;
 
 let schemaReady = false;
@@ -870,6 +900,128 @@ router.get('/fuel/analysis', async (req, res) => {
       fuel_per_hour: n(x.total_hours) > 0 ? (n(x.total_fuel) / n(x.total_hours)).toFixed(2) : null,
     }));
     res.json({ data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 5b. DAILY EQUIPMENT LOG — hour-meter / KM / diesel stock ledger (DG, JCB, etc.)
+// ───────────────────────────────────────────────────────────────────────────
+router.get('/equipment-logs', async (req, res) => {
+  try {
+    const { equipment_id, month, from, to, search } = req.query;
+    let sql = `
+      SELECT l.*, e.code AS equipment_code, e.name AS equipment_name, p.name AS project_name
+      FROM pm_equipment_daily_logs l
+      JOIN pm_equipment e ON e.id = l.equipment_id
+      LEFT JOIN projects p ON p.id = l.project_id
+      WHERE l.company_id=$1 AND l.is_deleted=false`;
+    const params = [CID(req)]; let i = 2;
+    if (equipment_id) { sql += ` AND l.equipment_id=$${i++}`; params.push(equipment_id); }
+    if (month)         { sql += ` AND to_char(l.log_date,'YYYY-MM')=$${i++}`; params.push(month); }
+    if (from)          { sql += ` AND l.log_date>=$${i++}`; params.push(from); }
+    if (to)            { sql += ` AND l.log_date<=$${i++}`; params.push(to); }
+    if (search)        { sql += ` AND (l.description ILIKE $${i} OR l.remarks ILIKE $${i})`; params.push(`%${search}%`); i++; }
+    sql += ' ORDER BY l.log_date ASC, l.created_at ASC';
+    res.json({ data: (await query(sql, params)).rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Most recent entry for an equipment — used to auto-carry-forward opening stock
+router.get('/equipment-logs/last', async (req, res) => {
+  try {
+    const { equipment_id } = req.query;
+    if (!equipment_id) return res.status(400).json({ error: 'equipment_id required' });
+    const r = await query(
+      `SELECT * FROM pm_equipment_daily_logs
+       WHERE company_id=$1 AND equipment_id=$2 AND is_deleted=false
+       ORDER BY log_date DESC, created_at DESC LIMIT 1`,
+      [CID(req), equipment_id]);
+    res.json({ data: r.rows[0] || null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Monthly rollup — hours/KM run, diesel issued/consumed, open & close stock per month
+router.get('/equipment-logs/summary', async (req, res) => {
+  try {
+    const { equipment_id } = req.query;
+    if (!equipment_id) return res.status(400).json({ error: 'equipment_id required' });
+    const r = await query(`
+      SELECT
+        to_char(date_trunc('month', log_date), 'Mon-YYYY') AS month,
+        date_trunc('month', log_date) AS month_start,
+        SUM(hr_total) AS hours_run,
+        SUM(km_total) AS km_run,
+        SUM(diesel_issued) AS issued,
+        SUM(consumption) AS consumed,
+        (ARRAY_AGG(opening_stock ORDER BY log_date ASC, created_at ASC))[1] AS open_stock,
+        (ARRAY_AGG(closing_stock ORDER BY log_date DESC, created_at DESC))[1] AS close_stock
+      FROM pm_equipment_daily_logs
+      WHERE company_id=$1 AND equipment_id=$2 AND is_deleted=false
+      GROUP BY date_trunc('month', log_date)
+      ORDER BY month_start ASC`,
+      [CID(req), equipment_id]);
+    res.json({ data: r.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/equipment-logs', async (req, res) => {
+  try {
+    const b = req.body;
+    if (!b.equipment_id) return res.status(400).json({ error: 'equipment_id required' });
+    if (!b.log_date) return res.status(400).json({ error: 'log_date required' });
+    const kmTotal = Math.max(0, n(b.km_end) - n(b.km_start));
+    const hrTotal = Math.max(0, n(b.hr_end) - n(b.hr_start));
+    const totalStock = n(b.opening_stock) + n(b.diesel_issued);
+    const closingStock = totalStock - n(b.consumption);
+    const r = await query(
+      `INSERT INTO pm_equipment_daily_logs
+       (company_id, equipment_id, project_id, log_date, shift, break_hours,
+        km_start, km_end, km_total, hr_start, hr_end, hr_total,
+        opening_stock, diesel_issued, total_stock, consumption, closing_stock,
+        description, remarks, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       RETURNING *`,
+      [CID(req), b.equipment_id, b.project_id || null, b.log_date, b.shift || 'Day', n(b.break_hours),
+       b.km_start === '' || b.km_start == null ? null : n(b.km_start),
+       b.km_end   === '' || b.km_end   == null ? null : n(b.km_end), kmTotal,
+       b.hr_start === '' || b.hr_start == null ? null : n(b.hr_start),
+       b.hr_end   === '' || b.hr_end   == null ? null : n(b.hr_end), hrTotal,
+       n(b.opening_stock), n(b.diesel_issued), totalStock, n(b.consumption), closingStock,
+       b.description || null, b.remarks || null, req.user.id]);
+    res.status(201).json({ data: r.rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/equipment-logs/:id([0-9a-fA-F-]{36})', async (req, res) => {
+  try {
+    const b = req.body;
+    const kmTotal = Math.max(0, n(b.km_end) - n(b.km_start));
+    const hrTotal = Math.max(0, n(b.hr_end) - n(b.hr_start));
+    const totalStock = n(b.opening_stock) + n(b.diesel_issued);
+    const closingStock = totalStock - n(b.consumption);
+    const r = await query(
+      `UPDATE pm_equipment_daily_logs SET
+         project_id=$1, log_date=$2, shift=$3, break_hours=$4,
+         km_start=$5, km_end=$6, km_total=$7, hr_start=$8, hr_end=$9, hr_total=$10,
+         opening_stock=$11, diesel_issued=$12, total_stock=$13, consumption=$14, closing_stock=$15,
+         description=$16, remarks=$17
+       WHERE id=$18 AND company_id=$19 RETURNING *`,
+      [b.project_id || null, b.log_date, b.shift || 'Day', n(b.break_hours),
+       b.km_start === '' || b.km_start == null ? null : n(b.km_start),
+       b.km_end   === '' || b.km_end   == null ? null : n(b.km_end), kmTotal,
+       b.hr_start === '' || b.hr_start == null ? null : n(b.hr_start),
+       b.hr_end   === '' || b.hr_end   == null ? null : n(b.hr_end), hrTotal,
+       n(b.opening_stock), n(b.diesel_issued), totalStock, n(b.consumption), closingStock,
+       b.description || null, b.remarks || null, req.params.id, CID(req)]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Log not found' });
+    res.json({ data: r.rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/equipment-logs/:id([0-9a-fA-F-]{36})', async (req, res) => {
+  try {
+    await query(`UPDATE pm_equipment_daily_logs SET is_deleted=true WHERE id=$1 AND company_id=$2`, [req.params.id, CID(req)]);
+    res.json({ message: 'Deleted' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

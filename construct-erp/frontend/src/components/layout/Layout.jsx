@@ -256,6 +256,7 @@ const navGroups = [
     { to: '/plant/hire',        icon: Briefcase,       label: 'Hire Management' },
     { to: '/plant/deployment',  icon: Gauge,           label: 'Deployment & Utilisation' },
     { to: '/plant/fuel',        icon: Fuel,            label: 'Fuel Management' },
+    { to: '/plant/equipment-log', icon: ClipboardList, label: 'Equipment Daily Log' },
     { to: '/plant/maintenance', icon: Wrench,          label: 'Maintenance & Repairs' },
     { to: '/plant/operators',   icon: UserCheck,       label: 'Operator Management' },
     { to: '/plant/compliance',  icon: ShieldCheck,     label: 'Document Compliance' },

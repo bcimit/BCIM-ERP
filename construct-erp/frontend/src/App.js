@@ -180,6 +180,7 @@ const PlantTransfers      = lazy(() => import('./pages/plant/PlantTransfers'));
 const PlantHire           = lazy(() => import('./pages/plant/PlantHire'));
 const PlantDeployment     = lazy(() => import('./pages/plant/PlantDeployment'));
 const PlantFuel           = lazy(() => import('./pages/plant/PlantFuel'));
+const PlantEquipmentLog   = lazy(() => import('./pages/plant/PlantEquipmentLog'));
 const PlantMaintenance    = lazy(() => import('./pages/plant/PlantMaintenance'));
 const PlantOperators      = lazy(() => import('./pages/plant/PlantOperators'));
 const PlantCompliance     = lazy(() => import('./pages/plant/PlantCompliance'));
@@ -747,6 +748,7 @@ export default function App() {
                 <Route path="plant/hire"         element={<RequireModule module="Assets & IT"><PlantHire /></RequireModule>} />
                 <Route path="plant/deployment"   element={<RequireModule module="Assets & IT"><PlantDeployment /></RequireModule>} />
                 <Route path="plant/fuel"         element={<RequireModule module="Assets & IT"><PlantFuel /></RequireModule>} />
+                <Route path="plant/equipment-log" element={<RequireModule module="Assets & IT"><PlantEquipmentLog /></RequireModule>} />
                 <Route path="plant/maintenance"  element={<RequireModule module="Assets & IT"><PlantMaintenance /></RequireModule>} />
                 <Route path="plant/operators"    element={<RequireModule module="Assets & IT"><PlantOperators /></RequireModule>} />
                 <Route path="plant/compliance"   element={<RequireModule module="Assets & IT"><PlantCompliance /></RequireModule>} />

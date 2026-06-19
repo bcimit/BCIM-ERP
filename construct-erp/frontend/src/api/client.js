@@ -948,6 +948,13 @@ export const plantAPI = {
   createFuel:        (d)     => api.post('/plant/fuel', d),
   deleteFuel:        (id)    => api.delete(`/plant/fuel/${id}`),
   fuelAnalysis:      ()      => api.get('/plant/fuel/analysis'),
+  // Equipment Daily Log (hour-meter / KM / diesel stock ledger — DG, JCB, etc.)
+  listEquipmentLogs:   (p)     => api.get('/plant/equipment-logs', { params: p }),
+  lastEquipmentLog:    (equipment_id) => api.get('/plant/equipment-logs/last', { params: { equipment_id } }),
+  equipmentLogSummary: (equipment_id) => api.get('/plant/equipment-logs/summary', { params: { equipment_id } }),
+  createEquipmentLog:  (d)     => api.post('/plant/equipment-logs', d),
+  updateEquipmentLog:  (id, d) => api.put(`/plant/equipment-logs/${id}`, d),
+  deleteEquipmentLog:  (id)    => api.delete(`/plant/equipment-logs/${id}`),
   // Maintenance
   listSchedule:      (p)     => api.get('/plant/maintenance/schedule', { params: p }),
   createSchedule:    (d)     => api.post('/plant/maintenance/schedule', d),
