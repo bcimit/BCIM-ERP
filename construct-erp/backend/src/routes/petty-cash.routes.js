@@ -485,6 +485,44 @@ router.post('/categories', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.patch('/categories/:id', async (req, res) => {
+  try {
+    const { category_name, category_code, construction_type, gl_account, requires_receipt, is_active } = req.body;
+    const { rows: [row] } = await query(
+      `UPDATE pc_expense_categories SET
+         category_name=COALESCE($1,category_name),
+         category_code=COALESCE($2,category_code),
+         construction_type=COALESCE($3,construction_type),
+         gl_account=COALESCE($4,gl_account),
+         requires_receipt=COALESCE($5,requires_receipt),
+         is_active=COALESCE($6,is_active)
+       WHERE id=$7 AND (company_id=$8 OR company_id='00000000-0000-0000-0000-000000000000') RETURNING *`,
+      [category_name, category_code, construction_type, gl_account,
+       requires_receipt != null ? !!requires_receipt : null,
+       is_active != null ? !!is_active : null,
+       req.params.id, req.user.company_id]
+    );
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Topup a cash account balance directly (admin action)
+router.post('/accounts/:id/topup', async (req, res) => {
+  try {
+    const { amount, remarks } = req.body;
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'amount required' });
+    const { rows: [row] } = await query(
+      `UPDATE pc_accounts SET current_balance=current_balance+$1,updated_at=NOW()
+       WHERE id=$2 AND company_id=$3 RETURNING *`,
+      [Number(amount), req.params.id, req.user.company_id]
+    );
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    await auditLog(req.user.company_id, 'pc_account', row.id, 'topup', null, null, `Top-up ₹${amount}${remarks ? ' — ' + remarks : ''}`, req.user.id);
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── TRANSACTIONS: Requests ─────────────────────────────────────────────────────
 router.get('/requests', async (req, res) => {
   try {

@@ -603,35 +603,50 @@ function MastersTab({ projects }) {
   const qc = useQueryClient();
   const [section, setSection] = useState('accounts');
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null); // row being edited
+  const [topupRow, setTopupRow] = useState(null);
+  const [topupAmt, setTopupAmt] = useState('');
+  const [topupRmk, setTopupRmk] = useState('');
   const [form, setForm] = useState({});
 
   const { data: accounts }   = useQuery({ queryKey: ['pc-accounts'],   queryFn: () => pettyCashAPI.accounts().then(r => r.data) });
   const { data: custodians } = useQuery({ queryKey: ['pc-custodians'], queryFn: () => pettyCashAPI.custodians().then(r => r.data) });
   const { data: categories } = useQuery({ queryKey: ['pc-categories'], queryFn: () => pettyCashAPI.categories().then(r => r.data) });
 
-  const createAccount   = useMutation({ mutationFn: d => pettyCashAPI.createAccount(d),   onSuccess: () => { toast.success('Account created');  qc.invalidateQueries({ queryKey: ['pc-accounts'] });   setShowForm(false); setForm({}); } });
-  const createCustodian = useMutation({ mutationFn: d => pettyCashAPI.createCustodian(d), onSuccess: () => { toast.success('Custodian added');  qc.invalidateQueries({ queryKey: ['pc-custodians'] }); setShowForm(false); setForm({}); } });
-  const createCategory  = useMutation({ mutationFn: d => pettyCashAPI.createCategory(d),  onSuccess: () => { toast.success('Category added');   qc.invalidateQueries({ queryKey: ['pc-categories'] }); setShowForm(false); setForm({}); } });
+  const inv = key => qc.invalidateQueries({ queryKey: [key] });
+
+  const createAccount   = useMutation({ mutationFn: d => pettyCashAPI.createAccount(d),   onSuccess: () => { toast.success('Account created');  inv('pc-accounts');   setShowForm(false); setForm({}); } });
+  const updateAccount   = useMutation({ mutationFn: d => pettyCashAPI.updateAccount(d.id, d), onSuccess: () => { toast.success('Account updated');  inv('pc-accounts');   setEditing(null); } });
+  const topupAccount    = useMutation({ mutationFn: ({ id, amount, remarks }) => pettyCashAPI.topupAccount(id, { amount, remarks }), onSuccess: () => { toast.success('Balance added'); inv('pc-accounts'); inv('pc-dashboard'); setTopupRow(null); setTopupAmt(''); setTopupRmk(''); } });
+  const createCustodian = useMutation({ mutationFn: d => pettyCashAPI.createCustodian(d), onSuccess: () => { toast.success('Custodian added');  inv('pc-custodians'); setShowForm(false); setForm({}); } });
+  const updateCustodian = useMutation({ mutationFn: d => pettyCashAPI.updateCustodian(d.id, d), onSuccess: () => { toast.success('Custodian updated'); inv('pc-custodians'); setEditing(null); } });
+  const createCategory  = useMutation({ mutationFn: d => pettyCashAPI.createCategory(d),  onSuccess: () => { toast.success('Category added');   inv('pc-categories'); setShowForm(false); setForm({}); } });
+  const updateCategory  = useMutation({ mutationFn: d => pettyCashAPI.updateCategory(d.id, d), onSuccess: () => { toast.success('Category updated'); inv('pc-categories'); setEditing(null); } });
+  const deactivateCat   = useMutation({ mutationFn: id => pettyCashAPI.updateCategory(id, { is_active: false }), onSuccess: () => { toast.success('Category deactivated'); inv('pc-categories'); } });
 
   const sections = [{ id: 'accounts', label: 'Cash Accounts' }, { id: 'custodians', label: 'Custodians' }, { id: 'categories', label: 'Categories' }];
+  const addLabel = { accounts: 'Add Cash', custodians: 'Add Custodian', categories: 'Add Category' };
+
+  const openEdit = row => { setEditing(row); setForm({ ...row }); };
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2 border-b border-gray-100 pb-2">
         {sections.map(s => (
-          <button key={s.id} onClick={() => setSection(s.id)} className={clsx('text-xs font-medium px-4 py-1.5 rounded-xl transition-colors', section === s.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100')}>
+          <button key={s.id} onClick={() => { setSection(s.id); setEditing(null); }} className={clsx('text-xs font-medium px-4 py-1.5 rounded-xl transition-colors', section === s.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100')}>
             {s.label}
           </button>
         ))}
         <div className="ml-auto">
-          <button onClick={() => { setForm({}); setShowForm(true); }} className={btnPrimary}><PlusCircle size={14} className="inline mr-1" />Add {sections.find(s => s.id === section)?.label.split(' ')[0]}</button>
+          <button onClick={() => { setForm({}); setEditing(null); setShowForm(true); }} className={btnPrimary}><PlusCircle size={14} className="inline mr-1" />{addLabel[section]}</button>
         </div>
       </div>
 
+      {/* ── Cash Accounts ── */}
       {section === 'accounts' && (
         <div className="overflow-x-auto rounded-2xl border border-gray-100">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50"><tr>{['Account','Code','Project','Site','Balance','Limit','Custodian','Status'].map(h => <th key={h} className="px-3 py-2.5 text-left font-semibold text-gray-500">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['Account','Code','Project','Site','Balance','Limit','Custodian','Status','Actions'].map(h => <th key={h} className="px-3 py-2.5 text-left font-semibold text-gray-500">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">
               {(accounts||[]).map(a => (
                 <tr key={a.id} className="hover:bg-gray-50">
@@ -642,19 +657,31 @@ function MastersTab({ projects }) {
                   <td className="px-3 py-2 text-right font-semibold text-green-700">{fmt(a.current_balance)}</td>
                   <td className="px-3 py-2 text-right text-gray-500">{fmt(a.credit_limit)}</td>
                   <td className="px-3 py-2">{a.custodian_name || '—'}</td>
-                  <td className="px-3 py-2"><span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold', a.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>{a.status}</span></td>
+                  <td className="px-3 py-2">
+                    <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold cursor-pointer', a.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}
+                      onClick={() => updateAccount.mutate({ id: a.id, status: a.status === 'active' ? 'inactive' : 'active' })}>
+                      {a.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1">
+                      <button onClick={() => { setTopupRow(a); setTopupAmt(''); setTopupRmk(''); }} className="text-[10px] px-2 py-0.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 font-medium">+ Balance</button>
+                      <button onClick={() => openEdit(a)} className="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">Edit</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {(accounts||[]).length === 0 && <tr><td colSpan={8} className="py-8 text-center text-gray-400">No accounts. Add your first cash account.</td></tr>}
+              {(accounts||[]).length === 0 && <tr><td colSpan={9} className="py-8 text-center text-gray-400">No accounts. Add your first cash account.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
 
+      {/* ── Custodians ── */}
       {section === 'custodians' && (
         <div className="overflow-x-auto rounded-2xl border border-gray-100">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50"><tr>{['Name','Code','Designation','Project','Site','Spending Limit','Holding','Status'].map(h => <th key={h} className="px-3 py-2.5 text-left font-semibold text-gray-500">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['Name','Code','Designation','Project','Site','Spending Limit','Holding','Status','Actions'].map(h => <th key={h} className="px-3 py-2.5 text-left font-semibold text-gray-500">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">
               {(custodians||[]).map(c => (
                 <tr key={c.id} className="hover:bg-gray-50">
@@ -665,19 +692,28 @@ function MastersTab({ projects }) {
                   <td className="px-3 py-2 text-gray-500">{c.site_location || '—'}</td>
                   <td className="px-3 py-2 text-right">{fmt(c.spending_limit)}</td>
                   <td className={clsx('px-3 py-2 text-right font-semibold', Number(c.current_holding) > 0 ? 'text-amber-600' : 'text-gray-400')}>{fmt(c.current_holding)}</td>
-                  <td className="px-3 py-2"><span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold', c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>{c.status}</span></td>
+                  <td className="px-3 py-2">
+                    <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-semibold cursor-pointer', c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}
+                      onClick={() => updateCustodian.mutate({ id: c.id, status: c.status === 'active' ? 'inactive' : 'active' })}>
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => openEdit(c)} className="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">Edit</button>
+                  </td>
                 </tr>
               ))}
-              {(custodians||[]).length === 0 && <tr><td colSpan={8} className="py-8 text-center text-gray-400">No custodians yet.</td></tr>}
+              {(custodians||[]).length === 0 && <tr><td colSpan={9} className="py-8 text-center text-gray-400">No custodians yet.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
 
+      {/* ── Categories ── */}
       {section === 'categories' && (
         <div className="overflow-x-auto rounded-2xl border border-gray-100">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50"><tr>{['Code','Category','Type','GL Account','Receipt Req.','Active'].map(h => <th key={h} className="px-3 py-2.5 text-left font-semibold text-gray-500">{h}</th>)}</tr></thead>
+            <thead className="bg-gray-50"><tr>{['Code','Category','Type','GL Account','Receipt Req.','Active','Actions'].map(h => <th key={h} className="px-3 py-2.5 text-left font-semibold text-gray-500">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">
               {(categories||[]).map(c => (
                 <tr key={c.id} className="hover:bg-gray-50">
@@ -687,6 +723,12 @@ function MastersTab({ projects }) {
                   <td className="px-3 py-2 font-mono">{c.gl_account || '—'}</td>
                   <td className="px-3 py-2">{c.requires_receipt ? <CheckCircle size={12} className="text-green-600" /> : '—'}</td>
                   <td className="px-3 py-2">{c.is_active ? <CheckCircle size={12} className="text-green-600" /> : <XCircle size={12} className="text-gray-400" />}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(c)} className="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">Edit</button>
+                      {c.is_active && <button onClick={() => { if (window.confirm('Deactivate this category?')) deactivateCat.mutate(c.id); }} className="text-[10px] px-2 py-0.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-medium">Hide</button>}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -694,7 +736,7 @@ function MastersTab({ projects }) {
         </div>
       )}
 
-      {/* Create modals per section */}
+      {/* ── Add Cash Account modal ── */}
       {showForm && section === 'accounts' && (
         <Modal title="New Cash Account" onClose={() => setShowForm(false)} wide>
           <div className="grid grid-cols-2 gap-3">
@@ -717,6 +759,51 @@ function MastersTab({ projects }) {
         </Modal>
       )}
 
+      {/* ── Edit Cash Account modal ── */}
+      {editing && section === 'accounts' && (
+        <Modal title={`Edit — ${editing.account_name}`} onClose={() => setEditing(null)} wide>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Account Name *"><input className={inputCls} value={form.account_name||''} onChange={e => setForm(f => ({...f, account_name: e.target.value}))} /></Field>
+            <Field label="Account Code"><input className={inputCls} value={form.account_code||''} onChange={e => setForm(f => ({...f, account_code: e.target.value}))} /></Field>
+            <Field label="Site Location"><input className={inputCls} value={form.site_location||''} onChange={e => setForm(f => ({...f, site_location: e.target.value}))} /></Field>
+            <Field label="Credit Limit"><input type="number" className={inputCls} value={form.credit_limit||''} onChange={e => setForm(f => ({...f, credit_limit: e.target.value}))} /></Field>
+            <Field label="Custodian">
+              <select className={inputCls} value={form.custodian_id||''} onChange={e => setForm(f => ({...f, custodian_id: e.target.value}))}>
+                <option value="">— None —</option>
+                {(custodians||[]).map(c => <option key={c.id} value={c.id}>{c.custodian_name}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div className="flex gap-2 mt-4 justify-end">
+            <button onClick={() => setEditing(null)} className={btnSecondary}>Cancel</button>
+            <button onClick={() => updateAccount.mutate(form)} disabled={updateAccount.isPending} className={btnPrimary}>Save Changes</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Top-up Balance modal ── */}
+      {topupRow && (
+        <Modal title={`Add Balance — ${topupRow.account_name}`} onClose={() => setTopupRow(null)}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between bg-green-50 rounded-xl px-4 py-2 text-xs">
+              <span className="text-gray-600">Current Balance</span>
+              <span className="font-bold text-green-700 text-base">{fmt(topupRow.current_balance)}</span>
+            </div>
+            <Field label="Amount to Add *"><input type="number" className={inputCls} value={topupAmt} onChange={e => setTopupAmt(e.target.value)} placeholder="5000" autoFocus /></Field>
+            <Field label="Remarks"><input className={inputCls} value={topupRmk} onChange={e => setTopupRmk(e.target.value)} placeholder="Cash received from HO, cheque no…" /></Field>
+            {topupAmt && <div className="flex items-center justify-between bg-blue-50 rounded-xl px-4 py-2 text-xs">
+              <span className="text-gray-600">New Balance will be</span>
+              <span className="font-bold text-blue-700 text-base">{fmt(Number(topupRow.current_balance) + Number(topupAmt))}</span>
+            </div>}
+          </div>
+          <div className="flex gap-2 mt-4 justify-end">
+            <button onClick={() => setTopupRow(null)} className={btnSecondary}>Cancel</button>
+            <button onClick={() => { if (!topupAmt || Number(topupAmt) <= 0) return toast.error('Enter a valid amount'); topupAccount.mutate({ id: topupRow.id, amount: topupAmt, remarks: topupRmk }); }} disabled={topupAccount.isPending} className={btnPrimary}>Add Balance</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Add Custodian modal ── */}
       {showForm && section === 'custodians' && (
         <Modal title="New Custodian" onClose={() => setShowForm(false)} wide>
           <div className="grid grid-cols-2 gap-3">
@@ -740,6 +827,24 @@ function MastersTab({ projects }) {
         </Modal>
       )}
 
+      {/* ── Edit Custodian modal ── */}
+      {editing && section === 'custodians' && (
+        <Modal title={`Edit — ${editing.custodian_name}`} onClose={() => setEditing(null)} wide>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name *"><input className={inputCls} value={form.custodian_name||''} onChange={e => setForm(f => ({...f, custodian_name: e.target.value}))} /></Field>
+            <Field label="Designation"><input className={inputCls} value={form.designation||''} onChange={e => setForm(f => ({...f, designation: e.target.value}))} /></Field>
+            <Field label="Site Location"><input className={inputCls} value={form.site_location||''} onChange={e => setForm(f => ({...f, site_location: e.target.value}))} /></Field>
+            <Field label="Spending Limit"><input type="number" className={inputCls} value={form.spending_limit||''} onChange={e => setForm(f => ({...f, spending_limit: e.target.value}))} /></Field>
+            <Field label="Contact Number"><input className={inputCls} value={form.contact_number||''} onChange={e => setForm(f => ({...f, contact_number: e.target.value}))} /></Field>
+          </div>
+          <div className="flex gap-2 mt-4 justify-end">
+            <button onClick={() => setEditing(null)} className={btnSecondary}>Cancel</button>
+            <button onClick={() => updateCustodian.mutate(form)} disabled={updateCustodian.isPending} className={btnPrimary}>Save Changes</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Add Category modal ── */}
       {showForm && section === 'categories' && (
         <Modal title="New Category" onClose={() => setShowForm(false)}>
           <div className="space-y-3">
@@ -760,6 +865,31 @@ function MastersTab({ projects }) {
           <div className="flex gap-2 mt-4 justify-end">
             <button onClick={() => setShowForm(false)} className={btnSecondary}>Cancel</button>
             <button onClick={() => { if (!form.category_name) return toast.error('Category name required'); createCategory.mutate(form); }} disabled={createCategory.isPending} className={btnPrimary}>Add Category</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Edit Category modal ── */}
+      {editing && section === 'categories' && (
+        <Modal title={`Edit — ${editing.category_name}`} onClose={() => setEditing(null)}>
+          <div className="space-y-3">
+            <Field label="Category Name *"><input className={inputCls} value={form.category_name||''} onChange={e => setForm(f => ({...f, category_name: e.target.value}))} /></Field>
+            <Field label="Category Code"><input className={inputCls} value={form.category_code||''} onChange={e => setForm(f => ({...f, category_code: e.target.value}))} /></Field>
+            <Field label="Construction Type">
+              <select className={inputCls} value={form.construction_type||''} onChange={e => setForm(f => ({...f, construction_type: e.target.value}))}>
+                <option value="">— Select —</option>
+                {['Labour','Material','Vehicle','Site','General'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="GL Account"><input className={inputCls} value={form.gl_account||''} onChange={e => setForm(f => ({...f, gl_account: e.target.value}))} /></Field>
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+              <input type="checkbox" checked={form.requires_receipt||false} onChange={e => setForm(f => ({...f, requires_receipt: e.target.checked}))} className="rounded" />
+              Requires receipt / bill
+            </label>
+          </div>
+          <div className="flex gap-2 mt-4 justify-end">
+            <button onClick={() => setEditing(null)} className={btnSecondary}>Cancel</button>
+            <button onClick={() => updateCategory.mutate(form)} disabled={updateCategory.isPending} className={btnPrimary}>Save Changes</button>
           </div>
         </Modal>
       )}

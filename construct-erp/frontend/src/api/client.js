@@ -334,8 +334,10 @@ export const pettyCashAPI = {
   custodians:   (params) => api.get('/petty-cash/custodians', { params }),
   createCustodian:(data) => api.post('/petty-cash/custodians', data),
   updateCustodian:(id,d) => api.patch(`/petty-cash/custodians/${id}`, d),
+  topupAccount: (id, d)  => api.post(`/petty-cash/accounts/${id}/topup`, d),
   categories:   (params) => api.get('/petty-cash/categories', { params }),
   createCategory:(data)  => api.post('/petty-cash/categories', data),
+  updateCategory:(id, d) => api.patch(`/petty-cash/categories/${id}`, d),
   // Requests
   requests:     (params) => api.get('/petty-cash/requests', { params }),
   createRequest:(data)   => api.post('/petty-cash/requests', data),
