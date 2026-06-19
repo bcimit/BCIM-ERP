@@ -475,6 +475,8 @@ export default function StoreLedgerPage() {
   const [filterStatus, setFilterStatus]   = useState('all');
   const [projectFilter, setProjectFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [majorHeadFilter, setMajorHeadFilter] = useState('');
+  const [groupByMajorHead, setGroupByMajorHead] = useState(false);
   const [showImport, setShowImport]       = useState(false);
   const [page, setPage]                   = useState(1);
   const PAGE_SIZE = 50;
@@ -514,7 +516,8 @@ export default function StoreLedgerPage() {
   });
 
   // ── Derived ─────────────────────────────────────────────────
-  const categories = [...new Set([...DEFAULT_CATEGORIES, ...inventoryData.map(s => s.category).filter(Boolean)])].sort();
+  const categories  = [...new Set([...DEFAULT_CATEGORIES, ...inventoryData.map(s => s.category).filter(Boolean)])].sort();
+  const majorHeads  = [...new Set(inventoryData.map(s => s.major_head).filter(Boolean))].sort();
 
   const outCount = inventoryData.filter(s => parseFloat(s.closing_stock) <= 0).length;
   const lowCount = inventoryData.filter(s => {
@@ -529,7 +532,8 @@ export default function StoreLedgerPage() {
     const r = parseFloat(s.reorder_level) || 0;
     const status = c <= 0 ? 'out_of_stock' : (m > 0 && c <= m) ? 'critical_low' : (r > 0 && c <= r) ? 'reorder' : 'ok';
     if (filterStatus !== 'all' && status !== filterStatus) return false;
-    if (categoryFilter && s.category !== categoryFilter) return false;
+    if (categoryFilter  && s.category   !== categoryFilter)  return false;
+    if (majorHeadFilter && s.major_head !== majorHeadFilter) return false;
     if (search && !s.material_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -551,7 +555,7 @@ export default function StoreLedgerPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterStatus, categoryFilter, projectFilter, inventoryData.length]);
+  }, [search, filterStatus, categoryFilter, majorHeadFilter, projectFilter, inventoryData.length]);
 
   const transactions = ledgerData?.transactions || [];
   const ledgerInventory = ledgerData?.inventory || selectedMaterial;
@@ -586,7 +590,7 @@ export default function StoreLedgerPage() {
   };
 
   const exportLedgerCSV = () => {
-    const headers = ['SL NO','Category','Material Description','Unit','Opening Stock','Closing Stock','Rate (₹)','Total Issued Stock Value','Opening Stock Value','Closing Stock Value','GST @18%','Grand Total'];
+    const headers = ['SL NO','Major Head','Category','Material Description','Unit','DC/IDC','Opening Stock','Closing Stock','Rate (₹)','Total Issued Stock Value','Opening Stock Value','Closing Stock Value','GST @18%','Grand Total'];
     const rows = filteredSummary.map((s, idx) => {
       const rate       = parseFloat(s.unit_rate  || 0);
       const opening    = parseFloat(s.opening_stock || 0);
@@ -597,7 +601,7 @@ export default function StoreLedgerPage() {
       const closingVal = (closing  * rate).toFixed(2);
       const gst        = (closing  * rate * GST_RATE).toFixed(2);
       const grand      = (closing  * rate * (1 + GST_RATE)).toFixed(2);
-      return [idx + 1, s.category || '', s.material_name, s.unit, opening, closing, rate, issuedVal, openingVal, closingVal, gst, grand];
+      return [idx + 1, s.major_head || '', s.category || '', s.material_name, s.unit, s.dc_idc || '', opening, closing, rate, issuedVal, openingVal, closingVal, gst, grand];
     });
     const csv = [headers, ...rows].map(row => row.map(c => `"${c}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -679,7 +683,7 @@ export default function StoreLedgerPage() {
 
     return {
       title: 'Store Ledger - Inventory Register',
-      columns: ['SL No', 'Category', 'Material Description', 'Unit', 'Opening Stock', 'Closing Stock', 'Rate', 'Issued Value', 'Opening Value', 'Closing Value', 'GST 18%', 'Grand Total'],
+      columns: ['SL No', 'Major Head', 'Category', 'Material Description', 'Unit', 'DC/IDC', 'Opening Stock', 'Closing Stock', 'Rate', 'Issued Value', 'Opening Value', 'Closing Value', 'GST 18%', 'Grand Total'],
       rows: filteredSummary.map((s, idx) => {
         const rate = parseFloat(s.unit_rate || 0);
         const opening = parseFloat(s.opening_stock || 0);
@@ -692,9 +696,11 @@ export default function StoreLedgerPage() {
         const grand = closingVal + gst;
         return [
           idx + 1,
+          s.major_head || '',
           s.category || '',
           s.material_name || '',
           s.unit || '',
+          s.dc_idc || '',
           qty(opening),
           qty(closing),
           inr(rate),
@@ -705,7 +711,7 @@ export default function StoreLedgerPage() {
           inr(grand),
         ];
       }),
-      totals: ['Totals', '', '', '', '', '', '', inr(totalIssuedValue), inr(totalOpeningValue), inr(totalClosingValue), inr(totalGST), inr(totalGrandTotal)],
+      totals: ['Totals', '', '', '', '', '', '', '', inr(totalIssuedValue), inr(totalOpeningValue), inr(totalClosingValue), inr(totalGST), inr(totalGrandTotal)],
     };
   };
 
@@ -1030,12 +1036,32 @@ export default function StoreLedgerPage() {
             </select>
             <select
               className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none focus:border-slate-900 focus:bg-white"
+              value={majorHeadFilter}
+              onChange={e => setMajorHeadFilter(e.target.value)}
+            >
+              <option value="">All Major Heads</option>
+              {majorHeads.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <select
+              className="h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none focus:border-slate-900 focus:bg-white"
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
             >
               <option value="">All Categories</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <button
+              onClick={() => setGroupByMajorHead(g => !g)}
+              className={clsx(
+                'h-10 shrink-0 rounded-xl border px-4 text-sm font-bold transition',
+                groupByMajorHead
+                  ? 'border-indigo-400 bg-indigo-600 text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100'
+              )}
+              title="Group rows by Major Head"
+            >
+              Group by Head
+            </button>
             <div className="relative shrink-0">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-900 font-semibold" />
               <select
@@ -1102,7 +1128,84 @@ export default function StoreLedgerPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {pagedSummary.map((s, idx) => {
+                    {groupByMajorHead ? (() => {
+                      // Group filteredSummary by major_head → category
+                      const groups = {};
+                      filteredSummary.forEach(s => {
+                        const head = s.major_head || '(No Major Head)';
+                        if (!groups[head]) groups[head] = {};
+                        const cat = s.category || '(Uncategorized)';
+                        if (!groups[head][cat]) groups[head][cat] = [];
+                        groups[head][cat].push(s);
+                      });
+                      let globalIdx = 0;
+                      return Object.entries(groups).map(([head, cats]) => {
+                        const headTotal = Object.values(cats).flat().reduce((sum, s) => {
+                          const r = parseFloat(s.unit_rate || 0);
+                          return sum + parseFloat(s.closing_stock || 0) * r;
+                        }, 0);
+                        return (
+                          <React.Fragment key={head}>
+                            {/* Major Head header row */}
+                            <tr className="bg-slate-700 text-white">
+                              <td colSpan={16} className="px-4 py-2 text-[12px] font-bold uppercase tracking-widest">
+                                {head}
+                                <span className="ml-3 text-[10px] font-medium opacity-75">Closing Value: ₹{inr(headTotal)}</span>
+                              </td>
+                            </tr>
+                            {Object.entries(cats).map(([cat, items]) => (
+                              <React.Fragment key={cat}>
+                                {/* Category sub-header row */}
+                                <tr className="bg-slate-100">
+                                  <td colSpan={16} className="px-5 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                                    {cat}
+                                  </td>
+                                </tr>
+                                {items.map((s) => {
+                                  globalIdx++;
+                                  const rate       = parseFloat(s.unit_rate || 0);
+                                  const opening    = parseFloat(s.opening_stock || 0);
+                                  const closing    = parseFloat(s.closing_stock || 0);
+                                  const issued     = Math.max(0, opening - closing);
+                                  const issuedVal  = issued   * rate;
+                                  const openingVal = opening  * rate;
+                                  const closingVal = closing  * rate;
+                                  const gst        = closingVal * GST_RATE;
+                                  const grandTotal = closingVal + gst;
+                                  const badge      = stockStatus(s.closing_stock, s.min_stock, s.reorder_level);
+                                  return (
+                                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                                      <td className="px-3 py-3 text-center text-[13px] text-slate-900 font-medium font-mono">{globalIdx}</td>
+                                      <td className="px-3 py-3 text-[13px] font-medium text-slate-500 italic">{cat}</td>
+                                      <td className="px-3 py-3 text-[13px] font-medium text-slate-500 italic">{head}</td>
+                                      <td className="px-3 py-3">
+                                        <div className="font-medium text-slate-900 text-[13px] tracking-tight">{s.material_name}</div>
+                                        <div className="text-[11px] text-slate-500 mt-0.5">{s.project_name}</div>
+                                      </td>
+                                      <td className="px-3 py-3 text-center"><UnitSelectCell value={s.unit} onSave={v => updateMutation.mutate({ id: s.id, data: { unit: v } })} /></td>
+                                      <td className="px-3 py-3 text-center text-[13px] font-medium">{s.dc_idc || '—'}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] text-slate-900 font-medium">{qty(opening)}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] font-medium text-slate-900">
+                                        <div>{qty(closing)}</div>
+                                        <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded-full border mt-0.5 inline-block', badge.cls)}>{badge.label}</span>
+                                      </td>
+                                      <td className="px-3 py-3 text-right text-[13px] font-medium">₹{inr(rate)}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] font-medium text-rose-700">₹{inr(issuedVal)}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] font-medium">₹{inr(openingVal)}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] font-medium text-indigo-700">₹{inr(closingVal)}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] font-medium text-amber-700">₹{inr(gst)}</td>
+                                      <td className="px-3 py-3 text-right font-mono text-[13px] font-bold text-emerald-700">₹{inr(grandTotal)}</td>
+                                      <td className="px-3 py-3 text-[12px] text-slate-500">{s.remarks || '—'}</td>
+                                      <td className="px-3 py-2 text-center"></td>
+                                    </tr>
+                                  );
+                                })}
+                              </React.Fragment>
+                            ))}
+                          </React.Fragment>
+                        );
+                      });
+                    })() : pagedSummary.map((s, idx) => {
                       const rate        = parseFloat(s.unit_rate || 0);
                       const opening     = parseFloat(s.opening_stock || 0);
                       const closing     = parseFloat(s.closing_stock || 0);
