@@ -572,139 +572,172 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     `, params);
 
     let entries_created = 0, loads_created = 0;
+    const poIds = pos.rows.map(p => p.id);
 
-    for (const po of pos.rows) {
-      // Upsert entry
-      let entryRes = await query(
-        `SELECT id FROM material_tracker_entries WHERE company_id=$1 AND po_id=$2 AND material_type=$3`,
-        [companyId, po.id, material_type]
-      );
-      let entryId;
-      if (!entryRes.rows.length) {
-        const ins = await query(`
-          INSERT INTO material_tracker_entries
-            (company_id, project_id, material_type, po_id, po_number, vendor_name,
-             grade, ordered_qty, unit, created_by)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-          RETURNING id
-        `, [companyId, po.project_id, material_type,
-            po.id, po.po_number || po.serial_no_formatted,
-            po.vendor_name, po.grade || null,
-            po.ordered_qty || null, po.unit || null, req.user.id]);
-        entryId = ins.rows[0].id;
-        entries_created++;
-      } else {
-        entryId = entryRes.rows[0].id;
-      }
-
-      // ── Import from GRNs ────────────────────────────────────────────────────
-      const kwCond2 = kwCondition(kws, 'gi', 'material_name', 2);
-      const grns = await query(`
-        SELECT
-          g.id AS grn_id, g.grn_date, g.invoice_number, g.grn_number,
-          g.challan_number, g.vehicle_number, g.wb_slip_no,
-          SUM(gi.quantity_received) AS qty,
-          MAX(gi.rate)              AS rate,
-          MAX(gi.unit)              AS unit
-        FROM grn g
-        JOIN grn_items gi ON gi.grn_id = g.id
-        WHERE g.po_id = $1
-          AND (${kwCond2})
-        GROUP BY g.id
-        ORDER BY g.grn_date
-      `, [po.id, ...kwPats]);
-
-      for (const grn of grns.rows) {
-        const dup = await query(
-          `SELECT id FROM material_tracker_loads WHERE source_grn_id=$1`, [grn.grn_id]
-        );
-        if (dup.rows.length) continue;
-
-        // Try to find linked bill for GST/grand_total
-        const bill = await query(`
-          SELECT b.gst_amount, b.total_amount,
-            (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate
-          FROM tqs_bills b
-          WHERE (b.grn_id = $1 OR (b.po_id = $2 AND LOWER(TRIM(b.inv_number)) = LOWER(TRIM($3))))
-            AND b.is_deleted = FALSE
-          LIMIT 1
-        `, [grn.grn_id, po.id, grn.invoice_number || '']);
-
-        const billRow = bill.rows[0];
-        const rate     = parseFloat(grn.rate  || 0);
-        const qty      = parseFloat(grn.qty   || 0);
-        const basic    = qty * rate;
-        const gstRate  = parseFloat(billRow?.gst_rate || 28);
-        const gstAmt   = billRow?.gst_amount   != null ? parseFloat(billRow.gst_amount)   : (basic * gstRate / 100);
-        const grandTot = billRow?.total_amount  != null ? parseFloat(billRow.total_amount) : (basic + gstAmt);
-
-        await query(`
-          INSERT INTO material_tracker_loads
-            (entry_id, received_date, invoice_no, ign_no, grs_no, vehicle_no,
-             invoice_qty, rate, gst_rate, gst_amount, grand_total, created_by, source_grn_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        `, [entryId, grn.grn_date || todayStr,
-            grn.invoice_number || null,
-            grn.grn_number || grn.wb_slip_no || null,
-            grn.challan_number || null,
-            grn.vehicle_number || null,
-            qty || null, rate || null,
-            gstRate, gstAmt || null, grandTot || null,
-            req.user.id, grn.grn_id]);
-
-        loads_created++;
-      }
-
-      // ── Import from bills that have NO GRN (direct invoice entry) ───────────
-      const kwCond3 = kwCondition(kws, 'li', 'item_name', 2);
-      const bills = await query(`
-        SELECT
-          b.id, b.inv_number, b.inv_date, b.created_at AS bill_created_at,
-          b.gst_amount, b.total_amount,
-          (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate,
-          COALESCE(SUM(li.quantity),0)  AS qty,
-          MAX(li.rate)                  AS rate,
-          MAX(li.unit)                  AS unit,
-          MAX(bu.vehicle_number)        AS vehicle_number
-        FROM tqs_bills b
-        LEFT JOIN tqs_bill_line_items li ON li.bill_id = b.id
-        LEFT JOIN tqs_bill_updates bu ON bu.bill_id = b.id
-        WHERE b.po_id = $1
-          AND b.grn_id IS NULL
-          AND b.is_deleted = FALSE
-          AND (li.item_name IS NULL OR (${kwCond3}))
-        GROUP BY b.id
-        ORDER BY b.inv_date
-      `, [po.id, ...kwPats]);
-
-      for (const bill of bills.rows) {
-        const dup = await query(
-          `SELECT id FROM material_tracker_loads WHERE source_bill_id=$1`, [bill.id]
-        );
-        if (dup.rows.length) continue;
-
-        const rate     = parseFloat(bill.rate  || 0);
-        const qty      = parseFloat(bill.qty   || 0);
-        const basic    = qty * rate;
-        const gstRate  = parseFloat(bill.gst_rate || 28);
-        const gstAmt   = bill.gst_amount  != null ? parseFloat(bill.gst_amount)  : (basic * gstRate / 100);
-        const grandTot = bill.total_amount != null ? parseFloat(bill.total_amount): (basic + gstAmt);
-
-        await query(`
-          INSERT INTO material_tracker_loads
-            (entry_id, received_date, invoice_no, vehicle_no,
-             invoice_qty, rate, gst_rate, gst_amount, grand_total, created_by, source_bill_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-        `, [entryId, bill.inv_date || (bill.bill_created_at ? new Date(bill.bill_created_at).toISOString().slice(0,10) : todayStr),
-            bill.inv_number || null,
-            bill.vehicle_number || null,
-            qty || null, rate || null,
-            gstRate, gstAmt || null, grandTot || null,
-            req.user.id, bill.id]);
-
-        loads_created++;
-      }
+    if (!poIds.length) {
+      return res.json({ data: { entries_created: 0, loads_created: 0, total_pos: 0 } });
     }
+
+    // Pre-load existing tracker entries for these POs → po_id => entry_id
+    const existingEntries = await query(
+      `SELECT id, po_id FROM material_tracker_entries
+       WHERE company_id = $1 AND material_type = $2 AND po_id = ANY($3::uuid[])`,
+      [companyId, material_type, poIds]
+    );
+    const entryByPo = new Map(existingEntries.rows.map(r => [r.po_id, r.id]));
+
+    // Create entries for POs that don't have one yet
+    for (const po of pos.rows) {
+      if (entryByPo.has(po.id)) continue;
+      const ins = await query(`
+        INSERT INTO material_tracker_entries
+          (company_id, project_id, material_type, po_id, po_number, vendor_name,
+           grade, ordered_qty, unit, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        RETURNING id
+      `, [companyId, po.project_id, material_type,
+          po.id, po.po_number || po.serial_no_formatted,
+          po.vendor_name, po.grade || null,
+          po.ordered_qty || null, po.unit || null, req.user.id]);
+      entryByPo.set(po.id, ins.rows[0].id);
+      entries_created++;
+    }
+
+    // Pre-load already-imported source ids (global — source ids are unique uuids)
+    const imported = await query(
+      `SELECT source_grn_id, source_bill_id FROM material_tracker_loads
+       WHERE source_grn_id IS NOT NULL OR source_bill_id IS NOT NULL`
+    );
+    const importedGrnSet  = new Set(imported.rows.map(r => r.source_grn_id).filter(Boolean));
+    const importedBillSet = new Set(imported.rows.map(r => r.source_bill_id).filter(Boolean));
+
+    // ── Bulk fetch ALL matching GRNs for these POs in one query ──
+    const kwCond2 = kwCondition(kws, 'gi', 'material_name', 2);
+    const grns = await query(`
+      SELECT
+        g.po_id, g.id AS grn_id, g.grn_date, g.invoice_number, g.grn_number,
+        g.challan_number, g.vehicle_number, g.wb_slip_no,
+        SUM(gi.quantity_received) AS qty,
+        MAX(gi.rate)              AS rate,
+        MAX(gi.unit)              AS unit
+      FROM grn g
+      JOIN grn_items gi ON gi.grn_id = g.id
+      WHERE g.po_id = ANY($1::uuid[])
+        AND (${kwCond2})
+      GROUP BY g.po_id, g.id
+      ORDER BY g.grn_date
+    `, [poIds, ...kwPats]);
+
+    // ── Bulk fetch bills for GST/total lookup (by grn_id and po_id+inv_number) ──
+    const gstBills = await query(`
+      SELECT b.grn_id, b.po_id, LOWER(TRIM(b.inv_number)) AS inv_key,
+        b.gst_amount, b.total_amount,
+        (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate
+      FROM tqs_bills b
+      WHERE b.po_id = ANY($1::uuid[]) AND b.is_deleted = FALSE
+    `, [poIds]);
+    const billByGrn   = new Map();
+    const billByPoInv = new Map();
+    for (const b of gstBills.rows) {
+      if (b.grn_id) billByGrn.set(b.grn_id, b);
+      if (b.inv_key) billByPoInv.set(`${b.po_id}|${b.inv_key}`, b);
+    }
+
+    // Build GRN load rows
+    const grnCols = ['entry_id','received_date','invoice_no','ign_no','grs_no','vehicle_no',
+                     'invoice_qty','rate','gst_rate','gst_amount','grand_total','created_by','source_grn_id'];
+    const grnRows = [];
+    for (const grn of grns.rows) {
+      if (importedGrnSet.has(grn.grn_id)) continue;
+      const entryId = entryByPo.get(grn.po_id);
+      if (!entryId) continue;
+      const billRow = billByGrn.get(grn.grn_id)
+        || billByPoInv.get(`${grn.po_id}|${(grn.invoice_number || '').trim().toLowerCase()}`);
+      const rate     = parseFloat(grn.rate || 0);
+      const qty      = parseFloat(grn.qty  || 0);
+      const basic    = qty * rate;
+      const gstRate  = parseFloat(billRow?.gst_rate || 28);
+      const gstAmt   = billRow?.gst_amount   != null ? parseFloat(billRow.gst_amount)   : (basic * gstRate / 100);
+      const grandTot = billRow?.total_amount != null ? parseFloat(billRow.total_amount) : (basic + gstAmt);
+      grnRows.push([
+        entryId, grn.grn_date || todayStr,
+        grn.invoice_number || null,
+        grn.grn_number || grn.wb_slip_no || null,
+        grn.challan_number || null,
+        grn.vehicle_number || null,
+        qty || null, rate || null,
+        gstRate, gstAmt || null, grandTot || null,
+        req.user.id, grn.grn_id,
+      ]);
+    }
+
+    // ── Bulk fetch ALL no-GRN bills for these POs in one query ──
+    const kwCond3 = kwCondition(kws, 'li', 'item_name', 2);
+    const bills = await query(`
+      SELECT
+        b.po_id, b.id, b.inv_number, b.inv_date, b.created_at AS bill_created_at,
+        b.gst_amount, b.total_amount,
+        (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate,
+        COALESCE(SUM(li.quantity),0)  AS qty,
+        MAX(li.rate)                  AS rate,
+        MAX(li.unit)                  AS unit,
+        MAX(bu.vehicle_number)        AS vehicle_number
+      FROM tqs_bills b
+      LEFT JOIN tqs_bill_line_items li ON li.bill_id = b.id
+      LEFT JOIN tqs_bill_updates bu ON bu.bill_id = b.id
+      WHERE b.po_id = ANY($1::uuid[])
+        AND b.grn_id IS NULL
+        AND b.is_deleted = FALSE
+        AND (li.item_name IS NULL OR (${kwCond3}))
+      GROUP BY b.po_id, b.id
+      ORDER BY b.inv_date
+    `, [poIds, ...kwPats]);
+
+    const billCols = ['entry_id','received_date','invoice_no','vehicle_no',
+                      'invoice_qty','rate','gst_rate','gst_amount','grand_total','created_by','source_bill_id'];
+    const billRows = [];
+    for (const bill of bills.rows) {
+      if (importedBillSet.has(bill.id)) continue;
+      const entryId = entryByPo.get(bill.po_id);
+      if (!entryId) continue;
+      const rate     = parseFloat(bill.rate || 0);
+      const qty      = parseFloat(bill.qty  || 0);
+      const basic    = qty * rate;
+      const gstRate  = parseFloat(bill.gst_rate || 28);
+      const gstAmt   = bill.gst_amount  != null ? parseFloat(bill.gst_amount)  : (basic * gstRate / 100);
+      const grandTot = bill.total_amount != null ? parseFloat(bill.total_amount): (basic + gstAmt);
+      billRows.push([
+        entryId,
+        bill.inv_date || (bill.bill_created_at ? new Date(bill.bill_created_at).toISOString().slice(0,10) : todayStr),
+        bill.inv_number || null,
+        bill.vehicle_number || null,
+        qty || null, rate || null,
+        gstRate, gstAmt || null, grandTot || null,
+        req.user.id, bill.id,
+      ]);
+    }
+
+    // ── Chunked multi-row insert helper (avoids per-row round-trips) ──
+    const chunkInsert = async (cols, rows) => {
+      const CH = 100;
+      for (let i = 0; i < rows.length; i += CH) {
+        const slice = rows.slice(i, i + CH);
+        const flat = [];
+        const tuples = slice.map((row, ri) => {
+          const ph = row.map((_, ci) => `$${ri * cols.length + ci + 1}`);
+          flat.push(...row);
+          return `(${ph.join(',')})`;
+        });
+        await query(
+          `INSERT INTO material_tracker_loads (${cols.join(',')}) VALUES ${tuples.join(',')}`,
+          flat
+        );
+      }
+    };
+
+    await chunkInsert(grnCols, grnRows);
+    await chunkInsert(billCols, billRows);
+    loads_created = grnRows.length + billRows.length;
 
     res.json({ data: { entries_created, loads_created, total_pos: pos.rows.length } });
   } catch (err) {
