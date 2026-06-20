@@ -1320,6 +1320,11 @@ export const gfcAPI = {
   uploadFile:     (id, fd)      => api.post(`/gfc/drawings/${id}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
   uploadRevFile:  (id, rid, fd) => api.post(`/gfc/drawings/${id}/revisions/${rid}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
   downloadFile:   (id)          => api.get(`/gfc/drawings/${id}/file`, { responseType: 'blob' }),
+  // multi-file attachments
+  listFiles:      (id)          => api.get(`/gfc/drawings/${id}/files`),
+  addFile:        (id, fd)      => api.post(`/gfc/drawings/${id}/files`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  downloadFileById: (id, fid)   => api.get(`/gfc/drawings/${id}/files/${fid}`, { responseType: 'blob' }),
+  deleteFile:     (id, fid)     => api.delete(`/gfc/drawings/${id}/files/${fid}`),
 };
 
 // ─── Subcontractor Management ─────────────────────────────────────────────────

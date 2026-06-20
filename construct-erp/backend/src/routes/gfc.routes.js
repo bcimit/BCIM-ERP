@@ -62,13 +62,25 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
-  // Add file columns if they don't exist yet (idempotent)
+  // Legacy single-file columns (kept for backward compat, superseded by gfc_drawing_files)
   await query(`ALTER TABLE gfc_drawings          ADD COLUMN IF NOT EXISTS file_name VARCHAR(255)`);
   await query(`ALTER TABLE gfc_drawings          ADD COLUMN IF NOT EXISTS file_url  TEXT`);
   await query(`ALTER TABLE gfc_drawings          ADD COLUMN IF NOT EXISTS file_size BIGINT`);
   await query(`ALTER TABLE gfc_drawing_revisions ADD COLUMN IF NOT EXISTS file_name VARCHAR(255)`);
   await query(`ALTER TABLE gfc_drawing_revisions ADD COLUMN IF NOT EXISTS file_url  TEXT`);
   await query(`ALTER TABLE gfc_drawing_revisions ADD COLUMN IF NOT EXISTS file_size BIGINT`);
+  // Multi-file attachments per drawing
+  await query(`
+    CREATE TABLE IF NOT EXISTS gfc_drawing_files (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      drawing_id   UUID REFERENCES gfc_drawings(id) ON DELETE CASCADE,
+      file_name    VARCHAR(255) NOT NULL,
+      file_url     TEXT NOT NULL,
+      file_size    BIGINT,
+      uploaded_by  UUID REFERENCES users(id),
+      uploaded_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
   schemaReady = true;
 }
 router.use(async (req, res, next) => {
@@ -92,7 +104,8 @@ router.get('/drawings', async (req, res) => {
     }
     const r = await query(
       `SELECT d.*, p.name AS project_name, u.name AS created_by_name,
-              (SELECT COUNT(*) FROM gfc_drawing_revisions rv WHERE rv.drawing_id = d.id) AS revision_count
+              (SELECT COUNT(*) FROM gfc_drawing_revisions rv WHERE rv.drawing_id = d.id) AS revision_count,
+              (SELECT COUNT(*) FROM gfc_drawing_files    f  WHERE f.drawing_id  = d.id) AS file_count
        FROM gfc_drawings d
        JOIN projects p ON d.project_id = p.id
        LEFT JOIN users u ON d.created_by = u.id
@@ -349,6 +362,70 @@ router.get('/drawings/:id/file', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── GET /gfc/drawings/:id/files — list all attached files ───────────────────
+router.get('/drawings/:id/files', async (req, res) => {
+  try {
+    const own = await query('SELECT id FROM gfc_drawings WHERE id=$1 AND company_id=$2', [req.params.id, req.user.company_id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'Drawing not found' });
+    const r = await query(
+      `SELECT f.*, u.name AS uploaded_by_name
+       FROM gfc_drawing_files f LEFT JOIN users u ON u.id = f.uploaded_by
+       WHERE f.drawing_id = $1 ORDER BY f.uploaded_at ASC`,
+      [req.params.id]
+    );
+    res.json({ data: r.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── POST /gfc/drawings/:id/files — attach a new file ────────────────────────
+router.post('/drawings/:id/files', upload.single('file'), async (req, res) => {
+  try {
+    const own = await query('SELECT id FROM gfc_drawings WHERE id=$1 AND company_id=$2', [req.params.id, req.user.company_id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'Drawing not found' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const fileUrl = `/uploads/gfc-drawings/${req.file.filename}`;
+    const r = await query(
+      `INSERT INTO gfc_drawing_files (drawing_id, file_name, file_url, file_size, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.params.id, req.file.originalname, fileUrl, req.file.size, req.user.id]
+    );
+    res.json({ data: r.rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── GET /gfc/drawings/:id/files/:fileId — download a specific file ───────────
+router.get('/drawings/:id/files/:fileId', async (req, res) => {
+  try {
+    const r = await query(
+      `SELECT f.file_url, f.file_name FROM gfc_drawing_files f
+       JOIN gfc_drawings d ON d.id = f.drawing_id
+       WHERE f.id=$1 AND d.company_id=$2`,
+      [req.params.fileId, req.user.company_id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'File not found' });
+    const { file_url, file_name } = r.rows[0];
+    const filePath = path.join(GFC_UPLOAD_DIR, path.basename(file_url));
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing on server' });
+    res.setHeader('Content-Disposition', `inline; filename="${(file_name || 'drawing').replace(/"/g, '')}"`);
+    res.sendFile(filePath);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── DELETE /gfc/drawings/:id/files/:fileId — remove an attached file ─────────
+router.delete('/drawings/:id/files/:fileId', async (req, res) => {
+  try {
+    const r = await query(
+      `DELETE FROM gfc_drawing_files f USING gfc_drawings d
+       WHERE f.id=$1 AND f.drawing_id=d.id AND d.company_id=$2 RETURNING f.file_url`,
+      [req.params.fileId, req.user.company_id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'File not found' });
+    const filePath = path.join(GFC_UPLOAD_DIR, path.basename(r.rows[0].file_url));
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    res.json({ message: 'File deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── DELETE /gfc/drawings/:id ─────────────────────────────────────────────────

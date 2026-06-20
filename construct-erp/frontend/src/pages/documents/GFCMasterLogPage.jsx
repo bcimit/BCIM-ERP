@@ -1,11 +1,12 @@
 // src/pages/documents/GFCMasterLogPage.jsx — GFC Drawing Master Log Tracker
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Layers, Plus, X, Search, RefreshCw, History, Pencil, Trash2,
   FileUp, CheckCircle2, PauseCircle, CircleSlash, FileStack, Download,
-  Paperclip, Eye,
+  Paperclip, Eye, FileText, File,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
@@ -299,6 +300,120 @@ function HistoryModal({ drawing, onClose }) {
   );
 }
 
+/* ── Files Modal (multi-attachment per drawing) ───────────────────────────── */
+function FilesModal({ drawing, onClose }) {
+  const qc = useQueryClient();
+  const inputRef = useRef();
+
+  const { data: files = [], isLoading } = useQuery({
+    queryKey: ['gfc-files', drawing.id],
+    queryFn: () => gfcAPI.listFiles(drawing.id).then(r => r.data?.data ?? []),
+  });
+
+  const addMut = useMutation({
+    mutationFn: (file) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return gfcAPI.addFile(drawing.id, fd);
+    },
+    onSuccess: () => { toast.success('File attached'); qc.invalidateQueries({ queryKey: ['gfc-files', drawing.id] }); qc.invalidateQueries({ queryKey: ['gfc-drawings'] }); },
+    onError: e => toast.error(e?.response?.data?.error || 'Upload failed'),
+  });
+
+  const delMut = useMutation({
+    mutationFn: (fid) => gfcAPI.deleteFile(drawing.id, fid),
+    onSuccess: () => { toast.success('File removed'); qc.invalidateQueries({ queryKey: ['gfc-files', drawing.id] }); qc.invalidateQueries({ queryKey: ['gfc-drawings'] }); },
+    onError: e => toast.error(e?.response?.data?.error || 'Delete failed'),
+  });
+
+  const openFile = async (fid, name) => {
+    try {
+      const res = await gfcAPI.downloadFileById(drawing.id, fid);
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noreferrer'; a.download = name || 'drawing';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch { toast.error('Could not open file'); }
+  };
+
+  const extIcon = (name) => {
+    const ext = (name || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf') return <FileText className="w-4 h-4 text-red-500" />;
+    if (['dwg','dxf'].includes(ext)) return <File className="w-4 h-4 text-blue-500" />;
+    return <File className="w-4 h-4 text-slate-400" />;
+  };
+
+  const fmtSize = (b) => {
+    if (!b) return '';
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-8 overflow-hidden">
+        <div className="px-6 py-4 bg-indigo-700 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Paperclip className="w-5 h-5 text-white" />
+            <div>
+              <p className="text-base font-semibold text-white leading-tight">Attached Files</p>
+              <p className="text-xs text-indigo-200">{drawing.drawing_number} — {drawing.title}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-indigo-200 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5">
+          {/* Upload button */}
+          <input ref={inputRef} type="file" className="hidden"
+            accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.tif,.tiff"
+            onChange={e => { const f = e.target.files?.[0]; if (f) addMut.mutate(f); e.target.value = ''; }}
+          />
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={addMut.isPending}
+            className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-indigo-300 text-indigo-600 rounded-xl hover:bg-indigo-50 text-sm font-medium transition-colors disabled:opacity-50">
+            <Paperclip className="w-4 h-4" />
+            {addMut.isPending ? 'Uploading…' : 'Attach PDF / DWG / DXF / Image'}
+          </button>
+
+          {/* File list */}
+          <div className="mt-4 space-y-2">
+            {isLoading ? (
+              <p className="text-center text-sm text-slate-400 py-6">Loading…</p>
+            ) : files.length === 0 ? (
+              <p className="text-center text-sm text-slate-400 py-6">No files attached yet.</p>
+            ) : files.map(f => (
+              <div key={f.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                {extIcon(f.file_name)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 truncate">{f.file_name}</p>
+                  <p className="text-[11px] text-slate-400">{fmtSize(f.file_size)} · {dayjs(f.uploaded_at).format('DD MMM YYYY')} · {f.uploaded_by_name || '—'}</p>
+                </div>
+                <button onClick={() => openFile(f.id, f.file_name)} title="View / Download"
+                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 transition-colors shrink-0">
+                  <Eye className="w-4 h-4" />
+                </button>
+                <button onClick={() => { if (window.confirm(`Remove "${f.file_name}"?`)) delMut.mutate(f.id); }}
+                  title="Remove"
+                  className="p-1.5 rounded-lg border border-red-100 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-colors shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-6 py-3 border-t border-slate-100 flex justify-end">
+          <button onClick={onClose} className="px-5 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── CSV export helper ────────────────────────────────────────────────────── */
 function exportCSV(rows, filename) {
   const headers = ['Drawing No.', 'Title', 'Discipline', 'Tower/Block', 'Floor/Zone', 'Revision', 'Status', 'GFC Date', 'Received', 'Transmittal Ref', 'Issued By', 'Copies', 'Soft Copy', 'Remarks'];
@@ -321,6 +436,40 @@ function exportCSV(rows, filename) {
   a.click();
 }
 
+/* ── Excel export helper ──────────────────────────────────────────────────── */
+function exportExcel(rows, filename) {
+  const headers = ['Drawing No.', 'Project', 'Title', 'Discipline', 'Tower/Block', 'Floor/Zone', 'Revision', 'Status', 'GFC Date', 'Received', 'Transmittal Ref', 'Issued By', 'Hard Copies', 'Soft Copy', 'Remarks'];
+  const data = rows.map(d => [
+    d.drawing_number,
+    d.project_name || '',
+    d.title,
+    d.discipline || '',
+    d.tower_block || '',
+    d.floor_zone || '',
+    d.current_revision || d.revision || '',
+    d.status ? d.status.charAt(0).toUpperCase() + d.status.slice(1).replace('_', ' ') : '',
+    d.gfc_date ? dayjs(d.gfc_date).format('DD-MMM-YYYY') : '',
+    d.received_date ? dayjs(d.received_date).format('DD-MMM-YYYY') : '',
+    d.transmittal_ref || '',
+    d.issued_by || '',
+    d.copies_received ?? 0,
+    d.soft_copy ? 'Yes' : 'No',
+    d.remarks || '',
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+  // Column widths
+  ws['!cols'] = [12,20,35,14,12,12,8,12,14,14,16,20,10,8,30].map(w => ({ wch: w }));
+  // Header row style (bold)
+  headers.forEach((_, ci) => {
+    const cell = XLSX.utils.encode_cell({ r: 0, c: ci });
+    if (!ws[cell]) return;
+    ws[cell].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E8EAF6' } } };
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'GFC Master Log');
+  XLSX.writeFile(wb, filename);
+}
+
 /* ── Main Page ────────────────────────────────────────────────────────────── */
 export default function GFCMasterLogPage() {
   const qc = useQueryClient();
@@ -329,9 +478,7 @@ export default function GFCMasterLogPage() {
   const [projectFilter, setProject]     = useState('');
   const [disciplineFilter, setDiscipline] = useState('');
   const [statusFilter, setStatus]       = useState('');
-  const [modal, setModal]               = useState(null); // {type:'add'|'edit'|'revision'|'history', drawing}
-  const [uploadTarget, setUploadTarget] = useState(null); // drawing id being uploaded to
-  const fileInputRef                    = React.useRef();
+  const [modal, setModal] = useState(null); // {type:'add'|'edit'|'revision'|'history'|'files', drawing}
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -393,31 +540,6 @@ export default function GFCMasterLogPage() {
     onSuccess: () => { toast.success('Drawing deleted'); invalidate(); },
     onError: e => toast.error(e?.response?.data?.error || 'Delete failed'),
   });
-  const uploadMut = useMutation({
-    mutationFn: ({ id, file }) => {
-      const fd = new FormData();
-      fd.append('file', file);
-      return gfcAPI.uploadFile(id, fd);
-    },
-    onSuccess: () => { toast.success('File attached'); setUploadTarget(null); invalidate(); },
-    onError: e => toast.error(e?.response?.data?.error || 'Upload failed'),
-  });
-
-  const openFile = async (id, fileName) => {
-    try {
-      const res = await gfcAPI.downloadFile(id);
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noreferrer';
-      a.download = fileName || 'drawing';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      toast.error('Could not open file');
-    }
-  };
 
   const kpis = [
     { label: 'Total Drawings', value: stats?.total ?? '—',      icon: FileStack,    cls: 'border-indigo-500',  iconBg: 'bg-indigo-50 text-indigo-600' },
@@ -436,9 +558,13 @@ export default function GFCMasterLogPage() {
           <p className="text-sm text-slate-500 mt-0.5">Good For Construction drawing register · revisions · transmittals</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => exportExcel(drawings, `gfc-register-${dayjs().format('YYYY-MM-DD')}.xlsx`)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 shadow-sm">
+            <FileText className="w-4 h-4" /> Excel
+          </button>
           <button onClick={() => exportCSV(drawings, `gfc-register-${dayjs().format('YYYY-MM-DD')}.csv`)}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 shadow-sm">
-            <Download className="w-4 h-4" /> Export CSV
+            <Download className="w-4 h-4" /> CSV
           </button>
           <button onClick={() => setModal({ type: 'add' })}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 shadow-sm">
@@ -507,19 +633,6 @@ export default function GFCMasterLogPage() {
         <span className="text-xs text-slate-400 shrink-0">{drawings.length} drawings</span>
       </div>
 
-      {/* Hidden file input for drawing attachment */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.tif,.tiff"
-        className="hidden"
-        onChange={e => {
-          const file = e.target.files?.[0];
-          if (file && uploadTarget) uploadMut.mutate({ id: uploadTarget, file });
-          e.target.value = '';
-        }}
-      />
-
       {/* Master log table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -548,12 +661,11 @@ export default function GFCMasterLogPage() {
                   <td className="px-4 py-3 max-w-[220px]">
                     <p className="text-xs font-medium text-slate-800 truncate" title={d.title}>{d.title}</p>
                     {d.remarks && <p className="text-[10px] text-slate-400 truncate" title={d.remarks}>{d.remarks}</p>}
-                    {d.file_name && (
-                      <button onClick={() => openFile(d.id, d.file_name)}
-                        className="inline-flex items-center gap-1 mt-1 text-[10px] text-indigo-600 hover:underline truncate max-w-full text-left"
-                        title={d.file_name}>
+                    {Number(d.file_count) > 0 && (
+                      <button onClick={() => setModal({ type: 'files', drawing: d })}
+                        className="inline-flex items-center gap-1 mt-1 text-[10px] text-indigo-600 hover:underline text-left">
                         <Paperclip className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{d.file_name}</span>
+                        {d.file_count} file{Number(d.file_count) > 1 ? 's' : ''} attached
                       </button>
                     )}
                   </td>
@@ -581,25 +693,16 @@ export default function GFCMasterLogPage() {
                   <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={d.status} /></td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => { setUploadTarget(d.id); fileInputRef.current?.click(); }}
-                        title={d.file_name ? `Replace file (${d.file_name})` : 'Attach drawing file'}
-                        disabled={uploadMut.isPending && uploadTarget === d.id}
+                      <button onClick={() => setModal({ type: 'files', drawing: d })}
+                        title={Number(d.file_count) > 0 ? `${d.file_count} file(s) attached` : 'Attach files'}
                         className={clsx(
                           'p-1.5 rounded-lg border transition-colors',
-                          d.file_url
+                          Number(d.file_count) > 0
                             ? 'border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white'
                             : 'border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300',
                         )}>
                         <Paperclip className="w-3.5 h-3.5" />
                       </button>
-                      {d.file_url && (
-                        <button onClick={() => openFile(d.id, d.file_name)}
-                          title="View / download file"
-                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 transition-colors">
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                       <button onClick={() => setModal({ type: 'revision', drawing: d })} title="Issue new revision"
                         className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-600 hover:text-white transition-colors">
                         <FileUp className="w-3.5 h-3.5" />
@@ -763,6 +866,9 @@ export default function GFCMasterLogPage() {
       )}
       {modal?.type === 'history' && (
         <HistoryModal drawing={modal.drawing} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === 'files' && (
+        <FilesModal drawing={modal.drawing} onClose={() => setModal(null)} />
       )}
     </div>
   );
