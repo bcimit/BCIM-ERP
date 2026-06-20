@@ -225,6 +225,47 @@ router.get('/drawings/:id/revisions', async (req, res) => {
   }
 });
 
+// ── GET /gfc/drawings/revisions/all — all revisions across all drawings ───────
+router.get('/drawings/revisions/all', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let sql = `
+      SELECT rv.*, d.drawing_number, d.title, d.discipline,
+             u.name AS created_by_name
+      FROM gfc_drawing_revisions rv
+      JOIN gfc_drawings d ON d.id = rv.drawing_id
+      LEFT JOIN users u ON rv.created_by = u.id
+      WHERE d.company_id = $1`;
+    const params = [req.user.company_id];
+    if (project_id) { sql += ` AND d.project_id = $2`; params.push(project_id); }
+    sql += ` ORDER BY rv.created_at DESC LIMIT 500`;
+    const r = await query(sql, params);
+    res.json({ data: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /gfc/drawings/superseded — all superseded drawings ────────────────────
+router.get('/drawings/superseded', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let sql = `
+      SELECT d.*, p.name AS project_name, u.name AS created_by_name
+      FROM gfc_drawings d
+      LEFT JOIN projects p ON p.id = d.project_id
+      LEFT JOIN users u ON u.id = d.created_by
+      WHERE d.company_id = $1 AND d.status = 'superseded'`;
+    const params = [req.user.company_id];
+    if (project_id) { sql += ` AND d.project_id = $2`; params.push(project_id); }
+    sql += ` ORDER BY d.updated_at DESC`;
+    const r = await query(sql, params);
+    res.json({ data: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DELETE /gfc/drawings/:id ─────────────────────────────────────────────────
 router.delete('/drawings/:id', async (req, res) => {
   try {

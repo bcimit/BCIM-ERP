@@ -1315,6 +1315,8 @@ export const gfcAPI = {
   remove:       (id)      => api.delete(`/gfc/drawings/${id}`),
   addRevision:  (id, d)   => api.post(`/gfc/drawings/${id}/revisions`, d),
   revisions:    (id)      => api.get(`/gfc/drawings/${id}/revisions`),
+  allRevisions: (p)       => api.get('/gfc/drawings/revisions/all', { params: p }),
+  superseded:   (p)       => api.get('/gfc/drawings/superseded', { params: p }),
 };
 
 // ─── Subcontractor Management ─────────────────────────────────────────────────

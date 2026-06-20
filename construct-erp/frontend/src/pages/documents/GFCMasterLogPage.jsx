@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Layers, Plus, X, Search, RefreshCw, History, Pencil, Trash2,
-  FileUp, CheckCircle2, PauseCircle, CircleSlash, FileStack,
+  FileUp, CheckCircle2, PauseCircle, CircleSlash, FileStack, Download,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -298,9 +298,32 @@ function HistoryModal({ drawing, onClose }) {
   );
 }
 
+/* ── CSV export helper ────────────────────────────────────────────────────── */
+function exportCSV(rows, filename) {
+  const headers = ['Drawing No.', 'Title', 'Discipline', 'Tower/Block', 'Floor/Zone', 'Revision', 'Status', 'GFC Date', 'Received', 'Transmittal Ref', 'Issued By', 'Copies', 'Soft Copy', 'Remarks'];
+  const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const lines = [
+    headers.map(escape).join(','),
+    ...rows.map(d => [
+      d.drawing_number, d.title, d.discipline || '', d.tower_block || '', d.floor_zone || '',
+      d.current_revision || d.revision || '', d.status || '',
+      d.gfc_date ? dayjs(d.gfc_date).format('DD-MMM-YYYY') : '',
+      d.received_date ? dayjs(d.received_date).format('DD-MMM-YYYY') : '',
+      d.transmittal_ref || '', d.issued_by || '',
+      d.copies_received ?? '', d.soft_copy ? 'Yes' : 'No', d.remarks || '',
+    ].map(escape).join(',')),
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
 /* ── Main Page ────────────────────────────────────────────────────────────── */
 export default function GFCMasterLogPage() {
   const qc = useQueryClient();
+  const [activeTab, setActiveTab]       = useState('register'); // 'register' | 'revlog' | 'superseded'
   const [search, setSearch]             = useState('');
   const [projectFilter, setProject]     = useState('');
   const [disciplineFilter, setDiscipline] = useState('');
@@ -328,9 +351,23 @@ export default function GFCMasterLogPage() {
     queryFn: () => gfcAPI.stats({ project_id: projectFilter || undefined }).then(r => r.data?.data ?? {}),
   });
 
+  const { data: allRevisions = [], isLoading: revLogLoading } = useQuery({
+    queryKey: ['gfc-all-revisions', projectFilter],
+    queryFn: () => gfcAPI.allRevisions({ project_id: projectFilter || undefined }).then(r => r.data?.data ?? []),
+    enabled: activeTab === 'revlog',
+  });
+
+  const { data: supersededDrawings = [], isLoading: supLoading } = useQuery({
+    queryKey: ['gfc-superseded', projectFilter],
+    queryFn: () => gfcAPI.superseded({ project_id: projectFilter || undefined }).then(r => r.data?.data ?? []),
+    enabled: activeTab === 'superseded',
+  });
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['gfc-drawings'] });
     qc.invalidateQueries({ queryKey: ['gfc-stats'] });
+    qc.invalidateQueries({ queryKey: ['gfc-all-revisions'] });
+    qc.invalidateQueries({ queryKey: ['gfc-superseded'] });
   };
 
   const createMut = useMutation({
@@ -370,12 +407,36 @@ export default function GFCMasterLogPage() {
           <h1 className="text-2xl font-semibold text-slate-900">GFC Master Log</h1>
           <p className="text-sm text-slate-500 mt-0.5">Good For Construction drawing register · revisions · transmittals</p>
         </div>
-        <button onClick={() => setModal({ type: 'add' })}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 shadow-sm w-fit">
-          <Plus className="w-4 h-4" /> Register Drawing
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportCSV(drawings, `gfc-register-${dayjs().format('YYYY-MM-DD')}.csv`)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 shadow-sm">
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+          <button onClick={() => setModal({ type: 'add' })}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 shadow-sm">
+            <Plus className="w-4 h-4" /> Register Drawing
+          </button>
+        </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-fit">
+        {[
+          { key: 'register',   label: 'Drawing Register' },
+          { key: 'revlog',     label: 'Revision Log' },
+          { key: 'superseded', label: 'Superseded' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={clsx('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
+              activeTab === t.key
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50')}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'register' && (<>
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
         {kpis.map(({ label, value, icon: Icon, cls, iconBg }) => (
@@ -521,6 +582,103 @@ export default function GFCMasterLogPage() {
           </table>
         </div>
       </div>
+
+      </>)}
+
+      {/* ── Revision Log tab ───────────────────────────────────────────────── */}
+      {activeTab === 'revlog' && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <span className="text-sm font-semibold text-slate-700">All Revision Events</span>
+            <button onClick={() => exportCSV(allRevisions, `gfc-revisions-${dayjs().format('YYYY-MM-DD')}.csv`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+              <Download className="w-3.5 h-3.5" /> Export CSV
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            {revLogLoading ? (
+              <div className="py-16 text-center text-sm text-slate-400">Loading…</div>
+            ) : allRevisions.length === 0 ? (
+              <div className="py-16 text-center text-sm text-slate-400">No revision events recorded yet.</div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    {['Drawing No.', 'Title', 'Discipline', 'New Rev', 'GFC Date', 'Received', 'Transmittal', 'Issued By', 'Change Description', 'Logged By', 'Date'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {allRevisions.map(rv => (
+                    <tr key={rv.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono font-bold text-indigo-700 whitespace-nowrap">{rv.drawing_number}</td>
+                      <td className="px-4 py-3 max-w-[200px] truncate text-slate-700" title={rv.title}>{rv.title}</td>
+                      <td className="px-4 py-3 text-slate-500">{rv.discipline || '—'}</td>
+                      <td className="px-4 py-3"><span className="font-mono font-bold text-emerald-700">{rv.revision}</span></td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{fmt(rv.gfc_date)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600">{fmt(rv.received_date)}</td>
+                      <td className="px-4 py-3 font-mono text-slate-600">{rv.transmittal_ref || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">{rv.issued_by || '—'}</td>
+                      <td className="px-4 py-3 max-w-[200px] truncate text-slate-500" title={rv.change_description}>{rv.change_description || '—'}</td>
+                      <td className="px-4 py-3 text-slate-400">{rv.created_by_name || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-400">{fmt(rv.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Superseded tab ─────────────────────────────────────────────────── */}
+      {activeTab === 'superseded' && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div>
+              <span className="text-sm font-semibold text-slate-700">Superseded Drawings</span>
+              <p className="text-xs text-slate-400 mt-0.5">For reference only — do not use for construction</p>
+            </div>
+            <button onClick={() => exportCSV(supersededDrawings, `gfc-superseded-${dayjs().format('YYYY-MM-DD')}.csv`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+              <Download className="w-3.5 h-3.5" /> Export CSV
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            {supLoading ? (
+              <div className="py-16 text-center text-sm text-slate-400">Loading…</div>
+            ) : supersededDrawings.length === 0 ? (
+              <div className="py-16 text-center text-sm text-slate-400">No superseded drawings.</div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    {['Drawing No.', 'Title', 'Discipline', 'Tower/Floor', 'Rev', 'GFC Date', 'Transmittal', 'Issued By', 'Remarks'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {supersededDrawings.map(d => (
+                    <tr key={d.id} className="opacity-70 hover:opacity-100">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-500 whitespace-nowrap">{d.drawing_number}</td>
+                      <td className="px-4 py-3 max-w-[220px] truncate text-slate-600" title={d.title}>{d.title}</td>
+                      <td className="px-4 py-3 text-slate-500">{d.discipline || '—'}</td>
+                      <td className="px-4 py-3 text-slate-500">{[d.tower_block, d.floor_zone].filter(Boolean).join(' · ') || '—'}</td>
+                      <td className="px-4 py-3"><span className="font-mono text-red-500 font-bold">{d.current_revision}</span></td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-500">{fmt(d.gfc_date)}</td>
+                      <td className="px-4 py-3 font-mono text-slate-500">{d.transmittal_ref || '—'}</td>
+                      <td className="px-4 py-3 text-slate-500">{d.issued_by || '—'}</td>
+                      <td className="px-4 py-3 max-w-[180px] truncate text-slate-400" title={d.remarks}>{d.remarks || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {modal?.type === 'add' && (
