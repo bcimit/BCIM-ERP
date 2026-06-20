@@ -817,8 +817,11 @@ function stripAmendSuffix(ref) {
   return String(ref || '').replace(/-A\d+$/i, '');
 }
 
-async function nextAmendSuffix(client, companyId, baseRef) {
-  const r = await client.query(
+// queryFn must be directly callable as queryFn(sql, params) — pass the bare
+// `query` helper, or `(sql, params) => client.query(sql, params)` for a
+// transaction client.
+async function nextAmendSuffix(queryFn, companyId, baseRef) {
+  const r = await queryFn(
     `SELECT po.po_ref_no, po.serial_no_formatted, po.po_number
      FROM purchase_orders po
      JOIN projects p ON p.id = po.project_id
@@ -898,7 +901,7 @@ router.post('/:id/amend', async (req, res) => {
       );
       const base = baseRes.rows[0];
       const baseRef = stripAmendSuffix(base.po_ref_no || base.serial_no_formatted || base.po_number);
-      const suffix = await nextAmendSuffix(client, req.user.company_id, baseRef);
+      const suffix = await nextAmendSuffix((sql, params) => client.query(sql, params), req.user.company_id, baseRef);
       const newRef = `${baseRef}-A${suffix}`;
 
       const headerRes = await client.query(

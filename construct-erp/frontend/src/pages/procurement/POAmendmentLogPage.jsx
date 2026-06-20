@@ -176,6 +176,12 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
             <div className="py-10 text-center text-sm text-slate-400">Select a purchase order above to load its line items.</div>
           ) : ctxQuery.isLoading ? (
             <div className="py-10 text-center text-sm text-slate-400 flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading PO items…</div>
+          ) : ctxQuery.isError ? (
+            <div className="py-10 text-center text-sm text-red-500 flex flex-col items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              {ctxQuery.error?.response?.data?.error || 'Failed to load PO items'}
+              <button onClick={() => ctxQuery.refetch()} className="text-xs text-indigo-600 hover:underline mt-1">Retry</button>
+            </div>
           ) : (
             <>
               <div className="border border-slate-200 rounded-lg overflow-hidden">
