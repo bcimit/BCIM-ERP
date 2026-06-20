@@ -215,6 +215,7 @@ const SCWorkOrders       = lazy(() => import('./pages/sc/SCWorkOrders'));
 const SCLabour           = lazy(() => import('./pages/sc/SCLabour'));
 const SCProgress         = lazy(() => import('./pages/sc/SCProgress'));
 const SCBillPreparation  = lazy(() => import('./pages/sc/SCBillPreparation'));
+const HireUsageTrackerPage = lazy(() => import('./pages/sc/HireUsageTrackerPage'));
 const SCBillApproval     = lazy(() => import('./pages/sc/SCBillApproval'));
 const SCPayments         = lazy(() => import('./pages/sc/SCPayments'));
 const SCDeductions       = lazy(() => import('./pages/sc/SCDeductions'));
@@ -651,6 +652,7 @@ export default function App() {
                 <Route path="sc/labour"           element={<RequireModule module="Subcontractors"><SCLabour /></RequireModule>} />
                 <Route path="sc/progress"         element={<RequireModule module="Subcontractors"><SCProgress /></RequireModule>} />
                 <Route path="sc/bill-preparation" element={<RequireModule module="Subcontractors"><SCBillPreparation /></RequireModule>} />
+                <Route path="sc/hire-usage-tracker" element={<RequireModule module="Subcontractors"><HireUsageTrackerPage /></RequireModule>} />
                 <Route path="sc/bill-approval"    element={<RequireModule module="Subcontractors"><SCBillApproval /></RequireModule>} />
                 <Route path="sc/payments"         element={<RequireModule module="Subcontractors"><SCPayments /></RequireModule>} />
                 <Route path="sc/deductions"       element={<RequireModule module="Subcontractors"><SCDeductions /></RequireModule>} />

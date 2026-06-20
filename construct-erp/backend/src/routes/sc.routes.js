@@ -79,7 +79,7 @@ async function syncLegacyWorkOrdersToSC(req, filters = {}) {
       JOIN projects p ON p.id = wo.project_id
       JOIN vendors v ON v.id = wo.vendor_id
       WHERE ${conditions.join(' AND ')}
-        AND v.vendor_type IN ('subcontractor','Sub-contractor','Labour Contractor','labour_contractor','Labor Contractor')
+        AND v.vendor_type IN ('subcontractor','Sub-contractor','Labour Contractor','labour_contractor','Labor Contractor','Service Provider','service_provider')
       ORDER BY wo.created_at ASC
     `, params);
 
@@ -431,7 +431,7 @@ router.get('/all-work-orders', async (req, res) => {
       FROM work_orders wo
       JOIN projects p ON p.id=wo.project_id
       JOIN vendors v ON v.id=wo.vendor_id
-      WHERE v.vendor_type IN ('subcontractor','Sub-contractor','Labour Contractor','labour_contractor','Labor Contractor')
+      WHERE v.vendor_type IN ('subcontractor','Sub-contractor','Labour Contractor','labour_contractor','Labor Contractor','Service Provider','service_provider')
       ${legacyPClause}
       ORDER BY wo.created_at DESC`, lp);
 

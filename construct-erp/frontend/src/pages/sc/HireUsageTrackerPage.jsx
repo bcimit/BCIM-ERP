@@ -1,0 +1,320 @@
+// src/pages/sc/HireUsageTrackerPage.jsx — Hire / Rental Usage Tracker
+// For equipment-hire Work Orders (cranes, forklifts, etc.) billed per usage
+// category (Upto 3 Hours / After 3 Hours / For 1 Day...) across many invoices,
+// recording both vendor-Invoiced and site-Certified hours before raising the
+// actual bill — mirrors the manual tracking sheet used for this billing type.
+import React, { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { hireLogAPI, scAPI } from '../../api/client';
+import { PageHeader, Theme } from '../../theme';
+import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { clsx } from 'clsx';
+import dayjs from 'dayjs';
+
+const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+const num = (v) => parseFloat(v || 0);
+const inp = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition';
+
+// ─── Add/Edit Entry Modal ───────────────────────────────────────────────────
+function EntryModal({ wo, equipmentGroups, onClose }) {
+  const qc = useQueryClient();
+  const [billNo, setBillNo]   = useState('');
+  const [month, setMonth]     = useState('');
+  const [date, setDate]       = useState(dayjs().format('YYYY-MM-DD'));
+  const [hours, setHours]     = useState({}); // wo_item_id -> { invoice, certified }
+
+  const setHour = (itemId, field, value) =>
+    setHours(prev => ({ ...prev, [itemId]: { ...prev[itemId], [field]: value } }));
+
+  const saveMut = useMutation({
+    mutationFn: () => hireLogAPI.addEntry(wo.id, {
+      bill_no: billNo, bill_month: month, bill_date: date,
+      lines: Object.entries(hours).map(([wo_item_id, h]) => ({
+        wo_item_id, invoice_hours: num(h.invoice), certified_hours: num(h.certified),
+      })).filter(l => l.invoice_hours > 0 || l.certified_hours > 0),
+    }),
+    onSuccess: () => {
+      toast.success('Entry added');
+      qc.invalidateQueries({ queryKey: ['hire-log', wo.id] });
+      onClose();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed to add entry'),
+  });
+
+  const handleSave = () => {
+    if (!date) return toast.error('Bill date is required');
+    const hasAny = Object.values(hours).some(h => num(h?.invoice) > 0 || num(h?.certified) > 0);
+    if (!hasAny) return toast.error('Enter at least one hour value');
+    saveMut.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"
+          style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+          <div>
+            <h2 className="font-bold text-white text-sm">Add Bill Entry</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>{wo.wo_number} · {wo.sc_name}</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Bill No.</label>
+              <input className={inp} value={billNo} onChange={e => setBillNo(e.target.value)} placeholder="0761/1" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Month</label>
+              <input className={inp} value={month} onChange={e => setMonth(e.target.value)} placeholder="Oct-25" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Date *</label>
+              <input type="date" className={inp} value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+          </div>
+
+          {equipmentGroups.map(g => (
+            <div key={g.equipment_group}>
+              <p className="text-xs font-bold text-indigo-700 mb-2">{g.equipment_group}</p>
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${g.categories.length}, 1fr)` }}>
+                {g.categories.map(c => (
+                  <div key={c.id} className="border border-slate-200 rounded-lg p-2">
+                    <p className="text-[10px] font-semibold text-slate-600 mb-1.5 leading-tight">{c.usage_category}</p>
+                    <p className="text-[9px] text-slate-400 mb-1.5">₹{num(c.rate).toLocaleString('en-IN')}/{c.unit}</p>
+                    <label className="block text-[9px] text-slate-400">Invoice</label>
+                    <input type="number" step="0.01" className={clsx(inp, 'mb-1')}
+                      value={hours[c.id]?.invoice || ''} onChange={e => setHour(c.id, 'invoice', e.target.value)} />
+                    <label className="block text-[9px] text-slate-400">Certified</label>
+                    <input type="number" step="0.01" className={inp}
+                      value={hours[c.id]?.certified || ''} onChange={e => setHour(c.id, 'certified', e.target.value)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex justify-end gap-3 px-5 py-4 border-t bg-slate-50/60">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600">Cancel</button>
+          <button onClick={handleSave} disabled={saveMut.isPending}
+            className="px-5 py-2 text-white text-sm font-bold rounded-lg disabled:opacity-50"
+            style={{ background: `linear-gradient(135deg, ${Theme.navyLight} 0%, ${Theme.navyDark} 100%)` }}>
+            {saveMut.isPending ? 'Saving…' : 'Save Entry'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Equipment Group Table ──────────────────────────────────────────────────
+function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
+  const cats = group.categories;
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: `linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+        <Truck className="w-3.5 h-3.5 text-white/80" />
+        <span className="text-xs font-bold text-white">{wo.sc_name} — ({group.equipment_group})</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">S.No</th>
+              <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">Bill No.</th>
+              <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">Month</th>
+              <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">Date</th>
+              <th colSpan={cats.length} className="px-2 py-1.5 text-center font-bold text-slate-500 border-r border-b border-slate-200 bg-blue-50/60">Invoice Hours</th>
+              <th colSpan={cats.length} className="px-2 py-1.5 text-center font-bold text-slate-500 border-b border-slate-200 bg-emerald-50/60">Certified Hours</th>
+              <th rowSpan={2} className="px-2 py-2 text-center font-bold text-slate-500">Action</th>
+            </tr>
+            <tr className="bg-slate-50">
+              {cats.map(c => <th key={`inv-${c.id}`} className="px-2 py-1.5 text-right font-medium text-slate-400 border-r border-slate-100 whitespace-nowrap bg-blue-50/30">{c.usage_category}</th>)}
+              {cats.map(c => <th key={`cert-${c.id}`} className="px-2 py-1.5 text-right font-medium text-slate-400 border-r border-slate-100 whitespace-nowrap bg-emerald-50/30">{c.usage_category}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, i) => {
+              const lineByItem = new Map(e.lines.map(l => [l.wo_item_id, l]));
+              return (
+                <tr key={e.id} className={clsx('border-t border-slate-100', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/30')}>
+                  <td className="px-2 py-2 text-slate-400 border-r border-slate-50">{i + 1}</td>
+                  <td className="px-2 py-2 font-mono text-indigo-700 border-r border-slate-50">{e.bill_no || '—'}</td>
+                  <td className="px-2 py-2 border-r border-slate-50">{e.bill_month || '—'}</td>
+                  <td className="px-2 py-2 border-r border-slate-50 whitespace-nowrap">{e.bill_date ? dayjs(e.bill_date).format('DD-MMM-YY') : '—'}</td>
+                  {cats.map(c => (
+                    <td key={`inv-${c.id}`} className="px-2 py-2 text-right border-r border-slate-50">
+                      {num(lineByItem.get(c.id)?.invoice_hours) > 0 ? num(lineByItem.get(c.id)?.invoice_hours).toFixed(2) : '-'}
+                    </td>
+                  ))}
+                  {cats.map(c => (
+                    <td key={`cert-${c.id}`} className="px-2 py-2 text-right border-r border-slate-50 font-semibold text-emerald-700">
+                      {num(lineByItem.get(c.id)?.certified_hours) > 0 ? num(lineByItem.get(c.id)?.certified_hours).toFixed(2) : '-'}
+                    </td>
+                  ))}
+                  <td className="px-2 py-2 text-center">
+                    {e.status === 'billed' ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        <CheckCircle2 className="w-3 h-3" /> {e.sc_bill_number || 'Billed'}
+                      </span>
+                    ) : (
+                      <button onClick={() => onRaiseBill(e)} disabled={raisingId === e.id}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-2 py-1 rounded-lg">
+                        <Receipt className="w-3 h-3" /> {raisingId === e.id ? '…' : 'Raise Bill'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {entries.length === 0 && (
+              <tr><td colSpan={4 + cats.length * 2 + 1} className="px-4 py-6 text-center text-slate-400">No bill entries yet for this equipment.</td></tr>
+            )}
+            {/* Totals row */}
+            <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+              <td colSpan={4} className="px-2 py-2 text-right text-slate-600 uppercase text-[10px] tracking-wider border-r border-slate-200">Total Hours</td>
+              {cats.map(c => (
+                <td key={`tinv-${c.id}`} className="px-2 py-2 text-right text-slate-500 border-r border-slate-100">
+                  {num(totals[c.id]?.invoice_hours).toFixed(2)}
+                </td>
+              ))}
+              {cats.map(c => (
+                <td key={`tcert-${c.id}`} className="px-2 py-2 text-right text-emerald-700 border-r border-slate-100">
+                  {num(totals[c.id]?.certified_hours).toFixed(2)}
+                </td>
+              ))}
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function HireUsageTrackerPage() {
+  const qc = useQueryClient();
+  const [woId, setWoId] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [raisingId, setRaisingId] = useState(null);
+
+  const { data: wos = [] } = useQuery({
+    queryKey: ['hire-log-wos'],
+    queryFn: () => hireLogAPI.listWOs().then(r => r.data?.data || []),
+  });
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['hire-log', woId],
+    queryFn: () => hireLogAPI.get(woId).then(r => r.data?.data),
+    enabled: !!woId,
+    staleTime: 0,
+  });
+
+  const wo = data?.wo;
+  const equipmentGroups = data?.equipmentGroups || [];
+  const entries = data?.entries || [];
+  const totals = data?.totals || {};
+
+  const raiseBill = async (entry) => {
+    setRaisingId(entry.id);
+    try {
+      const items = entry.lines
+        .filter(l => num(l.certified_hours) > 0)
+        .map(l => {
+          const item = equipmentGroups.flatMap(g => g.categories).find(c => c.id === l.wo_item_id);
+          return {
+            wo_item_id: l.wo_item_id,
+            description: item ? `${item.equipment_group} — ${item.usage_category}` : 'Hire item',
+            unit: item?.unit, wo_qty: item?.qty, prev_qty: item?.billed_qty,
+            curr_qty: num(l.certified_hours), balance_qty: Math.max(0, num(item?.balance_qty) - num(l.certified_hours)),
+            rate: num(item?.rate),
+          };
+        });
+      if (!items.length) { toast.error('No certified hours to bill on this entry'); return; }
+      const grossAmount = items.reduce((s, it) => s + it.curr_qty * it.rate, 0);
+
+      const res = await scAPI.createBill({
+        wo_id: woId, bill_type: 'ra',
+        bill_date: entry.bill_date || dayjs().format('YYYY-MM-DD'),
+        description: `Hire bill ${entry.bill_no || ''} (${entry.bill_month || ''})`,
+        gross_amount: grossAmount, gst_pct: 18, tds_pct: 0, retention_pct: 0,
+        items,
+      });
+      const newBill = res.data?.data;
+      await hireLogAPI.markBilled(woId, entry.id, newBill.id);
+      toast.success(`Bill ${newBill.bill_number} created — ${fmt(newBill.net_payable)}`);
+      qc.invalidateQueries({ queryKey: ['hire-log', woId] });
+      qc.invalidateQueries({ queryKey: ['sc-bills'] });
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'Failed to raise bill');
+    } finally {
+      setRaisingId(null);
+    }
+  };
+
+  return (
+    <div style={{ background: Theme.pageBg, minHeight: '100vh' }}>
+      <PageHeader
+        title="Hire / Rental Usage Tracker"
+        subtitle="Track Invoiced vs Certified hours per usage category, then raise the bill"
+        breadcrumbs={[{ label: 'Subcontractors' }, { label: 'Hire Usage Tracker' }]}
+        actions={wo && (
+          <button onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition shadow-sm"
+            style={{ background: '#fff', color: Theme.navyDark }}>
+            <Plus className="w-3.5 h-3.5" /> Add Bill Entry
+          </button>
+        )}
+      />
+
+      <div className="p-5 md:p-6 max-w-[1400px] mx-auto space-y-5">
+        <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 shadow-sm">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Work Order</label>
+          <select value={woId} onChange={e => setWoId(e.target.value)}
+            className="w-full max-w-xl border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="">— Select a hire/rental work order —</option>
+            {wos.map(w => (
+              <option key={w.id} value={w.id}>{w.wo_number} · {w.sc_name} · {w.project_name}</option>
+            ))}
+          </select>
+          {wos.length === 0 && (
+            <p className="text-xs text-amber-600 mt-2">
+              No work orders have categorized usage items yet. A work order needs its line items tagged with an equipment group + category before it appears here.
+            </p>
+          )}
+        </div>
+
+        {!woId ? null : isLoading ? (
+          <div className="space-y-3">{[1, 2].map(n => <div key={n} className="h-40 bg-slate-100 rounded-xl animate-pulse" />)}</div>
+        ) : equipmentGroups.length === 0 ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-700">
+            This work order has no categorized items yet.
+          </div>
+        ) : (
+          equipmentGroups.map(g => (
+            <GroupTable
+              key={g.equipment_group}
+              wo={wo}
+              group={g}
+              entries={entries.map(e => ({ ...e, lines: e.lines.filter(l => g.categories.some(c => c.id === l.wo_item_id)) }))}
+              totals={totals}
+              onRaiseBill={raiseBill}
+              raisingId={raisingId}
+            />
+          ))
+        )}
+      </div>
+
+      {showAdd && wo && (
+        <EntryModal wo={wo} equipmentGroups={equipmentGroups} onClose={() => setShowAdd(false)} />
+      )}
+    </div>
+  );
+}

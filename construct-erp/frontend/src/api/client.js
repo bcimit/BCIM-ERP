@@ -1508,6 +1508,16 @@ export const scAPI = {
   closeWO:            (id, d)   => api.patch(`/sc/work-orders/${id}/close`, d),
 };
 
+export const hireLogAPI = {
+  listWOs:       ()           => api.get('/hire-log/work-orders'),
+  get:           (woId)       => api.get(`/hire-log/${woId}`),
+  addEntry:      (woId, d)    => api.post(`/hire-log/${woId}`, d),
+  updateEntry:   (woId, id, d)=> api.patch(`/hire-log/${woId}/${id}`, d),
+  deleteEntry:   (woId, id)   => api.delete(`/hire-log/${woId}/${id}`),
+  markBilled:    (woId, id, scBillId) => api.patch(`/hire-log/${woId}/${id}/mark-billed`, { sc_bill_id: scBillId }),
+  categorizeItem:(woId, itemId, d) => api.patch(`/hire-log/${woId}/items/${itemId}/categorize`, d),
+};
+
 export const analyticsAPI = {
   global:     ()        => api.get('/analytics/global'),
   executive:  (params)  => api.get('/analytics/executive', { params }),
