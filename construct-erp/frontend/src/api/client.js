@@ -418,6 +418,8 @@ export const poAPI = {
   register:      (params) => api.get('/purchase-orders/register', { params }),
   registerExport:(params) => api.get('/purchase-orders/register/export', { params, responseType: 'blob' }),
   bills:         (id)     => api.get(`/purchase-orders/${id}/bills`),
+  amendmentContext: (id)      => api.get(`/purchase-orders/${id}/amendment-context`),
+  submitAmendment:  (id, data) => api.post(`/purchase-orders/${id}/amend`, data),
 };
 
 export const poAmendmentAPI = {

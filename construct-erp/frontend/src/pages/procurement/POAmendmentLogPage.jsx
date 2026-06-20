@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import {
@@ -13,11 +13,298 @@ import {
   XCircle,
   FileText,
   ClipboardList,
+  AlertTriangle,
+  Trash2,
+  Send,
+  Loader2,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
 import { poAPI, vendorAPI, poAmendmentAPI } from '../../api/client';
+
+const REASON_OPTIONS = [
+  'Quantity Revision',
+  'Rate Revision',
+  'Scope Addition',
+  'Scope Deletion',
+  'Delivery Date Extension',
+  'GST Correction',
+  'Payment Terms Change',
+  'Specification Change',
+  'Others',
+];
+
+const APPROVAL_THRESHOLD = 200000; // ₹2,00,000 — increase beyond this needs higher authority re-approval
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+const inrFull = v => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINE-ITEM AMENDMENT EDITOR — revise qty/rate per item against a live PO.
+// On submit this creates a new "-A{n}" PO (the convention already used across
+// this app's reconciliation reports) carrying the revised items, plus a
+// po_amendments log entry for the approval history below.
+// ─────────────────────────────────────────────────────────────────────────────
+function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
+  const user = useAuthStore(state => state.user);
+  const [selectedPoId, setSelectedPoId] = useState(poId || '');
+  const [reasonCode, setReasonCode] = useState(REASON_OPTIONS[0]);
+  const [remarks, setRemarks] = useState('');
+  const [raisedBy, setRaisedBy] = useState(user?.name || '');
+  const [items, setItems] = useState([]);
+
+  const ctxQuery = useQuery({
+    queryKey: ['po-amend-context', selectedPoId],
+    queryFn: () => poAPI.amendmentContext(selectedPoId).then(r => r.data?.data),
+    enabled: !!selectedPoId,
+  });
+  const ctx = ctxQuery.data;
+
+  useEffect(() => {
+    if (!ctx) return;
+    setItems((ctx.items || []).map(it => ({
+      po_item_id: it.id,
+      material_name: it.material_name,
+      unit: it.unit,
+      gst_rate: it.gst_rate,
+      original_qty: num(it.quantity),
+      revised_qty: num(it.quantity),
+      original_rate: num(it.rate),
+      revised_rate: num(it.rate),
+      received_qty: num(it.received_quantity),
+    })));
+  }, [ctx]);
+
+  const updateItem = (idx, field, value) => setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  const removeItem = idx => setItems(prev => prev.filter((_, i) => i !== idx));
+  const addBlankItem = () => setItems(prev => [...prev, {
+    po_item_id: null, material_name: '', unit: 'Nos', gst_rate: 0,
+    original_qty: 0, revised_qty: 0, original_rate: 0, revised_rate: 0, received_qty: 0,
+  }]);
+
+  const originalTotal = useMemo(() => items.reduce((s, it) => s + num(it.original_qty) * num(it.original_rate), 0), [items]);
+  const revisedTotal  = useMemo(() => items.reduce((s, it) => s + num(it.revised_qty)  * num(it.revised_rate),  0), [items]);
+  const difference = revisedTotal - originalTotal;
+  const requiresReApproval = Math.abs(difference) > APPROVAL_THRESHOLD;
+  const underReceivedWarnings = items.filter(it => num(it.revised_qty) < num(it.received_qty) && num(it.received_qty) > 0);
+
+  const submitMut = useMutation({
+    mutationFn: () => poAPI.submitAmendment(selectedPoId, {
+      reason_code: reasonCode,
+      reason_remarks: remarks,
+      raised_by: raisedBy,
+      items: items.filter(it => it.material_name?.trim()).map(it => ({
+        po_item_id: it.po_item_id,
+        material_name: it.material_name,
+        unit: it.unit,
+        gst_rate: it.gst_rate,
+        quantity: num(it.revised_qty),
+        rate: num(it.revised_rate),
+      })),
+    }),
+    onSuccess: (res) => {
+      toast.success(`${res.data?.data?.po?.po_ref_no || 'Amendment'} created`);
+      onSubmitted();
+    },
+    onError: err => toast.error(err?.response?.data?.error || 'Unable to submit amendment'),
+  });
+
+  const handleSubmit = () => {
+    if (!selectedPoId) return toast.error('Select a PO to amend');
+    if (!raisedBy.trim()) return toast.error('Enter who is raising this amendment');
+    if (!items.some(it => it.material_name?.trim())) return toast.error('Add at least one line item');
+    submitMut.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-6">
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-medium text-slate-900">New PO Amendment</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Revise quantities/rates — saved as a new {ctx?.next_amendment_ref || '-A{n}'} purchase order</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="col-span-2">
+              <label className="block text-xs text-slate-500 mb-1">Purchase Order *</label>
+              <select
+                value={selectedPoId}
+                onChange={e => setSelectedPoId(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400">
+                <option value="">Select PO to amend</option>
+                {(pos || []).map(po => (
+                  <option key={po.id} value={po.id}>
+                    {po.po_ref_no || po.serial_no_formatted || po.po_number} — {po.vendor_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Reason for Amendment</label>
+              <select
+                value={reasonCode}
+                onChange={e => setReasonCode(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400">
+                {REASON_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Raised By *</label>
+              <input
+                value={raisedBy}
+                onChange={e => setRaisedBy(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Remarks</label>
+            <textarea
+              rows={2}
+              value={remarks}
+              onChange={e => setRemarks(e.target.value)}
+              placeholder="Add context for this amendment…"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 resize-none" />
+          </div>
+
+          {!selectedPoId ? (
+            <div className="py-10 text-center text-sm text-slate-400">Select a purchase order above to load its line items.</div>
+          ) : ctxQuery.isLoading ? (
+            <div className="py-10 text-center text-sm text-slate-400 flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading PO items…</div>
+          ) : (
+            <>
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                        <th className="text-left px-3 py-2.5 font-medium">Item</th>
+                        <th className="text-left px-2 py-2.5 font-medium">Unit</th>
+                        <th className="text-right px-2 py-2.5 font-medium">Orig Qty</th>
+                        <th className="text-right px-2 py-2.5 font-medium">Rev Qty</th>
+                        <th className="text-right px-2 py-2.5 font-medium">Orig Rate</th>
+                        <th className="text-right px-2 py-2.5 font-medium">Rev Rate</th>
+                        <th className="text-right px-2 py-2.5 font-medium">Diff ₹</th>
+                        <th className="px-2 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it, idx) => {
+                        const origAmt = num(it.original_qty) * num(it.original_rate);
+                        const revAmt = num(it.revised_qty) * num(it.revised_rate);
+                        const diff = revAmt - origAmt;
+                        const underReceived = num(it.revised_qty) < num(it.received_qty) && num(it.received_qty) > 0;
+                        return (
+                          <tr key={idx} className="border-t border-slate-100">
+                            <td className="px-3 py-2">
+                              <input
+                                value={it.material_name}
+                                onChange={e => updateItem(idx, 'material_name', e.target.value)}
+                                placeholder="Item description"
+                                className="w-full min-w-[160px] border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                              {underReceived && (
+                                <div className="flex items-center gap-1 text-amber-600 text-[11px] mt-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Below {it.received_qty} already received
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              <input
+                                value={it.unit}
+                                onChange={e => updateItem(idx, 'unit', e.target.value)}
+                                className="w-16 border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                            </td>
+                            <td className="px-2 py-2 text-right text-slate-400">{it.original_qty}</td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                value={it.revised_qty}
+                                onChange={e => updateItem(idx, 'revised_qty', e.target.value)}
+                                className={clsx('w-20 text-right border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300',
+                                  underReceived ? 'border-amber-400' : 'border-slate-200')} />
+                            </td>
+                            <td className="px-2 py-2 text-right text-slate-400">{it.original_rate}</td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                value={it.revised_rate}
+                                onChange={e => updateItem(idx, 'revised_rate', e.target.value)}
+                                className="w-20 text-right border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                            </td>
+                            <td className={clsx('px-2 py-2 text-right font-medium whitespace-nowrap',
+                              diff > 0 ? 'text-orange-600' : diff < 0 ? 'text-sky-600' : 'text-slate-400')}>
+                              {diff !== 0 ? `${diff > 0 ? '+' : ''}${inrFull(diff)}` : '—'}
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <button onClick={() => removeItem(idx)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {items.length === 0 && (
+                        <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400 text-sm">No line items yet. Add one below.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <button onClick={addBlankItem} className="flex items-center gap-1.5 px-4 py-2.5 text-sm text-indigo-600 hover:bg-slate-50 transition-colors w-full justify-center border-t border-slate-100">
+                  <Plus className="w-3.5 h-3.5" /> Add line item
+                </button>
+              </div>
+
+              {underReceivedWarnings.length > 0 && (
+                <div className="flex items-start gap-2 px-4 py-3 rounded-md bg-amber-50 text-amber-700 ring-1 ring-amber-200 text-sm">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{underReceivedWarnings.length} item{underReceivedWarnings.length > 1 ? 's' : ''} have revised quantity below what's already received via GRN. Confirm this is intentional.</span>
+                </div>
+              )}
+              {requiresReApproval && (
+                <div className="flex items-start gap-2 px-4 py-3 rounded-md bg-orange-50 text-orange-700 ring-1 ring-orange-200 text-sm">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>Value change of {inrFull(Math.abs(difference))} exceeds the {inrFull(APPROVAL_THRESHOLD)} threshold — flag for higher-authority approval.</span>
+                </div>
+              )}
+
+              <div className="bg-slate-50 rounded-lg p-4 grid grid-cols-3 gap-4">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase mb-1">Original Value</div>
+                  <div className="text-base font-semibold text-slate-700">{inrFull(originalTotal)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 uppercase mb-1">Revised Value</div>
+                  <div className="text-base font-semibold text-slate-900">{inrFull(revisedTotal)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 uppercase mb-1">Difference</div>
+                  <div className={clsx('text-base font-semibold', difference > 0 ? 'text-orange-600' : difference < 0 ? 'text-sky-600' : 'text-slate-500')}>
+                    {difference !== 0 ? `${difference > 0 ? '+' : ''}${inrFull(difference)}` : '—'}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-all">Cancel</button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitMut.isPending || !selectedPoId}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 shadow-sm transition-all disabled:opacity-60">
+            {submitMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {submitMut.isPending ? 'Submitting…' : 'Submit Amendment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const asArray = payload => {
   if (Array.isArray(payload)) return payload;
@@ -65,6 +352,7 @@ export default function POAmendmentLogPage() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [showModal, setShowModal] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
   const [form, setForm] = useState({
     po_id: '',
@@ -245,10 +533,18 @@ export default function POAmendmentLogPage() {
           </button>
           <button
             onClick={openNew}
+            className="inline-flex items-center gap-2 px-4 h-10 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:border-indigo-300 hover:text-indigo-700 transition-all shadow-sm"
+            title="Log a non-item change (date extension, payment terms, etc.) without revising line items"
+          >
+            <FileText className="w-4 h-4" />
+            Log Other Change
+          </button>
+          <button
+            onClick={() => setShowEditor(true)}
             className="inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-all shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Log Amendment
+            New Amendment
           </button>
         </div>
       </div>
@@ -566,6 +862,18 @@ export default function POAmendmentLogPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showEditor && (
+        <POAmendEditor
+          pos={poQuery.data || []}
+          onClose={() => setShowEditor(false)}
+          onSubmitted={() => {
+            setShowEditor(false);
+            qc.invalidateQueries({ queryKey: ['procurement-po-amendments'] });
+            qc.invalidateQueries({ queryKey: ['procurement-po-amendment-pos'] });
+          }}
+        />
       )}
     </div>
   );

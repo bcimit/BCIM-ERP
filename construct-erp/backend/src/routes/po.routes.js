@@ -808,6 +808,168 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ───────────────────────────────────────────────────────────────────────────
+// PO AMENDMENTS — line-item revision, persisted as a new "-A{n}" suffixed PO
+// (the existing convention already used across this app's reconciliation
+// reports), plus an entry in po_amendments for the approval log.
+// ───────────────────────────────────────────────────────────────────────────
+function stripAmendSuffix(ref) {
+  return String(ref || '').replace(/-A\d+$/i, '');
+}
+
+async function nextAmendSuffix(client, companyId, baseRef) {
+  const r = await client.query(
+    `SELECT po.po_ref_no, po.serial_no_formatted, po.po_number
+     FROM purchase_orders po
+     JOIN projects p ON p.id = po.project_id
+     WHERE p.company_id = $1
+       AND UPPER(REGEXP_REPLACE(COALESCE(NULLIF(po.po_ref_no,''), NULLIF(po.serial_no_formatted,''), po.po_number), '-A[0-9]+$', '', 'i')) = UPPER($2)`,
+    [companyId, baseRef]
+  );
+  let max = 0;
+  for (const row of r.rows) {
+    const ref = row.po_ref_no || row.serial_no_formatted || row.po_number;
+    const m = String(ref).match(/-A(\d+)$/i);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return max + 1;
+}
+
+// GET /:id/amendment-context — base PO + items (with GRN-received qty for the
+// "revised below already-received" warning) + the next -A{n} number preview.
+router.get('/:id/amendment-context', async (req, res) => {
+  try {
+    await getAccessiblePo(req, req.params.id);
+    const poRes = await query(
+      `SELECT po.*, v.name AS vendor_name
+       FROM purchase_orders po JOIN vendors v ON v.id = po.vendor_id
+       WHERE po.id = $1`,
+      [req.params.id]
+    );
+    const po = poRes.rows[0];
+    if (!po) return res.status(404).json({ error: 'Purchase Order not found' });
+
+    const items = await query(
+      `SELECT i.*,
+        COALESCE((
+          SELECT SUM(gi.quantity_received)
+          FROM grn_items gi JOIN grn g ON g.id = gi.grn_id
+          WHERE g.quality_status <> 'rejected'
+            AND (
+              gi.po_item_id = i.id
+              OR (gi.po_item_id IS NULL AND g.po_id = i.po_id
+                  AND LOWER(TRIM(COALESCE(gi.material_name,''))) = LOWER(TRIM(COALESCE(i.material_name,'')))
+                  AND COALESCE(gi.unit,'') = COALESCE(i.unit,''))
+            )
+        ), 0) AS received_quantity
+       FROM po_items i WHERE i.po_id = $1 ORDER BY i.sort_order`,
+      [req.params.id]
+    );
+
+    const baseRef = stripAmendSuffix(po.po_ref_no || po.serial_no_formatted || po.po_number);
+    const suffix = await nextAmendSuffix(query, req.user.company_id, baseRef);
+
+    res.json({
+      data: {
+        ...po,
+        items: items.rows,
+        base_ref_no: baseRef,
+        next_amendment_ref: `${baseRef}-A${suffix}`,
+      },
+    });
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
+});
+
+// POST /:id/amend — create the revised PO (new -A{n} record) + a po_amendments log entry
+router.post('/:id/amend', async (req, res) => {
+  try {
+    const { items = [], reason_code, reason_remarks, raised_by } = req.body;
+    if (!items.length) return res.status(400).json({ error: 'At least one line item is required' });
+
+    const basePo = await getAccessiblePo(req, req.params.id);
+    if (!userCanAccessProject(req, basePo.project_id)) {
+      return res.status(403).json({ error: 'Access denied for this project.' });
+    }
+
+    const result = await withTransaction(async (client) => {
+      const baseRes = await client.query(
+        `SELECT po.* FROM purchase_orders po WHERE po.id = $1`,
+        [req.params.id]
+      );
+      const base = baseRes.rows[0];
+      const baseRef = stripAmendSuffix(base.po_ref_no || base.serial_no_formatted || base.po_number);
+      const suffix = await nextAmendSuffix(client, req.user.company_id, baseRef);
+      const newRef = `${baseRef}-A${suffix}`;
+
+      const headerRes = await client.query(
+        `INSERT INTO purchase_orders (
+          project_id, vendor_id, po_number, po_date, delivery_date,
+          terms_conditions, notes, bank_details, payment_terms, tcs_amount,
+          status, created_by, po_ref_no, serial_no_formatted,
+          department, currency, billing_address, freight_mode, transport_mode, tax_type,
+          freight_charges, loading_unloading_charges, insurance_charges, tds_percent,
+          internal_remarks, delivery_instructions
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        RETURNING *`,
+        [base.project_id, base.vendor_id, newRef, base.po_date, base.delivery_date,
+         base.terms_conditions, reason_remarks || base.notes, base.bank_details, base.payment_terms, base.tcs_amount,
+         req.user.id, newRef,
+         base.department, base.currency, base.billing_address, base.freight_mode, base.transport_mode, base.tax_type,
+         base.freight_charges, base.loading_unloading_charges, base.insurance_charges, base.tds_percent,
+         base.internal_remarks, base.delivery_instructions]
+      );
+      const newPoId = headerRes.rows[0].id;
+
+      let subTotal = 0, totalGst = 0;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const qty = parseFloat(it.quantity) || 0;
+        const rate = parseFloat(it.rate) || 0;
+        const gstRate = parseFloat(it.gst_rate) || 0;
+        const basic = qty * rate;
+        const gst = basic * (gstRate / 100);
+        await client.query(
+          `INSERT INTO po_items (po_id, material_name, make_model, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order, mrs_item_id, item_code)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [newPoId, it.material_name, it.make_model || null, it.hsn_code || null, qty, it.unit || 'Nos',
+           rate, gstRate, it.req_date || null, i + 1, it.po_item_id || null, it.item_code || null]
+        );
+        subTotal += basic; totalGst += gst;
+      }
+      const grandTotal = subTotal + totalGst;
+      const finalRes = await client.query(
+        `UPDATE purchase_orders SET sub_total=$1, total_gst=$2, grand_total=$3 WHERE id=$4 RETURNING *`,
+        [subTotal, totalGst, grandTotal, newPoId]
+      );
+
+      const diff = grandTotal - parseFloat(base.grand_total || 0);
+      const impactType = diff > 0 ? 'increase' : diff < 0 ? 'decrease' : 'none';
+
+      const countRes = await client.query(
+        `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(amendment_no, '^.*-', '') AS INTEGER)), 0)::int AS last_seq
+         FROM po_amendments WHERE company_id = $1 AND amendment_no ~ '[0-9]+$'`,
+        [req.user.company_id]
+      );
+      const seq = String(countRes.rows[0].last_seq + 1).padStart(3, '0');
+      const amendmentNo = `AMD-${new Date().getFullYear()}-${seq}`;
+
+      const amendRes = await client.query(
+        `INSERT INTO po_amendments (
+          company_id, po_id, vendor_id, amendment_no, amendment_type, description,
+          value_impact, impact_type, raised_by, amendment_date, status, created_by
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,CURRENT_DATE,'pending',$10) RETURNING *`,
+        [req.user.company_id, newPoId, base.vendor_id, amendmentNo, reason_code || 'Qty Change',
+         reason_remarks || `Amendment ${newRef} of ${baseRef}`, Math.abs(diff), impactType,
+         raised_by || req.user.name, req.user.id]
+      );
+
+      return { po: finalRes.rows[0], amendment: amendRes.rows[0] };
+    });
+
+    res.status(201).json({ data: result });
+  } catch (err) { res.status(err.statusCode || 500).json({ error: err.message }); }
+});
+
 // PATCH /purchase-orders/:id — edit core PO fields (po_number, delivery_address, etc.)
 router.patch('/:id', async (req, res) => {
   try {
