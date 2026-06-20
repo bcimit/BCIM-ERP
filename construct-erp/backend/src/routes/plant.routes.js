@@ -563,29 +563,8 @@ async function buildDepreciation(client, companyId, equipmentId, eq) {
   }
 }
 
-router.post('/equipment', async (req, res) => {
-  try {
-    const code = req.body.code || await nextSeq('pm_equipment', 'code', 'EQ');
-    const result = await withTransaction(async (client) => {
-      const vals = EQUIP_FIELDS.map((f) => {
-        let v = req.body[f];
-        if (v === undefined || v === '') v = null;
-        return v;
-      });
-      const cols = ['code', ...EQUIP_FIELDS];
-      const allVals = [code, ...vals];
-      const placeholders = cols.map((_, i) => `$${i + 2}`).join(',');
-      const r = await client.query(
-        `INSERT INTO pm_equipment (company_id, ${cols.join(',')})
-         VALUES ($1, ${placeholders}) RETURNING *`,
-        [CID(req), ...allVals]);
-      const eq = r.rows[0];
-      if (n(eq.purchase_value) > 0) await buildDepreciation(client, CID(req), eq.id, eq);
-      return eq;
-    });
-    res.status(201).json({ data: result });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// NOTE: no manual POST /equipment — equipment is registered exactly once, in the
+// general Asset Master (Assets & IT), and mirrored here by syncEquipmentFromAssetMaster().
 
 router.put('/equipment/:id([0-9a-fA-F-]{36})', async (req, res) => {
   try {

@@ -174,7 +174,6 @@ const WBSEditorPage         = lazy(() => import('./pages/planning/WBSEditorPage'
 const RiskRegisterPage      = lazy(() => import('./pages/planning/RiskRegisterPage'));
 const MRPPage               = lazy(() => import('./pages/planning/MRPPage'));
 const PlantDashboard      = lazy(() => import('./pages/plant/PlantDashboard'));
-const PlantEquipment      = lazy(() => import('./pages/plant/PlantEquipment'));
 const PlantMasters        = lazy(() => import('./pages/plant/PlantMasters'));
 const PlantTransfers      = lazy(() => import('./pages/plant/PlantTransfers'));
 const PlantHire           = lazy(() => import('./pages/plant/PlantHire'));
@@ -742,7 +741,6 @@ export default function App() {
                 <Route path="assets/roles"       element={<RequireModule module="Assets & IT"><AssetRolesPage /></RequireModule>} />
                 <Route path="plant"              element={<RequireModule module="Assets & IT"><PlantDashboard /></RequireModule>} />
                 <Route path="plant/dashboard"    element={<RequireModule module="Assets & IT"><PlantDashboard /></RequireModule>} />
-                <Route path="plant/equipment"    element={<RequireModule module="Assets & IT"><PlantEquipment /></RequireModule>} />
                 <Route path="plant/masters"      element={<RequireModule module="Assets & IT"><PlantMasters /></RequireModule>} />
                 <Route path="plant/transfers"    element={<RequireModule module="Assets & IT"><PlantTransfers /></RequireModule>} />
                 <Route path="plant/hire"         element={<RequireModule module="Assets & IT"><PlantHire /></RequireModule>} />

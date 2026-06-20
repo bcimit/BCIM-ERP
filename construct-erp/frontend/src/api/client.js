@@ -917,10 +917,9 @@ export const plantAPI = {
   createOperator:    (d)     => api.post('/plant/operators', d),
   updateOperator:    (id, d) => api.put(`/plant/operators/${id}`, d),
   deleteOperator:    (id)    => api.delete(`/plant/operators/${id}`),
-  // Equipment / Asset Register
+  // Equipment — mirrored from the general Asset Master (Assets & IT), no manual create
   listEquipment:     (p)     => api.get('/plant/equipment', { params: p }),
   getEquipment:      (id)    => api.get(`/plant/equipment/${id}`),
-  createEquipment:   (d)     => api.post('/plant/equipment', d),
   updateEquipment:   (id, d) => api.put(`/plant/equipment/${id}`, d),
   deleteEquipment:   (id)    => api.delete(`/plant/equipment/${id}`),
   addDocument:       (id, d) => api.post(`/plant/equipment/${id}/documents`, d),

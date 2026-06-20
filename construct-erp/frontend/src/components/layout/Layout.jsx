@@ -250,7 +250,6 @@ const navGroups = [
   ]},
   { label: 'Plant & Machinery', items: [
     { to: '/plant/dashboard',   icon: LayoutDashboard, label: 'Fleet Dashboard' },
-    { to: '/plant/equipment',   icon: Truck,           label: 'Asset Register' },
     { to: '/plant/masters',     icon: Layers,          label: 'Masters' },
     { to: '/plant/transfers',   icon: ArrowLeftRight,  label: 'Transfers & Disposals' },
     { to: '/plant/hire',        icon: Briefcase,       label: 'Hire Management' },
