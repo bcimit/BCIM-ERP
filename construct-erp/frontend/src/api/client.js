@@ -425,13 +425,7 @@ export const poAmendmentAPI = {
   delete: (id)     => api.delete(`/procurement/po-amendments/${id}`),
 };
 
-export const grnAPI = {
-  list:    (params)   => api.get('/grn', { params }),
-  get:     (id)       => api.get(`/grn/${id}`),
-  create:  (data)     => api.post('/grn', data),
-  approve: (id, stage) => api.patch(`/grn/${id}/${stage}`),
-  remove:  (id)       => api.delete(`/grn/${id}`),
-};
+// grnAPI removed — GRN features merged into IGN. Use ignAPI instead.
 
 export const grsAPI = {
   list:        (params) => api.get('/grs', { params }),

@@ -1225,7 +1225,7 @@ export default function StoreLedgerPage() {
                           <Package className="w-8 h-8 text-slate-300 mx-auto mb-3" />
                           <p className="text-sm text-slate-900 font-semibold">
                             {inventoryData.length === 0
-                              ? 'No inventory records yet. Materials appear here after GRN approval.'
+                              ? 'No inventory records yet. Materials appear here after IGN approval.'
                               : 'No materials match your filter.'}
                           </p>
                         </td>
