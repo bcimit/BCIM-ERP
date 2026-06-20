@@ -103,7 +103,7 @@ const getWorkOrders = async (req, res) => {
          OR (tqs_billed.vendor_id IS NULL AND LOWER(TRIM(tqs_billed.vendor_name)) = LOWER(TRIM(v.name)))
        )
       WHERE p.company_id = $1
-        AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor')
+        AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor', 'service provider')
     `;
     const params = [req.user.company_id];
     let i = 2;
@@ -519,7 +519,7 @@ const getBills = async (req, res) => {
       JOIN work_orders wo ON b.wo_id = wo.id
       JOIN vendors v     ON wo.vendor_id = v.id
       WHERE p.company_id = $1
-        AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor')
+        AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor', 'service provider')
     `;
     const params = [req.user.company_id];
     let i = 2;
@@ -732,7 +732,7 @@ const getDashboard = async (req, res) => {
         LEFT JOIN tqs_bills tb ON tb.is_deleted = FALSE
           AND UPPER(TRIM(COALESCE(tb.wo_number, tb.po_number))) = UPPER(TRIM(wo.wo_number))
         WHERE p.company_id = $1 ${cond}
-          AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor')
+          AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor', 'service provider')
       `, params),
       query(`
         SELECT
@@ -749,7 +749,7 @@ const getDashboard = async (req, res) => {
         LEFT JOIN tqs_bills tb ON tb.is_deleted = FALSE
           AND UPPER(TRIM(COALESCE(tb.wo_number, tb.po_number))) = UPPER(TRIM(wo.wo_number))
         WHERE p.company_id = $1 ${cond}
-          AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor')
+          AND LOWER(v.vendor_type) IN ('sub-contractor', 'subcontractor', 'labour contractor', 'labour_contractor', 'service provider')
         GROUP BY v.id, v.name
         ORDER BY contract_value DESC
       `, params),
@@ -795,7 +795,7 @@ const listSubcontractors = async (req, res) => {
         GROUP BY wo.vendor_id
       ) stats ON stats.vendor_id = v.id
       WHERE v.company_id = $1
-        AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor')
+        AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor','service provider')
     `;
 
     // Project filter: restrict to vendors that have WOs in this project
@@ -1090,7 +1090,7 @@ const listExpiringDocuments = async (req, res) => {
          WHERE company_id = $1
            AND contract_end_date IS NOT NULL
            AND contract_end_date <= CURRENT_DATE + ($2 || ' days')::interval
-           AND LOWER(vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor')
+           AND LOWER(vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor','service provider')
          ORDER BY contract_end_date ASC`,
         [req.user.company_id, days]
       ),
@@ -1307,7 +1307,7 @@ const reportLedger = async (req, res) => {
         JOIN work_orders wo ON wo.id = b.wo_id
         JOIN vendors     v  ON v.id  = wo.vendor_id
        WHERE ${billWhere}
-         AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor')
+         AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor','service provider')
 
       UNION ALL
 
@@ -1370,7 +1370,7 @@ const reportDeductionSummary = async (req, res) => {
        JOIN work_orders wo ON b.wo_id = wo.id
        JOIN vendors v ON wo.vendor_id = v.id
        WHERE ${where}
-         AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor')
+         AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor','service provider')
        GROUP BY v.id, v.name
        ORDER BY net_payable_total DESC`,
       params
@@ -1406,7 +1406,7 @@ const reportWOUtilization = async (req, res) => {
        JOIN vendors v ON wo.vendor_id = v.id
        LEFT JOIN subcontractor_bills b ON b.wo_id = wo.id
        WHERE ${where}
-         AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor')
+         AND LOWER(v.vendor_type) IN ('sub-contractor','subcontractor','labour contractor','labour_contractor','service provider')
        GROUP BY wo.id, v.name, p.name
        ORDER BY utilization_pct DESC`,
       params
