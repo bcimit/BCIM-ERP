@@ -27,6 +27,7 @@ export default function RABillNewPage() {
 
   const [formData, setFormData] = useState({
     project_id: '',
+    wo_number: '',
     bill_number: '',
     bill_date: dayjs().format('YYYY-MM-DD'),
     contractor_name: '',
@@ -166,7 +167,9 @@ export default function RABillNewPage() {
       setFormData(prev => {
         const next = {
           ...prev,
-          bill_number: prev.bill_number || `RA/${dayjs().format('YY')}/${String(count).padStart(2, '0')}`,
+          bill_number: prev.bill_number || (prev.wo_number
+            ? `${prev.wo_number}-RA-${String(count).padStart(2, '0')}`
+            : `RA/${dayjs().format('YY')}/${String(count).padStart(2, '0')}`),
         };
 
         // Auto-configure from Project
@@ -549,6 +552,19 @@ export default function RABillNewPage() {
                   )}
                 </div>
               )}
+
+              <Field label="Work Order No.">
+                <input
+                  className="field-input font-mono"
+                  placeholder="e.g. WDIRY0151"
+                  value={formData.wo_number}
+                  onChange={e => {
+                    set('wo_number', e.target.value);
+                    // Reset bill_number so it re-generates with new WO prefix on next project load
+                    set('bill_number', '');
+                  }}
+                />
+              </Field>
 
               <Field label="RA Bill No. *">
                 <input className="field-input font-mono bg-slate-50" value={formData.bill_number} onChange={e => set('bill_number', e.target.value)} />
