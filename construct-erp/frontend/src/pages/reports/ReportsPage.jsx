@@ -8,7 +8,7 @@ import {
   Flag, Ruler, BookOpen, ClipboardList, Target, ChevronRight,
   Printer, Download, RefreshCw, X, Filter, SlidersHorizontal,
   CheckCircle2, Circle, ChevronDown, Eye, FileSpreadsheet,
-  ArrowUpRight, Wallet, DollarSign, AlertCircle, Info,
+  ArrowUpRight, Wallet, IndianRupee, AlertCircle, Info,
   LayoutDashboard, Table2, MousePointerClick,
 } from 'lucide-react';
 import {
@@ -576,7 +576,7 @@ export const REPORTS = [
     ],
   },
   {
-    key:'procurement-negotiation-savings', dept:'procurement', category:'Quotation Reports', title:'Negotiation Savings Report', icon:DollarSign, color:'amber',
+    key:'procurement-negotiation-savings', dept:'procurement', category:'Quotation Reports', title:'Negotiation Savings Report', icon:IndianRupee, color:'amber',
     desc:'Savings achieved between the highest quoted amount and the finalized L1 amount',
     filters:['dateRange','project'],
     endpoint:'/quotations/cs-summary',
@@ -1034,7 +1034,7 @@ export const REPORTS = [
     ],
   },
   {
-    key:'procurement-costhead-analysis', dept:'procurement', category:'Cost Analysis Reports', title:'Procurement Spend by Cost Head', icon:DollarSign, color:'amber',
+    key:'procurement-costhead-analysis', dept:'procurement', category:'Cost Analysis Reports', title:'Procurement Spend by Cost Head', icon:IndianRupee, color:'amber',
     desc:'PO spend grouped by cost category — vs budgeted amount, % consumed, and variance',
     filters:['dateRange','project'],
     endpoint:'/reports/procurement/costhead-analysis',

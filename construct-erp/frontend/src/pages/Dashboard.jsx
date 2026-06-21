@@ -9,7 +9,7 @@ import {
   RadialBarChart, RadialBar, CartesianGrid,
 } from 'recharts';
 import {
-  Building2, DollarSign, Shield, Receipt, TrendingUp,
+  Building2, IndianRupee, Shield, Receipt, TrendingUp,
   AlertTriangle, ArrowRight, RefreshCw, Package, CheckCircle2,
   Clock, Wallet, FileWarning, HardHat, CalendarRange, FileText,
   ClipboardList, Zap, Activity, ChevronRight, TrendingDown,
@@ -614,7 +614,7 @@ export default function Dashboard() {
 
         {/* KPI Cards — row 1 */}
         <div className="dash-kpi-grid" style={{ marginBottom: 14 }}>
-          <KpiCard title="Portfolio Value"    rawValue={totalContractValue} sub={`${safeProjects.length} projects`} gradient={GRADIENTS[0]} icon={DollarSign}  delay={0}    to="/projects" loading={dashboardLoading} />
+          <KpiCard title="Portfolio Value"    rawValue={totalContractValue} sub={`${safeProjects.length} projects`} gradient={GRADIENTS[0]} icon={IndianRupee}  delay={0}    to="/projects" loading={dashboardLoading} />
           <KpiCard title="Certified Billing"  rawValue={totalCertified}     sub={`${pendingRABillCount} bills pending`} gradient={GRADIENTS[1]} icon={Receipt}    delay={0.07} to="/qs/ra-bills" loading={dashboardLoading} />
           <KpiCard title="Collections"        rawValue={totalCollections}   sub={`${inrCompact(receivables)} ${receivables < 0 ? 'over-collected' : 'receivable'}`} gradient={GRADIENTS[2]} icon={Wallet}     delay={0.14} to="/finance/payments" loading={dashboardLoading} />
           <KpiCard title="Pending RA Value"   rawValue={pendingRAValue}     sub={`${pendingRABillCount} pending bills`} gradient={GRADIENTS[3]} icon={Clock}      delay={0.21} to="/qs/ra-bills" loading={dashboardLoading} />
@@ -631,7 +631,7 @@ export default function Dashboard() {
         {/* DQS Bills Summary Row */}
         <div className="dash-kpi-grid" style={{ marginBottom: 14 }}>
           <KpiCard title="DQS Total Bills"     value={String(tqsTotalBills)}          sub={`${tqsPaid} paid · ${tqsPending} pending`}  gradient={['#f7971e','#ffd200']} icon={FileText}      delay={0.56} to="/tqs" />
-          <KpiCard title="DQS Invoice Value"   rawValue={tqsTotalInvoice}             sub="Total vendor invoices"                       gradient={['#11998e','#38ef7d']} icon={DollarSign}    delay={0.6}  to="/tqs/bills" />
+          <KpiCard title="DQS Invoice Value"   rawValue={tqsTotalInvoice}             sub="Total vendor invoices"                       gradient={['#11998e','#38ef7d']} icon={IndianRupee}    delay={0.6}  to="/tqs/bills" />
           <KpiCard title="DQS Certified"       rawValue={tqsTotalCertified}           sub="QS certified amount"                         gradient={['#6a11cb','#2575fc']} icon={ClipboardList}  delay={0.64} to="/tqs/bills" />
           <KpiCard title="DQS Balance to Pay"  rawValue={tqsBalance}                  sub="Outstanding vendor payments"                 gradient={['#f953c6','#b91d73']} icon={Clock}          delay={0.68} to="/tqs/bills" />
         </div>

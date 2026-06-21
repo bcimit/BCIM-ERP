@@ -7,7 +7,7 @@ import {
   AlertTriangle, CheckCircle2, Receipt, Shield, Building2,
   ArrowRight, Activity, Package, Briefcase, Plus, Clock, Users,
   TrendingUp, HardHat, FileText, Calendar, BarChart3, PieChart,
-  TrendingDown, DollarSign, Target, Zap, Settings, Filter,
+  TrendingDown, IndianRupee, Target, Zap, Settings, Filter,
   Download, RefreshCw, Eye, Edit, Trash2, MoreVertical
 } from 'lucide-react';
 import { projectAPI, incidentAPI, poAPI, raBillAPI, analyticsAPI } from '../api/client';
@@ -212,7 +212,7 @@ export default function Dashboard() {
             title="Total Revenue"
             value={inr(totalContract)}
             subtitle={`${activeProjects.length} active projects`}
-            icon={<DollarSign className="w-6 h-6 text-blue-600" />}
+            icon={<IndianRupee className="w-6 h-6 text-blue-600" />}
             color="bg-blue-100"
             trend={{ value: 12.5, label: "vs last month" }}
           />

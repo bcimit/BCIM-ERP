@@ -6,7 +6,7 @@ import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, X, RefreshCw, Search, ChevronDown, ChevronRight,
   AlertTriangle, IndianRupee, Layers, Download,
-  CheckCircle2, Building2, HardHat, Link2, Edit2, DollarSign,
+  CheckCircle2, Building2, HardHat, Link2, Edit2, IndianRupee,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -861,7 +861,7 @@ export default function BOQMappingPage() {
                                             boqItem: {...item, id:item.boq_item_id, description:boqDesc(item)},
                                           })}
                                           className="p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded">
-                                          <DollarSign className="w-3 h-3"/>
+                                          <IndianRupee className="w-3 h-3"/>
                                         </button>
                                       )}
                                       {/* Cancel — draft or confirmed (not wo_issued) */}

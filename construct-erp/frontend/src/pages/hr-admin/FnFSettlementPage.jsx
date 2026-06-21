@@ -1,7 +1,7 @@
 // FnFSettlementPage.jsx — Full & Final Settlement
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Eye, CheckCircle2, DollarSign } from 'lucide-react';
+import { Plus, X, Eye, CheckCircle2, IndianRupee } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText, Download, Calendar, Filter, Search,
   TrendingUp, BarChart3, PieChart, Activity,
-  DollarSign, Receipt, CreditCard, AlertCircle,
+  IndianRupee, Receipt, CreditCard, AlertCircle,
   ChevronDown, Printer, Eye, Clock,
   CheckCircle, XCircle, ArrowUpRight, X, Zap,
   Building2
@@ -156,7 +156,7 @@ const BillingReportsPage = () => {
       id: 'vendor-payment-register',
       name: 'Vendor Payment Register',
       description: 'All payments made to vendors with mode and reference',
-      icon: DollarSign,
+      icon: IndianRupee,
       accent: '#0369a1',
       accentLight: '#f0f9ff',
       category: 'Vendor',
@@ -633,7 +633,7 @@ const BillingReportsPage = () => {
 
   const overviewCards = [
     { label: 'Total Bills', value: totalBills, sub: `${paidBills} paid`, icon: Receipt, color: '#3b82f6', bg: '#eff6ff' },
-    { label: 'Total Billed', value: formatCurrency(totalBilled), sub: 'Gross amount', icon: DollarSign, color: '#10b981', bg: '#f0fdf4' },
+    { label: 'Total Billed', value: formatCurrency(totalBilled), sub: 'Gross amount', icon: IndianRupee, color: '#10b981', bg: '#f0fdf4' },
     { label: 'Outstanding', value: formatCurrency(outstanding), sub: `${pendingBills} pending bills`, icon: AlertCircle, color: '#ef4444', bg: '#fef2f2' },
     { label: 'Collection Rate', value: `${collectionRate}%`, sub: formatCurrency(totalCollected) + ' collected', icon: TrendingUp, color: '#8b5cf6', bg: '#f5f3ff' },
   ];

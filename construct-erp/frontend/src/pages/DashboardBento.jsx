@@ -11,7 +11,7 @@ import {
   RadialBarChart, RadialBar,
 } from 'recharts';
 import {
-  Building2, DollarSign, Shield, Receipt, TrendingUp,
+  Building2, IndianRupee, Shield, Receipt, TrendingUp,
   AlertTriangle, RefreshCw, Package, CheckCircle2,
   Clock, Wallet, FileWarning, HardHat, FileText,
   ClipboardList, Zap, ChevronRight, Heart, Sparkles,

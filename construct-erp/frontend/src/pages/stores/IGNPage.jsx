@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Plus, X, Search, Download, RefreshCw, Printer,
   Clock, CheckCircle2, Package, ChevronRight, FileText,
   Truck, ClipboardList, AlertTriangle, XCircle, Eye,
-  Building2, Trash2, DollarSign, ChevronDown, ChevronUp,
+  Building2, Trash2, IndianRupee, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';

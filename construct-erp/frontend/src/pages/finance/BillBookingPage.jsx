@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, FileText, ShoppingCart, 
   Truck, Save, Calculator, AlertCircle,
-  Plus, X, Box, Tag, DollarSign, Percent
+  Plus, X, Box, Tag, IndianRupee, Percent
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { invoiceAPI, projectAPI, vendorAPI, poAPI, ignAPI } from '../../api/client';

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText, Download, Calendar, Filter, Search,
   TrendingUp, BarChart3, PieChart, Activity,
-  Building2, Package, Users, DollarSign,
+  Building2, Package, Users, IndianRupee,
   ChevronDown, Printer, Eye, AlertCircle,
   CheckCircle, X, Layers, Zap
 } from 'lucide-react';
@@ -68,7 +68,7 @@ const ReportsPage = () => {
       id: 'ra-bill-summary',
       name: 'RA Bill Summary',
       description: 'Running Account bills overview and payment status',
-      icon: DollarSign,
+      icon: IndianRupee,
       category: 'Billing',
       accent: '#8b5cf6',
       accentLight: '#f5f3ff',
@@ -532,7 +532,7 @@ const ReportsPage = () => {
   const statsCards = [
     { label: 'Total Reports', value: reportTypes.length, icon: FileText, color: '#3b82f6', bg: '#eff6ff' },
     { label: 'QS Reports', value: reportTypes.filter(r => r.category === 'QS').length, icon: Package, color: '#10b981', bg: '#f0fdf4' },
-    { label: 'Billing Reports', value: reportTypes.filter(r => r.category === 'Billing').length, icon: DollarSign, color: '#8b5cf6', bg: '#f5f3ff' },
+    { label: 'Billing Reports', value: reportTypes.filter(r => r.category === 'Billing').length, icon: IndianRupee, color: '#8b5cf6', bg: '#f5f3ff' },
     { label: 'Active Projects', value: projects.length, icon: Building2, color: '#f59e0b', bg: '#fffbeb' },
   ];
 

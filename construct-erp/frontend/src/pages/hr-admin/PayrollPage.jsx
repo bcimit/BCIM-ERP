@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  CreditCard, Play, Check, DollarSign, Download, AlertCircle,
+  CreditCard, Play, Check, IndianRupee, Download, AlertCircle,
   CheckCircle, Clock, Banknote, TrendingDown, Users, X, ChevronDown,
   FileText, ArrowRight,
 } from 'lucide-react';
@@ -34,7 +34,7 @@ const STEPS = [
   { id: 'generate', label: 'Generate',  icon: Play         },
   { id: 'review',   label: 'Review',    icon: FileText     },
   { id: 'approve',  label: 'Approve',   icon: Check        },
-  { id: 'disburse', label: 'Disburse',  icon: DollarSign   },
+  { id: 'disburse', label: 'Disburse',  icon: IndianRupee   },
 ];
 
 function getWorkflowStep(records) {
@@ -101,7 +101,7 @@ function PayModal({ onClose, onConfirm, isPending, month, year, count }) {
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-emerald-600" />
+              <IndianRupee className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
               <p className="font-medium text-gray-900">Mark Payroll as Paid</p>
@@ -291,7 +291,7 @@ export default function PayrollPage() {
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-medium transition-all hover:shadow-md active:scale-95"
                 style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
               >
-                <DollarSign className="w-4 h-4" /> Mark as Paid
+                <IndianRupee className="w-4 h-4" /> Mark as Paid
               </button>
             )}
           </div>

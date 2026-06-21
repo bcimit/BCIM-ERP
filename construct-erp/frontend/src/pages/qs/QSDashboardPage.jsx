@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
-  FileSpreadsheet, Receipt, TrendingUp, DollarSign,
+  FileSpreadsheet, Receipt, TrendingUp, IndianRupee,
   AlertTriangle, ArrowUpRight, CheckCircle2, Clock,
   XCircle, ShieldCheck, ArrowLeftRight, Ruler,
   BarChart3, ChevronRight, Activity, CalendarDays,

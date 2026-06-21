@@ -2,7 +2,7 @@
 import React from 'react';
 import { 
   TrendingUp, TrendingDown, Users, Package, 
-  ShieldCheck, AlertTriangle, DollarSign, 
+  ShieldCheck, AlertTriangle, IndianRupee, 
   Clock, BarChart3, Activity, PieChart,
   HardHat, Warehouse, ShoppingCart, 
   ArrowUpRight, ArrowDownRight, Globe
@@ -19,7 +19,7 @@ export default function DepartmentalReportView({ type, data }) {
         return [
           { label: 'Workforce Strength', val: '482', sub: '320 Skilled · 162 Helper', icon: Users, color: 'text-blue-500' },
           { label: 'Attendance (Current)', val: '94.2%', sub: 'Avg last 7 days', icon: CheckCircle2, color: 'text-emerald-500' },
-          { label: 'Monthly Wage Liability', val: inr(4820000), sub: 'Due in 4 days', icon: DollarSign, color: 'text-indigo-500' },
+          { label: 'Monthly Wage Liability', val: inr(4820000), sub: 'Due in 4 days', icon: IndianRupee, color: 'text-indigo-500' },
           { label: 'OT Burn Rate', val: '12.4%', sub: 'Trend: +2.1% (Zone B)', icon: Activity, color: 'text-amber-500' }
         ];
       case 'procurement':
@@ -52,7 +52,7 @@ export default function DepartmentalReportView({ type, data }) {
         ];
       case 'finance':
         return [
-           { label: 'Cumulative Revenue', val: inr(284000000), sub: 'Project Order Book', icon: DollarSign, color: 'text-indigo-500' },
+           { label: 'Cumulative Revenue', val: inr(284000000), sub: 'Project Order Book', icon: IndianRupee, color: 'text-indigo-500' },
            { label: 'Realized Margin', val: '18.4%', sub: 'Avg Gross Profit', icon: TrendingUp, color: 'text-emerald-500' },
            { label: 'GST Liability (Cash)', val: inr(1240000), sub: 'Due: 20th Apr', icon: Activity, color: 'text-red-400' },
            { label: 'Total Spend (YTD)', val: inr(156000000), sub: 'Budget Utilization: 62%', icon: Wallet, color: 'text-blue-500' }

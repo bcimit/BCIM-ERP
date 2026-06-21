@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Target, Plus, Search, ChevronRight, X, TrendingUp, DollarSign } from 'lucide-react';
+import { Target, Plus, Search, ChevronRight, X, TrendingUp, IndianRupee } from 'lucide-react';
 import { bidOpportunityAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';

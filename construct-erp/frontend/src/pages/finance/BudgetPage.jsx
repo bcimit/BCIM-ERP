@@ -5,7 +5,7 @@ import {
   TrendingUp, AlertTriangle, X, ChevronDown, PieChart, Zap,
   Warehouse, Package, RefreshCw, ChevronRight, Search, Wrench,
   Plus, MoreVertical, Edit2, Trash2, CheckCircle, AlertCircle,
-  BarChart3, DollarSign, TrendingDown, ArrowUpRight,
+  BarChart3, IndianRupee, TrendingDown, ArrowUpRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import api, { projectAPI, inventoryAPI, budgetAPI } from '../../api/client';
@@ -306,7 +306,7 @@ export default function BudgetPage() {
               <>
                 {/* KPI strip */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <KpiCard label="Total budget" value={inr(totals.budget)} icon={DollarSign} />
+                  <KpiCard label="Total budget" value={inr(totals.budget)} icon={IndianRupee} />
                   <KpiCard
                     label="Actual spend (paid)"
                     value={inr(totals.actual)}

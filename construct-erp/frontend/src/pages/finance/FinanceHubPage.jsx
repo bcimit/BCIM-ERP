@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   FileText, CreditCard, Wallet, AlertTriangle, CheckCircle2,
-  Clock, DollarSign, TrendingUp, BarChart3, PieChart, Receipt,
+  Clock, IndianRupee, TrendingUp, BarChart3, PieChart, Receipt,
   Banknote, BookOpen, ShieldCheck, ArrowRight, Plus, RefreshCw,
   ClipboardList, LineChart, Calendar, Building2,
 } from 'lucide-react';
@@ -177,7 +177,7 @@ export default function FinanceHubPage() {
           label="Paid This Month"
           value={summary?.paid_this_month}
           count={summary?.paid_this_month_count}
-          icon={DollarSign}
+          icon={IndianRupee}
           iconBg="bg-blue-50 text-blue-600"
           color="text-blue-700"
           to="/finance/payments"

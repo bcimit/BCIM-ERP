@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
-  DollarSign, Clock, CheckCircle2, AlertTriangle, ArrowRight,
+  IndianRupee, Clock, CheckCircle2, AlertTriangle, ArrowRight,
   FileText, ChevronDown, ChevronRight, CreditCard, X,
   Search, Filter, RefreshCw,
 } from 'lucide-react';
@@ -417,7 +417,7 @@ export default function AccountsDashboard() {
 
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <FlatKPI icon={DollarSign}    label="Total Outstanding"    value={unpaidBills.length}           sub={inrFmt(totalOutstanding)} color="red"    loading={loadB} />
+        <FlatKPI icon={IndianRupee}    label="Total Outstanding"    value={unpaidBills.length}           sub={inrFmt(totalOutstanding)} color="red"    loading={loadB} />
         <FlatKPI icon={FileText}      label="PCs Pending Payment"  value={pendingPCCount}               sub={inrFmt(totalPCDue)}       color="amber"  loading={loadPC} />
         <FlatKPI icon={Clock}         label="At Accounts Stage"    value={readyForPayment.length}       sub={inrFmt(totalDue)}         color="purple" loading={loadB} />
         <FlatKPI icon={CheckCircle2}  label="Paid This Month"      value={paidThisMonth.length}         sub={inrFmt(paidAmt)}          color="emerald" loading={loadB} />

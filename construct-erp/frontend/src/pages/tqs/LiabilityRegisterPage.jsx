@@ -10,7 +10,7 @@ import {
   BookOpen, Search, Printer, AlertTriangle,
   IndianRupee, X, ShoppingCart, Hammer, Layers3,
   FileSpreadsheet, FileText, ChevronDown, Building2, Filter, Pencil,
-  Users, Receipt, Wallet, Percent, TrendingUp, Clock, CircleDollarSign,
+  Users, Receipt, Wallet, Percent, TrendingUp, Clock, IndianRupee,
   BellRing,
 } from 'lucide-react';
 
@@ -622,7 +622,7 @@ export default function LiabilityRegisterPage() {
           { label: 'Total Paid',     val: totalPaid,             isN: false, accent: C.blue, light: C.blueBg, border: C.blueBorder, Icon: Wallet },
           { label: 'TDS Deducted',   val: totalTDS,              isN: false, accent: C.slate, light: C.slateBg, border: C.slateBorder, Icon: Percent },
           { label: 'Advance Open',   val: totalAdvanceOpen || totalAdvance, isN: false, accent: C.red, light: C.redBg, border: C.redBorder, Icon: TrendingUp },
-          { label: 'Net Payable',    val: totalPayable || totalBalance,     isN: false, accent: C.slate, light: C.slateBg, border: C.slateBorder, Icon: CircleDollarSign },
+          { label: 'Net Payable',    val: totalPayable || totalBalance,     isN: false, accent: C.slate, light: C.slateBg, border: C.slateBorder, Icon: IndianRupee },
           { label: `90+ Days (${vendorsOver90})`, val: totalOver90,         isN: false, accent: C.red, light: C.redBg, border: C.redBorder, Icon: Clock },
         ].map(k => (
           <div key={k.label} style={{

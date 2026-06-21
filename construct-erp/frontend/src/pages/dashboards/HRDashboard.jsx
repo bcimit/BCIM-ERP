@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users, UserCheck, Calendar, DollarSign, ArrowRight } from 'lucide-react';
+import { Users, UserCheck, Calendar, IndianRupee, ArrowRight } from 'lucide-react';
 import { hrEmployeesAPI, hrAttendanceAPI, hrPayrollAPI, hrLeaveAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
 import { DashKPI, DashSection, DashTable, Badge, inr } from './DashKPI';
@@ -80,7 +80,7 @@ export default function HRDashboard() {
         <DashKPI icon={Users}     label="Active Employees"   value={active}            color="indigo"  loading={loadE} />
         <DashKPI icon={UserCheck} label="Present This Month" value={presentCount}       color="emerald" loading={loadA} />
         <DashKPI icon={Calendar}  label="Pending Leaves"     value={pendingLeave}       color="amber"   loading={loadL} />
-        <DashKPI icon={DollarSign}label="Payroll Paid"       value={`${payrollDone} emp`} color="blue" />
+        <DashKPI icon={IndianRupee}label="Payroll Paid"       value={`${payrollDone} emp`} color="blue" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

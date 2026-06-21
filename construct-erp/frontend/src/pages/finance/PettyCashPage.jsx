@@ -6,7 +6,7 @@ import clsx from 'clsx';
 import dayjs from 'dayjs';
 import {
   Wallet, PlusCircle, CheckCircle, XCircle, Clock, BarChart2,
-  FileText, RefreshCw, Settings, Send, DollarSign, TrendingUp,
+  FileText, RefreshCw, Settings, Send, IndianRupee, TrendingUp,
   AlertCircle, Layers
 } from 'lucide-react';
 
@@ -250,7 +250,7 @@ function RequestsTab({ projectId, projects, custodians, accounts }) {
                   <td className="px-3 py-2">
                     <div className="flex gap-1">
                       {r.status === 'draft' && <button onClick={() => submitMut.mutate(r.id)} className="text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"><Send size={10} className="inline mr-0.5" />Submit</button>}
-                      {r.status === 'approved' && <button onClick={() => { setShowIssue(r.id); setIssueForm(f => ({ ...f, amount_issued: r.amount_approved || r.amount_requested })); }} className="text-[10px] px-2 py-0.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium"><DollarSign size={10} className="inline mr-0.5" />Issue</button>}
+                      {r.status === 'approved' && <button onClick={() => { setShowIssue(r.id); setIssueForm(f => ({ ...f, amount_issued: r.amount_approved || r.amount_requested })); }} className="text-[10px] px-2 py-0.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium"><IndianRupee size={10} className="inline mr-0.5" />Issue</button>}
                     </div>
                   </td>
                 </tr>

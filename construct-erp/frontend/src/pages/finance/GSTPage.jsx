@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { DollarSign, Plus, X, FileText, TrendingUp, Landmark, Calculator } from 'lucide-react';
+import { IndianRupee, Plus, X, FileText, TrendingUp, Landmark, Calculator } from 'lucide-react';
 import api, { invoiceAPI, projectAPI, reportAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';

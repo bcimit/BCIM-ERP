@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
   BarChart3, TrendingUp, TrendingDown, 
-  Activity, ShieldAlert, DollarSign, 
+  Activity, ShieldAlert, IndianRupee, 
   Target, Layers, Package, Truck, 
   HardHat, Info, Download, ArrowLeft,
   ChevronRight, Calendar, Building2, Printer,

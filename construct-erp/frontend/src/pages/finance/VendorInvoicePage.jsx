@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, Search, CheckCircle2, Clock, ShieldCheck,
-  ExternalLink, Printer, DollarSign, Building2,
+  ExternalLink, Printer, IndianRupee, Building2,
   AlertTriangle, TrendingUp, Receipt, ArrowRight,
   ChevronDown, X, Filter
 } from 'lucide-react';
@@ -21,7 +21,7 @@ const STATUS = {
   pending:    { label: 'Pending Audit',     dot: 'bg-amber-400',   pill: 'bg-amber-50 text-amber-700 border-amber-200',   icon: Clock },
   verified:   { label: 'Audit Verified',    dot: 'bg-blue-500',    pill: 'bg-blue-50 text-blue-700 border-blue-200',       icon: ShieldCheck },
   authorized: { label: 'Ready for Payment', dot: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-  paid:       { label: 'Paid',              dot: 'bg-slate-400',   pill: 'bg-slate-100 text-slate-900 font-medium border-slate-200',   icon: DollarSign },
+  paid:       { label: 'Paid',              dot: 'bg-slate-400',   pill: 'bg-slate-100 text-slate-900 font-medium border-slate-200',   icon: IndianRupee },
 };
 
 export default function VendorInvoicePage() {
@@ -179,7 +179,7 @@ export default function VendorInvoicePage() {
             label="Paid This Period"
             value={inr(totalPaid)}
             sub={`${allInvoices.filter(i=>i.status==='paid').length} invoices settled`}
-            icon={DollarSign}
+            icon={IndianRupee}
             color="slate"
           />
         </div>
