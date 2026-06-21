@@ -383,7 +383,9 @@ router.get('/boq-actual', async (req, res) => {
            WHERE swi.boq_item_id=b.id
              AND sb.status IN ('approved','paid')
              AND sb.company_id=$2
-         ),0)
+         ),0),
+         COALESCE((SELECT SUM(rbi.current_qty) FROM ra_bill_items rbi JOIN ra_bills rb ON rbi.ra_bill_id=rb.id JOIN projects rp ON rb.project_id = rp.id
+                    WHERE rbi.boq_item_id=b.id AND rb.status IN ('certified','paid') AND rp.company_id=$2),0)
        ) as executed_qty,
        COALESCE((
          SELECT SUM(bi.curr_qty)
