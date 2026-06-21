@@ -151,6 +151,10 @@ const NT_ITEMS = [
 async function run() {
   console.log('Connecting to database…');
 
+  // Widen sl_no if it was created with VARCHAR(20)
+  await q(`ALTER TABLE IF EXISTS variation_statement_items ALTER COLUMN sl_no TYPE VARCHAR(60)`).catch(() => {});
+  await q(`ALTER TABLE IF EXISTS variation_statement_nt_items ALTER COLUMN sl_no TYPE VARCHAR(60)`).catch(() => {});
+
   // Ensure tables exist
   await q(`
     CREATE TABLE IF NOT EXISTS variation_statements (

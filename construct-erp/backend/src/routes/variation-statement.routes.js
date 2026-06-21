@@ -32,7 +32,7 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS variation_statement_items (
       id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       statement_id  UUID REFERENCES variation_statements(id) ON DELETE CASCADE,
-      sl_no         VARCHAR(20)  DEFAULT '',
+      sl_no         VARCHAR(60)  DEFAULT '',
       item_code     VARCHAR(60)  DEFAULT '',
       description   TEXT         DEFAULT '',
       unit          VARCHAR(30)  DEFAULT '',
@@ -46,7 +46,7 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS variation_statement_nt_items (
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       statement_id UUID REFERENCES variation_statements(id) ON DELETE CASCADE,
-      sl_no        VARCHAR(20)  DEFAULT '',
+      sl_no        VARCHAR(60)  DEFAULT '',
       description  TEXT         DEFAULT '',
       unit         VARCHAR(30)  DEFAULT '',
       rate         NUMERIC(12,2) DEFAULT 0,
