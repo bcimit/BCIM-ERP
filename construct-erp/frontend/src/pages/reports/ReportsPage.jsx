@@ -8,7 +8,7 @@ import {
   Flag, Ruler, BookOpen, ClipboardList, Target, ChevronRight,
   Printer, Download, RefreshCw, X, Filter, SlidersHorizontal,
   CheckCircle2, Circle, ChevronDown, Eye, FileSpreadsheet,
-  ArrowUpRight, Wallet, IndianRupee, AlertCircle, Info,
+  ArrowUpRight, Wallet, AlertCircle, Info,
   LayoutDashboard, Table2, MousePointerClick,
 } from 'lucide-react';
 import {

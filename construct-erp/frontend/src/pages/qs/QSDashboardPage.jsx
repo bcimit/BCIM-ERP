@@ -7,7 +7,7 @@ import {
   AlertTriangle, ArrowUpRight, CheckCircle2, Clock,
   XCircle, ShieldCheck, ArrowLeftRight, Ruler,
   BarChart3, ChevronRight, Activity, CalendarDays,
-  IndianRupee, Target, Layers,
+  Target, Layers,
 } from 'lucide-react';
 import { boqAPI, raBillAPI, retentionAPI, variationAPI, projectAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';

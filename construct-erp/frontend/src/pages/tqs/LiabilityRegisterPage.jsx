@@ -10,7 +10,7 @@ import {
   BookOpen, Search, Printer, AlertTriangle,
   IndianRupee, X, ShoppingCart, Hammer, Layers3,
   FileSpreadsheet, FileText, ChevronDown, Building2, Filter, Pencil,
-  Users, Receipt, Wallet, Percent, TrendingUp, Clock, IndianRupee,
+  Users, Receipt, Wallet, Percent, TrendingUp, Clock,
   BellRing,
 } from 'lucide-react';
 

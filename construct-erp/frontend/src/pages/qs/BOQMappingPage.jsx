@@ -6,7 +6,7 @@ import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, X, RefreshCw, Search, ChevronDown, ChevronRight,
   AlertTriangle, IndianRupee, Layers, Download,
-  CheckCircle2, Building2, HardHat, Link2, Edit2, IndianRupee,
+  CheckCircle2, Building2, HardHat, Link2, Edit2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
