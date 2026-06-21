@@ -30,7 +30,9 @@ router.get('/', async (req, res) => {
                         WHERE swi.boq_item_id=b.id
                           AND sb.status IN ('approved','paid')
                           AND sb.company_id=$1
-                      ),0)
+                      ),0),
+                      COALESCE((SELECT SUM(rbi.current_qty) FROM ra_bill_items rbi JOIN ra_bills rb ON rbi.ra_bill_id=rb.id
+                                 WHERE rbi.boq_item_id=b.id AND rb.status IN ('certified','paid')),0)
                     ) AS executed_qty,
                     COALESCE((
                       SELECT SUM(bi.curr_qty)
@@ -108,7 +110,9 @@ router.get('/summary/:project_id', async (req, res) => {
            WHERE swi.boq_item_id=b.id
              AND sb.status IN ('approved','paid')
              AND sb.company_id=$2
-         ),0)
+         ),0),
+         COALESCE((SELECT SUM(rbi.current_qty) FROM ra_bill_items rbi JOIN ra_bills rb ON rbi.ra_bill_id=rb.id
+                    WHERE rbi.boq_item_id=b.id AND rb.status IN ('certified','paid')),0)
        ) AS executed_qty,
        COALESCE((
          SELECT SUM(bi.curr_qty)
