@@ -134,8 +134,18 @@ export default function QSDashboardPage() {
     const totalNetPayable    = raBills.reduce((s, b) => s + Number(b.net_payable ?? b.gross_amount ?? b.total_amount ?? 0), 0);
     const totalReceived      = raBills.reduce((s, b) => s + Number(b.amount_received || 0), 0);
     const outstanding        = totalNetPayable - totalReceived;
-    const retentionHeld      = retentions.filter(r => r.status !== 'released').reduce((s, r) => s + Number(r.retention_amount || 0), 0);
-    const variationsApproved = variations.filter(v => v.status === 'approved').reduce((s, v) => s + Number(v.total_amount || 0), 0);
+    // Retention "held" is the money actually withheld on RA bills (a per-bill deduction),
+    // not the retention-release request records — those are only created when retention is
+    // being released back, so that table is empty until a release is raised. Sum the
+    // retention_amount on every non-draft/non-rejected bill.
+    const retentionFromBills = raBills
+      .filter(b => !['draft', 'rejected'].includes(b.status))
+      .reduce((s, b) => s + Number(b.retention_amount || 0), 0);
+    const retentionReleased  = retentions.filter(r => r.status === 'released').reduce((s, r) => s + Number(r.retention_amount || 0), 0);
+    const retentionHeld      = retentionFromBills - retentionReleased;
+    const retentionBillCount = raBills.filter(b => !['draft', 'rejected'].includes(b.status) && Number(b.retention_amount || 0) > 0).length;
+    // variation_orders stores the amount in `total_variation_amount` (not `total_amount`).
+    const variationsApproved = variations.filter(v => v.status === 'approved').reduce((s, v) => s + Number(v.total_variation_amount || 0), 0);
 
     const statusBuckets = {};
     for (const b of raBills) {
@@ -157,7 +167,7 @@ export default function QSDashboardPage() {
 
     return {
       contractValue, totalBilled, totalNetPayable, totalReceived, outstanding,
-      retentionHeld, variationsApproved,
+      retentionHeld, retentionBillCount, variationsApproved,
       statusBuckets, byProject,
       billingProgress: pct(totalBilled, contractValue),
       collectionRate:  pct(totalReceived, totalNetPayable),
@@ -208,7 +218,7 @@ export default function QSDashboardPage() {
           <ThemeKpiCard icon={Receipt}         label="Total Billed"      value={crore(kpi.totalBilled)}        color="emerald" sub={`${raBills.length} RA bills`} />
           <ThemeKpiCard icon={IndianRupee}     label="Amount Received"   value={crore(kpi.totalReceived)}      color="green"   sub={`${kpi.collectionRate}% collected`} />
           <ThemeKpiCard icon={AlertTriangle}   label="Outstanding"       value={crore(kpi.outstanding)}        color="amber"   sub="Pending collection" />
-          <ThemeKpiCard icon={ShieldCheck}     label="Retention Held"    value={crore(kpi.retentionHeld)}      color="violet"  sub={`${retentions.filter(r => r.status !== 'released').length} contracts`} />
+          <ThemeKpiCard icon={ShieldCheck}     label="Retention Held"    value={crore(kpi.retentionHeld)}      color="violet"  sub={`${kpi.retentionBillCount} bill${kpi.retentionBillCount !== 1 ? 's' : ''}`} />
           <ThemeKpiCard icon={ArrowLeftRight}  label="Variations"        value={crore(kpi.variationsApproved)} color="orange"  sub={`${variations.filter(v => v.status === 'approved').length} approved`} />
         </div>
 
@@ -462,7 +472,7 @@ export default function QSDashboardPage() {
                       <p className="text-[10px] text-slate-400">{v.project_name || '—'}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                      <span className="text-xs font-bold text-slate-800">{fmt(v.total_amount)}</span>
+                      <span className="text-xs font-bold text-slate-800">{fmt(v.total_variation_amount)}</span>
                       <span className={clsx('px-2 py-0.5 rounded-full text-[9px] font-bold uppercase',
                         v.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
                         {v.status || 'pending'}
