@@ -285,24 +285,29 @@ const HRRecruitmentPage       = lazy(() => import('./pages/hr-admin/RecruitmentP
 
 // ── Home route resolver — sends each user to their first accessible page ──────
 const MODULE_HOME = {
-  'Overview':          '/dashboard',
-  'Planning':          '/planning',
-  'Procurement':       '/procurement/vendors',
-  'Tender Management': '/tender-management',
-  'Stores':            '/stores',
-  'QS & Billing':      '/qs',
-  'Finance':           '/accounts',
-  'Bill Tracker':      '/tqs',
-  'DQS Tracker':       '/tqs',
-  'Quality (QA/QC)':   '/quality',
-  'HSE & Safety':      '/hse',
-  'Assets & IT':       '/assets/dashboard',
-  'Documents':         '/documents',  // legacy fallback
-  'Administration':    '/users',
+  'Overview':           '/dashboard',
+  'Planning':           '/planning',
+  'Procurement':        '/procurement/vendors',
+  'Tender Management':  '/tender-management',
+  'Stores':             '/stores',
+  'Stores Petty Cash':  '/stores/petty-cash',
+  'QS & Billing':       '/qs',
+  'Finance':            '/accounts',
+  'Accounts':           '/accounts',
+  'Bill Tracker':       '/tqs',
+  'DQS Tracker':        '/tqs',
+  'Quality (QA/QC)':    '/quality',
+  'HSE & Safety':       '/hse',
+  'Plant & Machinery':  '/plant',
+  'Hire & Rental':      '/hire-rental',
+  'Assets & IT':        '/assets/dashboard',
+  'Documents':          '/documents',
+  'Administration':     '/users',
   'Automation Ideas':   '/automation-ideas',
   'Approval Engine':    '/approval-engine',
-  'Reports':           '/reports',
-  'HR & Admin':        '/hr-admin',
+  'Reports':            '/reports',
+  'HR & Admin':         '/hr-admin',
+  'Subcontractors':     '/sc',
 };
 
 // Roles that land on the Approvals page first (they primarily approve work)
@@ -405,9 +410,15 @@ function RequireModule({ module, children }) {
   const mods = user.accessible_modules;
   if (!mods || mods.length === 0) return children; // unconfigured account → full access
   const legacyAliases = [
-    ...(module === 'Reports' ? ['CRM & Reports'] : []),
-    ...(module === 'Bill Tracker' ? ['DQS Tracker'] : []),
-    ...(module === 'DQS Tracker' ? ['Bill Tracker'] : []),
+    ...(module === 'Reports'          ? ['CRM & Reports'] : []),
+    ...(module === 'Bill Tracker'     ? ['DQS Tracker']   : []),
+    ...(module === 'DQS Tracker'      ? ['Bill Tracker']  : []),
+    // Finance and Accounts are the same module (nav group label vs stored name)
+    ...(module === 'Finance'          ? ['Accounts']      : []),
+    ...(module === 'Accounts'         ? ['Finance']       : []),
+    // Plant & Machinery and Hire & Rental were previously gated under Assets & IT
+    ...(module === 'Plant & Machinery'? ['Assets & IT']   : []),
+    ...(module === 'Hire & Rental'    ? ['Assets & IT']   : []),
   ];
   if (mods.includes(module) || legacyAliases.some(alias => mods.includes(alias))) return children;
   return <Navigate to={getHomeRoute(user)} replace />;
@@ -754,27 +765,27 @@ export default function App() {
                 <Route path="assets/reports"     element={<RequireModule module="Assets & IT"><AssetReportsDashboardPage /></RequireModule>} />
                 <Route path="assets/alerts"      element={<RequireModule module="Assets & IT"><AssetAlertsPage /></RequireModule>} />
                 <Route path="assets/roles"       element={<RequireModule module="Assets & IT"><AssetRolesPage /></RequireModule>} />
-                <Route path="plant"              element={<RequireModule module="Assets & IT"><PlantDashboard /></RequireModule>} />
-                <Route path="plant/dashboard"    element={<RequireModule module="Assets & IT"><PlantDashboard /></RequireModule>} />
-                <Route path="plant/masters"      element={<RequireModule module="Assets & IT"><PlantMasters /></RequireModule>} />
-                <Route path="plant/transfers"    element={<RequireModule module="Assets & IT"><PlantTransfers /></RequireModule>} />
-                <Route path="plant/hire"         element={<RequireModule module="Assets & IT"><PlantHire /></RequireModule>} />
-                <Route path="plant/deployment"   element={<RequireModule module="Assets & IT"><PlantDeployment /></RequireModule>} />
-                <Route path="plant/fuel"         element={<RequireModule module="Assets & IT"><PlantFuel /></RequireModule>} />
-                <Route path="plant/equipment-log" element={<RequireModule module="Assets & IT"><PlantEquipmentLog /></RequireModule>} />
-                <Route path="plant/maintenance"  element={<RequireModule module="Assets & IT"><PlantMaintenance /></RequireModule>} />
-                <Route path="plant/operators"    element={<RequireModule module="Assets & IT"><PlantOperators /></RequireModule>} />
-                <Route path="plant/compliance"   element={<RequireModule module="Assets & IT"><PlantCompliance /></RequireModule>} />
-                <Route path="plant/cost"         element={<RequireModule module="Assets & IT"><PlantCost /></RequireModule>} />
-                <Route path="plant/reports"      element={<RequireModule module="Assets & IT"><PlantReports /></RequireModule>} />
-                <Route path="hire-rental"           element={<RequireModule module="Assets & IT"><HireRentalPage defaultTab="dashboard" /></RequireModule>} />
-                <Route path="hire-rental/invoices"  element={<RequireModule module="Assets & IT"><HireRentalPage defaultTab="invoices" /></RequireModule>} />
-                <Route path="hire-rental/certify"   element={<RequireModule module="Assets & IT"><HireRentalPage defaultTab="certify" /></RequireModule>} />
-                <Route path="hire-rental/approvals" element={<RequireModule module="Assets & IT"><HireRentalPage defaultTab="approvals" /></RequireModule>} />
-                <Route path="hire-rental/payments"  element={<RequireModule module="Assets & IT"><HireRentalPage defaultTab="payments" /></RequireModule>} />
-                <Route path="hire-rental/reports"   element={<RequireModule module="Assets & IT"><HireRentalPage defaultTab="reports" /></RequireModule>} />
-                <Route path="hire-rental/crane-log"           element={<RequireModule module="Assets & IT"><CraneLogSheet /></RequireModule>} />
-                <Route path="hire-rental/rental-invoice/new"  element={<RequireModule module="Assets & IT"><RentalInvoiceEntry /></RequireModule>} />
+                <Route path="plant"              element={<RequireModule module="Plant & Machinery"><PlantDashboard /></RequireModule>} />
+                <Route path="plant/dashboard"    element={<RequireModule module="Plant & Machinery"><PlantDashboard /></RequireModule>} />
+                <Route path="plant/masters"      element={<RequireModule module="Plant & Machinery"><PlantMasters /></RequireModule>} />
+                <Route path="plant/transfers"    element={<RequireModule module="Plant & Machinery"><PlantTransfers /></RequireModule>} />
+                <Route path="plant/hire"         element={<RequireModule module="Plant & Machinery"><PlantHire /></RequireModule>} />
+                <Route path="plant/deployment"   element={<RequireModule module="Plant & Machinery"><PlantDeployment /></RequireModule>} />
+                <Route path="plant/fuel"         element={<RequireModule module="Plant & Machinery"><PlantFuel /></RequireModule>} />
+                <Route path="plant/equipment-log" element={<RequireModule module="Plant & Machinery"><PlantEquipmentLog /></RequireModule>} />
+                <Route path="plant/maintenance"  element={<RequireModule module="Plant & Machinery"><PlantMaintenance /></RequireModule>} />
+                <Route path="plant/operators"    element={<RequireModule module="Plant & Machinery"><PlantOperators /></RequireModule>} />
+                <Route path="plant/compliance"   element={<RequireModule module="Plant & Machinery"><PlantCompliance /></RequireModule>} />
+                <Route path="plant/cost"         element={<RequireModule module="Plant & Machinery"><PlantCost /></RequireModule>} />
+                <Route path="plant/reports"      element={<RequireModule module="Plant & Machinery"><PlantReports /></RequireModule>} />
+                <Route path="hire-rental"           element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="dashboard" /></RequireModule>} />
+                <Route path="hire-rental/invoices"  element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="invoices" /></RequireModule>} />
+                <Route path="hire-rental/certify"   element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="certify" /></RequireModule>} />
+                <Route path="hire-rental/approvals" element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="approvals" /></RequireModule>} />
+                <Route path="hire-rental/payments"  element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="payments" /></RequireModule>} />
+                <Route path="hire-rental/reports"   element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="reports" /></RequireModule>} />
+                <Route path="hire-rental/crane-log"           element={<RequireModule module="Hire & Rental"><CraneLogSheet /></RequireModule>} />
+                <Route path="hire-rental/rental-invoice/new"  element={<RequireModule module="Hire & Rental"><RentalInvoiceEntry /></RequireModule>} />
                 <Route path="it/assets"          element={<RequireModule module="Assets & IT"><ITAssetPage /></RequireModule>} />
                 <Route path="it/tickets" element={<RequireModule module="Assets & IT"><ITTicketPage /></RequireModule>} />
                 <Route path="it/licenses" element={<RequireModule module="Assets & IT"><LicensePage /></RequireModule>} />

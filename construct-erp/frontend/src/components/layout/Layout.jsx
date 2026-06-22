@@ -1767,8 +1767,11 @@ export default function Layout() {
       if (['admin', 'super_admin'].includes(user?.role)) return true;
       // If no modules configured at all, show everything (fallback for unconfigured accounts)
       if (!user?.accessible_modules?.length) return true;
-      const aliases = g.label === 'Bill Tracker' ? ['Bill Tracker', 'DQS Tracker']
-        : g.label === 'Stores' ? ['Stores', 'Stores Petty Cash']
+      const aliases = g.label === 'Bill Tracker'      ? ['Bill Tracker', 'DQS Tracker']
+        : g.label === 'Stores'           ? ['Stores', 'Stores Petty Cash']
+        : g.label === 'Accounts'         ? ['Accounts', 'Finance']
+        : g.label === 'Plant & Machinery'? ['Plant & Machinery', 'Assets & IT']
+        : g.label === 'Hire & Rental'    ? ['Hire & Rental', 'Assets & IT']
         : [g.label];
       return aliases.some(label => user?.accessible_modules?.includes(label));
     })
