@@ -23,6 +23,7 @@ const { pool } = require('./config/database');
 const authRoutes = require('./routes/auth.routes');
 const projectRoutes = require('./routes/project.routes');
 const boqRoutes = require('./routes/boq.routes');
+const boqBudgetRoutes = require('./routes/boq-budget.routes');
 const measurementRoutes = require('./routes/measurement.routes');
 const raBillRoutes = require('./routes/raBill.routes');
 const clientAdvanceRoutes = require('./routes/client-advance.routes');
@@ -273,6 +274,7 @@ app.use(`${API}/projects`, projectRoutes);
 
 // QS Module
 app.use(`${API}/boq`, boqRoutes);
+app.use(`${API}/boq-budget`, boqBudgetRoutes);
 app.use(`${API}/measurements`, measurementRoutes);
 app.use(`${API}/ra-bills`, raBillRoutes);
 app.use(`${API}/client-advances`, clientAdvanceRoutes);

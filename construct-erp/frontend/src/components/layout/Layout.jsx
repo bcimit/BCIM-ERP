@@ -106,6 +106,7 @@ const navGroups = [
     { to: '/qs/boq',                  icon: FileSpreadsheet, label: 'BOQ & Estimation' },
     { to: '/qs/boq-mapping',          icon: Layers,          label: 'BOQ SC Mapping' },
     { to: '/qs/boq-dashboard',        icon: BarChart3,       label: 'BOQ Margin Dashboard' },
+    { to: '/qs/boq-budget',           icon: Wallet,          label: 'BOQ Budget Breakdown' },
     { to: '/qs/measurements',         icon: Ruler,           label: 'Measurement Book' },
     { to: '/qs/ra-bills',             icon: Receipt,         label: 'RA Bills' },
     { to: '/qs/po',                   icon: ShoppingCart,    label: 'Purchase Orders' },
@@ -402,7 +403,7 @@ const NAV_SECTIONS = {
   ],
   'QS & Billing': [
     { label: 'Overview',             paths: ['/qs','/qs/boq-dashboard'] },
-    { label: 'Quantity Survey',      paths: ['/qs/boq','/qs/boq-mapping','/qs/measurements','/qs/ra-bills'] },
+    { label: 'Quantity Survey',      paths: ['/qs/boq','/qs/boq-mapping','/qs/boq-budget','/qs/measurements','/qs/ra-bills'] },
     { label: 'Purchase Orders',      paths: ['/qs/po','/qs/po-register'] },
     { label: 'Work Orders',          paths: ['/qs/work-orders','/qs/wo-register'] },
     { label: 'Vendor Certification', paths: ['/qs/vendor-certifications','/qs/retention-releases'] },
