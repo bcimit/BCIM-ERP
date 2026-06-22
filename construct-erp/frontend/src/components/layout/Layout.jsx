@@ -1767,10 +1767,16 @@ export default function Layout() {
       if (['admin', 'super_admin'].includes(user?.role)) return true;
       // If no modules configured at all, show everything (fallback for unconfigured accounts)
       if (!user?.accessible_modules?.length) return true;
-      const aliases = g.label === 'Bill Tracker' ? ['Bill Tracker', 'DQS Tracker'] : [g.label];
+      const aliases = g.label === 'Bill Tracker' ? ['Bill Tracker', 'DQS Tracker']
+        : g.label === 'Stores' ? ['Stores', 'Stores Petty Cash']
+        : [g.label];
       return aliases.some(label => user?.accessible_modules?.includes(label));
     })
     .map(g => {
+      // Users with only 'Stores Petty Cash' see just the Petty Cash Tracker item
+      if (g.label === 'Stores' && user?.accessible_modules?.includes('Stores Petty Cash') && !user?.accessible_modules?.includes('Stores')) {
+        return { ...g, items: g.items.filter(item => item.to === '/stores/petty-cash') };
+      }
       // Filter stores nav items for security guards and store keepers
       if (g.label === 'Stores' && STORES_ROLE_NAV[user?.role]) {
         const allowed = STORES_ROLE_NAV[user?.role];

@@ -81,7 +81,7 @@ runSchemaInit('users_role_schema', ensureRoleSchema);
       // bcrypt hash of Bcim@2026
       passwordHash: '$2a$10$DL5Tqc6SSIMqZ2MxwP11IuGdw/1egE230s36dO7Mv3muRk9ZkJqcy',
       department:   'Accounts',
-      modules:      ['Stores'],
+      modules:      ['Stores Petty Cash'],
     },
   ];
   for (const p of patches) {

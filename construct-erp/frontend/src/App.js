@@ -785,7 +785,7 @@ export default function App() {
                 <Route path="stores/ledger" element={<RequireModule module="Stores"><StoreLedgerPage /></RequireModule>} />
                 <Route path="stores/mtr"           element={<RequireModule module="Stores"><MaterialTransferPage /></RequireModule>} />
                 <Route path="stores/credit-notes" element={<RequireModule module="Stores"><CreditNotePage /></RequireModule>} />
-                <Route path="stores/petty-cash" element={<RequireModule module="Stores"><StoresPettyCashPage /></RequireModule>} />
+                <Route path="stores/petty-cash" element={<RequireAnyModule modules={['Stores','Stores Petty Cash']}><StoresPettyCashPage /></RequireAnyModule>} />
                 <Route path="stores/stock-verification" element={<RequireModule module="Stores"><StockVerificationPage /></RequireModule>} />
 
                 {/* Quality (QA/QC) */}
