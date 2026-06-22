@@ -1677,6 +1677,7 @@ export const tqsTrackerAPI = {
   create: (data)   => api.post('/tqs/material-tracker', data),
   update: (id, d)  => api.put(`/tqs/material-tracker/${id}`, d),
   delete: (id)     => api.delete(`/tqs/material-tracker/${id}`),
+  linkPO:  (data)  => api.patch('/tqs/material-tracker/link-po', data),
 };
 
 export const tqsVendorsAPI = {

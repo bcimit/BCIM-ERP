@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { tqsTrackerAPI, projectAPI } from '../../api/client';
+import { tqsTrackerAPI, projectAPI, poAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 import {
   Package, Plus, Search, X, Edit3, Trash2, ChevronRight, Layers,
   Activity, ClipboardList, RefreshCw, AlertCircle, CheckCircle2,
-  Clock, Truck, FileCheck, IndianRupee, ExternalLink, Filter,
+  Clock, Truck, FileCheck, IndianRupee, ExternalLink, Filter, Link2,
 } from 'lucide-react';
 
 const inr  = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -260,8 +260,82 @@ function TrackerModal({ initial, onClose, projects }) {
   );
 }
 
+/* ─── Link PO Modal ─────────────────────────────────────────────────────────── */
+// Can be used two ways:
+//   1. From a lifecycle row (row prop supplied) — MR number pre-filled, type PO number
+//   2. Standalone (row = null) — type both MR number and PO number manually
+function LinkPOModal({ row, onClose }) {
+  const qc = useQueryClient();
+  const [mrsNumber, setMrsNumber] = useState(row?.mr_number || '');
+  const [poNumber, setPoNumber]   = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => tqsTrackerAPI.linkPO({ mrs_number: mrsNumber.trim(), po_number: poNumber.trim() }),
+    onSuccess: (res) => {
+      const d = res.data || {};
+      toast.success(`Linked ${d.mr_number || mrsNumber} → ${d.po_number || poNumber} (${d.linked_items || 0} items matched)`);
+      qc.invalidateQueries({ queryKey: ['dqs-tracker-lifecycle'] });
+      onClose();
+    },
+    onError: (e) => toast.error(e.response?.data?.error || 'Link failed'),
+  });
+
+  const INP = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-blue-400';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-blue-600" /> Link MR → PO / WO
+          </h2>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="space-y-3 mb-5">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">MR Number</label>
+            <input
+              className={INP}
+              value={mrsNumber}
+              onChange={e => setMrsNumber(e.target.value)}
+              placeholder="e.g. BCIM-TQS-BLR-MR-019"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">PO or WO Number</label>
+            <input
+              className={INP}
+              value={poNumber}
+              onChange={e => setPoNumber(e.target.value)}
+              placeholder="e.g. POTQS010 or WOTQS010-A1"
+            />
+          </div>
+          <p className="text-xs text-slate-400">
+            Enter PO or WO reference. Numbers starting with "WO" are linked as Work Orders.
+          </p>
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50">Cancel</button>
+          <button
+            disabled={!mrsNumber.trim() || !poNumber.trim() || mutation.isPending}
+            onClick={() => mutation.mutate()}
+            className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            {mutation.isPending ? 'Linking…' : 'Link'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Live Lifecycle Table ───────────────────────────────────────────────────── */
 function LiveTrackerTab({ projectFilter, search }) {
+  const [linkRow, setLinkRow] = useState(null);
+
   const { data: rows = [], isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['dqs-tracker-lifecycle', { projectFilter, search }],
     queryFn: () => tqsTrackerAPI.lifecycle({
@@ -319,13 +393,23 @@ function LiveTrackerTab({ projectFilter, search }) {
         </button>
       </div>
 
+      {/* Manual link button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setLinkRow({})}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+        >
+          <Link2 className="w-3.5 h-3.5" /> Manual MR → PO / WO Link
+        </button>
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-[#f8f9fc] border-b border-slate-100">
-                {['MR #', 'Project', 'Material', 'Qty', 'PO #', 'Vendor', 'PO Value (₹)', 'GRN', 'Invoice', 'Pipeline', 'Stage'].map(h => (
+                {['MR #', 'MR Date', 'Material', 'MR Qty', 'PO #', 'Vendor', 'Ordered', 'Received', 'Balance', 'PO Value (₹)', 'GRN', 'Invoice', 'Pipeline', 'Stage'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-medium text-slate-900 font-medium uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -333,7 +417,7 @@ function LiveTrackerTab({ projectFilter, search }) {
             <tbody className="divide-y divide-slate-50">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-16 text-center">
+                  <td colSpan={14} className="px-4 py-16 text-center">
                     <Activity className="w-10 h-10 mx-auto mb-3 text-slate-200" />
                     <p className="text-sm font-medium text-slate-400">No workflow data found</p>
                     <p className="text-xs text-slate-900 font-medium mt-1">
@@ -353,24 +437,61 @@ function LiveTrackerTab({ projectFilter, search }) {
                         <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded font-semibold">Urgent</span>
                       )}
                     </td>
-                    {/* Project */}
-                    <td className="px-4 py-3 text-xs text-slate-900 font-medium max-w-[100px] truncate">{row.project_name || '—'}</td>
+                    {/* MR Date */}
+                    <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                      {row.mr_date ? fmt(row.mr_date) : '—'}
+                    </td>
                     {/* Material */}
                     <td className="px-4 py-3 max-w-[160px]">
-                      <div className="text-xs font-medium text-slate-900 font-medium truncate">{row.material_name || '—'}</div>
-                      {row.purpose && <div className="text-xs text-slate-900 font-medium truncate">{row.purpose}</div>}
+                      <div className="text-xs font-medium text-slate-900 truncate">{row.material_name || '—'}</div>
+                      {row.purpose && <div className="text-xs text-slate-500 truncate">{row.purpose}</div>}
                     </td>
-                    {/* Qty */}
+                    {/* MR Qty */}
                     <td className="px-4 py-3 text-xs text-slate-900 whitespace-nowrap">
                       {row.mr_qty ? `${row.mr_qty} ${row.unit || ''}` : '—'}
                     </td>
-                    {/* PO # */}
+                    {/* PO / WO # */}
                     <td className="px-4 py-3 font-mono text-xs text-slate-900 whitespace-nowrap">
-                      {row.po_number || <span className="text-slate-300">No PO</span>}
+                      {row.po_number ? (
+                        <span className="flex items-center gap-1">
+                          {row.order_type === 'wo' && (
+                            <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">WO</span>
+                          )}
+                          {row.po_number}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setLinkRow(row)}
+                          className="flex items-center gap-1 text-blue-500 hover:text-blue-700 text-xs font-medium"
+                          title="Link this MR to an existing PO or WO"
+                        >
+                          <Link2 className="w-3 h-3" /> Link PO/WO
+                        </button>
+                      )}
                     </td>
                     {/* Vendor */}
                     <td className="px-4 py-3 text-xs text-slate-900 max-w-[110px] truncate">
                       {row.vendor_name || <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* Ordered Qty */}
+                    <td className="px-4 py-3 text-xs text-slate-900 whitespace-nowrap">
+                      {row.ordered_qty != null ? `${Number(row.ordered_qty).toLocaleString('en-IN', { maximumFractionDigits: 3 })} ${row.unit || ''}` : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* Received Qty */}
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {row.received_qty != null ? (
+                        <span className={Number(row.received_qty) > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'}>
+                          {Number(row.received_qty).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.unit || ''}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    {/* Balance Qty */}
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {row.balance_qty != null ? (
+                        <span className={Number(row.balance_qty) > 0 ? 'text-amber-700 font-medium' : 'text-slate-400'}>
+                          {Number(row.balance_qty).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.unit || ''}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
                     </td>
                     {/* PO Value */}
                     <td className="px-4 py-3 text-xs font-medium text-slate-900 whitespace-nowrap">
@@ -429,6 +550,7 @@ function LiveTrackerTab({ projectFilter, search }) {
           </div>
         )}
       </div>
+      {linkRow && <LinkPOModal row={linkRow} onClose={() => setLinkRow(null)} />}
     </div>
   );
 }
