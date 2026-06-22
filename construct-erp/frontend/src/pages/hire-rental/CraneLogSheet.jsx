@@ -48,9 +48,10 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const inr = v =>
   `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// Extract equipment name from WO item description: "Hiring of Hydra Crane (12T) - Min 3hr" → "Hydra Crane (12T)"
+// Extract equipment name from WO item description: "Hiring of F15-Farana Crane - Min 3hr" → "F15-Farana Crane"
+// Split only on " - " (space-dash-space), not any dash, to preserve names like "F15-Farana".
 const getEquipKey = (desc) =>
-  (desc || '').replace(/^hiring of\s+/i, '').replace(/\s*[-–]\s*.+$/, '').trim();
+  (desc || '').replace(/^hiring of\s+/i, '').replace(/\s+[-–]\s+.+$/, '').trim();
 
 function makeEmptyRow(date, equipment = '') {
   const d = dayjs(date);
@@ -102,6 +103,15 @@ function classifyEquipRows(equipRows) {
     else { totalShifts++; if (hrs > 3) totalExtraHrs += +(hrs - 3).toFixed(2); }
   }
   return { totalShifts, totalExtraHrs: +totalExtraHrs.toFixed(2), totalDays };
+}
+
+// Per-row billing tier label (mirrors QS Excel columns: Upto 3 Hrs / After 3 Hrs / For 1 Day)
+function getRowTierLabel(netHrs) {
+  const h = Number(netHrs) || 0;
+  if (h <= 0) return '';
+  if (h >= 8) return '1 Day';
+  if (h > 3) return `1 Shift + ${+(h - 3).toFixed(2)}h Extra`;
+  return '1 Shift';
 }
 
 // Identify WO item billing tier from its description/unit.
@@ -520,7 +530,7 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
             <table className="w-full text-xs border-collapse" style={{ minWidth: 1400 }}>
               <thead>
                 <tr className="bg-slate-800 text-white">
-                  {['Date', 'Day', 'Status', ...(equipmentNames.length > 1 ? ['Equipment'] : []), 'Shift', 'Start', 'End', 'Gross Hrs', 'Idle Hrs', 'Idle Reason', 'Bdown Hrs', 'Bdown Reason', 'Net Hrs', 'Work Description', 'Floor / Location', 'SE Initial', ''].map(h => (
+                  {['Date', 'Day', 'Status', ...(equipmentNames.length > 1 ? ['Equipment'] : []), 'Shift', 'Start', 'End', 'Gross Hrs', 'Idle Hrs', 'Idle Reason', 'Bdown Hrs', 'Bdown Reason', 'Net Hrs', 'Billing', 'Work Description', 'Floor / Location', 'SE Initial', ''].map(h => (
                     <th key={h} className="px-2 py-2 text-left font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -573,6 +583,17 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
                         </select>
                       </td>
                       <td className={`px-2 py-1 text-center font-bold ${!netOk ? 'text-red-600' : 'text-green-700'}`}>{row.netHrs}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">
+                        {getRowTierLabel(row.netHrs) && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                            String(getRowTierLabel(row.netHrs)).startsWith('1 Day')
+                              ? 'bg-purple-100 text-purple-700'
+                              : String(getRowTierLabel(row.netHrs)).includes('Extra')
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-amber-100 text-amber-700'
+                          }`}>{getRowTierLabel(row.netHrs)}</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1">
                         <input className="border border-slate-300 rounded px-1 py-0.5 text-xs w-40" value={row.workDescription} onChange={e => updateRow(row.id, 'workDescription', e.target.value)} disabled={submitted} />
                       </td>
