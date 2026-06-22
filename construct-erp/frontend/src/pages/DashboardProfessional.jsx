@@ -30,8 +30,15 @@ const StoresDashboard       = lazy(() => import('./dashboards/StoresDashboard'))
 const ProcurementDashboard  = lazy(() => import('./dashboards/ProcurementDashboard'));
 const ApprovalsPage         = lazy(() => import('./approvals/ApprovalsPage'));
 
-const MD_DASHBOARD_ROLES        = ['md', 'managing_director'];
-const DASHBOARD_APPROVALS_EMAILS = ['stephen@bcim.in', 'it@bcim.in'];
+const MD_DASHBOARD_ROLES  = ['md', 'managing_director'];
+const MD_DASHBOARD_EMAILS = ['stephen@bcim.in', 'it@bcim.in'];
+const isMDDashboardUser = (u) => {
+  if (!u) return false;
+  const r = String(u.role || '').toLowerCase();
+  return MD_DASHBOARD_ROLES.includes(r)
+    || ['admin', 'super_admin'].includes(r)
+    || MD_DASHBOARD_EMAILS.includes((u.email || '').toLowerCase());
+};
 
 const STATUS_COLORS = ['#1e40af', '#0e7490', '#16a34a', '#b45309', '#b91c1c'];
 
@@ -229,9 +236,7 @@ export default function Dashboard() {
   const dept = (user?.department || '').toLowerCase();
 
   // Managing director, admins, and specific users see approvals embedded on dashboard.
-  const isMdRole = MD_DASHBOARD_ROLES.includes(String(role).toLowerCase())
-    || ['admin', 'super_admin'].includes(String(role).toLowerCase())
-    || DASHBOARD_APPROVALS_EMAILS.includes((user?.email || '').toLowerCase());
+  const isMdRole = isMDDashboardUser(user);
 
   // Role-based routing — skip for admin/super_admin/md/named emails
   if (!['super_admin', 'admin'].includes(role) && !isMdRole) {

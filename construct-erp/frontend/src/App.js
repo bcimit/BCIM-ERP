@@ -322,7 +322,18 @@ const ADMIN_ROLES = [
 ];
 
 // Managing-director roles get the approvals view embedded in their main dashboard.
-const MD_DASHBOARD_ROLES = ['md', 'managing_director'];
+const MD_DASHBOARD_ROLES  = ['md', 'managing_director'];
+const MD_DASHBOARD_EMAILS = ['stephen@bcim.in', 'it@bcim.in'];
+
+// Returns true for anyone who should land on the executive dashboard with approvals embedded.
+// Checked in routing, project-gate bypass, and dashboard render — kept in one place.
+function isMDDashboardUser(user) {
+  if (!user) return false;
+  const role = String(user.role || '').toLowerCase();
+  return MD_DASHBOARD_ROLES.includes(role)
+    || ['admin', 'super_admin'].includes(role)
+    || MD_DASHBOARD_EMAILS.includes((user.email || '').toLowerCase());
+}
 
 function getHomeRoute(user) {
   if (!user) return '/login';
@@ -330,13 +341,8 @@ function getHomeRoute(user) {
   // Stores-specific roles → direct to their section
   if (role === 'security_guard') return '/stores/grs';
   if (role === 'store_keeper')   return '/stores';
-  // Super admin & admin → full dashboard
-  if (['admin', 'super_admin'].includes(role)) return '/dashboard';
-  // Managing director → main dashboard (which renders all approvals inline)
-  if (MD_DASHBOARD_ROLES.includes(role)) return '/dashboard';
-  // Users whose approvals are embedded on the dashboard → go to dashboard, not /approvals
-  const DASHBOARD_APPROVALS_EMAILS = ['stephen@bcim.in', 'it@bcim.in'];
-  if (DASHBOARD_APPROVALS_EMAILS.includes((user.email || '').toLowerCase())) return '/dashboard';
+  // MD / admin users → executive dashboard with approvals panel
+  if (isMDDashboardUser(user)) return '/dashboard';
   // Approver / manager roles → My Approvals page as home
   if (APPROVER_ROLES.includes(role)) return '/approvals';
   const mods = user.accessible_modules;
@@ -359,7 +365,7 @@ const ProtectedRoute = ({ children, allowWithoutProject = false }) => {
   const { user, isInitialized, selectedProjectId } = useAuthStore();
   if (!isInitialized) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!allowWithoutProject && !GLOBAL_ROLES.includes(user.role) && !selectedProjectId) {
+  if (!allowWithoutProject && !GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
     return <Navigate to="/select-project" replace />;
   }
   return children;
@@ -370,7 +376,7 @@ const PublicRoute = ({ children }) => {
   if (!isInitialized) return <LoadingScreen />;
   if (user) {
     // Non-global users must pick a project before entering the app
-    if (!GLOBAL_ROLES.includes(user.role) && !selectedProjectId) {
+    if (!GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
       return <Navigate to="/select-project" replace />;
     }
     return <Navigate to={getHomeRoute(user)} replace />;
