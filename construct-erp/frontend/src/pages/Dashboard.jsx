@@ -321,10 +321,10 @@ export default function Dashboard() {
   const role = user?.role || '';
   const dept = (user?.department || '').toLowerCase();
 
-  // Managing director (and users with dashboard-embedded approvals) see the full
-  // executive dashboard with their pending approvals embedded near the top.
+  // Managing director, admins, and specific users get approvals embedded on the dashboard.
   const DASHBOARD_APPROVALS_EMAILS = ['stephen@bcim.in', 'it@bcim.in'];
   const isMdRole = MD_DASHBOARD_ROLES.includes(String(role).toLowerCase())
+    || ['admin', 'super_admin'].includes(String(role).toLowerCase())
     || DASHBOARD_APPROVALS_EMAILS.includes(user?.email?.toLowerCase());
 
   if (!['super_admin', 'admin'].includes(role) && !isMdRole) {
