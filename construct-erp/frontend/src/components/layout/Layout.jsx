@@ -1795,6 +1795,14 @@ export default function Layout() {
       }
       return g;
     })
+    .filter(g => g.items.length > 0)
+    // Apply per-user menu-level permissions (admins bypass)
+    .map(g => {
+      if (['admin', 'super_admin'].includes(user?.role)) return g;
+      const perms = user?.accessible_menus?.[g.label];
+      if (!perms || perms.length === 0) return g;
+      return { ...g, items: g.items.filter(item => perms.includes(item.to)) };
+    })
     .filter(g => g.items.length > 0);
 
   // MD users get a custom nav order: Procurement → Stores → QS&Billing → Planning → Bill Tracker → rest

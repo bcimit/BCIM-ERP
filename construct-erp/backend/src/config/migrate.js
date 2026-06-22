@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 );
 -- Ensure login_at exists on already-created tables (idempotent)
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS login_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+-- Menu-level permissions: JSONB map of { "ModuleName": ["/path1", "/path2"] | null }
+ALTER TABLE users ADD COLUMN IF NOT EXISTS accessible_menus JSONB;
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

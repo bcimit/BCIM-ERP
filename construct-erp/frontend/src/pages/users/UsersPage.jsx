@@ -106,7 +106,290 @@ const ROLE_MODULE_PRESETS = {
 const BLANK_FORM = {
   name:'', email:'', phone:'', password:'',
   role:'site_engineer', designation:'', department:'Civil & Structural',
-  accessible_modules:[], project_ids:[], vendor_id:'',
+  accessible_modules:[], accessible_menus:{}, project_ids:[], vendor_id:'',
+};
+
+// Menu items per module — mirrors navGroups in Layout.jsx (paths only, no icons needed here)
+const MENU_CONFIG = {
+  'Overview': [
+    { to:'/approvals', label:'My Approvals' },
+    { to:'/dashboard', label:'Dashboard' },
+    { to:'/projects',  label:'Projects' },
+  ],
+  'Planning': [
+    { to:'/planning',               label:'P&E Dashboard' },
+    { to:'/planning/p6-dashboard',  label:'P6 EVM Dashboard' },
+    { to:'/planning/wbs',           label:'WBS Editor' },
+    { to:'/planning/activities',    label:'Schedule & Activities' },
+    { to:'/planning/milestones',    label:'Milestones' },
+    { to:'/planning/look-ahead',    label:'Look-Ahead Plan' },
+    { to:'/planning/progress',      label:'Progress & S-Curve' },
+    { to:'/planning/delays',        label:'Delay Analysis' },
+    { to:'/planning/risks',         label:'Risk Register' },
+    { to:'/planning/mrp',           label:'Material Plan (MRP)' },
+    { to:'/planning/engineer-log',  label:'Engineer Daily Log' },
+    { to:'/planning/dpr',           label:'Daily Progress (DPR)' },
+    { to:'/planning/reports',       label:'Planning Reports' },
+    { to:'/planning/documents',     label:'Documents' },
+  ],
+  'Procurement': [
+    { to:'/procurement/dashboard',            label:'Dashboard' },
+    { to:'/procurement/material-request',     label:'Material Request (MRS)' },
+    { to:'/procurement/vendors',              label:'Vendors' },
+    { to:'/procurement/live-rate-checker',    label:'Live Rate Checker' },
+    { to:'/procurement/rate-contracts',       label:'Rate Contracts' },
+    { to:'/procurement/rfqs',                 label:'RFQ' },
+    { to:'/procurement/quotations',           label:'Quotations' },
+    { to:'/procurement/comparative-statements', label:'Comparative Statements' },
+    { to:'/procurement/po',                   label:'Purchase Orders' },
+    { to:'/procurement/po-amendments',        label:'PO Amendments' },
+    { to:'/procurement/po-register',          label:'PO Register' },
+    { to:'/procurement/budget-control',       label:'Budget & Cost Control' },
+    { to:'/procurement/po-bulk-import',       label:'Import POs (Bulk)' },
+    { to:'/procurement/work-orders',          label:'Work Orders' },
+    { to:'/procurement/wo-register',          label:'WO Register' },
+    { to:'/procurement/wo-bulk-import',       label:'Import WOs (Bulk)' },
+    { to:'/procurement/vendor-performance',   label:'Vendor Performance' },
+    { to:'/procurement/vendor-payments',      label:'Vendor Payments' },
+    { to:'/procurement/vendor-mapping',       label:'Vendor–Project Mapping' },
+    { to:'/procurement/inventory',            label:'Inventory' },
+    { to:'/procurement/documents',            label:'Documents' },
+    { to:'/procurement/reports',              label:'Reports' },
+    { to:'/procurement/alerts',               label:'Alerts' },
+    { to:'/procurement/tenders',              label:'Tenders (BD)' },
+    { to:'/procurement/bid-opportunities',    label:'Bid Opportunities' },
+  ],
+  'Tender Management': [
+    { to:'/tender-management',           label:'Tender Register' },
+    { to:'/tender-management/issue',     label:'Tender Issuance' },
+    { to:'/tender-management/register',  label:'Bid Opportunities' },
+    { to:'/tender-management/documents', label:'Documents' },
+  ],
+  'Stores': [
+    { to:'/stores',                    label:'Stores Dashboard' },
+    { to:'/stores/mrs',                label:'Material Requisition' },
+    { to:'/stores/po',                 label:'Purchase Orders' },
+    { to:'/stores/po-register',        label:'PO Register' },
+    { to:'/stores/work-orders',        label:'Work Orders' },
+    { to:'/stores/wo-register',        label:'WO Register' },
+    { to:'/stores/grs',                label:'GRS (Security Gate)' },
+    { to:'/stores/ign',                label:'IGN (Inward Goods)' },
+    { to:'/stores/gate-pass',          label:'Gate Pass' },
+    { to:'/stores/material-tracker',   label:'Material Tracker' },
+    { to:'/stores/ledger',             label:'Store Ledger' },
+    { to:'/stores/issue',              label:'Issue Slip' },
+    { to:'/stores/mtr',                label:'Material Transfer' },
+    { to:'/stores/stock-verification', label:'Stock Verification' },
+    { to:'/stores/credit-notes',       label:'Credit Notes' },
+    { to:'/stores/petty-cash',         label:'Petty Cash Tracker' },
+    { to:'/stores/documents',          label:'Documents' },
+  ],
+  'QS & Billing': [
+    { to:'/qs',                        label:'QS Dashboard' },
+    { to:'/qs/boq',                    label:'BOQ & Estimation' },
+    { to:'/qs/boq-mapping',            label:'BOQ SC Mapping' },
+    { to:'/qs/boq-dashboard',          label:'BOQ Margin Dashboard' },
+    { to:'/qs/measurements',           label:'Measurement Book' },
+    { to:'/qs/ra-bills',               label:'RA Bills' },
+    { to:'/qs/po',                     label:'Purchase Orders' },
+    { to:'/qs/po-register',            label:'PO Register' },
+    { to:'/qs/work-orders',            label:'Work Orders' },
+    { to:'/qs/wo-register',            label:'WO Register' },
+    { to:'/qs/price-escalation',       label:'Price Escalation' },
+    { to:'/qs/vendor-certifications',  label:'Vendor QS Certification' },
+    { to:'/qs/retention-releases',     label:'Retention Release' },
+    { to:'/qs/variations',             label:'Variation Orders' },
+    { to:'/qs/material-recon',         label:'Material Recon' },
+    { to:'/qs/norms',                  label:'Consumption Norms' },
+    { to:'/qs/reports',                label:'QS Reports' },
+    { to:'/qs/documents',              label:'Documents' },
+  ],
+  'Accounts': [
+    { to:'/accounts',                           label:'Overview' },
+    { to:'/accounts/banking/accounts',          label:'Bank Accounts' },
+    { to:'/accounts/banking/reconciliation',    label:'Bank Reconciliation' },
+    { to:'/accounts/banking/cash-flow',         label:'Cash Flow' },
+    { to:'/accounts/banking/cheque-tracker',    label:'Cheque Tracker' },
+    { to:'/accounts/banking/petty-cash',        label:'Petty Cash' },
+    { to:'/accounts/sales/customers',           label:'Customers' },
+    { to:'/accounts/sales/invoices',            label:'Invoices' },
+    { to:'/accounts/sales/proforma-invoices',   label:'Proforma Invoices' },
+    { to:'/accounts/sales/receipts',            label:'Receipts' },
+    { to:'/accounts/sales/credit-notes',        label:'Credit Notes' },
+    { to:'/accounts/sales/statements',          label:'Customer Statements' },
+    { to:'/accounts/purchases/vendors',         label:'Vendors' },
+    { to:'/accounts/purchases/bills',           label:'Bills' },
+    { to:'/accounts/purchases/bills/booking',   label:'Bill Booking' },
+    { to:'/accounts/purchases/payments-made',   label:'Payments Made' },
+    { to:'/accounts/purchases/payment-run',     label:'Payment Run' },
+    { to:'/accounts/purchases/debit-notes',     label:'Debit Notes' },
+    { to:'/accounts/accountant/chart-of-accounts', label:'Chart of Accounts' },
+    { to:'/accounts/accountant/journal-entries',   label:'Journal Entries' },
+    { to:'/accounts/accountant/bill-automation',   label:'Bill Accounts Auto' },
+    { to:'/accounts/accountant/transactions',      label:'Account Transactions' },
+    { to:'/accounts/reports/financial',         label:'Financial Reports' },
+    { to:'/accounts/reports/billing',           label:'Billing Reports' },
+    { to:'/accounts/reports/management-mis',    label:'Management MIS' },
+    { to:'/accounts/reports/control-dashboard', label:'Control Dashboard' },
+    { to:'/accounts/reports/budget',            label:'Budget vs Actual' },
+    { to:'/accounts/taxes/summary',             label:'Tax Summary' },
+    { to:'/accounts/taxes/gst',                 label:'GST' },
+    { to:'/accounts/taxes/tds',                 label:'TDS' },
+    { to:'/accounts/documents',                 label:'Documents' },
+    { to:'/accounts/settings',                  label:'Settings' },
+  ],
+  'HR & Admin': [
+    { to:'/hr-admin',                    label:'HR Dashboard' },
+    { to:'/hr-admin/employees',          label:'Employees' },
+    { to:'/hr-admin/attendance',         label:'Attendance' },
+    { to:'/hr-admin/leaves',             label:'Leave Management' },
+    { to:'/hr-admin/holidays',           label:'Holiday Calendar' },
+    { to:'/hr-admin/payroll',            label:'Payroll' },
+    { to:'/hr-admin/salary-structures',  label:'Salary Structures' },
+    { to:'/hr-admin/employee-salaries',  label:'Employee Salaries' },
+    { to:'/hr-admin/loans',              label:'Loans & Advances' },
+    { to:'/hr-admin/expenses',           label:'Expense Claims' },
+    { to:'/hr-admin/departments',        label:'Departments' },
+    { to:'/hr-admin/appraisals',         label:'Appraisals' },
+    { to:'/hr-admin/advanced',           label:'Advanced HR' },
+    { to:'/hr-admin/shifts',             label:'Shifts & OT' },
+    { to:'/hr-admin/fnf',                label:'Full & Final' },
+    { to:'/hr-admin/letters',            label:'Letter Generation' },
+    { to:'/hr-admin/training',           label:'Training' },
+    { to:'/hr-admin/emp-assets',         label:'Employee Assets' },
+    { to:'/hr-admin/travel',             label:'Travel Requests' },
+    { to:'/hr-admin/recruitment',        label:'Recruitment' },
+    { to:'/hr/workers',                  label:'Site Workers' },
+    { to:'/hr/attendance',               label:'Worker Attendance' },
+    { to:'/hr/payroll',                  label:'Worker Payroll' },
+    { to:'/hr-admin/essl-sync',          label:'ESSL Biometric' },
+    { to:'/hr-admin/import',             label:'Import Data' },
+    { to:'/hr-admin/reports',            label:'HR Reports' },
+    { to:'/ess',                         label:'ESS Portal' },
+    { to:'/hr-admin/documents',          label:'Documents' },
+  ],
+  'Bill Tracker': [
+    { to:'/tqs',                       label:'Bill Tracker Dashboard' },
+    { to:'/tqs/bills',                 label:'Bills' },
+    { to:'/tqs/transmittal',           label:'Transmittal' },
+    { to:'/tqs/material-tracker',      label:'Material Tracker' },
+    { to:'/tqs/concrete-tracker',      label:'Concrete Tracker' },
+    { to:'/tqs/analytics',             label:'Analytics' },
+    { to:'/tqs/reports',               label:'Reports' },
+    { to:'/tqs/liability-register',    label:'Liability Register' },
+    { to:'/tqs/advance-tracker',       label:'Advance Tracker' },
+    { to:'/tqs/deduction-register',    label:'Deduction Register' },
+    { to:'/tqs/wo-bill-register',      label:'WO Bill Register' },
+    { to:'/tqs/cash-flow',             label:'Cash Flow' },
+    { to:'/tqs/cost-report',           label:'Cost Report' },
+    { to:'/tqs/vendor-certifications', label:'QS Certification' },
+    { to:'/tqs/documents',             label:'Documents' },
+  ],
+  'Quality (QA/QC)': [
+    { to:'/quality',                    label:'QA/QC Dashboard' },
+    { to:'/quality/itp',                label:'ITP Register' },
+    { to:'/quality/method-statements',  label:'Method Statements' },
+    { to:'/quality/rfi',                label:'RFI / WIR Ledger' },
+    { to:'/quality/mir',                label:'Material Inspection' },
+    { to:'/quality/mtc',                label:'Test Certificates' },
+    { to:'/quality/lab-tests',          label:'Lab Certifications' },
+    { to:'/quality/pour-cards',         label:'Pour Cards' },
+    { to:'/quality/ncr',                label:'NCR Ledger' },
+    { to:'/quality/documents',          label:'Document Control' },
+    { to:'/quality/templates',          label:'Checklist Masters' },
+    { to:'/quality/snags',              label:'Snag List' },
+    { to:'/quality/audits',             label:'Quality Audits' },
+    { to:'/quality/reports',            label:'QA/QC Reports' },
+    { to:'/quality/doc-repository',     label:'Documents' },
+    { to:'/quality/document-library',   label:'QC Document Library' },
+  ],
+  'HSE & Safety': [
+    { to:'/hse',             label:'Safety Dashboard' },
+    { to:'/hse/incidents',   label:'Incident Hub' },
+    { to:'/hse/permits',     label:'Permit to Work' },
+    { to:'/hse/ppe',         label:'PPE Tracking' },
+    { to:'/hse/documents',   label:'Documents' },
+  ],
+  'Assets & IT': [
+    { to:'/assets/dashboard',   label:'Asset Dashboard' },
+    { to:'/assets/categories',  label:'Asset Categories' },
+    { to:'/assets',             label:'Asset Master' },
+    { to:'/assets/tracking',    label:'Asset Tracking' },
+    { to:'/assets/allocation',  label:'Allocation / Issuance' },
+    { to:'/assets/maintenance', label:'Maintenance Management' },
+    { to:'/assets/work-orders', label:'Work Orders' },
+    { to:'/assets/disposal',    label:'Disposal / Scrap' },
+    { to:'/assets/asset-docs',  label:'Documents & Permits' },
+    { to:'/assets/operations',  label:'Fuel & Usage Logs' },
+    { to:'/assets/depreciation',label:'Depreciation' },
+    { to:'/assets/reports',     label:'Reports & Analytics' },
+    { to:'/assets/alerts',      label:'Alerts & Notifications' },
+    { to:'/assets/roles',       label:'Roles & Permissions' },
+    { to:'/it/assets',          label:'IT Register' },
+    { to:'/it/tickets',         label:'Help Desk' },
+    { to:'/it/licenses',        label:'Licenses / AMC' },
+    { to:'/assets/documents',   label:'Module Documents' },
+  ],
+  'Plant & Machinery': [
+    { to:'/plant/dashboard',    label:'Fleet Dashboard' },
+    { to:'/plant/masters',      label:'Masters' },
+    { to:'/plant/transfers',    label:'Transfers & Disposals' },
+    { to:'/plant/hire',         label:'Hire Management' },
+    { to:'/plant/deployment',   label:'Deployment & Utilisation' },
+    { to:'/plant/fuel',         label:'Fuel Management' },
+    { to:'/plant/equipment-log',label:'Equipment Daily Log' },
+    { to:'/plant/maintenance',  label:'Maintenance & Repairs' },
+    { to:'/plant/operators',    label:'Operator Management' },
+    { to:'/plant/compliance',   label:'Document Compliance' },
+    { to:'/plant/cost',         label:'Cost Allocation' },
+    { to:'/plant/reports',      label:'Reports & Analytics' },
+  ],
+  'Hire & Rental': [
+    { to:'/hire-rental',                 label:'Dashboard' },
+    { to:'/plant/hire',                  label:'Hire Work Orders' },
+    { to:'/plant/deployment',            label:'Equipment Allocation' },
+    { to:'/plant/equipment-log',         label:'Daily Usage / Log Sheet' },
+    { to:'/hire-rental/invoices',        label:'Vendor Invoice Entry' },
+    { to:'/hire-rental/certify',         label:'QS Certification' },
+    { to:'/hire-rental/approvals',       label:'Approvals' },
+    { to:'/hire-rental/payments',        label:'Payment Status' },
+    { to:'/hire-rental/reports',         label:'Reports' },
+    { to:'/plant/masters',               label:'Settings' },
+    { to:'/hire-rental/crane-log',       label:'Crane Log Sheet' },
+    { to:'/hire-rental/rental-invoice/new', label:'New Rental Invoice' },
+  ],
+  'DMS': [
+    { to:'/dms',         label:'Document Repository' },
+    { to:'/dms/gfc-log', label:'GFC Master Log' },
+  ],
+  'Subcontractors': [
+    { to:'/sc/dashboard',          label:'Dashboard' },
+    { to:'/sc/master',             label:'Subcontractor Master' },
+    { to:'/sc/work-orders',        label:'Work Order Management' },
+    { to:'/sc/labour',             label:'Labour / Worker Attendance' },
+    { to:'/sc/progress',           label:'Work Progress Entry' },
+    { to:'/sc/bill-preparation',   label:'Bill Preparation' },
+    { to:'/sc/hire-usage-tracker', label:'Hire Usage Tracker' },
+    { to:'/sc/bill-approval',      label:'Bill Approval' },
+    { to:'/sc/payments',           label:'Payment Tracking' },
+    { to:'/sc/deductions',         label:'Retention / Deductions' },
+    { to:'/sc/documents',          label:'Documents' },
+    { to:'/sc/reports',            label:'Reports' },
+    { to:'/sc/settings',           label:'Settings' },
+  ],
+  'Administration': [
+    { to:'/users',              label:'Team Members' },
+    { to:'/accounts/settings',  label:'Company Profile' },
+    { to:'/audit-log',          label:'Audit Log' },
+    { to:'/role-permissions',   label:'Roles & Module Access' },
+  ],
+  'Automation Ideas': [
+    { to:'/automation-ideas', label:'Ideas Dashboard' },
+    { to:'/approval-engine',  label:'Approval Engine' },
+  ],
+  'Reports': [
+    { to:'/reports', label:'Reports Hub' },
+  ],
 };
 
 /* ═══════════════════════════════════════════════════════ HELPERS */
@@ -421,6 +704,129 @@ function ModulePicker({ value, onChange, role, onPreset }) {
   );
 }
 
+/* ── Menu Permissions Picker ─────────────────────────────────── */
+function MenuPicker({ selectedModules, value, onChange, role }) {
+  const isAdmin = ['admin','super_admin'].includes(role);
+  if (isAdmin) return (
+    <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+      <Check size={14} className="text-emerald-600 flex-shrink-0" />
+      <span className="text-xs font-semibold text-emerald-700">Admin has full access to all menus</span>
+    </div>
+  );
+
+  const configurableModules = selectedModules.filter(m => MENU_CONFIG[m]);
+  const [expanded, setExpanded] = useState(null);
+
+  const isAllAccess = (mod) => !value[mod] || value[mod] === null;
+  const selectedCount = (mod) => {
+    if (isAllAccess(mod)) return MENU_CONFIG[mod].length;
+    return (value[mod] || []).length;
+  };
+
+  const enableRestriction = (mod) => {
+    onChange({ ...value, [mod]: MENU_CONFIG[mod].map(m => m.to) });
+  };
+  const clearRestriction = (mod) => {
+    const next = { ...value };
+    delete next[mod];
+    onChange(next);
+  };
+  const toggleItem = (mod, path) => {
+    const cur = Array.isArray(value[mod]) ? value[mod] : MENU_CONFIG[mod].map(m => m.to);
+    const next = cur.includes(path) ? cur.filter(p => p !== path) : [...cur, path];
+    onChange({ ...value, [mod]: next.length > 0 ? next : [] });
+  };
+  const selectAll  = (mod) => onChange({ ...value, [mod]: MENU_CONFIG[mod].map(m => m.to) });
+  const clearAll   = (mod) => onChange({ ...value, [mod]: [] });
+
+  if (configurableModules.length === 0) return (
+    <div className="text-center py-10">
+      <p className="text-sm font-semibold text-slate-500">No modules assigned yet.</p>
+      <p className="text-xs text-slate-400 mt-1">Go to the <strong>Modules</strong> tab and assign at least one module first.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mb-3">
+        Configure which menu items are visible for each module. Leave at "All" to show everything.
+      </p>
+      {configurableModules.map(mod => {
+        const items    = MENU_CONFIG[mod];
+        const allAcc   = isAllAccess(mod);
+        const selCount = selectedCount(mod);
+        const isOpen   = expanded === mod;
+
+        return (
+          <div key={mod} className="border border-slate-200 rounded-xl overflow-hidden">
+            {/* Accordion header */}
+            <button type="button" onClick={() => setExpanded(isOpen ? null : mod)}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-slate-50 transition-colors text-left">
+              <span className="flex-1 text-sm font-semibold text-slate-800">{mod}</span>
+              <span className={clsx('text-[10px] font-bold px-2.5 py-0.5 rounded-full',
+                allAcc ? 'bg-emerald-100 text-emerald-700' : selCount === 0 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-700')}>
+                {allAcc ? 'All Menus' : `${selCount} / ${items.length}`}
+              </span>
+              <ChevronDown size={14} className={clsx('text-slate-400 flex-shrink-0 transition-transform', isOpen && 'rotate-180')} />
+            </button>
+
+            {isOpen && (
+              <div className="border-t border-slate-100 p-4 bg-slate-50/60">
+                {/* Mode toggle */}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <button type="button" onClick={() => clearRestriction(mod)}
+                    className={clsx('px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all',
+                      allAcc ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-400 hover:text-emerald-700')}>
+                    All Menus
+                  </button>
+                  <button type="button" onClick={() => enableRestriction(mod)}
+                    className={clsx('px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all',
+                      !allAcc ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-700')}>
+                    Custom Selection
+                  </button>
+                  {!allAcc && (
+                    <span className="ml-auto flex gap-1.5">
+                      <button type="button" onClick={() => selectAll(mod)}
+                        className="px-2.5 py-1 text-[9px] font-bold bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+                        Select All
+                      </button>
+                      <button type="button" onClick={() => clearAll(mod)}
+                        className="px-2.5 py-1 text-[9px] font-bold bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+                        Clear
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                {allAcc ? (
+                  <p className="text-[11px] text-slate-400 italic">
+                    All {items.length} menu items in <strong>{mod}</strong> are visible to this user.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                    {items.map(item => {
+                      const checked = (value[mod] || []).includes(item.to);
+                      return (
+                        <label key={item.to}
+                          className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-all text-[11px] font-medium',
+                            checked ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50')}>
+                          <input type="checkbox" checked={checked} className="w-3.5 h-3.5 accent-indigo-600 flex-shrink-0"
+                            onChange={() => toggleItem(mod, item.to)} />
+                          <span className="truncate">{item.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Project Access ──────────────────────────────────────────── */
 function ProjectPicker({ projects, value, onChange, role }) {
   const isAdmin = ['admin','super_admin'].includes(role);
@@ -468,8 +874,9 @@ function ProjectPicker({ projects, value, onChange, role }) {
 function MemberForm({ form, setF, setRole, applyPreset, showPw, setShowPw, projects, roleOptions, departmentOptions, isEdit }) {
   const [tab, setTab] = useState('info');
   const TABS = [
-    { id:'info', label:'Basic Info' },
-    { id:'access', label:'Modules' },
+    { id:'info',     label:'Basic Info' },
+    { id:'access',   label:'Modules' },
+    { id:'menus',    label:'Menu Access' },
     { id:'projects', label:'Projects' },
   ];
 
@@ -569,6 +976,16 @@ function MemberForm({ form, setF, setRole, applyPreset, showPw, setShowPw, proje
           <ModulePicker value={form.accessible_modules} role={form.role}
             onChange={v => setF('accessible_modules', v)}
             onPreset={applyPreset} />
+        )}
+
+        {/* ── Menu Access Tab ── */}
+        {tab === 'menus' && (
+          <MenuPicker
+            selectedModules={form.accessible_modules || []}
+            value={form.accessible_menus || {}}
+            onChange={v => setF('accessible_menus', v)}
+            role={form.role}
+          />
         )}
 
         {/* ── Projects Tab ── */}
@@ -688,6 +1105,7 @@ export default function UsersPage() {
     setForm({ name:u.name, email:u.email, phone:u.phone||'', password:'',
                role:u.role, designation:u.designation||'', department:u.department||'',
                accessible_modules:normalizeModules(u.accessible_modules),
+               accessible_menus: u.accessible_menus && typeof u.accessible_menus === 'object' ? u.accessible_menus : {},
                project_ids:Array.isArray(u.project_ids)?u.project_ids:[], vendor_id:u.vendor_id||'' });
     setDrawer('edit');
   };

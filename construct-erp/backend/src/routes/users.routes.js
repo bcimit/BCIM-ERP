@@ -142,7 +142,7 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await query(
       `SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.department,
-              u.employee_code, u.is_active, u.last_login, u.created_at, u.accessible_modules,
+              u.employee_code, u.is_active, u.last_login, u.created_at, u.accessible_modules, u.accessible_menus,
               u.vendor_id, v.name AS vendor_name,
               COALESCE((
                 SELECT ARRAY_AGG(pm.project_id::text ORDER BY p.name)
@@ -171,7 +171,7 @@ router.get('/', auth, async (req, res) => {
 // POST /api/v1/users — create a new team member
 router.post('/', admin, async (req, res) => {
   try {
-    const { name, phone, password, role, designation, department, accessible_modules, vendor_id, project_ids } = req.body;
+    const { name, phone, password, role, designation, department, accessible_modules, accessible_menus, vendor_id, project_ids } = req.body;
     const email = (req.body.email || '').trim().toLowerCase();
 
     if (!name || !email || !password || !role) {
@@ -189,12 +189,14 @@ router.post('/', admin, async (req, res) => {
 
     const result = await query(
       `INSERT INTO users
-         (company_id, employee_code, name, email, phone, password_hash, role, designation, department, accessible_modules, vendor_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::text[], $11)
-       RETURNING id, name, email, role, designation, department, employee_code, is_active, created_at, accessible_modules, vendor_id`,
+         (company_id, employee_code, name, email, phone, password_hash, role, designation, department, accessible_modules, accessible_menus, vendor_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::text[], $11::jsonb, $12)
+       RETURNING id, name, email, role, designation, department, employee_code, is_active, created_at, accessible_modules, accessible_menus, vendor_id`,
       [req.user.company_id, empCode, name, email, phone || null,
        passwordHash, role, designation || null, department || null,
-       normalizeModules(accessible_modules), vendor_id || null]
+       normalizeModules(accessible_modules),
+       accessible_menus ? JSON.stringify(accessible_menus) : null,
+       vendor_id || null]
     );
 
     await syncUserProjects(result.rows[0].id, req.user.company_id, project_ids, role);
@@ -210,7 +212,7 @@ router.post('/', admin, async (req, res) => {
 // PUT /api/v1/users/:id — update user details
 router.put('/:id', admin, async (req, res) => {
   try {
-    const { name, phone, role, designation, department, is_active, accessible_modules, vendor_id, project_ids } = req.body;
+    const { name, phone, role, designation, department, is_active, accessible_modules, accessible_menus, vendor_id, project_ids } = req.body;
     const email = req.body.email ? req.body.email.trim().toLowerCase() : undefined;
     await ensureRoleSchema();
 
@@ -232,13 +234,15 @@ router.put('/:id', admin, async (req, res) => {
          department  = COALESCE($6, department),
          is_active   = COALESCE($7, is_active),
          accessible_modules = COALESCE($8::text[], accessible_modules),
-         vendor_id   = $9,
+         accessible_menus   = CASE WHEN $9::text IS NOT NULL THEN $9::jsonb ELSE accessible_menus END,
+         vendor_id   = $10,
          updated_at  = NOW()
-       WHERE id = $10 AND company_id = $11
-       RETURNING id, name, email, phone, role, designation, department, is_active, accessible_modules, vendor_id`,
+       WHERE id = $11 AND company_id = $12
+       RETURNING id, name, email, phone, role, designation, department, is_active, accessible_modules, accessible_menus, vendor_id`,
       [name, email, phone, role, designation, department,
        is_active !== undefined ? is_active : null,
        accessible_modules !== undefined ? normalizeModules(accessible_modules) : null,
+       accessible_menus !== undefined ? JSON.stringify(accessible_menus) : null,
        vendor_id || null,
        req.params.id, req.user.company_id]
     );

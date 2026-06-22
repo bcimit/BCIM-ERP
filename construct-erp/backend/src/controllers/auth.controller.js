@@ -102,7 +102,7 @@ const normalizedEmail = (email || '').trim().toLowerCase();
 
     const result = await query(
       `SELECT u.id, u.name, u.email, u.role, u.designation, u.signature_url, u.password_hash, u.is_active,
-              u.company_id, u.last_login, u.accessible_modules,
+              u.company_id, u.last_login, u.accessible_modules, u.accessible_menus,
               COALESCE((
                 SELECT ARRAY_AGG(pm.project_id::text ORDER BY p.name)
                 FROM project_members pm
@@ -146,6 +146,7 @@ const normalizedEmail = (email || '').trim().toLowerCase();
         company_name: user.company_name,
         company_gstin: user.company_gstin,
         accessible_modules: user.accessible_modules,
+        accessible_menus:   user.accessible_menus || null,
         project_ids: user.project_ids || []
       },
       accessToken: tokens.accessToken,
@@ -216,7 +217,7 @@ const getMe = async (req, res) => {
   try {
     const result = await query(
       `SELECT u.id, u.name, u.email, u.role, u.designation, u.phone,
-              u.signature_url, u.accessible_modules,
+              u.signature_url, u.accessible_modules, u.accessible_menus,
               COALESCE((
                 SELECT ARRAY_AGG(pm.project_id::text ORDER BY p.name)
                 FROM project_members pm
