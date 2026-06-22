@@ -105,7 +105,7 @@ router.get('/orders', async (req, res) => {
   try {
     const { status, project_id } = req.query;
     let sql = `
-      SELECT h.id, h.order_no, h.equipment_desc, h.vendor_name, h.hire_rate, h.rate_type,
+      SELECT h.id, h.order_no, h.equipment_desc, h.vendor_id, h.vendor_name, h.hire_rate, h.rate_type,
              h.start_date, h.end_date, h.status, h.project_id,
              e.code AS equipment_code, e.name AS equipment_name, p.name AS project_name,
              COALESCE((SELECT SUM(total_amount) FROM hire_vendor_invoices i
