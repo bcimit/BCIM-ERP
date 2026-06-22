@@ -106,6 +106,7 @@ const navGroups = [
     { to: '/qs/boq',                  icon: FileSpreadsheet, label: 'BOQ & Estimation' },
     { to: '/qs/boq-mapping',          icon: Layers,          label: 'BOQ SC Mapping' },
     { to: '/qs/boq-dashboard',        icon: BarChart3,       label: 'BOQ Margin Dashboard' },
+    { to: '/qs/boq-budget-breakdown', icon: PieChart,        label: 'BOQ Budget Breakdown' },
     { to: '/qs/measurements',         icon: Ruler,           label: 'Measurement Book' },
     { to: '/qs/ra-bills',             icon: Receipt,         label: 'RA Bills' },
     { to: '/qs/po',                   icon: ShoppingCart,    label: 'Purchase Orders' },
