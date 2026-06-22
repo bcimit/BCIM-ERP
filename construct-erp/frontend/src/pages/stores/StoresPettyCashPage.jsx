@@ -157,7 +157,8 @@ function printStatement({ entries, advances, receipts, projectName }) {
 
 // ── Entry Form (Local Purchase) ───────────────────────────────────────────────
 const EMPTY_ITEM  = { material_name: '', unit: "NO'S", quantity: '' };
-const EMPTY_ENTRY = { project_id: '', entry_date: dayjs().format('YYYY-MM-DD'), supplier: '', invoice_no: '', amount: '', remarks: '', bill_file_url: '', bill_file_name: '' };
+const EMPTY_ENTRY = { project_id: '', entry_date: dayjs().format('YYYY-MM-DD'), supplier: '', invoice_no: '', basic_amount: '', gst_pct: '0', gst_amount: '', amount: '', remarks: '', bill_file_url: '', bill_file_name: '' };
+const GST_RATES = [0, 5, 12, 18, 28];
 
 function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, existingInvoices, onClose }) {
   const qc = useQueryClient();
@@ -166,7 +167,9 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
   const [form, setForm] = useState(
     isEdit
       ? { project_id: initial.project_id || '', entry_date: initial.entry_date?.slice(0, 10) || dayjs().format('YYYY-MM-DD'),
-          supplier: initial.supplier || '', invoice_no: initial.invoice_no || '', amount: initial.amount || '',
+          supplier: initial.supplier || '', invoice_no: initial.invoice_no || '',
+          basic_amount: initial.basic_amount || '', gst_pct: initial.gst_pct ?? '0',
+          gst_amount: initial.gst_amount || '', amount: initial.amount || '',
           remarks: initial.remarks || '', bill_file_url: initial.bill_file_url || '', bill_file_name: initial.bill_file_name || '' }
       : { ...EMPTY_ENTRY, project_id: defaultProjectId || '' }
   );
@@ -281,9 +284,42 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
                 </div>
               )}
             </div>
-            <div className="col-span-2">
-              <Lbl req>Amount (₹)</Lbl>
-              <input type="number" step="0.01" className={F} placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required />
+            {/* GST breakdown */}
+            <div>
+              <Lbl req>Basic Amount (₹)</Lbl>
+              <input type="number" step="0.01" className={F} placeholder="0.00"
+                value={form.basic_amount}
+                onChange={e => {
+                  const basic = parseFloat(e.target.value) || 0;
+                  const gstAmt = +(basic * (parseFloat(form.gst_pct) || 0) / 100).toFixed(2);
+                  const total  = +(basic + gstAmt).toFixed(2);
+                  setForm(f => ({ ...f, basic_amount: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
+                }}
+              />
+            </div>
+            <div>
+              <Lbl>GST %</Lbl>
+              <select className={FS}
+                value={form.gst_pct}
+                onChange={e => {
+                  const pct   = parseFloat(e.target.value) || 0;
+                  const basic = parseFloat(form.basic_amount) || 0;
+                  const gstAmt = +(basic * pct / 100).toFixed(2);
+                  const total  = +(basic + gstAmt).toFixed(2);
+                  setForm(f => ({ ...f, gst_pct: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
+                }}>
+                {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
+              </select>
+            </div>
+            <div>
+              <Lbl>GST Amount (₹)</Lbl>
+              <input type="number" step="0.01" className={F + ' bg-slate-50'} placeholder="0.00"
+                value={form.gst_amount} readOnly tabIndex={-1} />
+            </div>
+            <div>
+              <Lbl req>Total Amount (₹)</Lbl>
+              <input type="number" step="0.01" className={F + ' font-semibold bg-slate-50'} placeholder="0.00"
+                value={form.amount} readOnly tabIndex={-1} />
               {/* Budget warning */}
               {budgetWarning && (
                 <div className={clsx('flex items-center gap-2 mt-1.5 text-xs font-medium px-3 py-1.5 rounded-lg',
