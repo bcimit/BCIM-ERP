@@ -8,7 +8,7 @@ import {
   ChevronUp, Plus, AlertTriangle, CheckCircle, Clock,
 } from 'lucide-react';
 import { RENTAL_CATEGORIES, logSheetNumber } from '../../config/RentalCategoryMaster';
-import { vendorAPI, hireRentalAPI } from '../../api/client';
+import { scAPI } from '../../api/client';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -139,26 +139,30 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
   const category = categoryProp || LOG_CATEGORIES.find(c => c.code === pickedCode) || LOG_CATEGORIES[0];
   const isCrane = category?.code === 'CRANE';
 
-  // Fetch vendors and hire orders from API when not supplied as props
-  const { data: fetchedVendors = [] } = useQuery({
-    queryKey: ['vendors-for-log'],
-    queryFn: () => vendorAPI.list({ limit: 500 }).then(r => r.data?.data || r.data || []),
-    enabled: vendorListProp.length === 0,
-    staleTime: 5 * 60 * 1000,
-  });
-  const { data: fetchedOrders = [] } = useQuery({
-    queryKey: ['hire-orders-for-log'],
-    queryFn: () => hireRentalAPI.orders().then(r => r.data?.data || r.data || []),
+  // Crane/hydra hire work orders are subcontractor work orders (sc_work_orders).
+  // Fetch them when not supplied as props; the Vendor list is derived from these
+  // WOs so the Vendor → WO filter is always consistent.
+  const { data: fetchedWOs = [] } = useQuery({
+    queryKey: ['sc-wos-for-log'],
+    queryFn: () => scAPI.listWO({ limit: 1000 }).then(r => r.data?.data || r.data || []),
     enabled: woListProp.length === 0,
     staleTime: 5 * 60 * 1000,
   });
-  const vendorList = vendorListProp.length > 0 ? vendorListProp : fetchedVendors;
-  const woList = woListProp.length > 0 ? woListProp : fetchedOrders.map(o => ({
+  const woList = woListProp.length > 0 ? woListProp : fetchedWOs.map(o => ({
     id: o.id,
-    wo_number: o.order_no || o.wo_number || o.id,
-    vendor_id: o.vendor_id,
+    wo_number: o.wo_number || o.order_no || o.id,
+    vendor_id: o.sc_id,
+    vendor_name: o.sc_name || o.vendor_name || '',
     project_name: o.project_name || '',
   }));
+  const vendorList = useMemo(() => {
+    if (vendorListProp.length > 0) return vendorListProp;
+    const map = new Map();
+    for (const w of fetchedWOs) {
+      if (w.sc_id && !map.has(w.sc_id)) map.set(w.sc_id, { id: w.sc_id, name: w.sc_name || w.vendor_name || '' });
+    }
+    return Array.from(map.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [vendorListProp, fetchedWOs]);
 
   // ── Section 1 — Header state ──
   const [header, setHeader] = useState({
@@ -407,14 +411,7 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
             }}>
               <option value="">— Select WO —</option>
               {woList
-                .filter(w => {
-                  if (!header.vendorId) return true;
-                  // Match by vendor_id UUID first (populated on newer orders)
-                  if (w.vendor_id && String(w.vendor_id) === String(header.vendorId)) return true;
-                  // Fall back: match by vendor name (older orders stored name only)
-                  const selName = (vendorList.find(v => String(v.id || v.value) === String(header.vendorId))?.name || '').toLowerCase();
-                  return selName && (w.vendor_name || '').toLowerCase().includes(selName);
-                })
+                .filter(w => !header.vendorId || String(w.vendor_id) === String(header.vendorId))
                 .map(w => (
                   <option key={w.id || w.wo_number} value={w.id || w.wo_number}>{w.wo_number}</option>
                 ))}
