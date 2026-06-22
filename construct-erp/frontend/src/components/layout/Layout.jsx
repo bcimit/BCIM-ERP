@@ -1756,6 +1756,10 @@ export default function Layout() {
                      '/stores/material-tracker'],
   };
 
+  // Users whose approvals are embedded on the dashboard — hide the separate nav link
+  const DASHBOARD_APPROVALS_EMAILS = ['stephen@bcim.in'];
+  const hasDashboardApprovals = DASHBOARD_APPROVALS_EMAILS.includes(user?.email?.toLowerCase());
+
   const filteredGroups = navGroups
     .filter(g => {
       if (['admin', 'super_admin'].includes(user?.role)) return true;
@@ -1769,6 +1773,10 @@ export default function Layout() {
       if (g.label === 'Stores' && STORES_ROLE_NAV[user?.role]) {
         const allowed = STORES_ROLE_NAV[user?.role];
         return { ...g, items: g.items.filter(item => allowed.includes(item.to)) };
+      }
+      // Hide the separate "My Approvals" page for users who see approvals on the dashboard
+      if (g.label === 'Overview' && hasDashboardApprovals) {
+        return { ...g, items: g.items.filter(item => item.to !== '/approvals') };
       }
       // Hide superAdminOnly items from everyone except super_admin
       if (user?.role !== 'super_admin') {
