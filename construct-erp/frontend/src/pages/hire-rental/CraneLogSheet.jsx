@@ -407,7 +407,7 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
             }}>
               <option value="">— Select WO —</option>
               {woList
-                .filter(w => !header.vendorId || w.vendor_id === header.vendorId)
+                .filter(w => !header.vendorId || String(w.vendor_id) === String(header.vendorId))
                 .map(w => (
                   <option key={w.id || w.wo_number} value={w.id || w.wo_number}>{w.wo_number}</option>
                 ))}
