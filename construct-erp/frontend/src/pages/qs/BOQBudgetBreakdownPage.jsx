@@ -81,16 +81,23 @@ export default function BOQBudgetBreakdownPage() {
 
   const totals = useMemo(() => {
     const t = {};
-    for (const h of costHeads) t[h] = 0;
+    const ta = {};
+    for (const h of costHeads) { t[h] = 0; ta[h] = 0; }
     let grand = 0;
+    let grandActual = 0;
+    let unallocated = 0;
     for (const item of items) {
       for (const h of costHeads) {
         const v = item.breakdown?.[h]?.amount || 0;
+        const a = item.breakdown?.[h]?.actual || 0;
         t[h] += v;
+        ta[h] += a;
         grand += v;
+        grandActual += a;
       }
+      unallocated += item.unallocated_actual || 0;
     }
-    return { byHead: t, grand };
+    return { byHead: t, byHeadActual: ta, grand, grandActual, unallocated };
   }, [items, costHeads]);
 
   return (
@@ -139,6 +146,7 @@ export default function BOQBudgetBreakdownPage() {
                 {costHeads.map(h => (
                   <th key={h} className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">{h}</th>
                 ))}
+                <th className="px-3 py-2 text-right font-medium text-amber-600 whitespace-nowrap">Unallocated</th>
                 <th className="px-3 py-2 text-right font-medium text-slate-600">Status</th>
               </tr>
             </thead>
@@ -153,6 +161,9 @@ export default function BOQBudgetBreakdownPage() {
                     <td className="px-3 py-2 text-right font-medium">{inr(item.amount)}</td>
                     {costHeads.map(h => {
                       const cell = item.breakdown?.[h] || {};
+                      const actual = cell.actual || 0;
+                      const budgetAmt = cell.amount || 0;
+                      const overActual = actual > budgetAmt + 0.01;
                       return (
                         <td key={h} className="px-1 py-1">
                           <EditableCell
@@ -160,9 +171,17 @@ export default function BOQBudgetBreakdownPage() {
                             mode={mode}
                             onSave={v => saveCell(item, h, mode, v)}
                           />
+                          {actual > 0 && (
+                            <div className={clsx('text-[10px] text-right pr-1', overActual ? 'text-rose-500' : 'text-emerald-600')}>
+                              Actual: {inr(actual)}
+                            </div>
+                          )}
                         </td>
                       );
                     })}
+                    <td className="px-3 py-2 text-right text-amber-600">
+                      {item.unallocated_actual > 0 ? inr(item.unallocated_actual) : <span className="text-slate-300">—</span>}
+                    </td>
                     <td className="px-3 py-2 text-right">
                       {over
                         ? <span className="inline-flex items-center gap-1 text-rose-600"><AlertTriangle size={12} /> Over</span>
@@ -173,7 +192,7 @@ export default function BOQBudgetBreakdownPage() {
               })}
 
               {items.length === 0 && (
-                <tr><td colSpan={costHeads.length + 4} className="text-center py-12 text-slate-400">No BOQ items found for this project.</td></tr>
+                <tr><td colSpan={costHeads.length + 5} className="text-center py-12 text-slate-400">No BOQ items found for this project.</td></tr>
               )}
             </tbody>
             {items.length > 0 && (
@@ -184,8 +203,14 @@ export default function BOQBudgetBreakdownPage() {
                     {inr(items.reduce((s, i) => s + parseFloat(i.amount || 0), 0))}
                   </td>
                   {costHeads.map(h => (
-                    <td key={h} className="px-3 py-2 text-right">{inr(totals.byHead[h])}</td>
+                    <td key={h} className="px-3 py-2 text-right">
+                      {inr(totals.byHead[h])}
+                      {totals.byHeadActual[h] > 0 && (
+                        <div className="text-[10px] text-emerald-600 font-normal">Actual: {inr(totals.byHeadActual[h])}</div>
+                      )}
+                    </td>
                   ))}
+                  <td className="px-3 py-2 text-right text-amber-600">{totals.unallocated > 0 ? inr(totals.unallocated) : '—'}</td>
                   <td className="px-3 py-2 text-right">{inr(totals.grand)}</td>
                 </tr>
               </tfoot>

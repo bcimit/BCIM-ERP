@@ -6,6 +6,12 @@ const { query, withTransaction } = require('../config/database');
 const dayjs = require('dayjs');
 const esslService = require('../services/essl.service');
 const { notifyScBillSubmitted, notifyScWoSubmitted } = require('../services/notif.helper');
+const { runSchemaInit } = require('../utils/schemaInit');
+const { BOQ_COST_HEADS } = require('../constants/boqCostHeads');
+
+runSchemaInit('sc_bill_items_cost_head', async () => {
+  await query(`ALTER TABLE sc_bill_items ADD COLUMN IF NOT EXISTS cost_head TEXT`);
+});
 
 router.use(authenticate);
 const CID  = req => req.user.company_id;
@@ -814,12 +820,13 @@ router.post('/bills', authorize(...PLANNER), async (req, res) => {
           const it = items[k];
           const currQty = parseFloat(it.curr_qty || 0);
           if (currQty <= 0) continue;
+          const costHead = BOQ_COST_HEADS.includes(it.cost_head) ? it.cost_head : null;
           await client.query(
-            `INSERT INTO sc_bill_items (bill_id,wo_item_id,description,unit,wo_qty,prev_qty,curr_qty,balance_qty,rate,sequence_no)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            `INSERT INTO sc_bill_items (bill_id,wo_item_id,description,unit,wo_qty,prev_qty,curr_qty,balance_qty,rate,sequence_no,cost_head)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
             [billId, it.wo_item_id||null, it.description, it.unit||null,
              it.wo_qty||0, it.prev_qty||0, currQty,
-             Math.max(0, parseFloat(it.balance_qty||0) - currQty), it.rate||0, k+1]);
+             Math.max(0, parseFloat(it.balance_qty||0) - currQty), it.rate||0, k+1, costHead]);
 
           if (it.wo_item_id) {
             await client.query(

@@ -50,18 +50,54 @@ router.get('/:project_id', async (req, res) => {
       WHERE project_id = $1
     `, [project_id]);
 
+    const raActuals = await query(`
+      SELECT rbi.boq_item_id, rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+      FROM ra_bill_items rbi
+      JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+      WHERE rb.project_id = $1 AND rb.status IN ('certified','paid')
+      GROUP BY rbi.boq_item_id, rbi.cost_head
+    `, [project_id]);
+
+    const scActuals = await query(`
+      SELECT swi.boq_item_id, bi.cost_head, SUM(bi.curr_qty * bi.rate) AS actual
+      FROM sc_bill_items bi
+      JOIN sc_bills sb ON sb.id = bi.bill_id
+      JOIN sc_wo_items swi ON swi.id = bi.wo_item_id
+      WHERE sb.project_id = $1 AND sb.status IN ('approved','paid') AND swi.boq_item_id IS NOT NULL
+      GROUP BY swi.boq_item_id, bi.cost_head
+    `, [project_id]);
+
     const byItem = {};
     for (const row of breakdown.rows) {
       if (!byItem[row.boq_item_id]) byItem[row.boq_item_id] = {};
       byItem[row.boq_item_id][row.cost_head] = {
         pct: parseFloat(row.budgeted_pct) || 0,
         amount: parseFloat(row.budgeted_amount) || 0,
+        actual: 0,
       };
     }
+
+    const unallocated = {};
+    const addActual = (rows) => {
+      for (const row of rows) {
+        const itemId = row.boq_item_id;
+        const amt = parseFloat(row.actual) || 0;
+        if (!row.cost_head || !BOQ_COST_HEADS.includes(row.cost_head)) {
+          unallocated[itemId] = (unallocated[itemId] || 0) + amt;
+          continue;
+        }
+        if (!byItem[itemId]) byItem[itemId] = {};
+        if (!byItem[itemId][row.cost_head]) byItem[itemId][row.cost_head] = { pct: 0, amount: 0, actual: 0 };
+        byItem[itemId][row.cost_head].actual += amt;
+      }
+    };
+    addActual(raActuals.rows);
+    addActual(scActuals.rows);
 
     const data = items.rows.map(item => ({
       ...item,
       breakdown: byItem[item.id] || {},
+      unallocated_actual: unallocated[item.id] || 0,
     }));
 
     res.json({ data, cost_heads: BOQ_COST_HEADS });

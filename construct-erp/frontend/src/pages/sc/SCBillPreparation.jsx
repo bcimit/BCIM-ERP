@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import RABillPrintTemplate from '../qs/RABillPrintTemplate';
+import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fmt  = (n) => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`;
@@ -592,7 +593,7 @@ function RaiseBillModal({ wos, onClose }) {
                     <table className="w-full text-xs">
                       <thead style={{ background: `linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
                         <tr>
-                          {['#','Description','Unit','WO Qty','Prev Billed','Balance Qty','Billing Progress','Current Bill Qty','Rate','Amount'].map(h => (
+                          {['#','Description','Unit','WO Qty','Prev Billed','Balance Qty','Billing Progress','Current Bill Qty','Cost Head','Rate','Amount'].map(h => (
                             <th key={h} className="px-3 py-2.5 text-left font-bold text-white/80 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
@@ -677,6 +678,16 @@ function RaiseBillModal({ wos, onClose }) {
                                   </div>
                                 )}
                               </td>
+                              <td className="px-3 py-3">
+                                <select value={it.cost_head || ''} onChange={e => {
+                                    const v = e.target.value;
+                                    setItems(prev => prev.map((bi, idx) => idx === i ? { ...bi, cost_head: v } : bi));
+                                  }}
+                                  className="border border-slate-200 rounded px-1.5 py-1 text-[10px] bg-white">
+                                  <option value="">Unallocated</option>
+                                  {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                                </select>
+                              </td>
                               <td className="px-3 py-3 text-right text-slate-600">{fmt(it.rate)}</td>
                               <td className={clsx('px-3 py-3 text-right font-bold text-sm',
                                 overBill ? 'text-red-600' : amt > 0 ? 'text-indigo-700' : 'text-slate-300')}>
@@ -687,7 +698,7 @@ function RaiseBillModal({ wos, onClose }) {
                         })}
                         {/* Gross total row */}
                         <tr className="border-t-2 border-slate-300 bg-slate-50">
-                          <td colSpan={9} className="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase tracking-wider">Gross Work Amount</td>
+                          <td colSpan={10} className="px-3 py-2.5 text-right font-bold text-slate-700 text-xs uppercase tracking-wider">Gross Work Amount</td>
                           <td className={clsx('px-3 py-2.5 text-right font-bold text-sm', exceedsContract ? 'text-red-600' : 'text-indigo-700')}>{fmt(calc.gross)}</td>
                         </tr>
                       </tbody>

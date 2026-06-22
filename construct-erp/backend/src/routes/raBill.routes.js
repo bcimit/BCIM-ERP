@@ -6,6 +6,7 @@ const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { loadProjectScope, appendProjectScope } = require('../middleware/projectScope');
 const { logAudit } = require('../utils/auditLog');
+const { BOQ_COST_HEADS } = require('../constants/boqCostHeads');
 router.use(authenticate);
 router.use(loadProjectScope);
 
@@ -24,6 +25,7 @@ const ensureRaBillCols = async () => {
     `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS company_id UUID`,
     `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS adhoc_advance_recovery NUMERIC(15,2) DEFAULT 0`,
     `ALTER TABLE ra_bills ADD COLUMN IF NOT EXISTS wo_number VARCHAR(100) DEFAULT ''`,
+    `ALTER TABLE ra_bill_items ADD COLUMN IF NOT EXISTS cost_head TEXT`,
   ];
   for (const sql of alters) {
     try { await query(sql); } catch (_) {}
@@ -199,11 +201,12 @@ router.post('/', authorize('super_admin','admin','qs_engineer','project_manager'
             `(total ${prevQty + currentQty} > ${boqQty})`
           );
         }
+        const costHead = BOQ_COST_HEADS.includes(it.cost_head) ? it.cost_head : null;
         await client.query(
           `INSERT INTO ra_bill_items
-             (ra_bill_id, boq_item_id, prev_certified_qty, current_qty, cumulative_qty, rate)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [billId, it.boq_item_id, prevQty, currentQty, prevQty + currentQty, it.rate]
+             (ra_bill_id, boq_item_id, prev_certified_qty, current_qty, cumulative_qty, rate, cost_head)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [billId, it.boq_item_id, prevQty, currentQty, prevQty + currentQty, it.rate, costHead]
         );
       }
       return header.rows[0];

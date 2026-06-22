@@ -12,6 +12,7 @@ import SearchableSelect from '../../components/shared/SearchableSelect';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
 
 const inr = v => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const compactInr = v => {
@@ -197,6 +198,12 @@ export default function RABillNewPage() {
     const it = newItems[idx];
     it.current_qty = parseFloat(qty || 0);
     it.amount = it.current_qty * it.rate;
+    setItems(newItems);
+  };
+
+  const handleCostHeadChange = (idx, value) => {
+    const newItems = [...items];
+    newItems[idx].cost_head = value;
     setItems(newItems);
   };
 
@@ -439,6 +446,9 @@ export default function RABillNewPage() {
                     <th className="px-4 py-3 text-[10px] font-semibold text-indigo-500 uppercase tracking-wider text-right w-32 border-b border-slate-100 bg-indigo-50/40">
                       Claim Qty
                     </th>
+                    <th className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-left w-40 border-b border-slate-100">
+                      Cost Head
+                    </th>
                     <th className="px-6 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right w-36 border-b border-slate-100">
                       Value (₹)
                     </th>
@@ -447,7 +457,7 @@ export default function RABillNewPage() {
                 <tbody>
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-24 text-center">
+                      <td colSpan={6} className="py-24 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="grid place-items-center w-12 h-12 rounded-2xl bg-slate-50 text-slate-300">
                             <Plus className="w-6 h-6" />
@@ -501,6 +511,16 @@ export default function RABillNewPage() {
                             onChange={e => handleQtyChange(idx, e.target.value)}
                             min={0}
                           />
+                        </td>
+                        <td className="px-4 py-3.5 border-b border-slate-50">
+                          <select
+                            className="w-full h-9 text-[12px] border border-slate-200 rounded-lg px-2 bg-white outline-none focus:border-indigo-500"
+                            value={it.cost_head || ''}
+                            onChange={e => handleCostHeadChange(idx, e.target.value)}
+                          >
+                            <option value="">Unallocated</option>
+                            {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
                         </td>
                         <td className="px-6 py-3.5 text-right font-mono text-[13px] font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors border-b border-slate-50">
                           {inr(it.amount || 0)}
