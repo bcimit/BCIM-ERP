@@ -67,6 +67,14 @@ router.get('/:project_id', async (req, res) => {
       GROUP BY swi.boq_item_id, bi.cost_head
     `, [project_id]);
 
+    const tqsActuals = await query(`
+      SELECT li.boq_item_id, li.cost_head, SUM(li.basic_amount) AS actual
+      FROM tqs_bill_line_items li
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE tb.project_id = $1 AND tb.workflow_status = 'paid' AND li.boq_item_id IS NOT NULL
+      GROUP BY li.boq_item_id, li.cost_head
+    `, [project_id]);
+
     const byItem = {};
     for (const row of breakdown.rows) {
       if (!byItem[row.boq_item_id]) byItem[row.boq_item_id] = {};
@@ -93,6 +101,7 @@ router.get('/:project_id', async (req, res) => {
     };
     addActual(raActuals.rows);
     addActual(scActuals.rows);
+    addActual(tqsActuals.rows);
 
     const data = items.rows.map(item => ({
       ...item,

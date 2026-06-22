@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { tqsBillsAPI, projectAPI, tqsVendorsAPI, poAPI, inventoryAPI, subcontractorAPI } from '../../api/client';
+import { tqsBillsAPI, projectAPI, tqsVendorsAPI, poAPI, inventoryAPI, subcontractorAPI, boqAPI } from '../../api/client';
+import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import { FIELD_HL } from '../../constants/fieldStyles';
@@ -70,7 +71,7 @@ const EMPTY_FORM = {
   cgst_pct: '', sgst_pct: '', igst_pct: '',
 };
 
-const EMPTY_ITEM = { category: '', item_name: '', unit: '', quantity: '', rate: '', discount_amount: '', gst_pct: '18', po_item_id: '', wo_item_id: '', remaining_qty: null };
+const EMPTY_ITEM = { category: '', item_name: '', unit: '', quantity: '', rate: '', discount_amount: '', gst_pct: '18', po_item_id: '', wo_item_id: '', remaining_qty: null, boq_item_id: '', cost_head: '' };
 
 const F = `w-full h-10 rounded-lg px-3 text-sm font-medium text-slate-900 outline-none transition-all border placeholder:text-slate-500 ${FIELD_HL}`;
 
@@ -167,6 +168,14 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
     });
     return map;
   }, [inventoryItems]);
+
+  // BOQ items for the selected project — lets each bill line be tagged to a BOQ item + cost sub-heading
+  const { data: boqItems = [] } = useQuery({
+    queryKey: ['tqs-boq-items', form.project_id],
+    queryFn: () => boqAPI.summary(form.project_id).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    enabled: !!form.project_id,
+    staleTime: 60000,
+  });
 
   // Approved POs available for invoicing (filtered by project once selected)
   const { data: availablePOs = [] } = useQuery({
@@ -927,6 +936,28 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
                             placeholder="Item / material name"
                             onChange={(materialName) => handleItemName(i, materialName)}
                           />
+                          <div className="flex gap-1 mt-1">
+                            <select
+                              className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+                              value={it.boq_item_id || ''}
+                              onChange={e => updateItem(i, 'boq_item_id', e.target.value)}
+                              title="Link to BOQ item"
+                            >
+                              <option value="">No BOQ item</option>
+                              {boqItems.map(b => (
+                                <option key={b.id} value={b.id}>{b.item_no ? `${b.item_no} — ` : ''}{b.description}</option>
+                              ))}
+                            </select>
+                            <select
+                              className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+                              value={it.cost_head || ''}
+                              onChange={e => updateItem(i, 'cost_head', e.target.value)}
+                              title="Cost sub-heading"
+                            >
+                              <option value="">Unallocated</option>
+                              {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                          </div>
                         </td>
                         <td className="px-2 py-1.5">
                           <input className={`w-16 rounded px-2 py-1.5 text-xs outline-none transition-all border ${FIELD_HL}`}

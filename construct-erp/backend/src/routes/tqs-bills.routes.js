@@ -16,6 +16,7 @@ const { sendMail } = require('../services/mail.service');
 const logger = require('../utils/logger');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { postAutoJournalStandalone } = require('../services/journalAutoPost');
+const { BOQ_COST_HEADS } = require('../constants/boqCostHeads');
 
 
 const router = express.Router();
@@ -329,6 +330,9 @@ async function ensureTables() {
     // PO linkage — tracks which PO line item this bill line is drawn against
     `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS po_item_id UUID`,
     `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS wo_item_id UUID`,
+    // BOQ linkage — tags this line item to a BOQ item + cost sub-heading for budget-vs-actual tracking
+    `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS boq_item_id UUID`,
+    `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS cost_head TEXT`,
     // Thumb rule — unit conversion audit trail (e.g. PO in Sqm, vendor invoices in Nos)
     `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS physical_qty NUMERIC(14,3)`,
     `ALTER TABLE tqs_bill_line_items ADD COLUMN IF NOT EXISTS physical_unit VARCHAR(30)`,
@@ -2086,21 +2090,23 @@ router.post('/', async (req, res) => {
         if (mode === 'interstate') { igP = gstPct; igA = basic * igP / 100; }
         else { cgP = gstPct / 2; sgP = gstPct / 2; cgA = basic * cgP / 100; sgA = basic * sgP / 100; }
         const gst_a = cgA + sgA + igA;
+        const costHead = BOQ_COST_HEADS.includes(it.cost_head) ? it.cost_head : null;
         await client.query(`
           INSERT INTO tqs_bill_line_items
             (bill_id, category, item_code, item_name, unit, quantity, rate,
              discount_amount, basic_amount, gst_pct, gst_mode,
              cgst_pct, cgst_amt, sgst_pct, sgst_amt, igst_pct, igst_amt,
              gst_amount, total_amount, sort_order, po_item_id, wo_item_id,
-             physical_qty, physical_unit, conversion_factor)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+             physical_qty, physical_unit, conversion_factor, boq_item_id, cost_head)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
         `, [billId, it.category || null, it.item_code || null, it.item_name,
             it.unit, it.quantity, it.rate, discount, basic, gstPct, mode,
             cgP, cgA, sgP, sgA, igP, igA, gst_a, basic + gst_a, idx,
             it.po_item_id || null, it.wo_item_id || null,
             it.physical_qty    || null,
             it.physical_unit   || null,
-            it.conversion_factor ? parseFloat(it.conversion_factor) : 1]);
+            it.conversion_factor ? parseFloat(it.conversion_factor) : 1,
+            it.boq_item_id || null, costHead]);
       }
 
       // ── AUTO-UPDATE STORE LEDGER ─────────────────────────────────────────────
