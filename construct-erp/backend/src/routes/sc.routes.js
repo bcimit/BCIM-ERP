@@ -13,6 +13,36 @@ runSchemaInit('sc_bill_items_cost_head', async () => {
   await query(`ALTER TABLE sc_bill_items ADD COLUMN IF NOT EXISTS cost_head TEXT`);
 });
 
+// ── One-time WO line-item correction ─────────────────────────────────────────
+// WOTQS006 — S.G.S. Forklift & Crane Services (correct items per WO dated 07.11.2025)
+runSchemaInit('wotqs006_items_fix_v1', async () => {
+  const wo = await query(`SELECT id FROM sc_work_orders WHERE wo_number=$1 LIMIT 1`, ['WOTQS006']);
+  if (!wo.rowCount) { console.log('[fix] WOTQS006 not found, skipping'); return; }
+  const woId = wo.rows[0].id;
+
+  // Replace all existing items with the correct 6 from the signed WO
+  await query(`DELETE FROM sc_wo_items WHERE wo_id=$1`, [woId]);
+
+  const items = [
+    { seq: 1, desc: 'Hiring of Hydra Crane (12 Ton) - Minimum 3 Hours Shift', unit: 'Shift', qty: 1, rate: 3000 },
+    { seq: 2, desc: 'Hiring of Hydra Crane (12 Ton) - After 3 Hours',         unit: 'Hours', qty: 1, rate: 700  },
+    { seq: 3, desc: 'Hiring of Hydra Crane (12 Ton) - 8 Hours per Day',       unit: 'Day',   qty: 1, rate: 6500 },
+    { seq: 4, desc: 'Hiring of F15-Farana Crane - Minimum 3 Hours',           unit: 'Shift', qty: 1, rate: 4500 },
+    { seq: 5, desc: 'Hiring of F15-Farana Crane - Per Hour',                  unit: 'Hours', qty: 1, rate: 1000 },
+    { seq: 6, desc: 'Hiring of F15-Farana Crane - 8 Hours Shift',             unit: 'Day',   qty: 1, rate: 8500 },
+  ];
+  for (const it of items) {
+    await query(
+      `INSERT INTO sc_wo_items (wo_id, item_code, description, unit, qty, rate, sequence_no)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [woId, `WOTQS006-${it.seq}`, it.desc, it.unit, it.qty, it.rate, it.seq]
+    );
+  }
+  // Update contract amount to match WO total (excl GST)
+  await query(`UPDATE sc_work_orders SET contract_amount=24200, subject='Hiring of Hydra & F15-Farana Crane for TQS, Yelahanka' WHERE id=$1`, [woId]);
+  console.log('[fix] WOTQS006 items corrected — 6 line items inserted');
+});
+
 router.use(authenticate);
 const CID  = req => req.user.company_id;
 const ADMIN = ['super_admin','admin'];
