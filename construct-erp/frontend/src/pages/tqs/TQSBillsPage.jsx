@@ -373,6 +373,9 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
               : it.gst_pct != null ? String(it.gst_pct) : '18',
             po_item_id: '',
             wo_item_id: it.id || '',
+            // Auto-link to BOQ item if the WO item was mapped (sc_wo_items.boq_item_id); user can override
+            boq_item_id: it.boq_item_id || '',
+            cost_head: '',
             remaining_qty: remaining,
             discount_amount: it.discount_amount != null ? String(Math.abs(Number(it.discount_amount) || 0)) : '',
           };
