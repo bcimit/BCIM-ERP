@@ -88,6 +88,31 @@ function generateRows(from, to) {
   return rows;
 }
 
+// Classify a set of rows into shift/extra-hour/day billing quantities.
+// Rules per row (based on netHrs):
+//   netHrs >= 8        → 1 Day
+//   0 < netHrs < 8     → 1 Shift; if netHrs > 3 also add (netHrs-3) extra hours
+//   netHrs = 0         → not billed
+function classifyEquipRows(equipRows) {
+  let totalShifts = 0, totalExtraHrs = 0, totalDays = 0;
+  for (const row of equipRows) {
+    const hrs = Number(row.netHrs) || 0;
+    if (hrs <= 0) continue;
+    if (hrs >= 8) { totalDays++; }
+    else { totalShifts++; if (hrs > 3) totalExtraHrs += +(hrs - 3).toFixed(2); }
+  }
+  return { totalShifts, totalExtraHrs: +totalExtraHrs.toFixed(2), totalDays };
+}
+
+// Identify WO item billing tier from its description/unit.
+function getItemTier(item) {
+  const desc = (item.description || '').toLowerCase();
+  const unit = (item.unit || '').toLowerCase();
+  if (unit === 'day' || desc.includes('8 hour') || desc.includes('per day')) return 'day';
+  if (unit === 'hours' && (desc.includes('per hour') || desc.includes('after') || desc.includes('hour'))) return 'hour';
+  return 'shift';
+}
+
 function computeGross(row) {
   if (!row.startTime || !row.endTime) return 0;
   const [sh, sm] = row.startTime.split(':').map(Number);
@@ -615,11 +640,12 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
       {woItems.length > 0 && (
         <SectionBox title="Section 3.5 — Work Order Line Items & Bill Calculation">
           {Array.from(equipmentGroups.entries()).map(([equipName, items], gi) => {
-            // Hours for this equipment group from the daily log
-            const eqRows   = rows.filter(r => (r.equipment || equipmentNames[0]) === equipName);
-            const eqNet    = +eqRows.reduce((s, r) => s + (Number(r.netHrs)       || 0), 0).toFixed(2);
-            const eqIdle   = +eqRows.reduce((s, r) => s + (Number(r.idleHrs)      || 0), 0).toFixed(2);
-            const eqBdown  = +eqRows.reduce((s, r) => s + (Number(r.breakdownHrs) || 0), 0).toFixed(2);
+            const eqRows = rows.filter(r => (r.equipment || equipmentNames[0]) === equipName);
+            const { totalShifts, totalExtraHrs, totalDays } = classifyEquipRows(eqRows);
+
+            // certified qty per tier
+            const certQtyFor = (tier) =>
+              tier === 'shift' ? totalShifts : tier === 'hour' ? totalExtraHrs : totalDays;
 
             let grandNet = 0;
             return (
@@ -627,7 +653,11 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
                 {equipmentNames.length > 1 && (
                   <div className="flex items-center gap-3 mb-2">
                     <span className="text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-1">{equipName}</span>
-                    <span className="text-xs text-slate-500">Net hrs from log: <strong className="text-blue-700">{eqNet}</strong> | Idle: <strong className="text-red-500">{eqIdle}</strong> | Bdown: <strong className="text-red-500">{eqBdown}</strong></span>
+                    <span className="text-xs text-slate-500">
+                      Shifts: <strong className="text-blue-700">{totalShifts}</strong> &nbsp;|&nbsp;
+                      Extra hrs: <strong className="text-blue-700">{totalExtraHrs}</strong> &nbsp;|&nbsp;
+                      Days: <strong className="text-blue-700">{totalDays}</strong>
+                    </span>
                   </div>
                 )}
                 <div className="overflow-x-auto">
@@ -639,26 +669,17 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
                         <th className="px-3 py-2 text-center">Unit</th>
                         <th className="px-3 py-2 text-right">Contract Qty</th>
                         <th className="px-3 py-2 text-right">Rate (₹)</th>
-                        <th className="px-3 py-2 text-right">Certified Qty (Log)</th>
-                        <th className="px-3 py-2 text-right">Gross Amt (₹)</th>
-                        <th className="px-3 py-2 text-right">Idle Ded (₹)</th>
-                        <th className="px-3 py-2 text-right">Bdown Ded (₹)</th>
-                        <th className="px-3 py-2 text-right font-bold text-amber-700">Net Certifiable (₹)</th>
+                        <th className="px-3 py-2 text-right">Certified Qty</th>
+                        <th className="px-3 py-2 text-right font-bold text-amber-700">Amount (₹)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map((item, idx) => {
-                        const rate     = Number(item.rate) || 0;
-                        const certQty  = eqNet;
-                        const grossAmt = +(certQty * rate).toFixed(2);
-                        let idleRate   = 0;
-                        if (ded.idleRule === 'Full')    idleRate = rate;
-                        else if (ded.idleRule === '50%') idleRate = rate * 0.5;
-                        else if (ded.idleRule === 'Custom%') idleRate = rate * ((Number(ded.customIdlePct) || 0) / 100);
-                        const idleDed  = +(eqIdle  * idleRate).toFixed(2);
-                        const bdownDed = +(eqBdown * (ded.breakdownRule === 'Full' ? rate : 0)).toFixed(2);
-                        const netCert  = +(grossAmt - idleDed - bdownDed).toFixed(2);
-                        grandNet += netCert;
+                        const rate    = Number(item.rate) || 0;
+                        const tier    = getItemTier(item);
+                        const certQty = certQtyFor(tier);
+                        const amount  = +(certQty * rate).toFixed(2);
+                        grandNet += amount;
                         return (
                           <tr key={item.id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                             <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
@@ -666,19 +687,16 @@ export default function CraneLogSheet({ category: categoryProp, vendorList: vend
                             <td className="px-3 py-2 text-center text-slate-600">{item.unit || header.billingUnit}</td>
                             <td className="px-3 py-2 text-right text-slate-600">{item.qty ?? '—'}</td>
                             <td className="px-3 py-2 text-right text-slate-700">{inr(rate)}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-blue-700">{certQty}</td>
-                            <td className="px-3 py-2 text-right text-slate-700">{inr(grossAmt)}</td>
-                            <td className="px-3 py-2 text-right text-red-600">({inr(idleDed)})</td>
-                            <td className="px-3 py-2 text-right text-red-600">({inr(bdownDed)})</td>
-                            <td className="px-3 py-2 text-right font-bold text-amber-700">{inr(netCert)}</td>
+                            <td className={`px-3 py-2 text-right font-semibold ${certQty > 0 ? 'text-blue-700' : 'text-slate-400'}`}>{certQty}</td>
+                            <td className={`px-3 py-2 text-right font-bold ${amount > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{inr(amount)}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
                       <tr className="bg-amber-50 border-t-2 border-amber-300">
-                        <td colSpan={9} className="px-3 py-2 text-right font-bold text-slate-800">{equipName} — Net Certifiable</td>
-                        <td className="px-3 py-2 text-right font-bold text-lg text-amber-700">{inr(grandNet)}</td>
+                        <td colSpan={6} className="px-3 py-2 text-right font-bold text-slate-800">{equipName} — Net Certifiable</td>
+                        <td className="px-3 py-2 text-right font-bold text-xl text-amber-700">{inr(grandNet)}</td>
                       </tr>
                     </tfoot>
                   </table>
