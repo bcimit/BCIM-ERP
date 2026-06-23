@@ -1411,11 +1411,11 @@ router.get('/org-chart', async (req, res) => {
         u.name,
         u.email,
         u.role,
-        COALESCE(ep.reporting_manager_id, NULL)  AS reporting_manager_id,
+        COALESCE(u.employee_code, '')             AS employee_code,
+        ep.reporting_manager_id,
         COALESCE(ep.work_location, '')            AS work_location,
         COALESCE(ep.employment_type, '')          AS employment_type,
         COALESCE(ep.profile_photo_url, '')        AS profile_photo_url,
-        COALESCE(ep.employee_code, '')            AS employee_code,
         COALESCE(dep.name, 'Unassigned')          AS department,
         COALESCE(des.name, '')                    AS designation,
         COALESCE(des.grade, '')                   AS grade
