@@ -67,7 +67,7 @@ export default function LabourCompliancePage() {
             { label: 'Total Employees',    value: EMPLOYEES,            sub: 'PF + ESI enrolled' },
             { label: 'PF (May 2026)',       value: inr(PF_EMP+PF_ER+PF_EDL+PF_ADM), sub: 'Employee + Employer + Admin' },
             { label: 'ESI (May 2026)',      value: inr(ESI_EMP+ESI_ER), sub: 'Employee 0.75% + Employer 3.25%' },
-            { label: 'Prof. Tax (H2 FY26)', value: '₹5,000',           sub: 'Due 31 Jul 2026' },
+            { label: 'Prof. Tax (Jun 2026)', value: '₹200/employee',    sub: 'Due 20 Jul 2026' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="bg-slate-50 border border-slate-200 rounded-md px-4 py-3">
               <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -175,26 +175,24 @@ export default function LabourCompliancePage() {
         {tab === 'Prof. Tax & LWF' && (
           <div className="space-y-4">
             <div className="bg-white border border-slate-200 rounded-md p-5 text-sm">
-              <h3 className="font-semibold text-slate-700 mb-4">Professional Tax — Tamil Nadu</h3>
+              <h3 className="font-semibold text-slate-700 mb-4">Professional Tax — Karnataka</h3>
               <div className="space-y-2 text-slate-600">
                 {[
-                  { slab: '₹0 – ₹21,000/month',   annual: 'Nil' },
-                  { slab: '₹21,001 – ₹30,000/month', annual: '₹135/month' },
-                  { slab: '₹30,001 – ₹45,000/month', annual: '₹315/month' },
-                  { slab: '₹45,001 – ₹60,000/month', annual: '₹690/month' },
-                  { slab: 'Above ₹75,000/month',      annual: '₹1,095/month' },
+                  { slab: 'Up to ₹15,000/month',       pt: 'Nil' },
+                  { slab: '₹15,001 – ₹35,000/month',   pt: '₹150/month' },
+                  { slab: 'Above ₹35,000/month',        pt: '₹200/month (max ₹2,400/year)' },
                 ].map(s => (
                   <div key={s.slab} className="flex justify-between border-b border-slate-100 pb-1.5">
                     <span>{s.slab}</span>
-                    <span className="font-mono font-medium text-slate-800">{s.annual}</span>
+                    <span className="font-mono font-medium text-slate-800">{s.pt}</span>
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-xs text-slate-400">Half-yearly — H1 (Apr–Sep) due 31 Jul · H2 (Oct–Mar) due 31 Jan. Company PT (employer) ₹5,000/year.</p>
+              <p className="mt-4 text-xs text-slate-400">Due by 20th of every month. Annual return (Form 5) by 30 Apr. Employer / company PT: ₹2,500/year.</p>
             </div>
             <div className="bg-white border border-slate-200 rounded-md p-5 text-sm">
               <h3 className="font-semibold text-slate-700 mb-2">Labour Welfare Fund (LWF)</h3>
-              <p className="text-slate-600">Tamil Nadu LWF — Employee ₹3, Employer ₹6 per half-year. Contributed in June (H1) and December (H2). Submit Form A to Labour Welfare Board.</p>
+              <p className="text-slate-600">Karnataka LWF — Employee ₹20, Employer ₹40 per year. Contributed in January. Submit annual return to Karnataka Labour Welfare Board.</p>
             </div>
           </div>
         )}
