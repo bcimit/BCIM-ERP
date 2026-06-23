@@ -977,4 +977,501 @@ router.patch('/payslip-templates/:id/activate', async (req, res) => {
   }
 });
 
+// ─── 16. CHEQUE / CASH STATEMENT ────────────────────────────────────────────
+
+router.get('/cheque-cash-statement', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const { rows } = await query(
+      `SELECT p.id, u.employee_code, u.name,
+              dep.name AS department,
+              p.payment_mode,
+              ep.cheque_no,
+              p.net_pay,
+              p.status
+       FROM hr_monthly_payroll p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE p.company_id = $1 AND p.month = $2 AND p.year = $3
+         AND p.payment_mode IN ('cheque','cash')
+       ORDER BY p.payment_mode, u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 17. SALARY REVISION ANALYTICS ──────────────────────────────────────────
+
+router.get('/salary-revision-analytics', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    // Overall summary
+    const sumQ = await query(
+      `SELECT COUNT(DISTINCT u.id) AS total_employees,
+              COUNT(es.id) FILTER (WHERE EXTRACT(YEAR FROM es.effective_from) = $2) AS total_revised,
+              AVG(CASE WHEN prev.ctc_annual > 0
+                       THEN (es.ctc_annual - prev.ctc_annual) / prev.ctc_annual * 100
+                       END) AS avg_hike_pct,
+              AVG(es.ctc_annual) AS avg_revised_ctc
+       FROM users u
+       LEFT JOIN hr_employee_salaries es ON es.user_id = u.id
+       LEFT JOIN LATERAL (
+         SELECT ctc_annual FROM hr_employee_salaries s2
+         WHERE s2.user_id = u.id AND s2.effective_from < es.effective_from
+         ORDER BY s2.effective_from DESC LIMIT 1
+       ) prev ON true
+       WHERE u.company_id = $1 AND u.is_active = TRUE AND u.role = 'employee'`,
+      [req.user.company_id, year]
+    );
+
+    // CTC band distribution (all active employees, latest salary)
+    const bandQ = await query(
+      `WITH latest AS (
+         SELECT DISTINCT ON (user_id) ctc_annual
+         FROM hr_employee_salaries
+         WHERE company_id = $1
+         ORDER BY user_id, effective_from DESC
+       )
+       SELECT
+         CASE
+           WHEN ctc_annual < 300000   THEN 'Below ₹3L'
+           WHEN ctc_annual < 600000   THEN '₹3L – ₹6L'
+           WHEN ctc_annual < 1000000  THEN '₹6L – ₹10L'
+           WHEN ctc_annual < 1500000  THEN '₹10L – ₹15L'
+           WHEN ctc_annual < 2500000  THEN '₹15L – ₹25L'
+           ELSE 'Above ₹25L'
+         END AS band,
+         COUNT(*) AS count
+       FROM latest
+       GROUP BY band
+       ORDER BY MIN(ctc_annual)`,
+      [req.user.company_id]
+    );
+
+    const totalEmp = parseInt(bandQ.rows.reduce((s, r) => s + parseInt(r.count), 0)) || 1;
+    const bands = bandQ.rows.map(r => ({
+      band: r.band,
+      count: parseInt(r.count),
+      pct: ((parseInt(r.count) / totalEmp) * 100).toFixed(1),
+    }));
+
+    // Monthly revision count for the year
+    const monthlyQ = await query(
+      `SELECT EXTRACT(MONTH FROM effective_from) AS mo, COUNT(*) AS count
+       FROM hr_employee_salaries
+       WHERE company_id = $1 AND EXTRACT(YEAR FROM effective_from) = $2
+       GROUP BY mo ORDER BY mo`,
+      [req.user.company_id, year]
+    );
+    const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const monthly = MONTH_LABELS.map((label, i) => {
+      const rec = monthlyQ.rows.find(r => parseInt(r.mo) === i + 1);
+      return { month_label: label, count: rec ? parseInt(rec.count) : 0 };
+    });
+
+    // Recent revisions (top 20)
+    const recentQ = await query(
+      `SELECT es.id, u.name, u.employee_code, dep.name AS department,
+              es.ctc_annual AS revised_ctc, es.effective_from AS effective_date,
+              prev.ctc_annual AS previous_ctc
+       FROM hr_employee_salaries es
+       JOIN users u ON u.id = es.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN LATERAL (
+         SELECT ctc_annual FROM hr_employee_salaries s2
+         WHERE s2.user_id = es.user_id AND s2.effective_from < es.effective_from
+         ORDER BY s2.effective_from DESC LIMIT 1
+       ) prev ON true
+       WHERE es.company_id = $1 AND EXTRACT(YEAR FROM es.effective_from) = $2
+       ORDER BY es.effective_from DESC LIMIT 20`,
+      [req.user.company_id, year]
+    );
+
+    const s = sumQ.rows[0];
+    res.json({
+      data: {
+        summary: {
+          total_employees: parseInt(s.total_employees) || 0,
+          total_revised:   parseInt(s.total_revised)   || 0,
+          avg_hike_pct:    parseFloat(s.avg_hike_pct)  || 0,
+          avg_revised_ctc: parseFloat(s.avg_revised_ctc) || 0,
+        },
+        bands,
+        monthly,
+        top_earners: recentQ.rows,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 18. STOP SALARY PROCESSING ──────────────────────────────────────────────
+
+const initStopSalary = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS hr_salary_stops (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+      user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+      reason      TEXT NOT NULL,
+      remarks     TEXT,
+      added_by    UUID REFERENCES users(id),
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, company_id)
+    )
+  `);
+};
+initStopSalary().catch(() => {});
+
+router.get('/stop-salary', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT ss.id, u.employee_code, u.name,
+              dep.name AS department,
+              ss.reason, ss.remarks,
+              ab.name AS added_by,
+              ss.created_at
+       FROM hr_salary_stops ss
+       JOIN users u ON u.id = ss.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN users ab ON ab.id = ss.added_by
+       WHERE ss.company_id = $1
+       ORDER BY ss.created_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/stop-salary', async (req, res) => {
+  try {
+    const { employee_id, reason, remarks } = req.body;
+    if (!employee_id || !reason) return res.status(400).json({ error: 'employee_id and reason required' });
+
+    const { rows } = await query(
+      `INSERT INTO hr_salary_stops (company_id, user_id, reason, remarks, added_by)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, company_id) DO UPDATE SET reason=$3, remarks=$4, added_by=$5, created_at=NOW()
+       RETURNING *`,
+      [req.user.company_id, employee_id, reason, remarks || null, req.user.id]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/stop-salary/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_salary_stops WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 19. ARREARS ─────────────────────────────────────────────────────────────
+
+const initArrears = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS hr_arrears (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+      user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+      month       INT NOT NULL,
+      year        INT NOT NULL,
+      amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+      description TEXT,
+      updated_by  UUID REFERENCES users(id),
+      updated_at  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, month, year)
+    )
+  `);
+};
+initArrears().catch(() => {});
+
+router.get('/arrears', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              dep.name AS department,
+              COALESCE(a.amount, 0) AS amount,
+              a.description
+       FROM users u
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN hr_arrears a ON a.user_id = u.id AND a.month = $2 AND a.year = $3 AND a.company_id = $1
+       WHERE u.company_id = $1 AND u.is_active = TRUE AND u.role = 'employee'
+       ORDER BY dep.name NULLS LAST, u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/arrears', async (req, res) => {
+  try {
+    const { month, year, entries } = req.body;
+    if (!month || !year || !Array.isArray(entries)) return res.status(400).json({ error: 'month, year, entries required' });
+
+    for (const e of entries) {
+      if (!e.employee_id) continue;
+      await query(
+        `INSERT INTO hr_arrears (company_id, user_id, month, year, amount, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (user_id, month, year) DO UPDATE SET amount=$5, updated_by=$6, updated_at=NOW()`,
+        [req.user.company_id, e.employee_id, month, year, parseFloat(e.amount) || 0, req.user.id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 20. OVERTIME REGISTER ───────────────────────────────────────────────────
+
+const initOvertime = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS hr_overtime (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+      user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+      month       INT NOT NULL,
+      year        INT NOT NULL,
+      ot_hours    NUMERIC(6,2) NOT NULL DEFAULT 0,
+      ot_rate     NUMERIC(10,2) NOT NULL DEFAULT 0,
+      updated_by  UUID REFERENCES users(id),
+      updated_at  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, month, year)
+    )
+  `);
+};
+initOvertime().catch(() => {});
+
+router.get('/overtime', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              dep.name AS department,
+              COALESCE(ot.ot_hours, 0) AS ot_hours,
+              COALESCE(ot.ot_rate, 0)  AS ot_rate
+       FROM users u
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN hr_overtime ot ON ot.user_id = u.id AND ot.month = $2 AND ot.year = $3 AND ot.company_id = $1
+       WHERE u.company_id = $1 AND u.is_active = TRUE AND u.role = 'employee'
+       ORDER BY dep.name NULLS LAST, u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/overtime', async (req, res) => {
+  try {
+    const { month, year, entries } = req.body;
+    if (!month || !year || !Array.isArray(entries)) return res.status(400).json({ error: 'month, year, entries required' });
+
+    for (const e of entries) {
+      if (!e.employee_id) continue;
+      await query(
+        `INSERT INTO hr_overtime (company_id, user_id, month, year, ot_hours, ot_rate, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (user_id, month, year) DO UPDATE SET ot_hours=$5, ot_rate=$6, updated_by=$7, updated_at=NOW()`,
+        [req.user.company_id, e.employee_id, month, year, parseFloat(e.ot_hours) || 0, parseFloat(e.ot_rate) || 0, req.user.id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 21. PF YTD STATEMENT ────────────────────────────────────────────────────
+
+router.get('/pf-ytd/:empId', async (req, res) => {
+  try {
+    const { empId } = req.params;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    const empCheck = await query(`SELECT id FROM users WHERE id=$1 AND company_id=$2`, [empId, req.user.company_id]);
+    if (!empCheck.rows.length) return res.status(404).json({ error: 'Employee not found' });
+
+    const fy = fyMonths(year);
+    const monthly = [];
+
+    for (const { month, year: my } of fy) {
+      const { rows } = await query(
+        `SELECT basic, pf_employee, pf_employer, gross_earnings AS gross
+         FROM hr_monthly_payroll
+         WHERE user_id=$1 AND month=$2 AND year=$3`,
+        [empId, month, my]
+      );
+      if (rows.length) {
+        const r = rows[0];
+        const pfWages  = Math.min(parseFloat(r.basic) || 0, 15000);
+        const empPF    = parseFloat(r.pf_employee) || 0;
+        const erTotal  = parseFloat(r.pf_employer) || 0;
+        const eps      = Math.round(pfWages * 0.0833);
+        const epf      = Math.max(0, erTotal - eps);
+        monthly.push({ pf_wages: pfWages, pf_employee: empPF, pf_employer: erTotal, eps_employer: eps, epf_employer: epf });
+      } else {
+        monthly.push({ pf_wages: 0, pf_employee: 0, pf_employer: 0, eps_employer: 0, epf_employer: 0 });
+      }
+    }
+
+    res.json({ data: { monthly } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 22. REIMBURSEMENT STATEMENT ─────────────────────────────────────────────
+
+router.get('/reimbursement-statement/:empId', async (req, res) => {
+  try {
+    const { empId } = req.params;
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    const empCheck = await query(`SELECT id FROM users WHERE id=$1 AND company_id=$2`, [empId, req.user.company_id]);
+    if (!empCheck.rows.length) return res.status(404).json({ error: 'Employee not found' });
+
+    // Pull from hr_expense_claims table (existing)
+    const { rows } = await query(
+      `SELECT ec.id, ec.claim_date, ec.category, ec.description, ec.amount, ec.status, ec.approved_date AS paid_date
+       FROM hr_expense_claims ec
+       WHERE ec.user_id = $1 AND ec.company_id = $2
+         AND EXTRACT(YEAR FROM ec.claim_date) = $3
+       ORDER BY ec.claim_date DESC`,
+      [empId, req.user.company_id, year]
+    ).catch(() => ({ rows: [] }));
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 23. CTC PAYSLIP ─────────────────────────────────────────────────────────
+
+router.get('/ctc-payslip/:empId', async (req, res) => {
+  try {
+    const { empId } = req.params;
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const empQ = await query(
+      `SELECT u.name, u.employee_code,
+              dep.name AS department, des.name AS designation
+       FROM users u
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN hr_designations des ON des.id = ep.designation_id
+       WHERE u.id = $1 AND u.company_id = $2`,
+      [empId, req.user.company_id]
+    );
+    if (!empQ.rows.length) return res.status(404).json({ error: 'Employee not found' });
+
+    const prQ = await query(
+      `SELECT * FROM hr_monthly_payroll WHERE user_id=$1 AND month=$2 AND year=$3`,
+      [empId, parseInt(month), parseInt(year)]
+    );
+    if (!prQ.rows.length) return res.json({ data: null });
+
+    const p = prQ.rows[0];
+    const emp = empQ.rows[0];
+
+    const gross      = parseFloat(p.gross_earnings) || 0;
+    const pfEmp      = parseFloat(p.pf_employee)    || 0;
+    const pfEr       = parseFloat(p.pf_employer)    || 0;
+    const esiEmp     = parseFloat(p.esi_employee)   || 0;
+    const esiEr      = parseFloat(p.esi_employer)   || 0;
+    const pt         = parseFloat(p.pt)             || 0;
+    const tds        = parseFloat(p.tds)            || 0;
+    const basic      = parseFloat(p.basic)          || 0;
+    const gratuity   = Math.round(basic / 26 * 15 / 12); // monthly gratuity accrual
+
+    const totalDeductions   = parseFloat(p.total_deductions) || 0;
+    const totalEmployerCost = pfEr + esiEr + gratuity;
+    const ctc               = gross + totalEmployerCost;
+
+    res.json({
+      data: {
+        ...emp,
+        employee_code:    p.employee_code || emp.employee_code,
+        working_days:     p.working_days,
+        paid_days:        p.paid_days,
+        basic,
+        hra:              parseFloat(p.hra) || 0,
+        conveyance:       parseFloat(p.conveyance) || 0,
+        medical:          parseFloat(p.medical) || 0,
+        special_allowance:parseFloat(p.special_allowance) || 0,
+        other_earnings:   parseFloat(p.other_earnings) || 0,
+        gross_earnings:   gross,
+        pf_employee:      pfEmp,
+        pf_employer:      pfEr,
+        esi_employee:     esiEmp,
+        esi_employer:     esiEr,
+        pt,
+        tds,
+        gratuity,
+        total_deductions: totalDeductions,
+        net_pay:          parseFloat(p.net_pay) || 0,
+        total_employer_cost: totalEmployerCost,
+        ctc,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 24. ACTIVE EMPLOYEES LIST (helper for dropdowns) ────────────────────────
+
+router.get('/employees/active', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.name, u.employee_code,
+              dep.name AS department
+       FROM users u
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE u.company_id = $1 AND u.is_active = TRUE AND u.role = 'employee'
+       ORDER BY u.name`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

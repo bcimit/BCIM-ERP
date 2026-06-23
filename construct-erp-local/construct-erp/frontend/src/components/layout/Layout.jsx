@@ -16,7 +16,8 @@ import {
   Landmark, FileSignature, CircleSlash, ShieldCheck, Clock3, Lightbulb,
   Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, IndianRupee,
   History, Mail, Image, FolderUp, MessageSquare, Database, Filter, UserCog, FileBadge, Network,
-  GitCompare, TableProperties, PauseCircle, GalleryThumbnails, Archive, CalendarX, BookMarked
+  GitCompare, TableProperties, PauseCircle, GalleryThumbnails, Archive, CalendarX, BookMarked,
+  StopCircle, Timer, BarChart2
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
@@ -153,13 +154,17 @@ const navGroups = [
     { to: '/hr-admin/holidays',            icon: CalendarDays,    label: 'Holiday Calendar' },
     { to: '/hr-admin/essl-sync',           icon: Fingerprint,     label: 'ESSL Biometric' },
     // Payroll > Information
-    { to: '/hr-admin/salary-revision-history', icon: TrendingUp,      label: 'Salary Revision History' },
+    { to: '/hr-admin/salary-revision-history',    icon: TrendingUp,       label: 'Salary Revision History' },
+    { to: '/hr-admin/salary-revision-analytics',  icon: BarChart2,        label: 'Salary Revision Analytics' },
     // Payroll > Inputs
     { to: '/hr-admin/payroll',             icon: CreditCard,      label: 'Payroll' },
     { to: '/hr-admin/salary-structures',   icon: Banknote,        label: 'Salary Structures' },
     { to: '/hr-admin/loans',              icon: Wallet,          label: 'Loans & Advances' },
     { to: '/hr-admin/expenses',           icon: Receipt,         label: 'Expense Claims' },
     { to: '/hr-admin/lop-days',            icon: CalendarX,       label: 'LOP Days' },
+    { to: '/hr-admin/arrears',             icon: DollarSign,      label: 'Arrears' },
+    { to: '/hr-admin/overtime',            icon: Timer,           label: 'Overtime Register' },
+    { to: '/hr-admin/stop-salary',         icon: StopCircle,      label: 'Stop Salary Processing' },
     // Payroll > Verify
     { to: '/hr-admin/quick-salary-statement', icon: FileBarChart,  label: 'Quick Salary Statement' },
     { to: '/hr-admin/payroll-statement',   icon: TableProperties, label: 'Payroll Statement' },
@@ -167,12 +172,16 @@ const navGroups = [
     // Payroll > Payout
     { to: '/hr-admin/accounts-jv',         icon: BookOpen,        label: 'Accounts JV' },
     { to: '/hr-admin/bank-transfer',        icon: Landmark,        label: 'Bank Transfer' },
+    { to: '/hr-admin/cheque-cash-statement',icon: Receipt,         label: 'Cheque / Cash Statement' },
     { to: '/hr-admin/hold-salary',          icon: PauseCircle,     label: 'Hold Salary Payout' },
     // Payroll > Published Info
     { to: '/hr-admin/ytd-summary',          icon: BarChart3,       label: 'YTD Summary' },
+    { to: '/hr-admin/pf-ytd',              icon: ShieldCheck,     label: 'PF YTD Statement' },
     { to: '/hr-admin/it-statement',         icon: FileText,        label: 'IT Statement' },
     { to: '/hr-admin/it-declaration',       icon: FileBadge,       label: 'IT Declaration' },
     { to: '/hr-admin/loan-statement',       icon: BookMarked,      label: 'Loan Statement' },
+    { to: '/hr-admin/reimbursement-statement', icon: Wallet,       label: 'Reimbursement Statement' },
+    { to: '/hr-admin/ctc-payslip',          icon: FileText,        label: 'CTC Payslip' },
     // Payroll > Setup
     { to: '/hr-admin/pay-item-groups',      icon: Layers,          label: 'Pay Item Groups' },
     { to: '/hr-admin/payroll-repository',   icon: Archive,         label: 'Payroll Repository' },
@@ -338,7 +347,7 @@ const NAV_SECTIONS = {
     { label: 'Admin',       paths: ['/hr-admin/generate-letter','/hr-admin/import','/hr-admin/bulk-photo-upload','/hr-admin/bulk-document-upload','/hr-admin/bulletin-board','/hr-admin/mass-communication','/hr-admin/identity-verification','/hr-admin/contracts','/hr-admin/data-drive'] },
     { label: 'Setup',       paths: ['/hr-admin/letter-templates','/hr-admin/policies','/hr-admin/employee-segments','/hr-admin/employee-filters'] },
     { label: 'Time',        paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays','/hr-admin/essl-sync'] },
-    { label: 'Payroll',     paths: ['/hr-admin/salary-revision-history','/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/loans','/hr-admin/expenses','/hr-admin/lop-days','/hr-admin/quick-salary-statement','/hr-admin/payroll-statement','/hr-admin/payroll-differences','/hr-admin/accounts-jv','/hr-admin/bank-transfer','/hr-admin/hold-salary','/hr-admin/ytd-summary','/hr-admin/it-statement','/hr-admin/it-declaration','/hr-admin/loan-statement','/hr-admin/pay-item-groups','/hr-admin/payroll-repository','/hr-admin/payslip-gallery','/hr-admin/departments','/hr-admin/appraisals'] },
+    { label: 'Payroll',     paths: ['/hr-admin/salary-revision-history','/hr-admin/salary-revision-analytics','/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/loans','/hr-admin/expenses','/hr-admin/lop-days','/hr-admin/arrears','/hr-admin/overtime','/hr-admin/stop-salary','/hr-admin/quick-salary-statement','/hr-admin/payroll-statement','/hr-admin/payroll-differences','/hr-admin/accounts-jv','/hr-admin/bank-transfer','/hr-admin/cheque-cash-statement','/hr-admin/hold-salary','/hr-admin/ytd-summary','/hr-admin/pf-ytd','/hr-admin/it-statement','/hr-admin/it-declaration','/hr-admin/loan-statement','/hr-admin/reimbursement-statement','/hr-admin/ctc-payslip','/hr-admin/pay-item-groups','/hr-admin/payroll-repository','/hr-admin/payslip-gallery','/hr-admin/departments','/hr-admin/appraisals'] },
     { label: 'Reports',     paths: ['/hr-admin/reports'] },
     { label: 'Documents',   paths: ['/hr-admin/documents'] },
   ],

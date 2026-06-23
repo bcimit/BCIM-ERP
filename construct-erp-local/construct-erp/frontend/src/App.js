@@ -262,6 +262,15 @@ const LoanStatementPage          = lazy(() => import('./pages/hr-admin/LoanState
 const PayItemGroupPage           = lazy(() => import('./pages/hr-admin/PayItemGroupPage'));
 const PayrollRepositoryPage      = lazy(() => import('./pages/hr-admin/PayrollRepositoryPage'));
 const PayslipGalleryPage         = lazy(() => import('./pages/hr-admin/PayslipGalleryPage'));
+// Phase 5 — Remaining pages
+const ChequeCashStatementPage    = lazy(() => import('./pages/hr-admin/ChequeCashStatementPage'));
+const SalaryRevisionAnalyticsPage= lazy(() => import('./pages/hr-admin/SalaryRevisionAnalyticsPage'));
+const StopSalaryProcessingPage   = lazy(() => import('./pages/hr-admin/StopSalaryProcessingPage'));
+const ArrearsPage                = lazy(() => import('./pages/hr-admin/ArrearsPage'));
+const OvertimeRegisterPage       = lazy(() => import('./pages/hr-admin/OvertimeRegisterPage'));
+const PFYTDStatementPage         = lazy(() => import('./pages/hr-admin/PFYTDStatementPage'));
+const ReimbursementStatementPage = lazy(() => import('./pages/hr-admin/ReimbursementStatementPage'));
+const CTCPayslipPage             = lazy(() => import('./pages/hr-admin/CTCPayslipPage'));
 
 // ── Home route resolver — sends each user to their first accessible page ──────
 const MODULE_HOME = {
@@ -632,6 +641,15 @@ export default function App() {
                 <Route path="hr-admin/pay-item-groups" element={<RequireModule module="HR & Admin"><PayItemGroupPage /></RequireModule>} />
                 <Route path="hr-admin/payroll-repository" element={<RequireModule module="HR & Admin"><PayrollRepositoryPage /></RequireModule>} />
                 <Route path="hr-admin/payslip-gallery" element={<RequireModule module="HR & Admin"><PayslipGalleryPage /></RequireModule>} />
+                {/* Phase 5 — Remaining */}
+                <Route path="hr-admin/cheque-cash-statement" element={<RequireModule module="HR & Admin"><ChequeCashStatementPage /></RequireModule>} />
+                <Route path="hr-admin/salary-revision-analytics" element={<RequireModule module="HR & Admin"><SalaryRevisionAnalyticsPage /></RequireModule>} />
+                <Route path="hr-admin/stop-salary" element={<RequireModule module="HR & Admin"><StopSalaryProcessingPage /></RequireModule>} />
+                <Route path="hr-admin/arrears" element={<RequireModule module="HR & Admin"><ArrearsPage /></RequireModule>} />
+                <Route path="hr-admin/overtime" element={<RequireModule module="HR & Admin"><OvertimeRegisterPage /></RequireModule>} />
+                <Route path="hr-admin/pf-ytd" element={<RequireModule module="HR & Admin"><PFYTDStatementPage /></RequireModule>} />
+                <Route path="hr-admin/reimbursement-statement" element={<RequireModule module="HR & Admin"><ReimbursementStatementPage /></RequireModule>} />
+                <Route path="hr-admin/ctc-payslip" element={<RequireModule module="HR & Admin"><CTCPayslipPage /></RequireModule>} />
 
                 {/* Site */}
                 <Route path="site/dpr" element={<DPRPage />} />
