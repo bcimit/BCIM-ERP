@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Shield, CheckCircle2, Clock, AlertTriangle, XCircle } from 'lucide-react';
 import dayjs from 'dayjs';
 
-const TODAY = dayjs('2026-06-22');
+const TODAY = dayjs();
 
 const STATUS = {
   filed:    { label: 'Filed',    cls: 'bg-emerald-50 text-emerald-700', icon: CheckCircle2,   iconCls: 'text-emerald-500' },
@@ -20,30 +20,7 @@ function computeStatus(dueDate, filed) {
   return 'upcoming';
 }
 
-const OBLIGATIONS = [
-  // GST
-  { id: 1,  category: 'GST',         name: 'GSTR-1 (May 2026)',          dueDate: '2026-06-11', filed: true,  period: 'May 2026',  penalty: '₹200/day' },
-  { id: 2,  category: 'GST',         name: 'GSTR-3B (May 2026)',         dueDate: '2026-06-20', filed: true,  period: 'May 2026',  penalty: '₹50/day' },
-  { id: 3,  category: 'GST',         name: 'GSTR-1 (Jun 2026)',          dueDate: '2026-07-11', filed: false, period: 'Jun 2026',  penalty: '₹200/day' },
-  { id: 4,  category: 'GST',         name: 'GSTR-3B (Jun 2026)',         dueDate: '2026-07-20', filed: false, period: 'Jun 2026',  penalty: '₹50/day' },
-  { id: 5,  category: 'GST',         name: 'GSTR-9 Annual (FY 25-26)',   dueDate: '2026-12-31', filed: false, period: 'FY 2025-26', penalty: '₹100/day' },
-  // TDS
-  { id: 6,  category: 'TDS',         name: 'TDS Deposit (May 2026)',     dueDate: '2026-06-07', filed: true,  period: 'May 2026',  penalty: '1.5%/month' },
-  { id: 7,  category: 'TDS',         name: 'TDS Deposit (Jun 2026)',     dueDate: '2026-07-07', filed: false, period: 'Jun 2026',  penalty: '1.5%/month' },
-  { id: 8,  category: 'TDS',         name: 'Form 26Q Q1 (Apr–Jun 2026)', dueDate: '2026-07-31', filed: false, period: 'Q1 FY26-27', penalty: '₹200/day' },
-  { id: 9,  category: 'TDS',         name: 'Form 24Q Q1 (Apr–Jun 2026)', dueDate: '2026-07-31', filed: false, period: 'Q1 FY26-27', penalty: '₹200/day' },
-  // PF
-  { id: 10, category: 'PF',          name: 'PF ECR (May 2026)',          dueDate: '2026-06-15', filed: true,  period: 'May 2026',  penalty: '₹5000+' },
-  { id: 11, category: 'PF',          name: 'PF ECR (Jun 2026)',          dueDate: '2026-07-15', filed: false, period: 'Jun 2026',  penalty: '₹5000+' },
-  // ESI
-  { id: 12, category: 'ESI',         name: 'ESI Contribution (May 2026)',dueDate: '2026-06-15', filed: true,  period: 'May 2026',  penalty: '₹5000+' },
-  { id: 13, category: 'ESI',         name: 'ESI Contribution (Jun 2026)',dueDate: '2026-07-15', filed: false, period: 'Jun 2026',  penalty: '₹5000+' },
-  // PT
-  { id: 14, category: 'Prof. Tax',   name: 'PT (Apr–Sep 2026) H1',      dueDate: '2026-07-31', filed: false, period: 'H1 FY26-27', penalty: '₹1000+' },
-  // IT
-  { id: 15, category: 'Income Tax',  name: 'Advance Tax Q1 (Jun 2026)', dueDate: '2026-06-15', filed: true,  period: 'Q1 FY26-27', penalty: '1%/month' },
-  { id: 16, category: 'Income Tax',  name: 'Advance Tax Q2 (Sep 2026)', dueDate: '2026-09-15', filed: false, period: 'Q2 FY26-27', penalty: '1%/month' },
-];
+const OBLIGATIONS = [];
 
 const CATEGORIES = ['All', 'GST', 'TDS', 'PF', 'ESI', 'Prof. Tax', 'Income Tax'];
 const CAT_CLR = { GST: 'bg-violet-100 text-violet-700', TDS: 'bg-blue-100 text-blue-700', PF: 'bg-teal-100 text-teal-700', ESI: 'bg-cyan-100 text-cyan-700', 'Prof. Tax': 'bg-orange-100 text-orange-700', 'Income Tax': 'bg-rose-100 text-rose-700' };
@@ -131,6 +108,7 @@ export default function ComplianceCalendarPage() {
               })}
             </tbody>
           </table>
+          {rows.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No compliance obligations tracked yet</p>}
         </div>
       </div>
     </div>

@@ -4,12 +4,7 @@ import dayjs from 'dayjs';
 
 const CATEGORIES = ['All', 'Travel', 'Office Supplies', 'Utilities', 'Repairs', 'Miscellaneous'];
 
-const SAMPLE = [
-  { id: 1, ref: 'EXP-001', date: '2025-11-02', paid_to: 'NHAI Toll', category: 'Travel', amount: 2400, paid_via: 'Cash', notes: 'Site vehicle toll — NH-48', status: 'recorded' },
-  { id: 2, ref: 'EXP-002', date: '2025-11-05', paid_to: 'BSNL Broadband', category: 'Utilities', amount: 3200, paid_via: 'Bank Transfer', notes: 'Site office internet', status: 'recorded' },
-  { id: 3, ref: 'EXP-003', date: '2025-11-08', paid_to: 'Stationery Mart', category: 'Office Supplies', amount: 1850, paid_via: 'Cash', notes: 'Drawing sheets, markers', status: 'recorded' },
-  { id: 4, ref: 'EXP-004', date: '2025-11-10', paid_to: 'Electrician Labour', category: 'Repairs', amount: 4500, paid_via: 'Cash', notes: 'Site office wiring repair', status: 'draft' },
-];
+const SAMPLE = [];
 
 const inr = v => `₹${(+v || 0).toLocaleString('en-IN')}`;
 

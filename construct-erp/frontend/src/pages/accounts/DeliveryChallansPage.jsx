@@ -9,11 +9,7 @@ const STATUS_CLS = {
   cancelled: 'bg-red-50 text-red-600',
 };
 
-const SAMPLE = [
-  { id: 1, ref: 'DC-2025-001', customer: 'Ramco Builders', project: 'Skyline Tower Phase 1', items: 3, date: '2025-11-05', status: 'delivered' },
-  { id: 2, ref: 'DC-2025-002', customer: 'Prestige Constructions', project: 'NH-48 Road Widening', items: 7, date: '2025-11-12', status: 'sent' },
-  { id: 3, ref: 'DC-2025-003', customer: 'DLF Infrastructure', project: 'IT Park Foundation', items: 2, date: '2025-11-18', status: 'draft' },
-];
+const SAMPLE = [];
 
 export default function DeliveryChallansPage() {
   const [search, setSearch] = useState('');

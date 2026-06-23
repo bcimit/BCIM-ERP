@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { Package, Plus, Search } from 'lucide-react';
 
-const SAMPLE_ITEMS = [
-  { id: 1, code: 'ITM-001', name: 'Cement (50 kg bag)', type: 'Product', unit: 'Bags', rate: 380, hsn: '2523', gst: 28, category: 'Building Materials' },
-  { id: 2, code: 'ITM-002', name: 'TMT Steel Bar (12mm)', type: 'Product', unit: 'MT', rate: 58000, hsn: '7213', gst: 18, category: 'Building Materials' },
-  { id: 3, code: 'SRV-001', name: 'Civil Construction Work', type: 'Service', unit: 'SQM', rate: 1200, hsn: '9954', gst: 18, category: 'Construction Services' },
-  { id: 4, code: 'SRV-002', name: 'Crane Hire (per hour)', type: 'Service', unit: 'Hours', rate: 2500, hsn: '9973', gst: 18, category: 'Equipment Hire' },
-  { id: 5, code: 'ITM-003', name: 'Ready Mix Concrete M25', type: 'Product', unit: 'CUM', rate: 5200, hsn: '3824', gst: 18, category: 'Building Materials' },
-];
+const SAMPLE_ITEMS = [];
 
 export default function ItemsPage() {
   const [search, setSearch] = useState('');

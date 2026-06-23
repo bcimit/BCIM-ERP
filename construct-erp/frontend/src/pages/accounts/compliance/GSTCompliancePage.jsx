@@ -3,35 +3,13 @@ import { IndianRupee, CheckCircle2, Clock, XCircle, Download, RefreshCw } from '
 import dayjs from 'dayjs';
 
 const FY = 'FY 2025-26';
-const TODAY = dayjs('2026-06-22');
+const TODAY = dayjs();
 
 const inr = v => `₹${(+v || 0).toLocaleString('en-IN')}`;
 
-const RETURNS = [
-  { month: 'April 2025',    gstr1Due: '2025-05-11', gstr1Filed: '2025-05-09', gstr3bDue: '2025-05-20', gstr3bFiled: '2025-05-18', taxable: 8450000, igst: 0, cgst: 760500, sgst: 760500, toPay: 1521000 },
-  { month: 'May 2025',      gstr1Due: '2025-06-11', gstr1Filed: '2025-06-10', gstr3bDue: '2025-06-20', gstr3bFiled: '2025-06-19', taxable: 9200000, igst: 0, cgst: 828000, sgst: 828000, toPay: 1656000 },
-  { month: 'June 2025',     gstr1Due: '2025-07-11', gstr1Filed: '2025-07-11', gstr3bDue: '2025-07-20', gstr3bFiled: '2025-07-18', taxable: 10100000, igst: 0, cgst: 909000, sgst: 909000, toPay: 1818000 },
-  { month: 'July 2025',     gstr1Due: '2025-08-11', gstr1Filed: '2025-08-09', gstr3bDue: '2025-08-20', gstr3bFiled: '2025-08-20', taxable: 7800000, igst: 0, cgst: 702000, sgst: 702000, toPay: 1404000 },
-  { month: 'August 2025',   gstr1Due: '2025-09-11', gstr1Filed: '2025-09-10', gstr3bDue: '2025-09-20', gstr3bFiled: '2025-09-19', taxable: 11200000, igst: 0, cgst: 1008000, sgst: 1008000, toPay: 2016000 },
-  { month: 'September 2025',gstr1Due: '2025-10-11', gstr1Filed: '2025-10-10', gstr3bDue: '2025-10-20', gstr3bFiled: '2025-10-20', taxable: 13500000, igst: 0, cgst: 1215000, sgst: 1215000, toPay: 2430000 },
-  { month: 'October 2025',  gstr1Due: '2025-11-11', gstr1Filed: '2025-11-10', gstr3bDue: '2025-11-20', gstr3bFiled: '2025-11-19', taxable: 12000000, igst: 0, cgst: 1080000, sgst: 1080000, toPay: 2160000 },
-  { month: 'November 2025', gstr1Due: '2025-12-11', gstr1Filed: '2025-12-10', gstr3bDue: '2025-12-20', gstr3bFiled: '2025-12-19', taxable: 9800000, igst: 0, cgst: 882000, sgst: 882000, toPay: 1764000 },
-  { month: 'December 2025', gstr1Due: '2026-01-11', gstr1Filed: '2026-01-10', gstr3bDue: '2026-01-20', gstr3bFiled: '2026-01-19', taxable: 14200000, igst: 0, cgst: 1278000, sgst: 1278000, toPay: 2556000 },
-  { month: 'January 2026',  gstr1Due: '2026-02-11', gstr1Filed: '2026-02-11', gstr3bDue: '2026-02-20', gstr3bFiled: '2026-02-20', taxable: 11500000, igst: 0, cgst: 1035000, sgst: 1035000, toPay: 2070000 },
-  { month: 'February 2026', gstr1Due: '2026-03-11', gstr1Filed: '2026-03-10', gstr3bDue: '2026-03-20', gstr3bFiled: '2026-03-19', taxable: 10200000, igst: 0, cgst: 918000, sgst: 918000, toPay: 1836000 },
-  { month: 'March 2026',    gstr1Due: '2026-04-11', gstr1Filed: '2026-04-10', gstr3bDue: '2026-04-20', gstr3bFiled: '2026-04-18', taxable: 16500000, igst: 0, cgst: 1485000, sgst: 1485000, toPay: 2970000 },
-  { month: 'April 2026',    gstr1Due: '2026-05-11', gstr1Filed: '2026-05-09', gstr3bDue: '2026-05-20', gstr3bFiled: '2026-05-19', taxable: 9100000, igst: 0, cgst: 819000, sgst: 819000, toPay: 1638000 },
-  { month: 'May 2026',      gstr1Due: '2026-06-11', gstr1Filed: '2026-06-10', gstr3bDue: '2026-06-20', gstr3bFiled: '2026-06-19', taxable: 8800000, igst: 0, cgst: 792000, sgst: 792000, toPay: 1584000 },
-  { month: 'June 2026',     gstr1Due: '2026-07-11', gstr1Filed: null,         gstr3bDue: '2026-07-20', gstr3bFiled: null,          taxable: 0, igst: 0, cgst: 0, sgst: 0, toPay: 0 },
-];
+const RETURNS = [];
 
-const ITC = [
-  { month: 'April 2025',  claimed: 920000, available: 1050000 },
-  { month: 'May 2025',    claimed: 1020000, available: 1150000 },
-  { month: 'June 2025',   claimed: 1100000, available: 1180000 },
-  { month: 'May 2026',    claimed: 680000, available: 740000 },
-  { month: 'June 2026',   claimed: 0, available: 0 },
-];
+const ITC = [];
 
 function StatusPill({ filed, dueDate }) {
   if (filed) return <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium"><CheckCircle2 className="w-3 h-3" />{dayjs(filed).format('DD MMM')}</span>;
@@ -131,6 +109,7 @@ export default function GSTCompliancePage() {
                 </tr>
               </tfoot>
             </table>
+            {RETURNS.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No GST returns tracked yet</p>}
           </div>
         )}
 
@@ -168,6 +147,7 @@ export default function GSTCompliancePage() {
                 })}
               </tbody>
             </table>
+            {ITC.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No ITC reconciliation data yet</p>}
           </div>
         )}
 

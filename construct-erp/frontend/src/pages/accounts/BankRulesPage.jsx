@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
 import { Cog, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 
-const SAMPLE_RULES = [
-  { id: 1, name: 'Vendor Salary Transfers', condition: 'Description contains "SALARY"', action: 'Categorise as Salary Expense', account: '6010 — Salaries', active: true },
-  { id: 2, name: 'GST Payments', condition: 'Description contains "GST" AND Amount > 10000', action: 'Categorise as GST Payable', account: '2100 — GST Payable', active: true },
-  { id: 3, name: 'Material Supplier Payments', condition: 'Reference starts with "PO-"', action: 'Categorise as Material Purchase', account: '5100 — Raw Materials', active: false },
-];
+const SAMPLE_RULES = [];
 
 export default function BankRulesPage() {
   const [rules, setRules] = useState(SAMPLE_RULES);
@@ -34,6 +30,9 @@ export default function BankRulesPage() {
       </div>
 
       <div className="px-6 py-5 space-y-3">
+        {rules.length === 0 && (
+          <p className="px-4 py-10 text-sm text-slate-400 text-center bg-white border border-slate-200 rounded-md">No bank rules found</p>
+        )}
         {rules.map(rule => (
           <div key={rule.id} className="bg-white border border-slate-200 rounded-md p-4 flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">

@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Users, CheckCircle2, Clock, XCircle, Download, AlertTriangle } from 'lucide-react';
 import dayjs from 'dayjs';
 
-const TODAY = dayjs('2026-06-22');
+const TODAY = dayjs();
 const inr = v => `₹${(+v || 0).toLocaleString('en-IN')}`;
 
-const EMPLOYEES = 87;
-const WAGES_MAY = 4820000;
+const EMPLOYEES = 0;
+const WAGES_MAY = 0;
 
 const PF_RATE = { employee: 0.12, employer_epf: 0.0367, employer_eps: 0.0833, employer_edli: 0.005, admin: 0.005 };
 const ESI_RATE = { employee: 0.0075, employer: 0.0325 };
@@ -18,17 +18,7 @@ const PF_ADM = Math.round(WAGES_MAY * PF_RATE.admin);
 const ESI_EMP = Math.round(WAGES_MAY * ESI_RATE.employee);
 const ESI_ER  = Math.round(WAGES_MAY * ESI_RATE.employer);
 
-const MONTHS = [
-  { month: 'May 2026',      pfDue: '2026-06-15', pfPaid: '2026-06-13', pfChallan: 'PF2026061301', pfAmount: PF_EMP + PF_ER + PF_EDL + PF_ADM,
-    esiDue: '2026-06-15', esiPaid: '2026-06-13', esiChallan: 'ESI2026061301', esiAmount: ESI_EMP + ESI_ER,
-    ptDue: null, ptPaid: null, ptAmount: 0, ptNote: 'H2 due Jul 2026' },
-  { month: 'April 2026',    pfDue: '2026-05-15', pfPaid: '2026-05-12', pfChallan: 'PF2026051201', pfAmount: 182400,
-    esiDue: '2026-05-15', esiPaid: '2026-05-12', esiChallan: 'ESI2026051201', esiAmount: 48600,
-    ptDue: null, ptPaid: null, ptAmount: 0, ptNote: '—' },
-  { month: 'March 2026',    pfDue: '2026-04-15', pfPaid: '2026-04-11', pfChallan: 'PF2026041101', pfAmount: 190500,
-    esiDue: '2026-04-15', esiPaid: '2026-04-11', esiChallan: 'ESI2026041101', esiAmount: 51000,
-    ptDue: '2026-03-31', ptPaid: '2026-03-28', ptAmount: 5000, ptNote: 'H2 FY25-26' },
-];
+const MONTHS = [];
 
 const TABS = ['Monthly Summary', 'PF Detail', 'ESI Detail', 'Prof. Tax & LWF'];
 
@@ -65,9 +55,9 @@ export default function LabourCompliancePage() {
         <div className="mt-4 grid grid-cols-4 gap-3">
           {[
             { label: 'Total Employees',    value: EMPLOYEES,            sub: 'PF + ESI enrolled' },
-            { label: 'PF (May 2026)',       value: inr(PF_EMP+PF_ER+PF_EDL+PF_ADM), sub: 'Employee + Employer + Admin' },
-            { label: 'ESI (May 2026)',      value: inr(ESI_EMP+ESI_ER), sub: 'Employee 0.75% + Employer 3.25%' },
-            { label: 'Prof. Tax (Jun 2026)', value: '₹200/employee',    sub: 'Due 20 Jul 2026' },
+            { label: 'PF (this month)',     value: inr(PF_EMP+PF_ER+PF_EDL+PF_ADM), sub: 'Employee + Employer + Admin' },
+            { label: 'ESI (this month)',    value: inr(ESI_EMP+ESI_ER), sub: 'Employee 0.75% + Employer 3.25%' },
+            { label: 'Prof. Tax',           value: '—',                sub: 'Due 20th of every month' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="bg-slate-50 border border-slate-200 rounded-md px-4 py-3">
               <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -112,13 +102,14 @@ export default function LabourCompliancePage() {
                 ))}
               </tbody>
             </table>
+            {MONTHS.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No labour compliance data tracked yet</p>}
           </div>
         )}
 
         {tab === 'PF Detail' && (
           <div className="space-y-4">
             <div className="bg-white border border-slate-200 rounded-md p-5">
-              <h3 className="text-sm font-semibold text-slate-700 mb-4">May 2026 — PF Breakdown ({EMPLOYEES} employees)</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-4">PF Breakdown ({EMPLOYEES} employees)</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {[
                   { label: 'Employee Contribution (12% of Basic)', value: inr(PF_EMP) },
@@ -148,7 +139,7 @@ export default function LabourCompliancePage() {
         {tab === 'ESI Detail' && (
           <div className="space-y-4">
             <div className="bg-white border border-slate-200 rounded-md p-5">
-              <h3 className="text-sm font-semibold text-slate-700 mb-4">May 2026 — ESI Breakdown (Wages ≤ ₹21,000/month covered)</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-4">ESI Breakdown (Wages ≤ ₹21,000/month covered)</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 {[
                   { label: 'Employee Contribution (0.75%)', value: inr(ESI_EMP) },

@@ -1,12 +1,7 @@
 import React from 'react';
 import { ScrollText, Plus, Play, Pause } from 'lucide-react';
 
-const SAMPLE = [
-  { id: 1, name: 'Site Office Rent', vendor: 'Sri Lakshmi Properties', amount: 45000, frequency: 'Monthly', nextDate: '2025-12-01', status: 'active' },
-  { id: 2, name: 'Security Agency Charges', vendor: 'Shield Security Services', amount: 62000, frequency: 'Monthly', nextDate: '2025-12-01', status: 'active' },
-  { id: 3, name: 'Software License — AutoCAD', vendor: 'Autodesk India Pvt Ltd', amount: 180000, frequency: 'Yearly', nextDate: '2026-04-01', status: 'active' },
-  { id: 4, name: 'Diesel Supply Contract', vendor: 'HP Petroleum', amount: 85000, frequency: 'Monthly', nextDate: '2025-12-15', status: 'paused' },
-];
+const SAMPLE = [];
 
 const inr = v => `₹${(+v || 0).toLocaleString('en-IN')}`;
 
@@ -31,6 +26,9 @@ export default function RecurringBillsPage() {
       </div>
 
       <div className="px-6 py-5 space-y-3">
+        {SAMPLE.length === 0 && (
+          <p className="px-4 py-10 text-sm text-slate-400 text-center bg-white border border-slate-200 rounded-md">No recurring bills found</p>
+        )}
         {SAMPLE.map(r => (
           <div key={r.id} className="bg-white border border-slate-200 rounded-md p-4 flex items-center justify-between gap-4">
             <div>

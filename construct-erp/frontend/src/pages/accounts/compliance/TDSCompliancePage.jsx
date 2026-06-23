@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FileBarChart, CheckCircle2, Clock, XCircle, Download } from 'lucide-react';
 import dayjs from 'dayjs';
 
-const TODAY = dayjs('2026-06-22');
+const TODAY = dayjs();
 const inr = v => `₹${(+v || 0).toLocaleString('en-IN')}`;
 
 const TDS_SECTIONS = [
@@ -13,32 +13,9 @@ const TDS_SECTIONS = [
   { section: '192B', nature: 'Salary', rate: 'Slab rate', threshold: 'Taxable salary' },
 ];
 
-const DEPOSITS = [
-  { month: 'April 2025',    amount: 284500, dueDate: '2025-05-07', paid: '2025-05-06', challanNo: 'CH2025050601' },
-  { month: 'May 2025',      amount: 312000, dueDate: '2025-06-07', paid: '2025-06-06', challanNo: 'CH2025060601' },
-  { month: 'June 2025',     amount: 298000, dueDate: '2025-07-07', paid: '2025-07-05', challanNo: 'CH2025070501' },
-  { month: 'July 2025',     amount: 326000, dueDate: '2025-08-07', paid: '2025-08-07', challanNo: 'CH2025080701' },
-  { month: 'August 2025',   amount: 341000, dueDate: '2025-09-07', paid: '2025-09-05', challanNo: 'CH2025090501' },
-  { month: 'September 2025',amount: 380000, dueDate: '2025-10-07', paid: '2025-10-06', challanNo: 'CH2025100601' },
-  { month: 'October 2025',  amount: 358000, dueDate: '2025-11-07', paid: '2025-11-06', challanNo: 'CH2025110601' },
-  { month: 'November 2025', amount: 295000, dueDate: '2025-12-07', paid: '2025-12-05', challanNo: 'CH2025120501' },
-  { month: 'December 2025', amount: 410000, dueDate: '2026-01-07', paid: '2026-01-06', challanNo: 'CH2026010601' },
-  { month: 'January 2026',  amount: 340000, dueDate: '2026-02-07', paid: '2026-02-05', challanNo: 'CH2026020501' },
-  { month: 'February 2026', amount: 318000, dueDate: '2026-03-07', paid: '2026-03-06', challanNo: 'CH2026030601' },
-  { month: 'March 2026',    amount: 520000, dueDate: '2026-04-30', paid: '2026-04-28', challanNo: 'CH2026042801' },
-  { month: 'April 2026',    amount: 290000, dueDate: '2026-05-07', paid: '2026-05-06', challanNo: 'CH2026050601' },
-  { month: 'May 2026',      amount: 305000, dueDate: '2026-06-07', paid: '2026-06-05', challanNo: 'CH2026060501' },
-  { month: 'June 2026',     amount: null,   dueDate: '2026-07-07', paid: null,         challanNo: null },
-];
+const DEPOSITS = [];
 
-const RETURNS = [
-  { form: '26Q', quarter: 'Q4 FY25-26 (Jan–Mar)', dueDate: '2026-05-31', filed: '2026-05-28', ackNo: '40956781234', deductees: 48 },
-  { form: '24Q', quarter: 'Q4 FY25-26 (Jan–Mar)', dueDate: '2026-05-31', filed: '2026-05-28', ackNo: '40956781235', deductees: 12 },
-  { form: '26Q', quarter: 'Q3 FY25-26 (Oct–Dec)', dueDate: '2026-01-31', filed: '2026-01-29', ackNo: '40934512345', deductees: 45 },
-  { form: '24Q', quarter: 'Q3 FY25-26 (Oct–Dec)', dueDate: '2026-01-31', filed: '2026-01-29', ackNo: '40934512346', deductees: 11 },
-  { form: '26Q', quarter: 'Q1 FY26-27 (Apr–Jun)', dueDate: '2026-07-31', filed: null, ackNo: null, deductees: 0 },
-  { form: '24Q', quarter: 'Q1 FY26-27 (Apr–Jun)', dueDate: '2026-07-31', filed: null, ackNo: null, deductees: 0 },
-];
+const RETURNS = [];
 
 const TABS = ['TDS Deposits', 'TDS Returns', 'Sections Reference'];
 
@@ -75,8 +52,8 @@ export default function TDSCompliancePage() {
           {[
             { label: 'Total TDS Deposited', value: inr(totalTDS), sub: 'FY 2025-26 + Apr–May 2026' },
             { label: 'Returns Filed',        value: `${RETURNS.filter(r=>r.filed).length}/${RETURNS.length}`, sub: 'Form 26Q + 24Q' },
-            { label: 'Form 16A Due',         value: 'Jun 2026', sub: 'For Q4 FY 2025-26' },
-            { label: 'Pending Deposit',      value: DEPOSITS.filter(d=>!d.paid).length ? 'Jun 2026' : 'None', sub: DEPOSITS.filter(d=>!d.paid).length ? 'Due 7 Jul 2026' : 'All up to date' },
+            { label: 'Form 16A Due',         value: '—', sub: 'No deposits tracked yet' },
+            { label: 'Pending Deposit',      value: DEPOSITS.filter(d=>!d.paid).length || 'None', sub: 'All up to date' },
           ].map(({ label, value, sub }) => (
             <div key={label} className="bg-slate-50 border border-slate-200 rounded-md px-4 py-3">
               <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -127,6 +104,7 @@ export default function TDSCompliancePage() {
                 </tr>
               </tfoot>
             </table>
+            {DEPOSITS.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No TDS deposits tracked yet</p>}
           </div>
         )}
 
@@ -155,9 +133,10 @@ export default function TDSCompliancePage() {
                   ))}
                 </tbody>
               </table>
+              {RETURNS.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No TDS returns tracked yet</p>}
             </div>
             <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 text-sm text-blue-700">
-              Form 16A for Q4 FY 2025-26 — generate and issue to vendors by 15 Jun 2026. Form 16 for employees due by 15 Jun 2026.
+              Form 16A must be generated and issued to vendors within 15 days of the TDS return due date. Form 16 for employees is due by 15 June following the financial year.
             </div>
           </div>
         )}

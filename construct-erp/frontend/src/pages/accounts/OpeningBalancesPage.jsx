@@ -3,14 +3,7 @@ import { FileBarChart, Plus, Save } from 'lucide-react';
 
 const ACCOUNT_GROUPS = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expense'];
 
-const SAMPLE = [
-  { id: 1, account: 'Cash in Hand', code: '1001', group: 'Assets',       debit: 85000,   credit: 0 },
-  { id: 2, account: 'HDFC Current Account', code: '1002', group: 'Assets', debit: 1250000, credit: 0 },
-  { id: 3, account: 'Sundry Debtors',  code: '1101', group: 'Assets',    debit: 3200000, credit: 0 },
-  { id: 4, account: 'Sundry Creditors',code: '2001', group: 'Liabilities',debit: 0,       credit: 1800000 },
-  { id: 5, account: 'TDS Payable',     code: '2101', group: 'Liabilities',debit: 0,       credit: 145000 },
-  { id: 6, account: 'Capital Account', code: '3001', group: 'Equity',    debit: 0,       credit: 2590000 },
-];
+const SAMPLE = [];
 
 const inr = v => v ? `₹${(+v).toLocaleString('en-IN')}` : '—';
 
@@ -88,6 +81,7 @@ export default function OpeningBalancesPage() {
               </tr>
             </tfoot>
           </table>
+          {rows.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">No opening balances set</p>}
         </div>
       </div>
     </div>

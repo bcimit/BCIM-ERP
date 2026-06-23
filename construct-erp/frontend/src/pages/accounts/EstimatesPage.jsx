@@ -10,11 +10,7 @@ const STATUS_CLS = {
   expired:  'bg-amber-50 text-amber-600',
 };
 
-const SAMPLE = [
-  { id: 1, ref: 'EST-2025-001', client: 'Ramco Builders', project: 'Skyline Tower Phase 1', amount: 4850000, date: '2025-11-01', expiry: '2025-11-30', status: 'accepted' },
-  { id: 2, ref: 'EST-2025-002', client: 'Prestige Constructions', project: 'NH-48 Road Widening', amount: 12300000, date: '2025-11-10', expiry: '2025-12-10', status: 'sent' },
-  { id: 3, ref: 'EST-2025-003', client: 'DLF Infrastructure', project: 'IT Park Foundation', amount: 7200000, date: '2025-10-15', expiry: '2025-11-15', status: 'draft' },
-];
+const SAMPLE = [];
 
 const inr = v => `₹${(+v || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
