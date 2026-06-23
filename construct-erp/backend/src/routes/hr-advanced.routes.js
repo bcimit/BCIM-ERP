@@ -1171,4 +1171,123 @@ router.get('/analytics/summary', async (req, res) => {
   });
 });
 
+// ── HR Analytics Charts ───────────────────────────────────────────────────────
+// Years in service, age distribution, location headcount, monthly additions & attrition
+router.get('/analytics/charts', async (req, res) => {
+  try {
+    const cid = companyId(req);
+
+    const [yearsInService, ageDist, locationDist, additionsAttrition] = await Promise.all([
+
+      // Years in service buckets
+      query(`
+        SELECT
+          CASE
+            WHEN yrs < 1  THEN '< 1'
+            WHEN yrs < 2  THEN '1-2'
+            WHEN yrs < 3  THEN '2-3'
+            WHEN yrs < 4  THEN '3-4'
+            WHEN yrs < 5  THEN '4-5'
+            WHEN yrs < 6  THEN '5-6'
+            WHEN yrs < 7  THEN '6-7'
+            WHEN yrs < 8  THEN '7-8'
+            WHEN yrs < 9  THEN '8-9'
+            WHEN yrs < 10 THEN '9-10'
+            ELSE '> 10'
+          END AS bucket,
+          COUNT(*)::int AS count
+        FROM (
+          SELECT EXTRACT(EPOCH FROM (NOW() - ep.date_of_joining)) / 86400 / 365 AS yrs
+          FROM users u
+          JOIN employee_profiles ep ON ep.user_id = u.id
+          WHERE u.company_id = $1 AND u.is_active = TRUE AND ep.date_of_joining IS NOT NULL
+            AND ep.employment_status = 'active'
+        ) t
+        GROUP BY bucket
+        ORDER BY MIN(yrs)`,
+        [cid]),
+
+      // Age distribution buckets
+      query(`
+        SELECT
+          CASE
+            WHEN age < 20  THEN '< 20'
+            WHEN age < 25  THEN '20-25'
+            WHEN age < 30  THEN '25-30'
+            WHEN age < 35  THEN '30-35'
+            WHEN age < 40  THEN '35-40'
+            WHEN age < 45  THEN '40-45'
+            WHEN age < 50  THEN '45-50'
+            ELSE '> 50'
+          END AS bucket,
+          COUNT(*)::int AS count
+        FROM (
+          SELECT DATE_PART('year', AGE(ep.date_of_birth)) AS age
+          FROM users u
+          JOIN employee_profiles ep ON ep.user_id = u.id
+          WHERE u.company_id = $1 AND u.is_active = TRUE AND ep.date_of_birth IS NOT NULL
+            AND ep.employment_status = 'active'
+        ) t
+        GROUP BY bucket
+        ORDER BY MIN(age)`,
+        [cid]),
+
+      // Employee count by location
+      query(`
+        SELECT COALESCE(NULLIF(TRIM(ep.work_location),''), 'Not Set') AS location,
+               COUNT(*)::int AS count
+        FROM users u
+        JOIN employee_profiles ep ON ep.user_id = u.id
+        WHERE u.company_id = $1 AND u.is_active = TRUE AND ep.employment_status = 'active'
+        GROUP BY COALESCE(NULLIF(TRIM(ep.work_location),''), 'Not Set')
+        ORDER BY count DESC
+        LIMIT 10`,
+        [cid]),
+
+      // Monthly additions & attrition — last 12 months
+      query(`
+        WITH months AS (
+          SELECT generate_series(
+            DATE_TRUNC('month', NOW()) - INTERVAL '11 months',
+            DATE_TRUNC('month', NOW()),
+            '1 month'::interval
+          ) AS mo
+        ),
+        joined AS (
+          SELECT DATE_TRUNC('month', ep.date_of_joining) AS mo, COUNT(*)::int AS cnt
+          FROM employee_profiles ep
+          JOIN users u ON u.id = ep.user_id
+          WHERE u.company_id = $1 AND ep.date_of_joining IS NOT NULL
+            AND ep.date_of_joining >= NOW() - INTERVAL '12 months'
+          GROUP BY 1
+        ),
+        left_co AS (
+          SELECT DATE_TRUNC('month', ep.date_of_leaving) AS mo, COUNT(*)::int AS cnt
+          FROM employee_profiles ep
+          JOIN users u ON u.id = ep.user_id
+          WHERE u.company_id = $1 AND ep.date_of_leaving IS NOT NULL
+            AND ep.date_of_leaving >= NOW() - INTERVAL '12 months'
+          GROUP BY 1
+        )
+        SELECT TO_CHAR(m.mo, 'Mon-YYYY') AS month,
+               COALESCE(j.cnt, 0) AS joined,
+               COALESCE(l.cnt, 0) AS resigned
+        FROM months m
+        LEFT JOIN joined   j ON j.mo = m.mo
+        LEFT JOIN left_co  l ON l.mo = m.mo
+        ORDER BY m.mo`,
+        [cid]),
+    ]);
+
+    res.json({
+      data: {
+        years_in_service:     yearsInService.rows,
+        age_distribution:     ageDist.rows,
+        location_headcount:   locationDist.rows,
+        additions_attrition:  additionsAttrition.rows,
+      },
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

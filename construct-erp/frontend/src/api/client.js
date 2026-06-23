@@ -1904,6 +1904,7 @@ export const hrAdvancedAPI = {
   createServiceRequest: (data)         => api.post('/hr-admin/advanced/service-requests', data),
   updateServiceRequest: (id, data)     => api.patch(`/hr-admin/advanced/service-requests/${id}`, data),
   analyticsSummary:     ()             => api.get('/hr-admin/advanced/analytics/summary'),
+  analyticsCharts:      ()             => api.get('/hr-admin/advanced/analytics/charts'),
 };
 
 export const essAPI = {

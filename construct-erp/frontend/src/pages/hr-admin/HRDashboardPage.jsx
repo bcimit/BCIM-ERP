@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
+  LineChart, Line, CartesianGrid, Legend,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
@@ -311,6 +312,11 @@ export default function HRDashboardPage() {
     queryKey:['hr-advanced-analytics-summary'],
     queryFn:()=>hrAdvancedAPI.analyticsSummary().then(r=>r.data),
   });
+  const { data: chartsData } = useQuery({
+    queryKey:['hr-analytics-charts'],
+    queryFn:()=>hrAdvancedAPI.analyticsCharts().then(r=>r.data),
+    staleTime: 300000,
+  });
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const employees    = empData?.data  || [];
@@ -324,6 +330,11 @@ export default function HRDashboardPage() {
   const complianceTotals = complianceData?.totals || {};
   const attSummary   = attSummaryData?.data || [];
   const advanced     = advancedData?.data || {};
+  const charts       = chartsData?.data  || {};
+  const yearsInServiceData   = charts.years_in_service    || [];
+  const ageDistData          = charts.age_distribution    || [];
+  const locationData         = charts.location_headcount  || [];
+  const additionsAttritionData = charts.additions_attrition || [];
 
   const totalActive  = employees.length;
   const permanent    = employees.filter(e=>e.employment_type==='permanent').length;
@@ -689,6 +700,97 @@ export default function HRDashboardPage() {
                 ))}
               </div>
             </motion.div>
+
+            {/* ── GREYTHR-STYLE ANALYTICS CHARTS ───────────────────────── */}
+            <div className="grid lg:grid-cols-2 gap-6">
+
+              {/* Years In Service Distribution */}
+              <motion.div {...fade(0.34)} className="bg-white rounded-2xl p-6 border border-gray-100"
+                style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+                <SectionHeader title="Years In Service Distribution" sub="Employee tenure breakdown"
+                  icon={Briefcase} iconColor={B.blue}/>
+                {yearsInServiceData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={yearsInServiceData} margin={{top:8,right:8,left:-20,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+                      <XAxis dataKey="bucket" tick={{fontSize:11}} />
+                      <YAxis tick={{fontSize:11}} allowDecimals={false}/>
+                      <Tooltip content={<ChartTip suffix=" employees"/>}/>
+                      <Bar dataKey="count" name="Employees" fill={B.blue} radius={[4,4,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">No tenure data yet</div>
+                )}
+              </motion.div>
+
+              {/* Additions & Attrition */}
+              <motion.div {...fade(0.35)} className="bg-white rounded-2xl p-6 border border-gray-100"
+                style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+                <SectionHeader title="Additions & Attrition" sub="Last 12 months"
+                  icon={TrendingUp} iconColor={B.success}/>
+                {additionsAttritionData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={additionsAttritionData} margin={{top:8,right:8,left:-20,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+                      <XAxis dataKey="month" tick={{fontSize:10}}/>
+                      <YAxis tick={{fontSize:11}} allowDecimals={false}/>
+                      <Tooltip content={<ChartTip/>}/>
+                      <Legend wrapperStyle={{fontSize:11}}/>
+                      <Line type="monotone" dataKey="joined"   name="Joined"   stroke={B.blue}    strokeWidth={2} dot={{r:3}}/>
+                      <Line type="monotone" dataKey="resigned" name="Resigned" stroke={B.danger}  strokeWidth={2} dot={{r:3}}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">No movement data yet</div>
+                )}
+              </motion.div>
+
+              {/* Employee Count By Location */}
+              <motion.div {...fade(0.36)} className="bg-white rounded-2xl p-6 border border-gray-100"
+                style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+                <SectionHeader title="Employee Count By Location" sub="Headcount per site/office"
+                  icon={Building2} iconColor="#8B5CF6"/>
+                {locationData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={locationData} layout="vertical" margin={{top:4,right:30,left:10,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false}/>
+                      <XAxis type="number" tick={{fontSize:11}} allowDecimals={false}/>
+                      <YAxis type="category" dataKey="location" tick={{fontSize:11}} width={90}/>
+                      <Tooltip content={<ChartTip suffix=" employees"/>}/>
+                      <Bar dataKey="count" name="Employees" fill="#14B8A6" radius={[0,4,4,0]}>
+                        {locationData.map((_,i)=>(
+                          <Cell key={i} fill={DEPT_COLORS[i%DEPT_COLORS.length]}/>
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">No location data yet</div>
+                )}
+              </motion.div>
+
+              {/* Age Distribution */}
+              <motion.div {...fade(0.37)} className="bg-white rounded-2xl p-6 border border-gray-100"
+                style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+                <SectionHeader title="Age Distribution" sub="Employee age groups"
+                  icon={Users} iconColor="#F59E0B"/>
+                {ageDistData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={ageDistData} margin={{top:8,right:8,left:-20,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+                      <XAxis dataKey="bucket" tick={{fontSize:11}}/>
+                      <YAxis tick={{fontSize:11}} allowDecimals={false}/>
+                      <Tooltip content={<ChartTip suffix=" employees"/>}/>
+                      <Line type="monotone" dataKey="count" name="Employees" stroke="#F59E0B" strokeWidth={2} dot={{r:4}} fill="#FEF3C7"/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">No age data yet</div>
+                )}
+              </motion.div>
+
+            </div>
 
             {/* ── PEOPLE LISTS ──────────────────────────────────────────── */}
             <div className="grid lg:grid-cols-2 gap-6">
