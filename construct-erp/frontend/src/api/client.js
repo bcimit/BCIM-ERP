@@ -1905,6 +1905,7 @@ export const hrAdvancedAPI = {
   updateServiceRequest: (id, data)     => api.patch(`/hr-admin/advanced/service-requests/${id}`, data),
   analyticsSummary:     ()             => api.get('/hr-admin/advanced/analytics/summary'),
   analyticsCharts:      ()             => api.get('/hr-admin/advanced/analytics/charts'),
+  orgChart:             ()             => api.get('/hr-admin/advanced/org-chart'),
 };
 
 export const essAPI = {

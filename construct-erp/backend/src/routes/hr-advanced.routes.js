@@ -1290,4 +1290,33 @@ router.get('/analytics/charts', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Org chart — all active employees with their reporting manager
+router.get('/org-chart', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { rows } = await query(`
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        ep.reporting_manager_id,
+        ep.work_location,
+        ep.employment_type,
+        ep.profile_photo_url,
+        dep.name  AS department,
+        des.name  AS designation,
+        des.grade AS grade
+      FROM users u
+      JOIN employee_profiles ep ON ep.user_id = u.id
+      LEFT JOIN departments dep ON dep.id = ep.department_id
+      LEFT JOIN designations des ON des.id = ep.designation_id
+      WHERE u.company_id = $1
+        AND u.is_active = TRUE
+        AND ep.employment_status = 'active'
+      ORDER BY dep.name NULLS LAST, u.name
+    `, [req.user.company_id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
