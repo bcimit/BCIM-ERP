@@ -355,6 +355,33 @@ const initTables = async () => {
       UNIQUE(company_id, request_no)
     )
   `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS hr_employee_segments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID REFERENCES companies(id),
+      name TEXT NOT NULL,
+      description TEXT,
+      criteria JSONB DEFAULT '{}',
+      color TEXT DEFAULT '#2563EB',
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS hr_employee_filters (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID REFERENCES companies(id),
+      name TEXT NOT NULL,
+      description TEXT,
+      filters JSONB DEFAULT '{}',
+      is_shared BOOLEAN DEFAULT FALSE,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 };
 
 runSchemaInit('hr-advanced', initTables);
@@ -1287,6 +1314,90 @@ router.get('/analytics/charts', async (req, res) => {
         additions_attrition:  additionsAttrition.rows,
       },
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Employee Segments ─────────────────────────────────────────────────────────
+router.get('/segments', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { rows } = await query(
+      `SELECT s.*, u.name AS created_by_name FROM hr_employee_segments s
+       LEFT JOIN users u ON u.id = s.created_by
+       WHERE s.company_id=$1 ORDER BY s.created_at DESC`,
+      [companyId(req)]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/segments', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  const { name, description, criteria, color } = req.body;
+  try {
+    const { rows } = await query(
+      `INSERT INTO hr_employee_segments (company_id, name, description, criteria, color, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [companyId(req), name, description||null, JSON.stringify(criteria||{}), color||'#2563EB', req.user.id]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/segments/:id', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  const { name, description, criteria, color } = req.body;
+  try {
+    const { rows } = await query(
+      `UPDATE hr_employee_segments SET name=COALESCE($1,name), description=COALESCE($2,description),
+       criteria=COALESCE($3,criteria), color=COALESCE($4,color), updated_at=NOW()
+       WHERE id=$5 AND company_id=$6 RETURNING *`,
+      [name, description, criteria ? JSON.stringify(criteria) : null, color, req.params.id, companyId(req)]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/segments/:id', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await query(`DELETE FROM hr_employee_segments WHERE id=$1 AND company_id=$2`, [req.params.id, companyId(req)]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Employee Filters ──────────────────────────────────────────────────────────
+router.get('/emp-filters', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    const { rows } = await query(
+      `SELECT f.*, u.name AS created_by_name FROM hr_employee_filters f
+       LEFT JOIN users u ON u.id = f.created_by
+       WHERE f.company_id=$1 ORDER BY f.created_at DESC`,
+      [companyId(req)]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/emp-filters', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  const { name, description, filters, is_shared } = req.body;
+  try {
+    const { rows } = await query(
+      `INSERT INTO hr_employee_filters (company_id, name, description, filters, is_shared, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [companyId(req), name, description||null, JSON.stringify(filters||{}), is_shared||false, req.user.id]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/emp-filters/:id', async (req, res) => {
+  if (!hasHrAccess(req)) return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await query(`DELETE FROM hr_employee_filters WHERE id=$1 AND company_id=$2`, [req.params.id, companyId(req)]);
+    res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

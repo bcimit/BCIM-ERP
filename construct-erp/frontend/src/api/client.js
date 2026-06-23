@@ -1906,6 +1906,13 @@ export const hrAdvancedAPI = {
   analyticsSummary:     ()             => api.get('/hr-admin/advanced/analytics/summary'),
   analyticsCharts:      ()             => api.get('/hr-admin/advanced/analytics/charts'),
   orgChart:             ()             => api.get('/hr-admin/advanced/org-chart'),
+  listSegments:         ()             => api.get('/hr-admin/advanced/segments'),
+  createSegment:        (data)         => api.post('/hr-admin/advanced/segments', data),
+  updateSegment:        (id, data)     => api.patch(`/hr-admin/advanced/segments/${id}`, data),
+  deleteSegment:        (id)           => api.delete(`/hr-admin/advanced/segments/${id}`),
+  listEmpFilters:       ()             => api.get('/hr-admin/advanced/emp-filters'),
+  createEmpFilter:      (data)         => api.post('/hr-admin/advanced/emp-filters', data),
+  deleteEmpFilter:      (id)           => api.delete(`/hr-admin/advanced/emp-filters/${id}`),
 };
 
 export const essAPI = {

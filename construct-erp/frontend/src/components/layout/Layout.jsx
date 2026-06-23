@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
+import HREmployeeNav from './HREmployeeNav';
 import { clsx } from 'clsx';
 import LoadingScreen from '../common/LoadingScreen';
 import { useLanguage, LANGUAGES } from '../../context/LanguageContext';
@@ -420,6 +421,7 @@ const NAV_SECTIONS = {
     { label: 'Time',         paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays'] },
     { label: 'Payroll',      paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses'] },
     { label: 'Admin',        paths: ['/hr-admin/departments','/hr-admin/appraisals','/hr-admin/advanced'] },
+    { label: 'Setup',        paths: ['/hr-admin/letters','/hr-admin/policies','/hr-admin/segments','/hr-admin/emp-filters'] },
     { label: 'Talent',       paths: ['/hr-admin/shifts','/hr-admin/fnf','/hr-admin/letters','/hr-admin/training','/hr-admin/emp-assets','/hr-admin/travel','/hr-admin/recruitment'] },
     { label: 'Site Workers', paths: ['/hr/workers','/hr/attendance','/hr/payroll'] },
     { label: 'Integrate',    paths: ['/hr-admin/essl-sync','/hr-admin/import'] },
@@ -2092,6 +2094,9 @@ export default function Layout() {
           </div>
         </div>
       )}
+
+      {/* ── HR secondary nav (greytHR-style) ── */}
+      {pageGroup === 'HR & Admin' && <HREmployeeNav />}
 
       {/* ── Page content: sidebar + main ── */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
