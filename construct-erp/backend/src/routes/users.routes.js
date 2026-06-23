@@ -50,6 +50,7 @@ runSchemaInit('users_role_schema', ensureRoleSchema);
 (async () => {
   const grants = [
     { email: 'bkmanjunath@bcim.in', module: 'Stores' },
+    { email: 'raja@bcim.in',        module: 'HR & Admin' },
   ];
   for (const { email, module } of grants) {
     try {
@@ -68,6 +69,59 @@ runSchemaInit('users_role_schema', ensureRoleSchema);
       }
     } catch (e) {
       console.error(`[users] Module grant failed for ${email}:`, e.message);
+    }
+  }
+})();
+
+// ── One-time role fixes ───────────────────────────────────────────────────────
+// Idempotent: only updates role if the user currently has a non-HR role.
+(async () => {
+  const roleFixes = [
+    { email: 'raja@bcim.in', role: 'hr' },
+  ];
+  for (const { email, role } of roleFixes) {
+    try {
+      const r = await query(
+        `UPDATE users SET role = $1
+         WHERE LOWER(email) = $2
+           AND role <> $1
+         RETURNING id, name, email, role`,
+        [role, email.toLowerCase()]
+      );
+      if (r.rowCount > 0) {
+        console.log(`[users] Role updated to "${role}" for ${email}`);
+      }
+    } catch (e) {
+      console.error(`[users] Role fix failed for ${email}:`, e.message);
+    }
+  }
+})();
+
+// ── One-time employee profile creation for existing users ────────────────────
+// Creates a minimal employee_profile if the user exists but has no profile yet.
+(async () => {
+  const profileFixes = [
+    { email: 'raja@bcim.in' },
+  ];
+  for (const { email } of profileFixes) {
+    try {
+      const userRow = await query(
+        `SELECT u.id, u.company_id FROM users u
+         LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+         WHERE LOWER(u.email) = $1 AND ep.user_id IS NULL`,
+        [email.toLowerCase()]
+      );
+      if (!userRow.rows.length) continue;
+      const { id: userId, company_id } = userRow.rows[0];
+      await query(
+        `INSERT INTO employee_profiles (user_id, company_id, employment_status, employment_type, date_of_joining)
+         VALUES ($1, $2, 'active', 'full_time', CURRENT_DATE)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [userId, company_id]
+      );
+      console.log(`[users] Created employee profile for ${email}`);
+    } catch (e) {
+      console.error(`[users] Profile creation failed for ${email}:`, e.message);
     }
   }
 })();
