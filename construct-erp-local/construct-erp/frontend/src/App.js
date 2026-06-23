@@ -246,6 +246,22 @@ const LetterTemplatePage     = lazy(() => import('./pages/hr-admin/LetterTemplat
 const CompanyPoliciesPage    = lazy(() => import('./pages/hr-admin/CompanyPoliciesPage'));
 const EmployeeSegmentPage    = lazy(() => import('./pages/hr-admin/EmployeeSegmentPage'));
 const EmployeeFilterPage     = lazy(() => import('./pages/hr-admin/EmployeeFilterPage'));
+// Phase 5 — Payroll Sub-pages
+const SalaryRevisionHistoryPage  = lazy(() => import('./pages/hr-admin/SalaryRevisionHistoryPage'));
+const LOPDaysPage                = lazy(() => import('./pages/hr-admin/LOPDaysPage'));
+const QuickSalaryStatementPage   = lazy(() => import('./pages/hr-admin/QuickSalaryStatementPage'));
+const PayrollStatementPage       = lazy(() => import('./pages/hr-admin/PayrollStatementPage'));
+const PayrollDifferencesPage     = lazy(() => import('./pages/hr-admin/PayrollDifferencesPage'));
+const AccountsJVPage             = lazy(() => import('./pages/hr-admin/AccountsJVPage'));
+const BankTransferPage           = lazy(() => import('./pages/hr-admin/BankTransferPage'));
+const HoldSalaryPayoutPage       = lazy(() => import('./pages/hr-admin/HoldSalaryPayoutPage'));
+const YTDSummaryPage             = lazy(() => import('./pages/hr-admin/YTDSummaryPage'));
+const ITStatementPage            = lazy(() => import('./pages/hr-admin/ITStatementPage'));
+const ITDeclarationPage          = lazy(() => import('./pages/hr-admin/ITDeclarationPage'));
+const LoanStatementPage          = lazy(() => import('./pages/hr-admin/LoanStatementPage'));
+const PayItemGroupPage           = lazy(() => import('./pages/hr-admin/PayItemGroupPage'));
+const PayrollRepositoryPage      = lazy(() => import('./pages/hr-admin/PayrollRepositoryPage'));
+const PayslipGalleryPage         = lazy(() => import('./pages/hr-admin/PayslipGalleryPage'));
 
 // ── Home route resolver — sends each user to their first accessible page ──────
 const MODULE_HOME = {
@@ -593,6 +609,29 @@ export default function App() {
                 <Route path="hr-admin/policies" element={<RequireModule module="HR & Admin"><CompanyPoliciesPage /></RequireModule>} />
                 <Route path="hr-admin/employee-segments" element={<RequireModule module="HR & Admin"><EmployeeSegmentPage /></RequireModule>} />
                 <Route path="hr-admin/employee-filters" element={<RequireModule module="HR & Admin"><EmployeeFilterPage /></RequireModule>} />
+
+                {/* HR & Admin — Phase 5: Payroll Sub-pages */}
+                {/* Information */}
+                <Route path="hr-admin/salary-revision-history" element={<RequireModule module="HR & Admin"><SalaryRevisionHistoryPage /></RequireModule>} />
+                {/* Payroll Inputs */}
+                <Route path="hr-admin/lop-days" element={<RequireModule module="HR & Admin"><LOPDaysPage /></RequireModule>} />
+                {/* Verify */}
+                <Route path="hr-admin/quick-salary-statement" element={<RequireModule module="HR & Admin"><QuickSalaryStatementPage /></RequireModule>} />
+                <Route path="hr-admin/payroll-statement" element={<RequireModule module="HR & Admin"><PayrollStatementPage /></RequireModule>} />
+                <Route path="hr-admin/payroll-differences" element={<RequireModule module="HR & Admin"><PayrollDifferencesPage /></RequireModule>} />
+                {/* Payout */}
+                <Route path="hr-admin/accounts-jv" element={<RequireModule module="HR & Admin"><AccountsJVPage /></RequireModule>} />
+                <Route path="hr-admin/bank-transfer" element={<RequireModule module="HR & Admin"><BankTransferPage /></RequireModule>} />
+                <Route path="hr-admin/hold-salary" element={<RequireModule module="HR & Admin"><HoldSalaryPayoutPage /></RequireModule>} />
+                {/* Published Info */}
+                <Route path="hr-admin/ytd-summary" element={<RequireModule module="HR & Admin"><YTDSummaryPage /></RequireModule>} />
+                <Route path="hr-admin/it-statement" element={<RequireModule module="HR & Admin"><ITStatementPage /></RequireModule>} />
+                <Route path="hr-admin/it-declaration" element={<RequireModule module="HR & Admin"><ITDeclarationPage /></RequireModule>} />
+                <Route path="hr-admin/loan-statement" element={<RequireModule module="HR & Admin"><LoanStatementPage /></RequireModule>} />
+                {/* Setup */}
+                <Route path="hr-admin/pay-item-groups" element={<RequireModule module="HR & Admin"><PayItemGroupPage /></RequireModule>} />
+                <Route path="hr-admin/payroll-repository" element={<RequireModule module="HR & Admin"><PayrollRepositoryPage /></RequireModule>} />
+                <Route path="hr-admin/payslip-gallery" element={<RequireModule module="HR & Admin"><PayslipGalleryPage /></RequireModule>} />
 
                 {/* Site */}
                 <Route path="site/dpr" element={<DPRPage />} />
