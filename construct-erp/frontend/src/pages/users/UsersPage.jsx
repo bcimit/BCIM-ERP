@@ -1,6 +1,7 @@
 // src/pages/users/UsersPage.jsx — Team Members (Redesigned)
 import React, { useMemo, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Users, Plus, Edit2, Trash2, RotateCcw, Key,
@@ -9,7 +10,7 @@ import {
   Download, Upload, FileSpreadsheet, ChevronDown,
   LayoutGrid, List, MoreVertical, Lock, RefreshCw,
   Briefcase, Calendar, LogIn, Filter, Sparkles,
-  AlertTriangle, Check
+  AlertTriangle, Check, Link2
 } from 'lucide-react';
 import clsx from 'clsx';
 import dayjs from 'dayjs';
@@ -482,6 +483,7 @@ function Avatar({ name, role, size = 40 }) {
 /* ── Member Card ─────────────────────────────────────────────── */
 function MemberCard({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReactivate }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
   const r = roleInfo(user.role);
 
   return (
@@ -523,6 +525,12 @@ function MemberCard({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReac
                         className="flex items-center gap-2 w-full px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-700 font-medium">
                         <Edit2 size={12} className="text-blue-500" /> Edit Member
                       </button>
+                      <button onClick={() => { setMenuOpen(false); navigate(`/hr-admin/employees/${user.id}/edit`); }}
+                        className={clsx('flex items-center gap-2 w-full px-3 py-2 rounded-lg font-medium',
+                          user.has_hr_profile ? 'hover:bg-slate-50 text-slate-700' : 'hover:bg-amber-50 text-amber-700')}>
+                        <Link2 size={12} className={user.has_hr_profile ? 'text-indigo-500' : 'text-amber-500'} />
+                        {user.has_hr_profile ? 'Edit HR Profile' : 'Create HR Profile'}
+                      </button>
                       <button onClick={() => { setMenuOpen(false); onReset(user); }}
                         className="flex items-center gap-2 w-full px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-700 font-medium">
                         <Key size={12} className="text-amber-500" /> Reset Password
@@ -547,9 +555,14 @@ function MemberCard({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReac
           </div>
         </div>
 
-        {/* Role badge + dept */}
-        <div className="flex items-center gap-2 mb-3">
+        {/* Role badge + HR profile badge */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <RoleBadge role={user.role} />
+          {!user.has_hr_profile && (
+            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+              <Link2 size={8} /> No HR Profile
+            </span>
+          )}
         </div>
         {user.department && (
           <div className="flex items-center gap-1.5 mb-3">
@@ -593,6 +606,7 @@ function MemberCard({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReac
 
 /* ── Table Row ───────────────────────────────────────────────── */
 function MemberRow({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReactivate }) {
+  const navigate = useNavigate();
   return (
     <tr className="hover:bg-slate-50/60 transition-colors group">
       <td className="px-4 py-3">
@@ -602,6 +616,9 @@ function MemberRow({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReact
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-slate-800 truncate">{user.name}</span>
               {isMe && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-600">YOU</span>}
+              {!user.has_hr_profile && (
+                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">No HR Profile</span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 font-mono">{user.employee_code || '—'}</span>
           </div>
@@ -625,9 +642,17 @@ function MemberRow({ user, isMe, isAdmin, onEdit, onReset, onDeactivate, onReact
       {isAdmin && (
         <td className="px-4 py-3">
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => onEdit(user)} title="Edit"
+            <button onClick={() => onEdit(user)} title="Edit Member"
               className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 hover:text-blue-600 flex items-center justify-center text-slate-500 transition-colors">
               <Edit2 size={12} />
+            </button>
+            <button onClick={() => navigate(`/hr-admin/employees/${user.id}/edit`)}
+              title={user.has_hr_profile ? 'Edit HR Profile' : 'Create HR Profile'}
+              className={clsx('w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                user.has_hr_profile
+                  ? 'bg-slate-100 hover:bg-indigo-100 hover:text-indigo-600 text-slate-500'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-500')}>
+              <Link2 size={12} />
             </button>
             <button onClick={() => onReset(user)} title="Reset Password"
               className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-600 flex items-center justify-center text-slate-500 transition-colors">
@@ -1050,6 +1075,7 @@ export default function UsersPage() {
   const [filterRole, setFilterRole]   = useState('');
   const [filterDept, setFilterDept]   = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterNoHR, setFilterNoHR]     = useState(false);
   const [view, setView]               = useState('grid'); // 'grid' | 'list'
   const [drawer, setDrawer]           = useState(null);   // 'add' | 'edit' | 'reset' | 'deactivate'
   const [selected, setSelected]       = useState(null);
@@ -1098,17 +1124,18 @@ export default function UsersPage() {
     return ms
       && (!filterRole   || u.role === filterRole)
       && (!filterDept   || u.department === filterDept)
-      && (!filterStatus || (filterStatus==='active' ? u.is_active : !u.is_active));
+      && (!filterStatus || (filterStatus==='active' ? u.is_active : !u.is_active))
+      && (!filterNoHR   || !u.has_hr_profile);
   });
 
   /* KPIs */
   const all       = data||[];
   const kpis = [
-    { label:'Total',       value: all.length,                                        color:'#3B82F6', bg:'#EFF6FF', icon: Users     },
-    { label:'Active',      value: all.filter(u=>u.is_active).length,                 color:'#10B981', bg:'#ECFDF5', icon: UserCheck  },
-    { label:'Inactive',    value: all.filter(u=>!u.is_active).length,                color:'#94A3B8', bg:'#F8FAFC', icon: UserX      },
-    { label:'Roles',       value: new Set(all.map(u=>u.role)).size,                  color:'#8B5CF6', bg:'#F5F3FF', icon: Shield     },
-    { label:'Departments', value: new Set(all.map(u=>u.department).filter(Boolean)).size, color:'#06B6D4', bg:'#ECFEFF', icon: Building2 },
+    { label:'Total',          value: all.length,                                            color:'#3B82F6', bg:'#EFF6FF', icon: Users     },
+    { label:'Active',         value: all.filter(u=>u.is_active).length,                   color:'#10B981', bg:'#ECFDF5', icon: UserCheck  },
+    { label:'Inactive',       value: all.filter(u=>!u.is_active).length,                  color:'#94A3B8', bg:'#F8FAFC', icon: UserX      },
+    { label:'Roles',          value: new Set(all.map(u=>u.role)).size,                    color:'#8B5CF6', bg:'#F5F3FF', icon: Shield     },
+    { label:'No HR Profile',  value: all.filter(u=>!u.has_hr_profile).length,             color:'#D97706', bg:'#FFFBEB', icon: Link2      },
   ];
 
   /* Mutations */
@@ -1188,8 +1215,8 @@ export default function UsersPage() {
     finally { setImporting(false); }
   };
 
-  const hasFilters = search||filterRole||filterDept||filterStatus;
-  const clearFilters = () => { setSearch(''); setFilterRole(''); setFilterDept(''); setFilterStatus(''); };
+  const hasFilters = search||filterRole||filterDept||filterStatus||filterNoHR;
+  const clearFilters = () => { setSearch(''); setFilterRole(''); setFilterDept(''); setFilterStatus(''); setFilterNoHR(false); };
 
   /* ── Render ── */
   return (
@@ -1239,7 +1266,12 @@ export default function UsersPage() {
           {/* KPI strip */}
           <div className="flex items-center gap-3 mt-5 flex-wrap">
             {kpis.map(k => (
-              <div key={k.label} className="flex items-center gap-2 px-3 py-2 rounded-xl"
+              <div key={k.label}
+                onClick={k.label === 'No HR Profile' ? () => setFilterNoHR(v => !v) : undefined}
+                className={clsx('flex items-center gap-2 px-3 py-2 rounded-xl transition-all',
+                  k.label === 'No HR Profile'
+                    ? 'cursor-pointer hover:bg-amber-500/20 ' + (filterNoHR ? 'ring-2 ring-amber-400' : '')
+                    : '')}
                 style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' }}>
                 <k.icon size={13} style={{ color: k.color }} />
                 <span className="text-lg font-bold text-white leading-none">{k.value}</span>
@@ -1282,6 +1314,14 @@ export default function UsersPage() {
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
+
+          <button onClick={() => setFilterNoHR(v => !v)}
+            className={clsx('h-9 px-3 rounded-xl border text-xs font-semibold transition-colors flex items-center gap-1.5',
+              filterNoHR
+                ? 'bg-amber-500 border-amber-500 text-white'
+                : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100')}>
+            <Link2 size={12} /> No HR Profile
+          </button>
 
           {hasFilters && (
             <button onClick={clearFilters}

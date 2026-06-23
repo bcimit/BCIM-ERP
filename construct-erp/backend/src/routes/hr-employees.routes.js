@@ -115,6 +115,7 @@ runSchemaInit('hr-employees', initTables);
 const employeeSelect = `
   SELECT u.id, u.employee_code, u.name, u.email, u.phone, u.role, u.designation,
          u.department, u.is_active,
+         (ep.user_id IS NOT NULL) AS has_profile,
          ep.department_id, ep.designation_id, ep.date_of_joining, ep.date_of_birth,
          ep.gender, ep.father_name, ep.mother_name, ep.marital_status, ep.blood_group,
          ep.nationality, ep.pan_number, ep.aadhaar_number, ep.uan_number,
@@ -175,26 +176,30 @@ async function ensureLifecycleChecklist(companyId, userId) {
 // ═══════════════════════════════════════════════════════════
 router.get('/', async (req, res) => {
   try {
-    const { search, department_id, employment_status, employment_type } = req.query;
+    const { search, department_id, employment_status, employment_type, no_profile } = req.query;
     let sql = `${employeeSelect} WHERE u.company_id = $1`;
     const params = [req.user.company_id];
     let idx = 2;
 
-    if (search) {
-      sql += ` AND (u.name ILIKE $${idx} OR u.employee_code ILIKE $${idx} OR u.email ILIKE $${idx})`;
-      params.push(`%${search}%`); idx++;
-    }
-    if (department_id) {
-      sql += ` AND ep.department_id = $${idx}`;
-      params.push(department_id); idx++;
-    }
-    if (employment_status) {
-      sql += ` AND ep.employment_status = $${idx}`;
-      params.push(employment_status); idx++;
-    }
-    if (employment_type) {
-      sql += ` AND ep.employment_type = $${idx}`;
-      params.push(employment_type); idx++;
+    if (no_profile === 'true') {
+      sql += ' AND ep.user_id IS NULL';
+    } else {
+      if (search) {
+        sql += ` AND (u.name ILIKE $${idx} OR u.employee_code ILIKE $${idx} OR u.email ILIKE $${idx})`;
+        params.push(`%${search}%`); idx++;
+      }
+      if (department_id) {
+        sql += ` AND ep.department_id = $${idx}`;
+        params.push(department_id); idx++;
+      }
+      if (employment_status) {
+        sql += ` AND ep.employment_status = $${idx}`;
+        params.push(employment_status); idx++;
+      }
+      if (employment_type) {
+        sql += ` AND ep.employment_type = $${idx}`;
+        params.push(employment_type); idx++;
+      }
     }
     sql += ' ORDER BY u.name';
 

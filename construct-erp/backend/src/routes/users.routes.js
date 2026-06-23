@@ -199,6 +199,7 @@ router.get('/', auth, async (req, res) => {
       `SELECT u.id, u.name, u.email, u.phone, u.role, u.designation, u.department,
               u.employee_code, u.is_active, u.last_login, u.created_at, u.accessible_modules, u.accessible_menus,
               u.vendor_id, v.name AS vendor_name,
+              (ep.user_id IS NOT NULL) AS has_hr_profile,
               COALESCE((
                 SELECT ARRAY_AGG(pm.project_id::text ORDER BY p.name)
                 FROM project_members pm
@@ -213,6 +214,7 @@ router.get('/', auth, async (req, res) => {
               ), ARRAY[]::text[]) AS project_names
        FROM users u
        LEFT JOIN vendors v ON u.vendor_id = v.id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
        WHERE u.company_id = $1
        ORDER BY u.is_active DESC, u.name ASC`,
       [req.user.company_id]

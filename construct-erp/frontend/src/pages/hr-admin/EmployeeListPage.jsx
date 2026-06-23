@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users, Plus, Search, UserCheck, UserX, Briefcase, Building2,
   LayoutGrid, List, ChevronRight, X, SlidersHorizontal,
-  Phone, Mail, Calendar, ArrowUpRight,
+  Phone, Mail, Calendar, ArrowUpRight, Link2,
 } from 'lucide-react';
 import { hrEmployeesAPI, hrMastersAPI } from '../../api/client';
 
@@ -87,9 +87,15 @@ function EmpCard({ emp, onClick }) {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${type.bg} ${type.text}`}>
-          {type.label}
-        </span>
+        {!emp.has_profile ? (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" /> No HR Profile
+          </span>
+        ) : (
+          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${type.bg} ${type.text}`}>
+            {type.label}
+          </span>
+        )}
         <div className="flex items-center gap-1 text-xs text-gray-400">
           <Calendar className="w-3 h-3" />
           {emp.date_of_joining
@@ -118,11 +124,11 @@ export default function EmployeeListPage() {
 
   const { data: empData, isLoading } = useQuery({
     queryKey: ['hr-employees', search, deptFilter, statusFilter],
-    queryFn: () => hrEmployeesAPI.list({
-      search: search || undefined,
-      department_id: deptFilter || undefined,
-      employment_status: statusFilter || undefined,
-    }).then(r => r.data),
+    queryFn: () => hrEmployeesAPI.list(
+      statusFilter === '__no_profile__'
+        ? { no_profile: 'true' }
+        : { search: search || undefined, department_id: deptFilter || undefined, employment_status: statusFilter || undefined }
+    ).then(r => r.data),
   });
 
   const { data: deptData } = useQuery({
@@ -224,10 +230,11 @@ export default function EmployeeListPage() {
           {/* Status tabs */}
           <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
             {[
-              { value: 'active',     label: 'Active'      },
-              { value: 'resigned',   label: 'Resigned'    },
-              { value: 'terminated', label: 'Terminated'  },
-              { value: '',           label: 'All'         },
+              { value: 'active',          label: 'Active'      },
+              { value: 'resigned',        label: 'Resigned'    },
+              { value: 'terminated',      label: 'Terminated'  },
+              { value: '',                label: 'All'         },
+              { value: '__no_profile__',  label: 'No Profile'  },
             ].map(s => (
               <button
                 key={s.value}
@@ -341,7 +348,7 @@ export default function EmployeeListPage() {
               <EmpCard
                 key={emp.id}
                 emp={emp}
-                onClick={() => navigate(`/hr-admin/employees/${emp.id}`)}
+                onClick={() => navigate(emp.has_profile ? `/hr-admin/employees/${emp.id}` : `/hr-admin/employees/${emp.id}/edit`)}
               />
             ))}
           </AnimatePresence>
@@ -378,7 +385,7 @@ export default function EmployeeListPage() {
               return (
                 <motion.div
                   key={emp.id}
-                  onClick={() => navigate(`/hr-admin/employees/${emp.id}`)}
+                  onClick={() => navigate(emp.has_profile ? `/hr-admin/employees/${emp.id}` : `/hr-admin/employees/${emp.id}/edit`)}
                   whileHover={{ backgroundColor: '#F9FAFB' }}
                   className="grid grid-cols-12 px-5 py-3.5 cursor-pointer items-center transition-colors"
                 >
