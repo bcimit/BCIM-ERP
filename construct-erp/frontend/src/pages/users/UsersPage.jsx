@@ -228,7 +228,6 @@ const MENU_CONFIG = {
     { to:'/accounts/sales/delivery-challans',          label:'Delivery Challans' },
     { to:'/accounts/sales/statements',                 label:'Customer Statements' },
     // Purchases
-    { to:'/accounts/purchases/vendors',                label:'Vendors' },
     { to:'/accounts/purchases/expenses',               label:'Expenses' },
     { to:'/accounts/purchases/purchase-orders',        label:'Purchase Orders' },
     { to:'/accounts/purchases/bills',                  label:'Bills' },

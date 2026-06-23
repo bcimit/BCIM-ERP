@@ -145,7 +145,6 @@ const navGroups = [
     { to: '/accounts/sales/delivery-challans',          icon: Truck,           label: 'Delivery Challans' },
     { to: '/accounts/sales/statements',                 icon: BookOpen,        label: 'Customer Statements' },
     // ── Purchase ─────────────────────────────────────────────────────────────
-    { to: '/accounts/purchases/vendors',                icon: Users,           label: 'Vendors' },
     { to: '/accounts/purchases/expenses',               icon: Wallet,          label: 'Expenses' },
     { to: '/accounts/purchases/purchase-orders',        icon: ShoppingCart,    label: 'Purchase Orders' },
     { to: '/accounts/purchases/bills',                  icon: FileText,        label: 'Bills' },

@@ -1,11 +1,11 @@
 // src/pages/procurement/VendorList.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import {
   Users, Plus, X, Phone, Mail, Star, MapPin, CreditCard,
   Shield, Search, Building2, ChevronDown, ChevronUp,
-  Banknote, FileText, Filter
+  Banknote, FileText, Filter, FolderOpen, ShoppingCart, Wrench
 } from 'lucide-react';
 import { vendorAPI, projectAPI, default as api } from '../../api/client';
 import toast from 'react-hot-toast';
@@ -28,7 +28,6 @@ const TYPES = {
   Other:              { label: 'Other',               dot: 'bg-slate-400',   badge: 'bg-slate-100 text-slate-900 border-slate-200' },
 };
 
-// Vendor type options for the "Register" form (combined list)
 const VENDOR_TYPE_OPTIONS = [
   { value: 'material_supplier',  label: 'Material Supplier' },
   { value: 'subcontractor',      label: 'Subcontractor' },
@@ -48,6 +47,13 @@ const STATES = [
   'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
   'Uttarakhand','West Bengal','Delhi','Jammu & Kashmir','Ladakh',
 ];
+
+const inr = v => {
+  const n = Number(v) || 0;
+  if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)}Cr`;
+  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)}L`;
+  return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+};
 
 function StarRating({ rating }) {
   return (
@@ -71,9 +77,204 @@ function FormField({ label, children }) {
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-all placeholder:text-slate-400';
 
+// ─── By-Project Tab ─────────────────────────────────────────────────────────
+
+function VendorTypeBadge({ type }) {
+  const vt = TYPES[type] || TYPES.Other;
+  return (
+    <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border', vt.badge)}>
+      {vt.label}
+    </span>
+  );
+}
+
+function ValueCell({ value, paid }) {
+  const outstanding = (Number(value) || 0) - (Number(paid) || 0);
+  return (
+    <div>
+      <div className="text-xs font-medium text-slate-900">{inr(value)}</div>
+      <div className="flex items-center gap-1.5 mt-0.5">
+        <span className="text-[10px] text-emerald-600">Paid {inr(paid)}</span>
+        {outstanding > 0 && <span className="text-[10px] text-amber-600">Out {inr(outstanding)}</span>}
+      </div>
+    </div>
+  );
+}
+
+function VendorTable({ vendors, docLabel }) {
+  if (!vendors || vendors.length === 0) {
+    return <p className="text-xs text-slate-400 py-3 pl-1">No vendors on record for this project.</p>;
+  }
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="border-b border-slate-100">
+          <th className="text-left py-2 pr-3 text-slate-500 font-medium w-2/5">Vendor</th>
+          <th className="text-left py-2 pr-3 text-slate-500 font-medium">Type</th>
+          <th className="text-right py-2 pr-3 text-slate-500 font-medium">{docLabel}s</th>
+          <th className="text-right py-2 text-slate-500 font-medium">Value / Paid</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-50">
+        {vendors.map((v, i) => (
+          <tr key={v.vendor_id || i} className="hover:bg-slate-50">
+            <td className="py-2.5 pr-3">
+              <div className="font-medium text-slate-800">{v.vendor_name}</div>
+              <div className="text-slate-400 font-mono">{v.vendor_code}</div>
+            </td>
+            <td className="py-2.5 pr-3"><VendorTypeBadge type={v.vendor_type} /></td>
+            <td className="py-2.5 pr-3 text-right font-mono text-slate-700">{v.doc_count}</td>
+            <td className="py-2.5 text-right"><ValueCell value={v.total_value} paid={v.paid_value} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ByProjectTab({ projects }) {
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [expandedProjects, setExpandedProjects] = useState({});
+
+  const { data: breakdownData, isLoading } = useQuery({
+    queryKey: ['vendor-project-breakdown', selectedProjectId],
+    queryFn: () => vendorAPI.projectBreakdown(selectedProjectId ? { project_id: selectedProjectId } : {})
+      .then(r => r.data?.data || []).catch(() => []),
+  });
+
+  const rows = breakdownData || [];
+
+  const toggle = id => setExpandedProjects(p => ({ ...p, [id]: !p[id] }));
+
+  const summaryTotals = useMemo(() => {
+    let poVendors = 0, woVendors = 0, poValue = 0, woValue = 0;
+    rows.forEach(r => {
+      poVendors += r.po_vendors?.length || 0;
+      woVendors += r.wo_vendors?.length || 0;
+      r.po_vendors?.forEach(v => { poValue += Number(v.total_value) || 0; });
+      r.wo_vendors?.forEach(v => { woValue += Number(v.total_value) || 0; });
+    });
+    return { poVendors, woVendors, poValue, woValue };
+  }, [rows]);
+
+  return (
+    <div>
+      {/* Filter + summary strip */}
+      <div className="flex flex-wrap items-center gap-4 mb-5">
+        <select
+          value={selectedProjectId}
+          onChange={e => setSelectedProjectId(e.target.value)}
+          className="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 outline-none focus:border-indigo-400 transition-all min-w-[220px]"
+        >
+          <option value="">All Projects</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.name || p.project_name}</option>
+          ))}
+        </select>
+        {rows.length > 0 && (
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <span><span className="font-semibold text-blue-700">{summaryTotals.poVendors}</span> PO vendors · {inr(summaryTotals.poValue)} total</span>
+            <span>·</span>
+            <span><span className="font-semibold text-purple-700">{summaryTotals.woVendors}</span> WO vendors · {inr(summaryTotals.woValue)} total</span>
+          </div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">{[1,2,3].map(n => <div key={n} className="h-20 bg-slate-200 animate-pulse rounded-xl" />)}</div>
+      ) : rows.length === 0 ? (
+        <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white">
+          <FolderOpen className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm font-medium text-slate-500">No vendor data found</p>
+          <p className="text-xs text-slate-400 mt-1">Vendors appear here once purchase orders or work orders are issued</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(proj => {
+            const isOpen = expandedProjects[proj.project_id] !== false;
+            const totalPo = (proj.po_vendors || []).reduce((s, v) => s + (Number(v.total_value) || 0), 0);
+            const totalWo = (proj.wo_vendors || []).reduce((s, v) => s + (Number(v.total_value) || 0), 0);
+            const paidPo  = (proj.po_vendors || []).reduce((s, v) => s + (Number(v.paid_value)  || 0), 0);
+            const paidWo  = (proj.wo_vendors || []).reduce((s, v) => s + (Number(v.paid_value)  || 0), 0);
+
+            return (
+              <div key={proj.project_id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                {/* Project header */}
+                <button
+                  onClick={() => toggle(proj.project_id)}
+                  className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Building2 className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <div className="text-left min-w-0">
+                      <div className="text-sm font-semibold text-slate-900 truncate">{proj.project_name}</div>
+                      <div className="text-[11px] text-slate-400 font-mono">{proj.project_code}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 shrink-0 ml-4">
+                    <div className="text-right">
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <ShoppingCart className="w-3 h-3 text-blue-500" />
+                        <span>{proj.po_vendors?.length || 0} PO vendors</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="font-semibold text-slate-700">{inr(totalPo)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                        <Wrench className="w-3 h-3 text-purple-500" />
+                        <span>{proj.wo_vendors?.length || 0} WO vendors</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="font-semibold text-slate-700">{inr(totalWo)}</span>
+                      </div>
+                    </div>
+                    {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                  </div>
+                </button>
+
+                {/* Expanded vendor tables */}
+                {isOpen && (
+                  <div className="border-t border-slate-100 divide-y divide-slate-100">
+                    {/* PO Vendors */}
+                    <div className="px-5 py-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <ShoppingCart className="w-3.5 h-3.5 text-blue-500" />
+                        <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Purchase Order Vendors</span>
+                        <span className="ml-auto text-xs text-slate-500">
+                          Paid {inr(paidPo)} of {inr(totalPo)}
+                          {totalPo - paidPo > 0 && <span className="text-amber-600"> · Outstanding {inr(totalPo - paidPo)}</span>}
+                        </span>
+                      </div>
+                      <VendorTable vendors={proj.po_vendors} docLabel="PO" />
+                    </div>
+
+                    {/* WO Vendors */}
+                    <div className="px-5 py-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Wrench className="w-3.5 h-3.5 text-purple-500" />
+                        <span className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Work Order Vendors</span>
+                        <span className="ml-auto text-xs text-slate-500">
+                          Paid {inr(paidWo)} of {inr(totalWo)}
+                          {totalWo - paidWo > 0 && <span className="text-amber-600"> · Outstanding {inr(totalWo - paidWo)}</span>}
+                        </span>
+                      </div>
+                      <VendorTable vendors={proj.wo_vendors} docLabel="WO" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
 export default function VendorList() {
+  const [activeTab, setActiveTab]   = useState('list');
   const [showForm, setShowForm]     = useState(false);
-  const [editVendor, setEditVendor] = useState(null); // null = create mode, object = edit mode
+  const [editVendor, setEditVendor] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [filterProjectId, setFilterProjectId] = useState('');
   const [search, setSearch]         = useState('');
@@ -152,7 +353,6 @@ export default function VendorList() {
     onError: e => toast.error(e?.response?.data?.error || 'Import failed'),
   });
 
-  // Normalise legacy mixed-case vendor_type values to canonical snake_case keys
   const normalizeType = t => ({
     'Sub-contractor':   'subcontractor',
     'Labour Contractor':'labour_contractor',
@@ -212,171 +412,188 @@ export default function VendorList() {
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 mb-5 flex flex-wrap items-center gap-3 shadow-sm">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-900 font-medium outline-none focus:border-indigo-400 transition-all"
-            placeholder="Search name, code, city…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Filter className="w-3.5 h-3.5 text-slate-400" />
-          {[{ value: 'all', label: 'All Types' }, ...VENDOR_TYPE_OPTIONS].map(t => (
-            <button
-              key={t.value}
-              onClick={() => setFilterType(t.value)}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
-                filterType === t.value
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-slate-900 font-medium border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <select
-          value={filterProjectId}
-          onChange={e => setFilterProjectId(e.target.value)}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 bg-white text-slate-700 outline-none focus:border-indigo-400 transition-all"
-        >
-          <option value="">All Projects</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.name || p.project_name}</option>
-          ))}
-        </select>
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 mb-5 bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-fit">
+        {[
+          { id: 'list',      label: 'Vendor List' },
+          { id: 'byProject', label: 'By Project' },
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={clsx(
+              'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+              activeTab === t.id
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Vendor Table */}
-      {isLoading ? (
-        <div className="space-y-2">{[1,2,3,4,5].map(n => <div key={n} className="h-16 bg-slate-200 animate-pulse rounded-xl" />)}</div>
-      ) : vendors.length === 0 ? (
-        <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white">
-          <Building2 className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-slate-500">No vendors found</p>
-          <p className="text-xs text-slate-900 font-medium mt-1">Adjust your search or register a new vendor</p>
-        </div>
-      ) : (
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          {/* Table Head */}
-          <div className="grid grid-cols-12 gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500">
-            <div className="col-span-4">Vendor</div>
-            <div className="col-span-2">Type</div>
-            <div className="col-span-2">GSTIN</div>
-            <div className="col-span-1 text-center">Credit</div>
-            <div className="col-span-2">Contact</div>
-            <div className="col-span-1" />
+      {/* By Project Tab */}
+      {activeTab === 'byProject' && <ByProjectTab projects={projects} />}
+
+      {/* Vendor List Tab */}
+      {activeTab === 'list' && (
+        <>
+          {/* Filters */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3 mb-5 flex flex-wrap items-center gap-3 shadow-sm">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-900 font-medium outline-none focus:border-indigo-400 transition-all"
+                placeholder="Search name, code, city…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              {[{ value: 'all', label: 'All Types' }, ...VENDOR_TYPE_OPTIONS].map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => setFilterType(t.value)}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
+                    filterType === t.value
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-900 font-medium border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <select
+              value={filterProjectId}
+              onChange={e => setFilterProjectId(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 bg-white text-slate-700 outline-none focus:border-indigo-400 transition-all"
+            >
+              <option value="">All Projects</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name || p.project_name}</option>
+              ))}
+            </select>
           </div>
 
-          {/* Rows */}
-          <div className="divide-y divide-slate-50">
-            {vendors.map(v => {
-              const vt = TYPES[v.vendor_type] || TYPES.service_provider;
-              const isOpen = expanded === v.id;
+          {/* Vendor Table */}
+          {isLoading ? (
+            <div className="space-y-2">{[1,2,3,4,5].map(n => <div key={n} className="h-16 bg-slate-200 animate-pulse rounded-xl" />)}</div>
+          ) : vendors.length === 0 ? (
+            <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white">
+              <Building2 className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-slate-500">No vendors found</p>
+              <p className="text-xs text-slate-900 font-medium mt-1">Adjust your search or register a new vendor</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="grid grid-cols-12 gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500">
+                <div className="col-span-4">Vendor</div>
+                <div className="col-span-2">Type</div>
+                <div className="col-span-2">GSTIN</div>
+                <div className="col-span-1 text-center">Credit</div>
+                <div className="col-span-2">Contact</div>
+                <div className="col-span-1" />
+              </div>
 
-              return (
-                <div key={v.id}>
-                  {/* Main Row */}
-                  <div
-                    className="grid grid-cols-12 gap-3 px-4 py-3.5 items-center hover:bg-slate-50 transition-colors cursor-pointer group"
-                    onClick={() => setExpanded(isOpen ? null : v.id)}
-                  >
-                    {/* Vendor name + code */}
-                    <div className="col-span-4 flex items-center gap-3 min-w-0">
-                      <div className={clsx('w-2 h-2 rounded-full shrink-0', vt.dot)} />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-slate-900 truncate">{v.name}</div>
-                        <div className="text-xs text-slate-900 font-medium font-mono">{v.vendor_code}</div>
-                      </div>
-                    </div>
+              <div className="divide-y divide-slate-50">
+                {vendors.map(v => {
+                  const vt = TYPES[v.vendor_type] || TYPES.service_provider;
+                  const isOpen = expanded === v.id;
 
-                    {/* Type badge */}
-                    <div className="col-span-2">
-                      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border', vt.badge)}>
-                        {vt.label}
-                      </span>
-                    </div>
-
-                    {/* GSTIN */}
-                    <div className="col-span-2 text-xs font-mono text-slate-900 truncate">{v.gstin || '—'}</div>
-
-                    {/* Credit days */}
-                    <div className="col-span-1 text-center">
-                      <span className="inline-block px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-medium">
-                        {v.credit_days || 30}d
-                      </span>
-                    </div>
-
-                    {/* Contact */}
-                    <div className="col-span-2 text-xs text-slate-900 font-medium truncate">
-                      {v.contact_person || '—'}
-                      {v.phone && <div className="text-slate-400">{v.phone}</div>}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="col-span-1 flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                      <button
+                  return (
+                    <div key={v.id}>
+                      <div
+                        className="grid grid-cols-12 gap-3 px-4 py-3.5 items-center hover:bg-slate-50 transition-colors cursor-pointer group"
                         onClick={() => setExpanded(isOpen ? null : v.id)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-900 font-medium hover:border-indigo-300 hover:text-indigo-600 transition-all"
                       >
-                        {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      </button>
-                      <TableActions onEdit={() => openEdit(v)} onDelete={() => deleteMut.mutate(v.id)} recordName={v.name} />
-                    </div>
-                  </div>
+                        <div className="col-span-4 flex items-center gap-3 min-w-0">
+                          <div className={clsx('w-2 h-2 rounded-full shrink-0', vt.dot)} />
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-slate-900 truncate">{v.name}</div>
+                            <div className="text-xs text-slate-900 font-medium font-mono">{v.vendor_code}</div>
+                          </div>
+                        </div>
 
-                  {/* Expanded Detail Row */}
-                  {isOpen && (
-                    <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 space-y-3">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <Detail label="Trade Name" value={v.trade_name} />
-                        <Detail label="PAN" value={v.pan} mono />
-                        <Detail label="GSTIN" value={v.gstin} mono />
-                        <Detail label="Website" value={v.website_url} />
-                        <Detail label="Email" value={v.email} />
-                        <Detail label="Mobile Number 1" value={v.mobile_number_1} />
-                        <Detail label="Mobile Number 2" value={v.mobile_number_2} />
-                        <Detail label="Address" value={[v.address, v.city, v.state, v.pincode].filter(Boolean).join(', ')} />
-                        <Detail label="Credit Days" value={v.credit_days ? `${v.credit_days} days` : '—'} />
-                        <Detail label="Trade License" value={v.trade_license} />
-                        <Detail label="MSME Reg." value={v.msme_reg} />
+                        <div className="col-span-2">
+                          <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border', vt.badge)}>
+                            {vt.label}
+                          </span>
+                        </div>
+
+                        <div className="col-span-2 text-xs font-mono text-slate-900 truncate">{v.gstin || '—'}</div>
+
+                        <div className="col-span-1 text-center">
+                          <span className="inline-block px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-medium">
+                            {v.credit_days || 30}d
+                          </span>
+                        </div>
+
+                        <div className="col-span-2 text-xs text-slate-900 font-medium truncate">
+                          {v.contact_person || '—'}
+                          {v.phone && <div className="text-slate-400">{v.phone}</div>}
+                        </div>
+
+                        <div className="col-span-1 flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => setExpanded(isOpen ? null : v.id)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-900 font-medium hover:border-indigo-300 hover:text-indigo-600 transition-all"
+                          >
+                            {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                          <TableActions onEdit={() => openEdit(v)} onDelete={() => deleteMut.mutate(v.id)} recordName={v.name} />
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
-                        <Detail label="Bank" value={v.bank_name} />
-                        <Detail label="Account No." value={v.account_number || v.bank_account} mono />
-                        <Detail label="IFSC" value={v.ifsc_code || v.bank_ifsc} mono />
-                        <Detail label="Branch" value={v.bank_branch} />
-                      </div>
-                      {v.notes && (
-                        <div className="pt-2 border-t border-slate-100">
-                          <div className="text-[10px] text-slate-900 font-medium uppercase tracking-wider mb-1">Notes</div>
-                          <p className="text-xs text-slate-600">{v.notes}</p>
+
+                      {isOpen && (
+                        <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 space-y-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <Detail label="Trade Name" value={v.trade_name} />
+                            <Detail label="PAN" value={v.pan} mono />
+                            <Detail label="GSTIN" value={v.gstin} mono />
+                            <Detail label="Website" value={v.website_url} />
+                            <Detail label="Email" value={v.email} />
+                            <Detail label="Mobile Number 1" value={v.mobile_number_1} />
+                            <Detail label="Mobile Number 2" value={v.mobile_number_2} />
+                            <Detail label="Address" value={[v.address, v.city, v.state, v.pincode].filter(Boolean).join(', ')} />
+                            <Detail label="Credit Days" value={v.credit_days ? `${v.credit_days} days` : '—'} />
+                            <Detail label="Trade License" value={v.trade_license} />
+                            <Detail label="MSME Reg." value={v.msme_reg} />
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
+                            <Detail label="Bank" value={v.bank_name} />
+                            <Detail label="Account No." value={v.account_number || v.bank_account} mono />
+                            <Detail label="IFSC" value={v.ifsc_code || v.bank_ifsc} mono />
+                            <Detail label="Branch" value={v.bank_branch} />
+                          </div>
+                          {v.notes && (
+                            <div className="pt-2 border-t border-slate-100">
+                              <div className="text-[10px] text-slate-900 font-medium uppercase tracking-wider mb-1">Notes</div>
+                              <p className="text-xs text-slate-600">{v.notes}</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
 
-          {/* Footer count */}
-          <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 text-xs text-slate-400">
-            Showing {vendors.length} of {allVendors.length} vendors
-          </div>
-        </div>
+              <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 text-xs text-slate-400">
+                Showing {vendors.length} of {allVendors.length} vendors
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Register Vendor — full screen */}
+      {/* Register / Edit Vendor form */}
       {showForm && (
         <div className="fixed inset-0 bg-white z-50 flex flex-col">
 
-          {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">{editVendor ? 'Edit Vendor' : 'Register Vendor'}</h2>
@@ -395,7 +612,6 @@ export default function VendorList() {
             <div className="flex-1 overflow-y-auto px-6 py-6">
               <div className="max-w-5xl mx-auto space-y-6">
 
-              {/* Section: Basic */}
               <Section icon={<Shield className="w-4 h-4 text-indigo-500" />} title="Basic Information">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
@@ -440,7 +656,6 @@ export default function VendorList() {
                 </div>
               </Section>
 
-              {/* Section: Statutory */}
               <Section icon={<FileText className="w-4 h-4 text-blue-500" />} title="Statutory &amp; Address">
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="GSTIN">
@@ -477,7 +692,6 @@ export default function VendorList() {
                 </div>
               </Section>
 
-              {/* Section: Banking */}
               <Section icon={<Banknote className="w-4 h-4 text-emerald-500" />} title="Banking Details">
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Bank Name">
@@ -495,7 +709,6 @@ export default function VendorList() {
                 </div>
               </Section>
 
-              {/* Section: Project Assignment */}
               <Section icon={<Building2 className="w-4 h-4 text-violet-500" />} title="Project Assignment">
                 <p className="text-xs text-slate-400 -mt-2 mb-2">Select the project(s) this vendor belongs to / will be ordered for. You can update this later.</p>
                 {projects.length === 0 ? (
@@ -520,7 +733,6 @@ export default function VendorList() {
                 )}
               </Section>
 
-              {/* Section: Notes */}
               <Section icon={<FileText className="w-4 h-4 text-slate-400" />} title="Notes">
                 <FormField label="Internal Notes">
                   <textarea {...register('notes')} rows={2} className={inputCls} placeholder="Any remarks about this vendor…" />
@@ -530,7 +742,6 @@ export default function VendorList() {
               </div>
             </div>
 
-            {/* Footer Buttons */}
             <div className="border-t border-slate-200 bg-white px-6 py-4 flex justify-end gap-3">
               <button type="button" onClick={closeForm}
                 className="px-5 py-2.5 bg-white border border-slate-300 text-slate-600 text-sm font-medium rounded-md hover:bg-slate-50 transition-colors">

@@ -280,6 +280,101 @@ vendorRouter.get('/performance', async (req, res) => {
   }
 });
 
+// GET /vendors/project-breakdown — vendors per project split by PO / WO
+vendorRouter.get('/project-breakdown', async (req, res) => {
+  try {
+    const cid = req.user.company_id;
+    const { project_id } = req.query;
+
+    const projectFilter = project_id ? `AND p.id = $2` : '';
+    const params = project_id ? [cid, project_id] : [cid];
+
+    const rows = await query(`
+      SELECT
+        p.id           AS project_id,
+        p.name         AS project_name,
+        p.project_code,
+        v.id           AS vendor_id,
+        v.name         AS vendor_name,
+        v.vendor_code,
+        v.vendor_type,
+        v.phone,
+        v.email,
+        'po'           AS source,
+        COUNT(DISTINCT po.id)::int        AS doc_count,
+        COALESCE(SUM(po.grand_total), 0)  AS total_value,
+        COALESCE((
+          SELECT SUM(i.total_amount)
+          FROM invoices i
+          WHERE i.vendor_id = v.id AND i.project_id = p.id
+            AND i.workflow_status = 'paid'
+        ), 0)          AS paid_value
+      FROM projects p
+      JOIN purchase_orders po ON po.project_id = p.id
+        AND po.status NOT IN ('rejected', 'cancelled', 'draft')
+      JOIN vendors v ON v.id = po.vendor_id
+      WHERE p.company_id = $1 ${projectFilter}
+      GROUP BY p.id, p.name, p.project_code, v.id, v.name, v.vendor_code, v.vendor_type, v.phone, v.email
+
+      UNION ALL
+
+      SELECT
+        p.id, p.name, p.project_code,
+        v.id, v.name, v.vendor_code, v.vendor_type, v.phone, v.email,
+        'wo',
+        COUNT(DISTINCT wo.id)::int        AS doc_count,
+        COALESCE(SUM(wo.total_value), 0)  AS total_value,
+        COALESCE((
+          SELECT SUM(b.net_payable)
+          FROM subcontractor_bills b
+          JOIN work_orders wo2 ON wo2.id = b.wo_id
+          WHERE wo2.vendor_id = v.id AND wo2.project_id = p.id
+            AND b.payment_date IS NOT NULL
+        ), 0)          AS paid_value
+      FROM projects p
+      JOIN work_orders wo ON wo.project_id = p.id
+        AND wo.status NOT IN ('rejected', 'terminated', 'cancelled')
+      JOIN vendors v ON v.id = wo.vendor_id
+      WHERE p.company_id = $1 ${projectFilter}
+      GROUP BY p.id, p.name, p.project_code, v.id, v.name, v.vendor_code, v.vendor_type, v.phone, v.email
+
+      ORDER BY project_name, source, vendor_name
+    `, params);
+
+    // Group into { project_id → { meta, po_vendors[], wo_vendors[] } }
+    const map = {};
+    for (const r of rows.rows) {
+      if (!map[r.project_id]) {
+        map[r.project_id] = {
+          project_id: r.project_id,
+          project_name: r.project_name,
+          project_code: r.project_code,
+          po_vendors: [],
+          wo_vendors: [],
+        };
+      }
+      const vendor = {
+        vendor_id:   r.vendor_id,
+        vendor_name: r.vendor_name,
+        vendor_code: r.vendor_code,
+        vendor_type: r.vendor_type,
+        phone:       r.phone,
+        email:       r.email,
+        doc_count:   r.doc_count,
+        total_value: parseFloat(r.total_value),
+        paid_value:  parseFloat(r.paid_value),
+      };
+      if (r.source === 'po') map[r.project_id].po_vendors.push(vendor);
+      else                   map[r.project_id].wo_vendors.push(vendor);
+    }
+
+    res.json({ data: Object.values(map) });
+  } catch (err) {
+    console.error('Vendor project breakdown error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST / — Create single vendor
 vendorRouter.post('/', authorize('super_admin', 'admin', 'procurement_manager'), async (req, res) => {
   try {

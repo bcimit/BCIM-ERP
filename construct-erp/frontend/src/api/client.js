@@ -406,6 +406,7 @@ export const vendorAPI = {
   mapToProject: (data)    => api.post('/vendors/project-map', data),
   unmapFromProject: (data)=> api.delete('/vendors/project-map', { data }),
   backfillProjectMap: ()  => api.post('/vendors/project-map/backfill'),
+  projectBreakdown: (params) => api.get('/vendors/project-breakdown', { params }),
 };
 
 export const poAPI = {
