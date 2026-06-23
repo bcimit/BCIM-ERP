@@ -16,6 +16,29 @@ const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractio
 const num = (v) => parseFloat(v || 0);
 const inp = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition';
 
+// Detect if a group has the standard 3-tier crane structure (Shift / Hourly / Day)
+function detectTiers(categories) {
+  const shiftCat = categories.find(c => /shift/i.test(c.unit));
+  const hrCat    = categories.find(c => /^hour/i.test(c.unit));
+  const dayCat   = categories.find(c => /^day/i.test(c.unit));
+  return shiftCat && hrCat && dayCat ? { shiftCat, hrCat, dayCat } : null;
+}
+
+// Apply tiered crane formula: ≤3 hrs→1 shift; >3&<8→1 shift+(hrs-3) hourly; ≥8→1 day
+function computeTieredQty(totalHrs) {
+  if (totalHrs <= 0) return { shift: 0, hr: 0, day: 0 };
+  if (totalHrs >= 8) {
+    const days = Math.floor(totalHrs / 8);
+    const rem  = +(totalHrs % 8).toFixed(2);
+    let shift = 0, hr = 0;
+    if (rem > 0 && rem <= 3) shift = 1;
+    else if (rem > 3) { shift = 1; hr = +(rem - 3).toFixed(2); }
+    return { shift, hr, day: days };
+  }
+  if (totalHrs > 3) return { shift: 1, hr: +(totalHrs - 3).toFixed(2), day: 0 };
+  return { shift: 1, hr: 0, day: 0 };
+}
+
 // ─── Add/Edit Entry Modal ───────────────────────────────────────────────────
 function EntryModal({ wo, equipmentGroups, onClose }) {
   const qc = useQueryClient();
@@ -23,9 +46,34 @@ function EntryModal({ wo, equipmentGroups, onClose }) {
   const [month, setMonth]     = useState('');
   const [date, setDate]       = useState(dayjs().format('YYYY-MM-DD'));
   const [hours, setHours]     = useState({}); // wo_item_id -> { invoice, certified }
+  const [groupHrs, setGroupHrs] = useState({}); // group name -> { invoice: '', certified: '' }
 
   const setHour = (itemId, field, value) =>
     setHours(prev => ({ ...prev, [itemId]: { ...prev[itemId], [field]: value } }));
+
+  // When user enters total hours for a tiered group, auto-distribute into categories
+  const applyTiered = (g, field, valStr) => {
+    setGroupHrs(prev => ({ ...prev, [g.equipment_group]: { ...prev[g.equipment_group], [field]: valStr } }));
+    const tiers = detectTiers(g.categories);
+    if (!tiers) return;
+    const { shiftCat, hrCat, dayCat } = tiers;
+    const totalHrs = parseFloat(valStr) || 0;
+    const qty = computeTieredQty(totalHrs);
+    setHours(prev => ({
+      ...prev,
+      [shiftCat.id]: { ...prev[shiftCat.id], [field]: qty.shift || '' },
+      [hrCat.id]:    { ...prev[hrCat.id],    [field]: qty.hr    || '' },
+      [dayCat.id]:   { ...prev[dayCat.id],   [field]: qty.day   || '' },
+    }));
+  };
+
+  // Compute preview billing amount for a tiered group
+  const groupBillingPreview = (g) => {
+    return g.categories.reduce((s, c) => {
+      const qty = num(hours[c.id]?.certified);
+      return qty > 0 ? s + qty * num(c.rate) : s;
+    }, 0);
+  };
 
   const saveMut = useMutation({
     mutationFn: () => hireLogAPI.addEntry(wo.id, {
@@ -45,7 +93,7 @@ function EntryModal({ wo, equipmentGroups, onClose }) {
   const handleSave = () => {
     if (!date) return toast.error('Bill date is required');
     const hasAny = Object.values(hours).some(h => num(h?.invoice) > 0 || num(h?.certified) > 0);
-    if (!hasAny) return toast.error('Enter at least one hour value');
+    if (!hasAny) return toast.error('Enter at least one value');
     saveMut.mutate();
   };
 
@@ -79,25 +127,68 @@ function EntryModal({ wo, equipmentGroups, onClose }) {
             </div>
           </div>
 
-          {equipmentGroups.map(g => (
-            <div key={g.equipment_group}>
-              <p className="text-xs font-bold text-indigo-700 mb-2">{g.equipment_group}</p>
-              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${g.categories.length}, 1fr)` }}>
-                {g.categories.map(c => (
-                  <div key={c.id} className="border border-slate-200 rounded-lg p-2">
-                    <p className="text-[10px] font-semibold text-slate-600 mb-1.5 leading-tight">{c.usage_category}</p>
-                    <p className="text-[9px] text-slate-400 mb-1.5">₹{num(c.rate).toLocaleString('en-IN')}/{c.unit}</p>
-                    <label className="block text-[9px] text-slate-400">Invoice</label>
-                    <input type="number" step="0.01" className={clsx(inp, 'mb-1')}
-                      value={hours[c.id]?.invoice || ''} onChange={e => setHour(c.id, 'invoice', e.target.value)} />
-                    <label className="block text-[9px] text-slate-400">Certified</label>
-                    <input type="number" step="0.01" className={inp}
-                      value={hours[c.id]?.certified || ''} onChange={e => setHour(c.id, 'certified', e.target.value)} />
+          {equipmentGroups.map(g => {
+            const tiers = detectTiers(g.categories);
+            const preview = groupBillingPreview(g);
+            return (
+              <div key={g.equipment_group}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold text-indigo-700">{g.equipment_group}</p>
+                  {preview > 0 && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      Bill: {fmt(preview)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Tiered auto-compute row for crane/hydra equipment */}
+                {tiers && (
+                  <div className="mb-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                    <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-2">
+                      Tiered Rate — Enter Total Deployed Hours (auto-splits Shift / Hourly / Day)
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-1">Invoice Total Hours</label>
+                        <input type="number" step="0.5" min="0" className={inp}
+                          value={groupHrs[g.equipment_group]?.invoice || ''}
+                          onChange={e => applyTiered(g, 'invoice', e.target.value)}
+                          placeholder="e.g. 5.5" />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-1">Certified Total Hours</label>
+                        <input type="number" step="0.5" min="0" className={inp}
+                          value={groupHrs[g.equipment_group]?.certified || ''}
+                          onChange={e => applyTiered(g, 'certified', e.target.value)}
+                          placeholder="e.g. 5.5" />
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-indigo-400 mt-1.5">
+                      ≤3 hrs → 1 Shift (₹{num(tiers.shiftCat.rate).toLocaleString('en-IN')}) &nbsp;·&nbsp;
+                      &gt;3 hrs → Shift + extra hrs×₹{num(tiers.hrCat.rate).toLocaleString('en-IN')} &nbsp;·&nbsp;
+                      ≥8 hrs → 1 Day (₹{num(tiers.dayCat.rate).toLocaleString('en-IN')})
+                    </p>
                   </div>
-                ))}
+                )}
+
+                {/* Per-category breakdown (editable override) */}
+                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${g.categories.length}, 1fr)` }}>
+                  {g.categories.map(c => (
+                    <div key={c.id} className="border border-slate-200 rounded-lg p-2">
+                      <p className="text-[10px] font-semibold text-slate-600 mb-1 leading-tight">{c.usage_category}</p>
+                      <p className="text-[9px] text-indigo-500 font-bold mb-1.5">₹{num(c.rate).toLocaleString('en-IN')} / {c.unit}</p>
+                      <label className="block text-[9px] text-slate-400">Invoice ({c.unit})</label>
+                      <input type="number" step="0.01" className={clsx(inp, 'mb-1')}
+                        value={hours[c.id]?.invoice || ''} onChange={e => setHour(c.id, 'invoice', e.target.value)} />
+                      <label className="block text-[9px] text-slate-400">Certified ({c.unit})</label>
+                      <input type="number" step="0.01" className={inp}
+                        value={hours[c.id]?.certified || ''} onChange={e => setHour(c.id, 'certified', e.target.value)} />
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t bg-slate-50/60">
@@ -130,13 +221,13 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
               <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">Bill No.</th>
               <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">Month</th>
               <th rowSpan={2} className="px-2 py-2 text-left font-bold text-slate-500 border-r border-slate-200">Date</th>
-              <th colSpan={cats.length} className="px-2 py-1.5 text-center font-bold text-slate-500 border-r border-b border-slate-200 bg-blue-50/60">Invoice Hours</th>
-              <th colSpan={cats.length} className="px-2 py-1.5 text-center font-bold text-slate-500 border-b border-slate-200 bg-emerald-50/60">Certified Hours</th>
+              <th colSpan={cats.length} className="px-2 py-1.5 text-center font-bold text-slate-500 border-r border-b border-slate-200 bg-blue-50/60">Invoiced Qty (per unit)</th>
+              <th colSpan={cats.length} className="px-2 py-1.5 text-center font-bold text-slate-500 border-b border-slate-200 bg-emerald-50/60">Certified Qty (per unit)</th>
               <th rowSpan={2} className="px-2 py-2 text-center font-bold text-slate-500">Action</th>
             </tr>
             <tr className="bg-slate-50">
-              {cats.map(c => <th key={`inv-${c.id}`} className="px-2 py-1.5 text-right font-medium text-slate-400 border-r border-slate-100 whitespace-nowrap bg-blue-50/30">{c.usage_category}</th>)}
-              {cats.map(c => <th key={`cert-${c.id}`} className="px-2 py-1.5 text-right font-medium text-slate-400 border-r border-slate-100 whitespace-nowrap bg-emerald-50/30">{c.usage_category}</th>)}
+              {cats.map(c => <th key={`inv-${c.id}`} className="px-2 py-1.5 text-right font-medium text-slate-400 border-r border-slate-100 whitespace-nowrap bg-blue-50/30">{c.usage_category} <span className="text-slate-300">({c.unit})</span></th>)}
+              {cats.map(c => <th key={`cert-${c.id}`} className="px-2 py-1.5 text-right font-medium text-slate-400 border-r border-slate-100 whitespace-nowrap bg-emerald-50/30">{c.usage_category} <span className="text-slate-300">({c.unit})</span></th>)}
             </tr>
           </thead>
           <tbody>
@@ -178,7 +269,7 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
             )}
             {/* Totals row */}
             <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
-              <td colSpan={4} className="px-2 py-2 text-right text-slate-600 uppercase text-[10px] tracking-wider border-r border-slate-200">Total Hours</td>
+              <td colSpan={4} className="px-2 py-2 text-right text-slate-600 uppercase text-[10px] tracking-wider border-r border-slate-200">Total Qty</td>
               {cats.map(c => (
                 <td key={`tinv-${c.id}`} className="px-2 py-2 text-right text-slate-500 border-r border-slate-100">
                   {num(totals[c.id]?.invoice_hours).toFixed(2)}
@@ -189,6 +280,21 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
                   {num(totals[c.id]?.certified_hours).toFixed(2)}
                 </td>
               ))}
+              <td />
+            </tr>
+            {/* Billing amount totals row */}
+            <tr className="border-t border-slate-200 bg-indigo-50/40">
+              <td colSpan={4} className="px-2 py-2 text-right text-indigo-700 uppercase text-[10px] font-bold tracking-wider border-r border-slate-200">Certified Bill (cert×rate)</td>
+              {cats.map(c => <td key={`binv-${c.id}`} className="border-r border-slate-100" />)}
+              {cats.map(c => {
+                const certQty = num(totals[c.id]?.certified_hours);
+                const certAmt = certQty * num(c.rate);
+                return (
+                  <td key={`bcert-${c.id}`} className="px-2 py-2 text-right text-indigo-700 font-bold text-[10px] border-r border-slate-100">
+                    {certQty > 0 ? fmt(certAmt) : '—'}
+                  </td>
+                );
+              })}
               <td />
             </tr>
           </tbody>
