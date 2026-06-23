@@ -139,6 +139,7 @@ const ocrRoutes                   = require('./routes/ocr.routes');
 const pettyCashRoutes             = require('./routes/petty-cash.routes');
 const automationIdeasRoutes       = require('./routes/automation-ideas.routes');
 const approvalEngineRoutes        = require('./routes/approval-engine.routes');
+const ewayBillRoutes              = require('./routes/ewayBill.routes');
 
 const http   = require('http');
 const { Server: SocketIO } = require('socket.io');
@@ -451,6 +452,7 @@ app.use(`${API}/gfc`,                 gfcRoutes);
 app.use(`${API}/subcontractor-mgmt`,  subMgmtRoutes);
 app.use(`${API}/bid-opportunities`,   bidRouter);
 app.use(`${API}/retention-releases`,  retentionRoutes);
+app.use(`${API}/eway-bills`,          ewayBillRoutes);
 
 // User / Team Management
 app.use(`${API}/users`, usersRoutes);

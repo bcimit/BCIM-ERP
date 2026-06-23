@@ -1034,6 +1034,13 @@ export const rentalInvoiceAPI = {
   createInvoice: (d)      => api.post('/hire-rental/rental/invoices-v2', d),
 };
 
+export const ewayBillAPI = {
+  list:   (params) => api.get('/eway-bills', { params }),
+  get:    (id)     => api.get(`/eway-bills/${id}`),
+  create: (data)   => api.post('/eway-bills', data),
+  cancel: (id)     => api.patch(`/eway-bills/${id}/cancel`),
+};
+
 export const itAssetAPI = {
   list:            (params)    => api.get('/it-assets', { params }),
   get:             (id)        => api.get(`/it-assets/${id}`),
