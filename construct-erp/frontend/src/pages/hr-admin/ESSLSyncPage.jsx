@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Fingerprint, Server, CheckCircle, XCircle, RefreshCw,
-  Settings, Eye, Download, AlertTriangle, Clock, Users, Wifi, WifiOff
+  Settings, Eye, Download, AlertTriangle, Clock, Users, Wifi, WifiOff,
+  Key, Copy, MonitorDot, Terminal, CheckCheck
 } from 'lucide-react';
 import { hrEsslAPI } from '../../api/client';
 import toast from 'react-hot-toast';
@@ -341,9 +342,165 @@ function UnmatchedPanel() {
   );
 }
 
+// ── Agent Mode Setup Panel ────────────────────────────────────────────────────
+function AgentSetupPanel() {
+  const [copied, setCopied] = useState(null);
+
+  const { data: agentData, isLoading, refetch } = useQuery({
+    queryKey: ['essl-agent-key'],
+    queryFn:  () => hrEsslAPI.agentKey().then(r => r.data?.data ?? r.data),
+  });
+
+  const copy = (text, label) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(label);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const CodeLine = ({ label, value }) => (
+    <div className="flex items-center gap-2 bg-gray-900 rounded-xl px-4 py-3">
+      <span className="text-gray-400 text-xs font-mono flex-1 break-all select-all">{value}</span>
+      <button onClick={() => copy(value, label)}
+        className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors">
+        {copied === label ? <CheckCheck size={14} className="text-emerald-400"/> : <Copy size={14}/>}
+      </button>
+    </div>
+  );
+
+  const STEPS = [
+    {
+      num: '01', title: 'Install Node.js on HRADMIN',
+      desc: 'Download and install Node.js LTS from nodejs.org on the HRADMIN Windows machine (192.168.1.26).',
+    },
+    {
+      num: '02', title: 'Copy the agent folder',
+      desc: 'Copy the essl-agent folder from the ERP project to C:\\essl-agent\\ on the HRADMIN machine.',
+    },
+    {
+      num: '03', title: 'Create config.json',
+      desc: 'Inside C:\\essl-agent\\, copy config.example.json → config.json. Fill in the SQL password and paste your API Key and Company ID below.',
+    },
+    {
+      num: '04', title: 'Install dependencies',
+      desc: 'Open Command Prompt in C:\\essl-agent\\ and run:',
+      code: 'npm install',
+    },
+    {
+      num: '05', title: 'Test run',
+      desc: 'Run a manual test sync for the past 1 day:',
+      code: 'node sync.js --days 1',
+    },
+    {
+      num: '06', title: 'Schedule via Windows Task Scheduler',
+      desc: 'Open Task Scheduler → Create Basic Task → Daily at 23:00 → Action: Start a program → Program: C:\\essl-agent\\run-sync.bat',
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {/* Why agent mode banner */}
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+        <div className="flex items-center gap-2 mb-2">
+          <MonitorDot className="w-4 h-4 text-amber-600"/>
+          <p className="font-bold text-amber-800 text-sm">Why Agent Mode?</p>
+        </div>
+        <p className="text-amber-700 text-sm leading-relaxed">
+          The ESSL SQL Server at <strong>192.168.1.26 (HRADMIN)</strong> is on your office LAN — the cloud ERP server cannot
+          reach it directly. The local agent runs on HRADMIN, reads ESSL data locally with no network issues,
+          and securely pushes attendance to the cloud ERP using an API key.
+        </p>
+      </div>
+
+      {/* API key card */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4" style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+        <div className="flex items-center gap-2">
+          <Key className="w-5 h-5 text-blue-500"/>
+          <h2 className="text-gray-900 font-black">Agent Credentials</h2>
+          <span className="text-xs text-gray-400">— paste these into config.json on HRADMIN</span>
+        </div>
+
+        {isLoading && (
+          <div className="flex items-center gap-2 text-gray-400 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin"/> Loading API key…
+          </div>
+        )}
+
+        {agentData && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wide block mb-1.5">API Key</label>
+              <CodeLine label="api_key" value={agentData.api_key}/>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Company ID</label>
+              <CodeLine label="company_id" value={String(agentData.company_id)}/>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wide block mb-1.5">Push URL (already set in config.example.json)</label>
+              <CodeLine label="push_url" value={agentData.push_url}/>
+            </div>
+            <button onClick={() => refetch()}
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-xl">
+              <RefreshCw className="w-3.5 h-3.5"/> Regenerate Key
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Setup steps */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4" style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+        <div className="flex items-center gap-2">
+          <Terminal className="w-5 h-5 text-violet-500"/>
+          <h2 className="text-gray-900 font-black">Setup Instructions</h2>
+        </div>
+
+        <div className="space-y-4">
+          {STEPS.map(step => (
+            <div key={step.num} className="flex gap-4">
+              <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white"
+                style={{background:'linear-gradient(135deg,#0A1F5C,#2563EB)'}}>
+                {step.num}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-900 text-sm">{step.title}</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{step.desc}</p>
+                {step.code && (
+                  <div className="mt-2">
+                    <CodeLine label={step.code} value={step.code}/>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800 mt-2">
+          <p className="font-bold mb-1">📋 config.json fields to fill:</p>
+          <pre className="text-xs text-blue-700 whitespace-pre-wrap">{`{
+  "essl": {
+    "host":     "192.168.1.26",
+    "instance": "SQLEXPRESS",
+    "database": "etimetrackliteweb",
+    "username": "sa",
+    "password": "YOUR_SQL_PASSWORD"
+  },
+  "erp": {
+    "api_key":    "← paste API Key from above",
+    "company_id": ← paste Company ID from above
+  },
+  "sync_days": 1
+}`}</pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ESSLSyncPage() {
   const qc = useQueryClient();
   const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState('agent'); // 'direct' | 'agent'
 
   const { data: cfgData, refetch } = useQuery({
     queryKey:['essl-config'],
@@ -351,6 +508,11 @@ export default function ESSLSyncPage() {
   });
   const cfg = cfgData;
   const isConfigured = !!cfg?.host;
+
+  const TABS = [
+    { key: 'agent',  label: '🖥️ Agent Mode (Recommended)',  desc: 'Agent runs on HRADMIN, pushes to cloud' },
+    { key: 'direct', label: '🔌 Direct Mode',               desc: 'Cloud server connects to SQL Server directly' },
+  ];
 
   return (
     <div className="p-6 space-y-6 min-h-screen" style={{background:'#F8FAFC'}}>
@@ -369,47 +531,77 @@ export default function ESSLSyncPage() {
               <span className="text-white/60 text-sm font-semibold">HR & Admin</span>
             </div>
             <h1 className="text-2xl font-black text-white">ESSL Biometric Sync</h1>
-            <p className="text-white/55 text-sm mt-1">Pull attendance data from ESSL device via Microsoft SQL Server</p>
+            <p className="text-white/55 text-sm mt-1">Pull attendance data from ESSL biometric device into ERP</p>
           </div>
           <div className="flex items-center gap-3 self-start flex-wrap">
-            {isConfigured ? (
+            {isConfigured && activeTab === 'direct' ? (
               <div className="flex items-center gap-2 text-emerald-300 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-xl">
                 <Wifi className="w-4 h-4"/> {cfg.host} / {cfg.database}
               </div>
-            ) : (
+            ) : activeTab === 'direct' && (
               <div className="flex items-center gap-2 text-amber-300 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-xl">
                 <WifiOff className="w-4 h-4"/> Not configured
               </div>
             )}
-            <button onClick={()=>setShowSettings(v=>!v)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black hover:opacity-90"
-              style={{background:B.yellow,color:B.navy}}>
-              <Settings className="w-4 h-4"/>
-              {showSettings?'Hide Settings':'Connection Settings'}
-            </button>
+            {activeTab === 'direct' && (
+              <button onClick={()=>setShowSettings(v=>!v)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black hover:opacity-90"
+                style={{background:B.yellow,color:B.navy}}>
+                <Settings className="w-4 h-4"/>
+                {showSettings?'Hide Settings':'Connection Settings'}
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
 
-      {(showSettings||!isConfigured) && (
+      {/* Mode Tabs */}
+      <motion.div {...fade(0.06)} className="flex gap-2 flex-wrap">
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className={`flex-1 min-w-[180px] px-5 py-3 rounded-2xl text-left transition-all border ${
+              activeTab === t.key
+                ? 'bg-white border-blue-200 shadow-md'
+                : 'bg-gray-100 border-transparent hover:bg-white hover:border-gray-200'
+            }`}>
+            <p className={`font-bold text-sm ${activeTab === t.key ? 'text-blue-700' : 'text-gray-600'}`}>{t.label}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t.desc}</p>
+          </button>
+        ))}
+      </motion.div>
+
+      {/* Agent Mode */}
+      {activeTab === 'agent' && (
         <motion.div {...fade(0.08)}>
-          <ConnectionSettings existing={cfg} onSaved={()=>{ refetch(); setShowSettings(false); }}/>
+          <AgentSetupPanel/>
         </motion.div>
       )}
 
-      {isConfigured ? (
+      {/* Direct Mode */}
+      {activeTab === 'direct' && (
         <>
-          <motion.div {...fade(0.12)}><SyncPanel lastSync={cfg.last_sync}/></motion.div>
-          <motion.div {...fade(0.16)}><UnmatchedPanel/></motion.div>
+          {(showSettings||!isConfigured) && (
+            <motion.div {...fade(0.08)}>
+              <ConnectionSettings existing={cfg} onSaved={()=>{ refetch(); setShowSettings(false); }}/>
+            </motion.div>
+          )}
+
+          {isConfigured ? (
+            <>
+              <motion.div {...fade(0.12)}><SyncPanel lastSync={cfg.last_sync}/></motion.div>
+              <motion.div {...fade(0.16)}><UnmatchedPanel/></motion.div>
+            </>
+          ) : (
+            <motion.div {...fade(0.12)} className="bg-white rounded-2xl border border-gray-100 p-14 text-center"
+              style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+              <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                <Fingerprint className="w-7 h-7 text-gray-300"/>
+              </div>
+              <p className="text-gray-500 font-bold">Configure the SQL Server connection above to start syncing attendance.</p>
+              <p className="text-gray-400 text-xs mt-2">Note: Direct mode requires the ESSL SQL Server to be reachable from the cloud. If ESSL is on your office LAN, use Agent Mode instead.</p>
+            </motion.div>
+          )}
         </>
-      ) : (
-        <motion.div {...fade(0.12)} className="bg-white rounded-2xl border border-gray-100 p-14 text-center"
-          style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
-          <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <Fingerprint className="w-7 h-7 text-gray-300"/>
-          </div>
-          <p className="text-gray-500 font-bold">Configure the SQL Server connection above to start syncing attendance.</p>
-        </motion.div>
       )}
     </div>
   );

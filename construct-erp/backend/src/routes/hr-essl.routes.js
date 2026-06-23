@@ -28,6 +28,8 @@ async function initTable() {
       updated_at  TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // Add push_api_key column for local agent authentication
+  await query(`ALTER TABLE hr_essl_config ADD COLUMN IF NOT EXISTS push_api_key TEXT`);
 }
 runSchemaInit('hr-essl', initTable);
 
@@ -459,6 +461,98 @@ router.get('/unmatched', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   GET /hr-admin/essl/agent-key
+   Generate / return the push API key for the local sync agent
+══════════════════════════════════════════════════════════════ */
+router.get('/agent-key', async (req, res) => {
+  try {
+    // Auto-create a minimal config row if one doesn't exist yet (use placeholder values for NOT NULL cols)
+    await query(
+      `INSERT INTO hr_essl_config (company_id, host, database, username, password)
+       VALUES ($1,'pending','pending','pending','pending')
+       ON CONFLICT (company_id) DO NOTHING`,
+      [req.user.company_id]
+    );
+    const r = await query(`SELECT push_api_key FROM hr_essl_config WHERE company_id=$1`, [req.user.company_id]);
+    let key = r.rows[0]?.push_api_key;
+    if (!key) {
+      key = require('crypto').randomBytes(32).toString('hex');
+      await query(`UPDATE hr_essl_config SET push_api_key=$1 WHERE company_id=$2`, [key, req.user.company_id]);
+    }
+    res.json({ data: { api_key: key, company_id: req.user.company_id,
+      push_url: `${process.env.API_BASE_URL || 'https://erp.bcim.in'}/api/v1/hr-admin/essl/agent-push` } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   POST /hr-admin/essl/agent-push  (NO auth middleware — uses API key)
+   Receives attendance data pushed from the local Windows agent.
+   Body: { api_key, company_id, records: [{ emp_code, date, in_time, out_time, punch_count }] }
+══════════════════════════════════════════════════════════════ */
+router.post('/agent-push', async (req, res) => {
+  const { api_key, company_id, records = [] } = req.body;
+  if (!api_key || !company_id) return res.status(400).json({ error: 'api_key and company_id required' });
+
+  try {
+    // Validate API key
+    const cfgRow = await query(
+      `SELECT * FROM hr_essl_config WHERE company_id=$1 AND push_api_key=$2`,
+      [company_id, api_key]
+    );
+    if (!cfgRow.rows.length) return res.status(401).json({ error: 'Invalid API key' });
+
+    // Load ERP employee map
+    const erpEmps = await query(
+      `SELECT u.id, u.employee_code FROM users u
+       JOIN employee_profiles ep ON ep.user_id = u.id
+       WHERE u.company_id=$1 AND u.is_active=true`,
+      [company_id]
+    );
+    const empMap = {};
+    erpEmps.rows.forEach(r => { empMap[String(r.employee_code).trim().toLowerCase()] = r.id; });
+
+    const results = { synced: 0, skipped: 0, not_found: [], errors: [] };
+
+    for (const rec of records) {
+      const code   = String(rec.emp_code || '').trim().toLowerCase();
+      const userId = empMap[code];
+      if (!userId) { results.not_found.push(rec.emp_code); results.skipped++; continue; }
+
+      const inTime  = rec.in_time  || null;
+      const outTime = rec.out_time || null;
+      const hasIn   = !!inTime;
+      const hasOut  = !!outTime && outTime !== inTime;
+      const status  = resolveStatus(hasIn, hasOut);
+
+      let lateMin = 0;
+      if (inTime) {
+        const [h, m] = inTime.split(':').map(Number);
+        const arrMins = h * 60 + m;
+        if (arrMins > 9 * 60 + 30) lateMin = arrMins - (9 * 60 + 30);
+      }
+
+      try {
+        await query(
+          `INSERT INTO hr_attendance
+             (user_id, company_id, attendance_date, status, in_time, out_time, late_minutes, source)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'essl_agent')
+           ON CONFLICT (user_id, attendance_date) DO UPDATE
+             SET status=$4,
+                 in_time=COALESCE($5, hr_attendance.in_time),
+                 out_time=COALESCE($6, hr_attendance.out_time),
+                 late_minutes=$7, source='essl_agent'`,
+          [userId, company_id, rec.date, status, inTime, outTime, lateMin]
+        );
+        results.synced++;
+      } catch (e2) { results.errors.push({ emp: rec.emp_code, date: rec.date, error: e2.message }); }
+    }
+
+    await query(`UPDATE hr_essl_config SET last_sync=NOW() WHERE company_id=$1`, [company_id]);
+    res.json({ success: true, ...results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

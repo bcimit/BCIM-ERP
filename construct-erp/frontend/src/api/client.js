@@ -1841,6 +1841,7 @@ export const hrEsslAPI = {
   preview:        (from, to)   => api.get('/hr-admin/essl/preview', { params: { from, to } }),
   sync:           (from, to)   => api.post('/hr-admin/essl/sync', { from, to }),
   unmatched:      ()           => api.get('/hr-admin/essl/unmatched'),
+  agentKey:       ()           => api.get('/hr-admin/essl/agent-key'),
 };
 
 const multipart = { headers: { 'Content-Type': undefined } };

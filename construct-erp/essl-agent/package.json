@@ -1,0 +1,14 @@
+{
+  "name": "essl-sync-agent",
+  "version": "1.0.0",
+  "description": "BCIM CONSTRUCT-ERP — ESSL biometric attendance sync agent",
+  "main": "sync.js",
+  "scripts": {
+    "start": "node sync.js",
+    "sync": "node sync.js",
+    "backfill": "node sync.js --days 30"
+  },
+  "dependencies": {
+    "mssql": "^10.0.4"
+  }
+}

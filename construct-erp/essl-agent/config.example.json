@@ -1,0 +1,26 @@
+{
+  "_comment": "Copy this file to config.json and fill in your details.",
+
+  "essl": {
+    "host":     "192.168.1.26",
+    "instance": "SQLEXPRESS",
+    "port":     1433,
+    "database": "etimetrackliteweb",
+    "username": "sa",
+    "password":  "YourSQLPassword"
+  },
+
+  "erp": {
+    "push_url":   "https://erp.bcim.in/api/v1/hr-admin/essl/agent-push",
+    "api_key":    "PASTE_YOUR_API_KEY_HERE",
+    "company_id": 1
+  },
+
+  "sync_days": 1,
+
+  "_notes": [
+    "sync_days: how many past days to sync on each run (1 = today only, 7 = last 7 days).",
+    "Run 'node sync.js --days 30' once for a historical backfill.",
+    "Get your api_key from the ERP: HR & Admin → ESSL Sync → Agent Setup tab."
+  ]
+}
