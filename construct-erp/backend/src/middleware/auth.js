@@ -2,6 +2,20 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
 
+// "MD" and "Managing Director" are the same role typed differently by different
+// admins over time. Canonicalize to 'managing_director' here, once, so every
+// downstream role check (whether it lists 'md', 'managing_director', or both)
+// agrees — instead of relying on every route file's allowlist staying in sync.
+const ROLE_ALIASES = {
+  md: 'managing_director',
+  'managing director': 'managing_director',
+  managingdirector: 'managing_director',
+};
+const canonicalizeRole = (role) => {
+  const key = String(role || '').trim().toLowerCase();
+  return ROLE_ALIASES[key] || role;
+};
+
 // Verify JWT token
 const authenticate = async (req, res, next) => {
   try {
@@ -23,6 +37,7 @@ const authenticate = async (req, res, next) => {
     if (!result.rows[0].is_active) return res.status(401).json({ error: 'Account deactivated.' });
 
     req.user = result.rows[0];
+    req.user.role = canonicalizeRole(req.user.role);
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -78,4 +93,4 @@ const projectAccess = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticate, authorize, projectAccess };
+module.exports = { authenticate, authorize, projectAccess, canonicalizeRole };

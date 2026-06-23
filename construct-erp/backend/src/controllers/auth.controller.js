@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { query, withTransaction } = require('../config/database');
 const { sendPasswordResetMail } = require('../services/mail.service');
+const { canonicalizeRole } = require('../middleware/auth');
 
 // Generate tokens
 const generateTokens = (user) => {
@@ -118,6 +119,7 @@ const normalizedEmail = (email || '').trim().toLowerCase();
     const user = result.rows[0];
     if (!user) return res.status(401).json({ error: 'Invalid email or password.' });
     if (!user.is_active) return res.status(401).json({ error: 'Account deactivated.' });
+    user.role = canonicalizeRole(user.role);
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(401).json({ error: 'Invalid email or password.' });
@@ -183,6 +185,7 @@ const refreshToken = async (req, res) => {
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
     const user = await query('SELECT * FROM users WHERE id = $1', [decoded.id]);
+    user.rows[0].role = canonicalizeRole(user.rows[0].role);
     const tokens = generateTokens(user.rows[0]);
 
     // Rotate — carry login_at forward so the 8h clock is never reset

@@ -23,6 +23,7 @@ dayjs.extend(relativeTime);
 const ROLES = [
   { value: 'super_admin',           label: 'Super Admin',            color: '#4F46E5', bg: '#EEF2FF', border: '#C7D2FE' },
   { value: 'admin',                 label: 'Admin',                  color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  { value: 'managing_director',     label: 'Managing Director (MD)', color: '#9333EA', bg: '#FAF5FF', border: '#E9D5FF' },
   { value: 'management',            label: 'Management',             color: '#9333EA', bg: '#FAF5FF', border: '#E9D5FF' },
   { value: 'project_head',          label: 'Project Head',           color: '#15803D', bg: '#F0FDF4', border: '#BBF7D0' },
   { value: 'project_manager',       label: 'Project Manager',        color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' },
