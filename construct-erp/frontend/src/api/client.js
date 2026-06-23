@@ -1252,6 +1252,7 @@ export const reportAPI = {
   projectPL:     (params) => api.get('/reports/project-pl', { params }),
   arAging:       (params) => api.get('/reports/ar-aging', { params }),
   apAging:       (params) => api.get('/reports/ap-aging', { params }),
+  procurementStoresSummary: (params) => api.get('/reports/accounts/procurement-stores-summary', { params }),
 };
 
 export const uploadAPI = {

@@ -23,6 +23,27 @@ const router = express.Router();
 router.use(authenticate);
 router.use(loadProjectScope);
 
+// If this bill formalizes a GRN that already got a provisional "goods received,
+// not invoiced" JV (posted at QC approval before any bill existed), the bill's
+// JV must clear that liability (2010) instead of re-booking the expense — else
+// the same goods cost is counted twice. Returns null when no provisional JV
+// applies, so the caller falls back to its normal expense code.
+async function resolveGrinClearingCode(companyId, grnId) {
+  if (!grnId) return null;
+  try {
+    const grnRow = await query(`SELECT grn_number FROM grn WHERE id = $1`, [grnId]);
+    const grnNumber = grnRow.rows[0]?.grn_number;
+    if (!grnNumber) return null;
+    const je = await query(
+      `SELECT 1 FROM journal_entries WHERE company_id = $1 AND source = 'auto_grn_provisional' AND reference = $2 LIMIT 1`,
+      [companyId, grnNumber]
+    );
+    return je.rows.length ? '2010' : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 const STAGE_DEPT_RULES = {
   stores:           ['store'],
   document_control: ['document controller', 'document', 'controller', 'doc'],
@@ -3179,7 +3200,7 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
     // Fetch bill base amounts for certified_net calculation
     const billRes = await query(
       `SELECT b.sl_number, b.bill_type, b.basic_amount, b.gst_amount, b.total_amount,
-              b.vendor_id, b.vendor_name, b.wo_number, b.po_number, b.project_id
+              b.vendor_id, b.vendor_name, b.wo_number, b.po_number, b.project_id, b.grn_id
        FROM tqs_bills b WHERE b.id = $1`,
       [req.params.id]
     );
@@ -3286,7 +3307,8 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
       const retention   = n(retention_money);
       const apCredit    = total - tds - retention; // advance & other deductions settle via subledger/payment
       const isWO        = (bill.bill_type === 'wo') || (!!bill.wo_number && !bill.po_number);
-      const expenseCode = isWO ? '5100' : '5000';
+      const grinCode    = await resolveGrinClearingCode(req.user.company_id, bill.grn_id);
+      const expenseCode = grinCode || (isWO ? '5100' : '5000');
       const ref         = bill.sl_number || req.params.id;
 
       if (total > 0) {
@@ -3296,8 +3318,9 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
           [req.user.company_id, ref]
         ).catch(() => {});
 
+        const expenseLabel = grinCode ? 'GRIN clearing' : (isWO ? 'Subcontractor' : 'Material');
         const lines = [
-          { code: expenseCode, debit: expenseBase, description: `${isWO ? 'Subcontractor' : 'Material'} — ${bill.vendor_name || ''} ${ref}` },
+          { code: expenseCode, debit: expenseBase, description: `${expenseLabel} — ${bill.vendor_name || ''} ${ref}` },
         ];
         if (gst > 0)       lines.push({ code: '1300', debit: gst, description: `Input GST / ITC — ${ref}` });
         lines.push({ code: '2000', credit: apCredit, description: `Payable to ${bill.vendor_name || 'vendor'} — ${ref}` });
@@ -3963,7 +3986,7 @@ router.post('/backfill-jv', async (req, res) => {
 
     const candidates = await query(`
       SELECT b.id, b.sl_number, b.bill_type, b.total_amount, b.gst_amount,
-             b.vendor_name, b.wo_number, b.po_number,
+             b.vendor_name, b.wo_number, b.po_number, b.grn_id,
              COALESCE(u.tds_deduction, 0)   AS tds_deduction,
              COALESCE(u.retention_money, 0) AS retention_money,
              COALESCE(u.accts_jv_date, u.qs_certified_date, b.received_date, b.inv_date, CURRENT_DATE) AS jv_date
@@ -3997,11 +4020,13 @@ router.post('/backfill-jv', async (req, res) => {
       const retention   = nn(bill.retention_money);
       const apCredit    = total - tds - retention;
       const isWO        = (bill.bill_type === 'wo') || (!!bill.wo_number && !bill.po_number);
-      const expenseCode = isWO ? '5100' : '5000';
+      const grinCode    = await resolveGrinClearingCode(company_id, bill.grn_id);
+      const expenseCode = grinCode || (isWO ? '5100' : '5000');
       const ref         = bill.sl_number;
 
+      const expenseLabel = grinCode ? 'GRIN clearing' : (isWO ? 'Subcontractor' : 'Material');
       const lines = [
-        { code: expenseCode, debit: expenseBase, description: `${isWO ? 'Subcontractor' : 'Material'} — ${bill.vendor_name || ''} ${ref}` },
+        { code: expenseCode, debit: expenseBase, description: `${expenseLabel} — ${bill.vendor_name || ''} ${ref}` },
       ];
       if (gst > 0)       lines.push({ code: '1300', debit: gst, description: `Input GST / ITC — ${ref}` });
       lines.push({ code: '2000', credit: apCredit, description: `Payable to ${bill.vendor_name || 'vendor'} — ${ref}` });

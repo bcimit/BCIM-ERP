@@ -147,6 +147,7 @@ const navGroups = [
     // ── Purchase ─────────────────────────────────────────────────────────────
     { to: '/accounts/purchases/expenses',               icon: Wallet,          label: 'Expenses' },
     { to: '/accounts/purchases/purchase-orders',        icon: ShoppingCart,    label: 'Purchase Orders' },
+    { to: '/accounts/purchases/procurement-stores',     icon: Truck,           label: 'Procurement & Stores' },
     { to: '/accounts/purchases/bills',                  icon: FileText,        label: 'Bills' },
     { to: '/accounts/purchases/bills/booking',          icon: ClipboardList,   label: 'Bill Booking' },
     { to: '/accounts/purchases/recurring-bills',        icon: ScrollText,      label: 'Recurring Bills' },
@@ -420,7 +421,7 @@ const NAV_SECTIONS = {
     { label: 'Banking',     paths: ['/accounts/banking/accounts','/accounts/banking/bank-rules','/accounts/banking/reconciliation','/accounts/banking/cash-flow','/accounts/banking/cheque-tracker','/accounts/banking/petty-cash'] },
     { label: 'Items',       paths: ['/accounts/items'] },
     { label: 'Sales',       paths: ['/accounts/sales/customers','/accounts/sales/estimates','/accounts/sales/invoices','/accounts/sales/recurring-invoices','/accounts/sales/proforma-invoices','/accounts/sales/customer-payments','/accounts/sales/credit-notes','/accounts/sales/delivery-challans','/accounts/sales/statements'] },
-    { label: 'Purchase',    paths: ['/accounts/purchases/vendors','/accounts/purchases/expenses','/accounts/purchases/purchase-orders','/accounts/purchases/bills','/accounts/purchases/bills/booking','/accounts/purchases/recurring-bills','/accounts/purchases/payments-made','/accounts/purchases/vendor-credits','/accounts/purchases/payment-run'] },
+    { label: 'Purchase',    paths: ['/accounts/purchases/vendors','/accounts/purchases/expenses','/accounts/purchases/purchase-orders','/accounts/purchases/procurement-stores','/accounts/purchases/bills','/accounts/purchases/bills/booking','/accounts/purchases/recurring-bills','/accounts/purchases/payments-made','/accounts/purchases/vendor-credits','/accounts/purchases/payment-run'] },
     { label: 'Accountant',  paths: ['/accounts/accountant/chart-of-accounts','/accounts/accountant/journal-entries','/accounts/accountant/transactions','/accounts/accountant/opening-balances','/accounts/accountant/bill-automation'] },
     { label: 'Reports',     paths: ['/accounts/reports/profit-loss','/accounts/reports/balance-sheet','/accounts/reports/trial-balance','/accounts/reports/cash-flow-statement','/accounts/reports/ar-aging','/accounts/reports/sales-by-customer','/accounts/reports/sales-by-item','/accounts/reports/ap-aging','/accounts/reports/purchase-by-vendor','/accounts/reports/expense-report','/accounts/reports/general-ledger','/accounts/reports/day-book','/accounts/reports/journal-report','/accounts/reports/financial','/accounts/reports/billing','/accounts/reports/management-mis','/accounts/reports/control-dashboard','/accounts/reports/budget'] },
     { label: 'Taxes',       paths: ['/accounts/taxes/gst','/accounts/taxes/gstr1','/accounts/taxes/gstr3b','/accounts/taxes/tds','/accounts/taxes/eway-bills','/accounts/taxes/summary'] },

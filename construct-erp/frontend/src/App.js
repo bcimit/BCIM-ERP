@@ -82,6 +82,7 @@ const EstimatesPage           = lazy(() => import('./pages/accounts/EstimatesPag
 const RecurringInvoicesPage   = lazy(() => import('./pages/accounts/RecurringInvoicesPage'));
 const DeliveryChallansPage    = lazy(() => import('./pages/accounts/DeliveryChallansPage'));
 const AccountExpensesPage     = lazy(() => import('./pages/accounts/AccountExpensesPage'));
+const ProcurementStoresPage   = lazy(() => import('./pages/accounts/ProcurementStoresPage'));
 const RecurringBillsPage      = lazy(() => import('./pages/accounts/RecurringBillsPage'));
 const OpeningBalancesPage     = lazy(() => import('./pages/accounts/OpeningBalancesPage'));
 const EWayBillsPage           = lazy(() => import('./pages/accounts/EWayBillsPage'));
@@ -623,6 +624,7 @@ export default function App() {
                 {/* Purchases (new) */}
                 <Route path="accounts/purchases/expenses" element={<RequireModule module="Finance"><AccountExpensesPage /></RequireModule>} />
                 <Route path="accounts/purchases/purchase-orders" element={<Navigate to="/procurement/po" replace />} />
+                <Route path="accounts/purchases/procurement-stores" element={<RequireModule module="Finance"><ProcurementStoresPage /></RequireModule>} />
                 <Route path="accounts/purchases/recurring-bills" element={<RequireModule module="Finance"><RecurringBillsPage /></RequireModule>} />
                 <Route path="accounts/purchases/vendor-credits" element={<RequireModule module="Finance"><DebitNotesPage /></RequireModule>} />
                 {/* Accountant (new) */}

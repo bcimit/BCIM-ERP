@@ -2471,4 +2471,67 @@ router.get('/stock-report', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Accounts ⇄ Procurement & Stores live summary ──────────────────────────────
+// Read-only view inside the Accounts module showing operational PO/GRN detail
+// alongside the GL impact already posted (GRIN clearing, AP), so accountants
+// don't have to leave Accounts to see what's driving the numbers.
+router.get('/accounts/procurement-stores-summary', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const params = [req.user.company_id];
+    const poConditions = ['p.company_id = $1'];
+    applyProjectScope(req, poConditions, params, 'p', project_id);
+
+    const [poKpi, grinBalance, stockValue, recentGrns, recentPos] = await Promise.all([
+      query(`
+        SELECT
+          COUNT(*) FILTER (WHERE po.status NOT IN ('rejected','cancelled'))                       AS open_po_count,
+          COALESCE(SUM(po.grand_total) FILTER (WHERE po.status NOT IN ('rejected','cancelled')),0) AS open_po_value
+        FROM purchase_orders po
+        JOIN projects p ON p.id = po.project_id
+        WHERE ${poConditions.join(' AND ')}
+      `, params),
+      query(`
+        SELECT COALESCE(SUM(jel.credit) - SUM(jel.debit), 0) AS grin_outstanding
+        FROM journal_entry_lines jel
+        JOIN journal_entries je ON je.id = jel.journal_entry_id
+        JOIN chart_of_accounts coa ON coa.id = jel.account_id
+        WHERE je.company_id = $1 AND je.status = 'posted' AND coa.code = '2010'
+      `, [req.user.company_id]),
+      query(`
+        SELECT COALESCE(SUM(i.closing_stock * COALESCE(i.unit_rate,0)), 0) AS stock_value
+        FROM inventory i JOIN projects p ON p.id = i.project_id
+        WHERE p.company_id = $1
+      `, [req.user.company_id]),
+      query(`
+        SELECT g.grn_number, g.grn_date, g.quality_status, v.name AS vendor_name, p.name AS project_name,
+               COALESCE((SELECT SUM(gi.quantity_received * COALESCE(gi.rate,0)) FROM grn_items gi WHERE gi.grn_id = g.id), 0) AS value
+        FROM grn g
+        JOIN projects p ON p.id = g.project_id
+        LEFT JOIN vendors v ON v.id = g.vendor_id
+        WHERE p.company_id = $1
+        ORDER BY g.created_at DESC LIMIT 8
+      `, [req.user.company_id]),
+      query(`
+        SELECT po.serial_no_formatted AS po_number, po.po_date, po.status, po.grand_total,
+               v.name AS vendor_name, p.name AS project_name
+        FROM purchase_orders po
+        JOIN projects p ON p.id = po.project_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        WHERE p.company_id = $1
+        ORDER BY po.created_at DESC LIMIT 8
+      `, [req.user.company_id]),
+    ]);
+
+    res.json({
+      open_po_count:    parseInt(poKpi.rows[0]?.open_po_count || 0),
+      open_po_value:    parseFloat(poKpi.rows[0]?.open_po_value || 0),
+      grin_outstanding: parseFloat(grinBalance.rows[0]?.grin_outstanding || 0),
+      stock_value:      parseFloat(stockValue.rows[0]?.stock_value || 0),
+      recent_grns:      recentGrns.rows,
+      recent_pos:       recentPos.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

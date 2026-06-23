@@ -4,6 +4,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject, appendProjectScope } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
 const { notifyGrnSubmitted, notifyGrnVerifiedStores, notifyGrnApproved } = require('../services/notif.helper');
+const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 const router = express.Router();
 
 // ── Auto-migrate: fix legacy grn schema ───────────────────────────────────
@@ -562,6 +563,15 @@ router.patch('/:id/approve-qc', async (req, res) => {
           );
         }
       }
+
+      // QC approval is the actual goods-received event when no bill exists yet for
+      // this GRN (billsAlreadyPostedStock=false). Track the value so Accounts can
+      // be posted a provisional JV after commit — never inside this transaction,
+      // since postAutoJournalStandalone opens its own connection.
+      const provisionalValue = billsAlreadyPostedStock
+        ? 0
+        : items.rows.reduce((s, it) => s + (parseFloat(it.quantity_received) || 0) * (parseFloat(it.rate) || 0), 0);
+
       // Auto-close PO when all items are fully received
       if (grn.po_id) {
         const poCheck = await client.query(
@@ -592,8 +602,29 @@ router.patch('/:id/approve-qc', async (req, res) => {
       const grnFull = await query(`SELECT g.*, v.name AS vendor_name, p.name AS project_name FROM grn g LEFT JOIN vendors v ON v.id=g.vendor_id JOIN projects p ON p.id=g.project_id WHERE g.id=$1`, [req.params.id]);
       if (grnFull.rows.length) notifyGrnApproved(req.user.company_id, grnFull.rows[0], req.user.name);
 
-      return { status: 'approved' };
+      return { status: 'approved', provisionalValue, grn_number: grn.grn_number, grn_date: grn.grn_date };
     });
+
+    // No bill exists for this GRN yet — post a provisional "goods received, not
+    // invoiced" journal entry so Accounts reflects the cost immediately. When a
+    // formal bill later references this grn_id and gets approved, that JV debits
+    // 2010 (instead of the usual 5000/5100) to clear this liability, so the value
+    // is never counted twice.
+    if (result.provisionalValue > 0) {
+      postAutoJournalStandalone({
+        companyId: req.user.company_id,
+        userId:    req.user.id,
+        entryDate: result.grn_date,
+        reference: result.grn_number,
+        narration: `Goods received (bill pending) — GRN ${result.grn_number}`,
+        source:    'auto_grn_provisional',
+        lines: [
+          { code: '1200', debit:  result.provisionalValue, description: `Inventory received — ${result.grn_number}` },
+          { code: '2010', credit: result.provisionalValue, description: `GRIN — ${result.grn_number}` },
+        ],
+      }).catch(() => {});
+    }
+
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
