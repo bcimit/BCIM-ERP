@@ -89,14 +89,16 @@ router.patch('/work-orders/:id/md-approve', authorize('super_admin', 'admin', 'm
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PATCH /work-orders/:id/reject — reject a WO
+// PATCH /work-orders/:id/reject — reject a WO, with a mandatory reason
 router.patch('/work-orders/:id/reject', authorize('super_admin', 'admin', 'project_manager', 'procurement_manager', 'managing_director', 'md', 'ceo'), async (req, res) => {
   try {
+    const reason = (req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A rejection reason is required.' });
     const result = await query(
-      `UPDATE work_orders SET status='rejected', updated_at=NOW()
+      `UPDATE work_orders SET status='rejected', rejection_reason=$3, updated_at=NOW()
        WHERE id=$1 AND project_id IN (SELECT id FROM projects WHERE company_id=$2)
        RETURNING *`,
-      [req.params.id, req.user.company_id]
+      [req.params.id, req.user.company_id, reason]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Work order not found' });
     res.json({ data: result.rows[0], message: 'Work Order rejected' });

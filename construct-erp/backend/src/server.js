@@ -579,6 +579,7 @@ async function runAutoMigrations() {
     // 004: Cost head on PO + WO
     await client.query(`ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS cost_head VARCHAR(100)`);
     await client.query(`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS cost_head VARCHAR(100)`);
+    await client.query(`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS rejection_reason TEXT`);
     // 005: Backfill missing tqs_bill_updates rows
     await client.query(`
       INSERT INTO tqs_bill_updates (bill_id, balance_to_pay, certified_net)

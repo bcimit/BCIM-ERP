@@ -10,7 +10,7 @@ import {
   ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Upload, IndianRupee,
   AlertCircle, RefreshCw, FileSpreadsheet,
   MapPin, User, Package, Phone, Mail, Hash,
-  Activity, Check, UserCheck, Edit2,
+  Activity, Check, UserCheck, Edit2, XCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -892,8 +892,59 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
   );
 }
 
+/* ─── WO Reject Reason Modal ─── */
+function WORejectModal({ wo, onClose, onConfirm, isPending }) {
+  const [reason, setReason] = useState('');
+  const canSubmit = reason.trim().length > 0;
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
+              <XCircle className="w-4 h-4 text-red-500" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Reject Work Order</p>
+              <p className="text-xs text-slate-500">{wo?.wo_number}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm">
+            <p className="font-semibold text-red-800">{wo?.vendor_name}</p>
+            <p className="text-xs text-red-600 mt-0.5">₹{inr(wo?.total_value || wo?.contract_amount)}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Rejection Reason <span className="text-red-500">*</span></label>
+            <textarea
+              rows={3}
+              autoFocus
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="e.g. Rate not approved, scope mismatch, vendor not eligible…"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-50 resize-none transition-all"
+            />
+            {!canSubmit && <p className="text-[11px] text-slate-400 mt-1">A reason is required so the team knows why this was rejected.</p>}
+          </div>
+        </div>
+        <div className="flex gap-3 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors">Cancel</button>
+          <button onClick={() => onConfirm(reason.trim())} disabled={isPending || !canSubmit}
+            className="flex-1 py-2.5 rounded-xl text-white text-sm font-black disabled:opacity-50 transition-all"
+            style={{ background: 'linear-gradient(135deg,#EF4444,#DC2626)' }}>
+            {isPending ? 'Rejecting…' : 'Reject WO'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── WO Detail Panel — Full-Screen Modal ────────────────────────────────── */
 function WODetailPanel({ wo, onClose, onEdit, onDelete, onApprove, onMDApprove, onReject, isApproving, isMDApproving, isRejecting, user, company }) {
+  const [rejectModal, setRejectModal] = useState(false);
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['work-order-detail', wo?.id],
     queryFn: () => subcontractorAPI.getWorkOrder(wo.id).then(r => r.data),
@@ -1195,6 +1246,17 @@ function WODetailPanel({ wo, onClose, onEdit, onDelete, onApprove, onMDApprove, 
             </div>
           </div>
 
+          {/* Rejection reason — shown once the WO has been rejected */}
+          {liveStatus === 'rejected' && displayWO.rejection_reason && (
+            <div className="border border-red-200 bg-red-50 rounded-xl p-4 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-500" />
+                <p className="text-sm font-medium text-red-800">Rejected</p>
+              </div>
+              <p className="text-xs text-red-700 pl-6">{displayWO.rejection_reason}</p>
+            </div>
+          )}
+
           {/* Action panel */}
           {currentAction && (() => {
             const authorized = canApproveWOStage(currentAction.id, user);
@@ -1221,7 +1283,7 @@ function WODetailPanel({ wo, onClose, onEdit, onDelete, onApprove, onMDApprove, 
                       {(isApproving || isMDApproving) ? 'Processing…' : currentAction.id === 'procurement-approve' ? 'Procurement Approve' : 'Review & Authorize'}
                     </button>
                     <button
-                      onClick={() => onReject(wo.id)}
+                      onClick={() => setRejectModal(true)}
                       disabled={isRejecting}
                       className="flex-1 h-9 rounded-lg bg-white border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-colors disabled:opacity-50">
                       {isRejecting ? '…' : 'Reject'}
@@ -1254,6 +1316,15 @@ function WODetailPanel({ wo, onClose, onEdit, onDelete, onApprove, onMDApprove, 
     <div ref={printZoneRef} style={{ display: 'none' }} aria-hidden="true">
       <WOPrintTemplate data={displayWO} company={company} />
     </div>
+
+    {rejectModal && (
+      <WORejectModal
+        wo={displayWO}
+        isPending={isRejecting}
+        onClose={() => setRejectModal(false)}
+        onConfirm={(reason) => { onReject(wo.id, reason); setRejectModal(false); }}
+      />
+    )}
     </>
   );
 }
@@ -1355,7 +1426,7 @@ export default function WorkOrderPage() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: id => subcontractorAPI.rejectWorkOrder(id),
+    mutationFn: ({ id, reason }) => subcontractorAPI.rejectWorkOrder(id, { reason }),
     onSuccess: () => {
       toast.success('Work Order rejected');
       setSelectedWO(null);
@@ -1648,7 +1719,7 @@ export default function WorkOrderPage() {
           onDelete={id => deleteMutation.mutate(id)}
           onApprove={id => approveMutation.mutate(id)}
           onMDApprove={id => mdApproveMutation.mutate(id)}
-          onReject={id => rejectMutation.mutate(id)}
+          onReject={(id, reason) => rejectMutation.mutate({ id, reason })}
           isApproving={approveMutation.isPending}
           isMDApproving={mdApproveMutation.isPending}
           isRejecting={rejectMutation.isPending}
