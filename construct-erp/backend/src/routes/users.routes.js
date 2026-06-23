@@ -178,6 +178,44 @@ const normalizeProjectIds = (projectIds) => {
   return [...new Set(projectIds.map(String).map(v => v.trim()).filter(v => uuidLike.test(v)))];
 };
 
+// Team Members edits the free-text users.department/designation, but the HR
+// module (dashboard, headcounts, payroll) reads employee_profiles.department_id/
+// designation_id — a FK into the hr_departments/hr_designations master tables.
+// The two were never kept in sync, so editing a user's department here silently
+// never showed up on the HR dashboard. Best-effort case-insensitive name match;
+// only updates when a match is found, and only if the user already has an
+// employee_profiles row (HR onboarding is a separate, more detailed step).
+const syncEmployeeProfileDeptDesig = async (userId, companyId, department, designation) => {
+  if (department === undefined && designation === undefined) return;
+  try {
+    const profile = await query('SELECT user_id FROM employee_profiles WHERE user_id = $1', [userId]);
+    if (!profile.rows.length) return;
+
+    const sets = [];
+    const params = [userId];
+    let i = 2;
+    if (department) {
+      const dep = await query(
+        `SELECT id FROM hr_departments WHERE company_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
+        [companyId, department]
+      );
+      if (dep.rows.length) { sets.push(`department_id = $${i++}`); params.push(dep.rows[0].id); }
+    }
+    if (designation) {
+      const desg = await query(
+        `SELECT id FROM hr_designations WHERE company_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
+        [companyId, designation]
+      );
+      if (desg.rows.length) { sets.push(`designation_id = $${i++}`); params.push(desg.rows[0].id); }
+    }
+    if (!sets.length) return;
+    sets.push('updated_at = NOW()');
+    await query(`UPDATE employee_profiles SET ${sets.join(', ')} WHERE user_id = $1`, params);
+  } catch (err) {
+    console.error('[users] employee_profile dept/designation sync failed:', err.message);
+  }
+};
+
 const syncUserProjects = async (userId, companyId, projectIds, role = null) => {
   const ids = normalizeProjectIds(projectIds);
   await query('DELETE FROM project_members WHERE user_id = $1', [userId]);
@@ -257,6 +295,7 @@ router.post('/', admin, async (req, res) => {
     );
 
     await syncUserProjects(result.rows[0].id, req.user.company_id, project_ids, role);
+    await syncEmployeeProfileDeptDesig(result.rows[0].id, req.user.company_id, department, designation);
 
     await logAudit(req, { action: 'create', tableName: 'users', recordId: result.rows[0].id, newValues: result.rows[0] });
     sendWelcomeMail(req, result.rows[0]);
@@ -307,6 +346,7 @@ router.put('/:id', admin, async (req, res) => {
     if (project_ids !== undefined) {
       await syncUserProjects(req.params.id, req.user.company_id, project_ids, role);
     }
+    await syncEmployeeProfileDeptDesig(req.params.id, req.user.company_id, department, designation);
 
     await logAudit(req, { action: 'update', tableName: 'users', recordId: req.params.id, oldValues: before, newValues: updated.rows[0] });
     res.json({ message: 'User updated successfully' });
