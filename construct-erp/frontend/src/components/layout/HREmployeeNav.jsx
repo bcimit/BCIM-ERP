@@ -26,31 +26,6 @@ const NAV_MENUS = [
       { label: 'Training',            to: '/hr-admin/training' },
     ],
   },
-  {
-    label: 'Admin',
-    items: [
-      { label: 'HR Dashboard',        to: '/hr-admin' },
-      { label: 'Departments',         to: '/hr-admin/departments' },
-      { label: 'Appraisals',          to: '/hr-admin/appraisals' },
-      { label: 'Recruitment',         to: '/hr-admin/recruitment' },
-      { label: 'Payroll',             to: '/hr-admin/payroll' },
-      { label: 'Employee Salaries',   to: '/hr-admin/employee-salaries' },
-      { label: 'Salary Structures',   to: '/hr-admin/salary-structures' },
-      { label: 'Shifts & OT',         to: '/hr-admin/shifts' },
-      { label: 'Full & Final',        to: '/hr-admin/fnf' },
-      { label: 'Advanced HR',         to: '/hr-admin/advanced' },
-      { label: 'HR Reports',          to: '/hr-admin/reports' },
-    ],
-  },
-  {
-    label: 'Setup',
-    items: [
-      { label: 'Letter Template',             to: '/hr-admin/letters' },
-      { label: 'Company Policies & Forms',    to: '/hr-admin/policies' },
-      { label: 'Employee Segment',            to: '/hr-admin/segments' },
-      { label: 'Employee Filter',             to: '/hr-admin/emp-filters' },
-    ],
-  },
 ];
 
 function DropdownMenu({ menu, isActive, onClose }) {

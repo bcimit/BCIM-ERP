@@ -208,6 +208,9 @@ const navGroups = [
     { to: '/hr-admin/shifts',           icon: Clock,           label: 'Shifts & OT' },
     { to: '/hr-admin/fnf',              icon: Wallet,          label: 'Full & Final' },
     { to: '/hr-admin/letters',          icon: FileText,        label: 'Letter Generation' },
+    { to: '/hr-admin/policies',         icon: FileText,        label: 'Company Policies & Forms' },
+    { to: '/hr-admin/segments',         icon: Users,           label: 'Employee Segment' },
+    { to: '/hr-admin/emp-filters',      icon: Users,           label: 'Employee Filter' },
     { to: '/hr-admin/training',         icon: BookOpen,        label: 'Training' },
     { to: '/hr-admin/emp-assets',       icon: Package,         label: 'Employee Assets' },
     { to: '/hr-admin/travel',           icon: MapPin,          label: 'Travel Requests' },
@@ -1816,9 +1819,14 @@ export default function Layout() {
         const allowed = STORES_ROLE_NAV[user?.role];
         return { ...g, items: g.items.filter(item => allowed.includes(item.to)) };
       }
-      // Hide the separate "My Approvals" page for users who see approvals on the dashboard
-      if (g.label === 'Overview' && hasDashboardApprovals) {
-        return { ...g, items: g.items.filter(item => item.to !== '/approvals') };
+      // Overview: hide "My Approvals" for users who see approvals on the dashboard,
+      // and hide "Projects" for HR & Admin staff (they manage people, not projects).
+      if (g.label === 'Overview') {
+        const isHrRole = ['hr', 'hr_admin', 'hr_manager'].includes(user?.role);
+        let items = g.items;
+        if (hasDashboardApprovals) items = items.filter(item => item.to !== '/approvals');
+        if (isHrRole) items = items.filter(item => item.to !== '/projects');
+        return { ...g, items };
       }
       // Hide superAdminOnly items from everyone except super_admin
       if (user?.role !== 'super_admin') {
