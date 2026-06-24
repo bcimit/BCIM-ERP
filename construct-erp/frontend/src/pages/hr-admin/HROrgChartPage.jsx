@@ -249,6 +249,13 @@ function DivisionView({ employees, onClick, searchQ }) {
       if (!map[div.key].depts[deptKey]) map[div.key].depts[deptKey] = [];
       map[div.key].depts[deptKey].push(emp);
     });
+    // Sort members within each dept by grade (L1 first)
+    const gradeRank = (g) => g ? (parseInt(g.replace(/\D/g,''),10) || 99) : 99;
+    Object.values(map).forEach(({ depts }) =>
+      Object.values(depts).forEach(members =>
+        members.sort((a,b) => gradeRank(a.grade) - gradeRank(b.grade) || a.name.localeCompare(b.name))
+      )
+    );
     // Sort divisions by predefined order
     const ordered = DIVISIONS.map(d => map[d.key]).filter(Boolean);
     if (map['other']) ordered.push(map['other']);
@@ -403,10 +410,21 @@ function DepartmentView({ employees, onClick, searchQ }) {
   const [collapsed, setCollapsed] = useState({});
   const toggle = (d) => setCollapsed(c => ({...c,[d]:!c[d]}));
 
+  const gradeRank = (g) => g ? (parseInt(g.replace(/\D/g,''),10) || 99) : 99;
+
   const grouped = useMemo(() => {
     const map = {};
     employees.forEach(e => { const d = e.department||'Unassigned'; if(!map[d]) map[d]=[]; map[d].push(e); });
-    return Object.entries(map).sort(([a],[b]) => a==='Unassigned'?1:b==='Unassigned'?-1:a.localeCompare(b));
+    // Sort members within each dept by grade (L1 first)
+    Object.values(map).forEach(members => members.sort((a,b) => gradeRank(a.grade) - gradeRank(b.grade) || a.name.localeCompare(b.name)));
+    // Sort depts: higher-grade dept first, then alpha; Unassigned last
+    return Object.entries(map).sort(([a, ma],[b, mb]) => {
+      if (a==='Unassigned') return 1;
+      if (b==='Unassigned') return -1;
+      const topA = gradeRank(ma[0]?.grade);
+      const topB = gradeRank(mb[0]?.grade);
+      return topA !== topB ? topA - topB : a.localeCompare(b);
+    });
   }, [employees]);
 
   const filtered = useMemo(() => {
