@@ -1,8 +1,12 @@
 // src/pages/hr-admin/GenerateLetterPage.jsx
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Mail, Search, FileText, Download, CheckCircle, Clock } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Mail, Search, FileText, Download } from 'lucide-react';
 import { hrEmployeesAPI } from '../../api/client';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+const _API = axios.create({ baseURL: '/api', withCredentials: true });
 import toast from 'react-hot-toast';
 
 const B = { purple: '#7C3AED' };
@@ -15,6 +19,7 @@ const TEMPLATES = [
 ];
 
 export default function GenerateLetterPage() {
+  const qc = useQueryClient();
   const [search, setSearch]     = useState('');
   const [empId, setEmpId]       = useState(null);
   const [empName, setEmpName]   = useState('');
@@ -28,14 +33,14 @@ export default function GenerateLetterPage() {
   const employees = empData?.data || [];
 
   const { data: lettersData, isLoading } = useQuery({
-    queryKey: ['hr-letters'],
-    queryFn: () => hrEmployeesAPI.getLetters?.().then(r => r.data) ?? Promise.resolve({ data: [] }),
+    queryKey: ['hr-letters-issued'],
+    queryFn: () => _API.get('/v1/hr-admin/advanced/letters/issues').then(r => r.data).catch(() => ({ data: [] })),
   });
   const letters = lettersData?.data || [];
 
   const genMut = useMutation({
-    mutationFn: () => hrEmployeesAPI.generateLetter?.({ employee_id: empId, template }).then(r => r.data) ?? Promise.resolve(),
-    onSuccess: () => { toast.success('Letter generated successfully'); },
+    mutationFn: () => _API.post('/v1/hr-admin/advanced/letters/issues', { employee_id: empId, template_name: template }).then(r => r.data),
+    onSuccess: () => { toast.success('Letter generated successfully'); qc.invalidateQueries({ queryKey: ['hr-letters-issued'] }); },
     onError: e => toast.error(e?.response?.data?.error || 'Failed to generate'),
   });
 

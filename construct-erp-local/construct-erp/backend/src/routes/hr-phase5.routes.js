@@ -1858,4 +1858,545 @@ router.get('/compliance/statutory-registers', async (req, res) => {
   }
 });
 
+// ─── PHASE 2-4: EMPLOYEE INFORMATION & ADMIN ────────────────────────────────
+
+// ── Position History ─────────────────────────────────────────────────────────
+router.get('/position-history/:empId', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_position_history (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id    UUID REFERENCES companies(id) ON DELETE CASCADE,
+        user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
+        effective_date DATE NOT NULL,
+        designation   TEXT,
+        department    TEXT,
+        location      TEXT,
+        grade         TEXT,
+        reason        TEXT,
+        remarks       TEXT,
+        change_type   TEXT DEFAULT 'Promotion',
+        created_by    UUID REFERENCES users(id),
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT ph.*, u.name AS created_by_name
+       FROM hr_position_history ph
+       LEFT JOIN users u ON u.id = ph.created_by
+       WHERE ph.user_id = $1 AND ph.company_id = $2
+       ORDER BY ph.effective_date DESC`,
+      [req.params.empId, req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/position-history/:empId', async (req, res) => {
+  try {
+    const { effective_date, designation, department, location, grade, reason, remarks, change_type } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_position_history (company_id, user_id, effective_date, designation, department, location, grade, reason, remarks, change_type, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.user.company_id, req.params.empId, effective_date, designation, department, location, grade, reason, remarks, change_type || 'Promotion', req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/position-history/:empId/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_position_history WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Employee Segments ─────────────────────────────────────────────────────────
+router.get('/segments', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_employee_segments (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        description TEXT,
+        filter_json JSONB DEFAULT '{}',
+        emp_count   INT DEFAULT 0,
+        created_by  UUID REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(company_id, name)
+      )
+    `);
+    const { rows } = await query(
+      `SELECT * FROM hr_employee_segments WHERE company_id=$1 ORDER BY name`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/segments', async (req, res) => {
+  try {
+    const { name, description, filter_json } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_employee_segments (company_id, name, description, filter_json, created_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.company_id, name, description, JSON.stringify(filter_json || {}), req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/segments/:id', async (req, res) => {
+  try {
+    const { name, description, filter_json } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_employee_segments SET name=$1, description=$2, filter_json=$3 WHERE id=$4 AND company_id=$5 RETURNING *`,
+      [name, description, JSON.stringify(filter_json || {}), req.params.id, req.user.company_id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/segments/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_employee_segments WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Employee Filters ──────────────────────────────────────────────────────────
+router.get('/filters', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_employee_filters (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        filter_json JSONB DEFAULT '{}',
+        is_shared   BOOLEAN DEFAULT FALSE,
+        created_by  UUID REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT f.*, u.name AS owner FROM hr_employee_filters f
+       LEFT JOIN users u ON u.id = f.created_by
+       WHERE f.company_id=$1 ORDER BY f.name`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/filters', async (req, res) => {
+  try {
+    const { name, filter_json, is_shared } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_employee_filters (company_id, name, filter_json, is_shared, created_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.company_id, name, JSON.stringify(filter_json || {}), is_shared || false, req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/filters/:id', async (req, res) => {
+  try {
+    const { name, filter_json, is_shared } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_employee_filters SET name=$1, filter_json=$2, is_shared=$3 WHERE id=$4 AND company_id=$5 RETURNING *`,
+      [name, JSON.stringify(filter_json || {}), is_shared, req.params.id, req.user.company_id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/filters/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_employee_filters WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Bulletin Board ────────────────────────────────────────────────────────────
+router.get('/bulletins', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_bulletins (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        body        TEXT,
+        category    TEXT DEFAULT 'General',
+        priority    TEXT DEFAULT 'Normal' CHECK (priority IN ('Normal','High','Urgent')),
+        expiry_date DATE,
+        is_active   BOOLEAN DEFAULT TRUE,
+        created_by  UUID REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT b.*, u.name AS author FROM hr_bulletins b
+       LEFT JOIN users u ON u.id = b.created_by
+       WHERE b.company_id=$1 ORDER BY b.created_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/bulletins', async (req, res) => {
+  try {
+    const { title, body, category, priority, expiry_date } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_bulletins (company_id, title, body, category, priority, expiry_date, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.company_id, title, body, category || 'General', priority || 'Normal', expiry_date || null, req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/bulletins/:id', async (req, res) => {
+  try {
+    const { title, body, category, priority, expiry_date, is_active } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_bulletins SET title=$1,body=$2,category=$3,priority=$4,expiry_date=$5,is_active=$6
+       WHERE id=$7 AND company_id=$8 RETURNING *`,
+      [title, body, category, priority, expiry_date || null, is_active, req.params.id, req.user.company_id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/bulletins/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_bulletins WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Contract Details ──────────────────────────────────────────────────────────
+router.get('/contracts', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_contracts (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id      UUID REFERENCES companies(id) ON DELETE CASCADE,
+        firm_name       TEXT NOT NULL,
+        nature_of_work  TEXT,
+        contractor_code TEXT,
+        start_date      DATE,
+        end_date        DATE,
+        emp_count       INT DEFAULT 0,
+        pf_code         TEXT,
+        esi_code        TEXT,
+        status          TEXT DEFAULT 'Active' CHECK (status IN ('Active','Expired','Terminated')),
+        created_by      UUID REFERENCES users(id),
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT * FROM hr_contracts WHERE company_id=$1 ORDER BY created_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/contracts', async (req, res) => {
+  try {
+    const { firm_name, nature_of_work, contractor_code, start_date, end_date, emp_count, pf_code, esi_code, status } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_contracts (company_id, firm_name, nature_of_work, contractor_code, start_date, end_date, emp_count, pf_code, esi_code, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.user.company_id, firm_name, nature_of_work, contractor_code, start_date || null, end_date || null, emp_count || 0, pf_code, esi_code, status || 'Active', req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/contracts/:id', async (req, res) => {
+  try {
+    const { firm_name, nature_of_work, contractor_code, start_date, end_date, emp_count, pf_code, esi_code, status } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_contracts SET firm_name=$1,nature_of_work=$2,contractor_code=$3,start_date=$4,end_date=$5,emp_count=$6,pf_code=$7,esi_code=$8,status=$9
+       WHERE id=$10 AND company_id=$11 RETURNING *`,
+      [firm_name, nature_of_work, contractor_code, start_date || null, end_date || null, emp_count || 0, pf_code, esi_code, status, req.params.id, req.user.company_id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/contracts/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_contracts WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Letter Templates ──────────────────────────────────────────────────────────
+router.get('/letter-templates', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_letter_templates_v2 (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        type        TEXT DEFAULT 'Appointment',
+        body        TEXT,
+        variables   TEXT[],
+        is_active   BOOLEAN DEFAULT TRUE,
+        created_by  UUID REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(company_id, name)
+      )
+    `);
+    const { rows } = await query(
+      `SELECT * FROM hr_letter_templates_v2 WHERE company_id=$1 ORDER BY name`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/letter-templates', async (req, res) => {
+  try {
+    const { name, type, body, variables } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_letter_templates_v2 (company_id, name, type, body, variables, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.company_id, name, type || 'Appointment', body, variables || [], req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/letter-templates/:id', async (req, res) => {
+  try {
+    const { name, type, body, variables, is_active } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_letter_templates_v2 SET name=$1,type=$2,body=$3,variables=$4,is_active=$5
+       WHERE id=$6 AND company_id=$7 RETURNING *`,
+      [name, type, body, variables, is_active, req.params.id, req.user.company_id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/letter-templates/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_letter_templates_v2 WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Company Policies ──────────────────────────────────────────────────────────
+router.get('/policies', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_company_policies (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        category    TEXT DEFAULT 'General',
+        description TEXT,
+        file_url    TEXT,
+        is_active   BOOLEAN DEFAULT TRUE,
+        published_at TIMESTAMPTZ,
+        created_by  UUID REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT p.*, u.name AS uploaded_by_name FROM hr_company_policies p
+       LEFT JOIN users u ON u.id = p.created_by
+       WHERE p.company_id=$1 ORDER BY p.created_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/policies', async (req, res) => {
+  try {
+    const { name, category, description } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_company_policies (company_id, name, category, description, created_by)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.company_id, name, category || 'General', description, req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/policies/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_company_policies WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Identity Verification ─────────────────────────────────────────────────────
+router.get('/identity-verification', async (req, res) => {
+  try {
+    const { search, status } = req.query;
+    let sql = `
+      SELECT u.id, u.name, u.employee_code,
+             e.pan_number, e.aadhaar_number AS aadhaar,
+             e.bank_account_number AS bank_account,
+             COALESCE(iv.pan_status, 'Pending')     AS pan_status,
+             COALESCE(iv.aadhaar_status, 'Pending') AS aadhaar_status,
+             COALESCE(iv.bank_status, 'Pending')    AS bank_status,
+             iv.id AS iv_id
+      FROM users u
+      LEFT JOIN hr_employee_details e ON e.user_id = u.id
+      LEFT JOIN (
+        SELECT DISTINCT ON (user_id) * FROM hr_identity_verifications
+        ORDER BY user_id, updated_at DESC
+      ) iv ON iv.user_id = u.id
+      WHERE u.company_id=$1 AND u.role='employee' AND u.is_active=TRUE`;
+    const params = [req.user.company_id];
+    if (search) { params.push(`%${search}%`); sql += ` AND (u.name ILIKE $${params.length} OR u.employee_code ILIKE $${params.length})`; }
+    sql += ` ORDER BY u.name`;
+    const { rows } = await query(sql, params);
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/identity-verification/:id', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_identity_verifications (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+        pan_status      TEXT DEFAULT 'Pending',
+        aadhaar_status  TEXT DEFAULT 'Pending',
+        bank_status     TEXT DEFAULT 'Pending',
+        updated_by  UUID REFERENCES users(id),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { status } = req.body;
+    // Determine which field to update based on request
+    const { field } = req.body; // 'pan_status' | 'aadhaar_status' | 'bank_status'
+    const validFields = ['pan_status', 'aadhaar_status', 'bank_status'];
+    if (!validFields.includes(field)) {
+      // Legacy: update all to status
+      await query(
+        `INSERT INTO hr_identity_verifications (company_id, user_id, pan_status, aadhaar_status, bank_status, updated_by)
+         VALUES ($1,$2,$3,$3,$3,$4)
+         ON CONFLICT (user_id) DO UPDATE SET pan_status=$3, aadhaar_status=$3, bank_status=$3, updated_by=$4, updated_at=NOW()`,
+        [req.user.company_id, req.params.id, status, req.user.id]
+      );
+    } else {
+      await query(
+        `INSERT INTO hr_identity_verifications (company_id, user_id, ${field}, updated_by)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (user_id) DO UPDATE SET ${field}=$3, updated_by=$4, updated_at=NOW()`,
+        [req.user.company_id, req.params.id, status, req.user.id]
+      );
+    }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Mass Communication ────────────────────────────────────────────────────────
+router.get('/mass-communication', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_mass_communications (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        subject     TEXT NOT NULL,
+        body        TEXT,
+        channel     TEXT DEFAULT 'Notification' CHECK (channel IN ('Notification','Email','Both')),
+        recipient_type TEXT DEFAULT 'All',
+        recipient_ids  UUID[],
+        sent_count  INT DEFAULT 0,
+        status      TEXT DEFAULT 'Sent',
+        sent_by     UUID REFERENCES users(id),
+        sent_at     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT mc.*, u.name AS sender FROM hr_mass_communications mc
+       LEFT JOIN users u ON u.id = mc.sent_by
+       WHERE mc.company_id=$1 ORDER BY mc.sent_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/mass-communication', async (req, res) => {
+  try {
+    const { subject, body, channel, recipient_type } = req.body;
+    const countResult = await query(
+      `SELECT COUNT(*) FROM users WHERE company_id=$1 AND role='employee' AND is_active=TRUE`,
+      [req.user.company_id]
+    );
+    const sent_count = parseInt(countResult.rows[0].count);
+    const { rows } = await query(
+      `INSERT INTO hr_mass_communications (company_id, subject, body, channel, recipient_type, sent_count, sent_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.company_id, subject, body, channel || 'Notification', recipient_type || 'All', sent_count, req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Data Drive ────────────────────────────────────────────────────────────────
+router.get('/data-drive', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_data_drives (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        drive_type  TEXT NOT NULL CHECK (drive_type IN ('Aadhaar','Bank Details','PAN','Vaccination')),
+        title       TEXT NOT NULL,
+        deadline    DATE,
+        response_count INT DEFAULT 0,
+        total_emp   INT DEFAULT 0,
+        status      TEXT DEFAULT 'Active',
+        created_by  UUID REFERENCES users(id),
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { rows } = await query(
+      `SELECT dd.*, u.name AS created_by_name FROM hr_data_drives dd
+       LEFT JOIN users u ON u.id = dd.created_by
+       WHERE dd.company_id=$1 ORDER BY dd.created_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/data-drive', async (req, res) => {
+  try {
+    const { drive_type, title, deadline } = req.body;
+    const countResult = await query(
+      `SELECT COUNT(*) FROM users WHERE company_id=$1 AND role='employee' AND is_active=TRUE`,
+      [req.user.company_id]
+    );
+    const total_emp = parseInt(countResult.rows[0].count);
+    const { rows } = await query(
+      `INSERT INTO hr_data_drives (company_id, drive_type, title, deadline, total_emp, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.company_id, drive_type, title, deadline || null, total_emp, req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/data-drive/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_data_drives WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
