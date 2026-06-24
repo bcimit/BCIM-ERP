@@ -127,6 +127,24 @@ function MonthFilter({ month, setMonth, year, setYear }) {
   );
 }
 
+// Light-theme month/year filter shown inside each report view
+function ReportFilterBar({ month, setMonth, year, setYear }) {
+  const sel = "h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-400 transition";
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-3 flex flex-wrap items-center gap-3"
+      style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+      <span className="text-xs font-black uppercase tracking-wide text-slate-500 px-1">Period</span>
+      <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className={sel}>
+        {MONTHS.slice(1).map((label, index) => <option key={label} value={index + 1}>{label}</option>)}
+      </select>
+      <select value={year} onChange={(e) => setYear(Number(e.target.value))} className={sel}>
+        {YEARS.map((item) => <option key={item} value={item}>{item}</option>)}
+      </select>
+      <span className="text-xs font-semibold text-slate-400">Applies to date-based reports (attendance, payroll, PF/ESI, new joinees)</span>
+    </div>
+  );
+}
+
 function MetricCard({ icon: Icon, label, value, sub, tone = 'blue' }) {
   const tones = {
     blue: 'border-blue-200 bg-blue-50 text-blue-700',
@@ -1116,6 +1134,7 @@ export default function HRReportsPage() {
             <span>HR Reports</span><span className="text-slate-300">/</span>
             <span className="text-slate-900">{labelOf(view)}</span>
           </div>
+          <ReportFilterBar month={month} setMonth={setMonth} year={year} setYear={setYear} />
           {renderReport(view)}
         </motion.div>
       ) : (
