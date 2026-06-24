@@ -193,7 +193,7 @@ router.get('/lookup/wos', async (req, res) => {
   try {
     const { company_id } = req.user;
     const { project_id, vendor_id } = req.query;
-    const wheres = [`p.company_id=$1`, `wo.is_deleted IS NOT TRUE`];
+    const wheres = [`p.company_id=$1`, `COALESCE(wo.status,'') NOT IN ('cancelled','rejected')`];
     const params = [company_id];
     applyProjectScope(req, wheres, params, 'wo', project_id);
     if (vendor_id) { params.push(vendor_id); wheres.push(`wo.vendor_id=$${params.length}`); }
