@@ -290,6 +290,7 @@ const HRAdvancedPage        = lazy(() => import('./pages/hr-admin/HRAdvancedPage
 const ESSPortalPage           = lazy(() => import('./pages/hr-admin/ESSPortalPage'));
 const HRShiftManagementPage   = lazy(() => import('./pages/hr-admin/ShiftManagementPage'));
 const HRFnFSettlementPage     = lazy(() => import('./pages/hr-admin/FnFSettlementPage'));
+const HRLOPDaysPage           = lazy(() => import('./pages/hr-admin/LOPDaysPage'));
 const HRLetterGenerationPage  = lazy(() => import('./pages/hr-admin/LetterGenerationPage'));
 const HRTrainingPage          = lazy(() => import('./pages/hr-admin/TrainingPage'));
 const HREmployeeAssetsPage    = lazy(() => import('./pages/hr-admin/EmployeeAssetsPage'));
@@ -786,6 +787,7 @@ export default function App() {
                 <Route path="hr-admin/documents"    element={<RequireModule module="HR & Admin"><DocumentsPage /></RequireModule>} />
                 <Route path="hr-admin/shifts"       element={<RequireModule module="HR & Admin"><HRShiftManagementPage /></RequireModule>} />
                 <Route path="hr-admin/fnf"          element={<RequireModule module="HR & Admin"><HRFnFSettlementPage /></RequireModule>} />
+                <Route path="hr-admin/lop-days"     element={<RequireModule module="HR & Admin"><HRLOPDaysPage /></RequireModule>} />
                 <Route path="hr-admin/letters"      element={<RequireModule module="HR & Admin"><HRLetterGenerationPage /></RequireModule>} />
                 <Route path="hr-admin/training"     element={<RequireModule module="HR & Admin"><HRTrainingPage /></RequireModule>} />
                 <Route path="hr-admin/emp-assets"   element={<RequireModule module="HR & Admin"><HREmployeeAssetsPage /></RequireModule>} />

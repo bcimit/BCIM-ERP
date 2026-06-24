@@ -1812,6 +1812,12 @@ export const hrPayrollAPI = {
   headcount:     ()       => api.get('/hr-admin/payroll/reports/headcount'),
 };
 
+export const hrLopAPI = {
+  list:   (params) => api.get('/hr-admin/payroll/lop', { params }),
+  save:   (data)   => api.post('/hr-admin/payroll/lop', data),
+  remove: (id)     => api.delete(`/hr-admin/payroll/lop/${id}`),
+};
+
 export const hrLoansAPI = {
   list:    (params) => api.get('/hr-admin/loans', { params }),
   create:  (data)   => api.post('/hr-admin/loans', data),

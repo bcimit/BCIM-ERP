@@ -588,5 +588,84 @@ router.get('/reports/headcount', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ═══════════════════════════════════════════════════════════
+// LOP DAYS — Loss of Pay entries per employee per month
+// ═══════════════════════════════════════════════════════════
+const initLopTable = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS hr_lop_days (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID REFERENCES companies(id),
+      user_id UUID REFERENCES users(id),
+      month INT NOT NULL,
+      year INT NOT NULL,
+      lop_days NUMERIC(5,2) DEFAULT 0,
+      type TEXT NOT NULL DEFAULT 'lop',  -- lop | reversal | retrospective
+      reason TEXT,
+      created_by UUID REFERENCES users(id),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_hr_lop_company ON hr_lop_days(company_id, month, year)`);
+};
+runSchemaInit('hr-lop-days', initLopTable);
+
+// GET /hr-admin/payroll/lop?month=&year=&type=
+router.get('/lop', async (req, res) => {
+  try {
+    const { month, year, type } = req.query;
+    const m = parseInt(month) || new Date().getMonth() + 1;
+    const y = parseInt(year)  || new Date().getFullYear();
+    const t = type || 'lop';
+    const { rows } = await query(
+      `SELECT l.*, u.name as employee_name, u.employee_code,
+              dep.name as department_name
+       FROM hr_lop_days l
+       JOIN users u ON u.id = l.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE l.company_id = $1 AND l.month = $2 AND l.year = $3 AND l.type = $4
+       ORDER BY u.name`,
+      [req.user.company_id, m, y, t]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /hr-admin/payroll/lop — upsert: one row per (user, month, year, type)
+router.post('/lop', async (req, res) => {
+  try {
+    const { user_id, month, year, lop_days, type = 'lop', reason } = req.body;
+    if (!user_id || !month || !year) return res.status(400).json({ error: 'user_id, month, year required' });
+    const { rows } = await query(
+      `INSERT INTO hr_lop_days (company_id, user_id, month, year, lop_days, type, reason, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
+      [req.user.company_id, user_id, month, year, lop_days || 0, type, reason || '', req.user.id]
+    );
+    if (rows.length === 0) {
+      // update existing
+      const { rows: u } = await query(
+        `UPDATE hr_lop_days SET lop_days=$1, reason=$2, updated_at=NOW()
+         WHERE company_id=$3 AND user_id=$4 AND month=$5 AND year=$6 AND type=$7
+         RETURNING *`,
+        [lop_days || 0, reason || '', req.user.company_id, user_id, month, year, type]
+      );
+      return res.json({ data: u[0] });
+    }
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /hr-admin/payroll/lop/:id
+router.delete('/lop/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_lop_days WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
 
