@@ -102,7 +102,7 @@ async function ensureTable() {
     CREATE TABLE IF NOT EXISTS tqs_advance_recoveries (
       id          SERIAL PRIMARY KEY,
       advance_id  INTEGER NOT NULL REFERENCES tqs_advance_vouchers(id) ON DELETE CASCADE,
-      bill_id     INTEGER,
+      bill_id     UUID,
       amount      NUMERIC(15,2) NOT NULL,
       recovery_date DATE NOT NULL,
       notes       TEXT,
@@ -110,6 +110,10 @@ async function ensureTable() {
       created_at  TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // bill_id was originally created as INTEGER, but tqs_bills.id is UUID - the
+  // mismatched type made every GET /:id 500 on the LEFT JOIN below. Table has
+  // never had any rows with bill_id set, so this is a safe no-op-or-fix ALTER.
+  await query(`ALTER TABLE tqs_advance_recoveries ALTER COLUMN bill_id TYPE UUID USING bill_id::text::uuid`);
 }
 
 runSchemaInit('tqs_advance_vouchers', ensureTable);
