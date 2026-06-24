@@ -199,7 +199,7 @@ const getWorkOrder = async (req, res) => {
           ) = 1
         )
        WHERE woi.wo_id = $1
-       ORDER BY woi.id ASC`,
+       ORDER BY woi.sequence_no ASC NULLS LAST, woi.id ASC`,
       [req.params.id]
     );
 
@@ -264,15 +264,16 @@ const createWorkOrder = async (req, res) => {
       // Insert line items when provided (advanced flow) — update total_value from item sum
       if (items && items.length > 0) {
         let itemsTotal = 0;
-        for (const item of items) {
+        for (let idx = 0; idx < items.length; idx++) {
+          const item = items[idx];
           const qty  = parseFloat(item.quantity) || 0;
           const rate = parseFloat(item.rate)     || 0;
           const gstRate = item.gst_rate !== undefined && item.gst_rate !== '' ? parseFloat(item.gst_rate) || 0 : (parseFloat(gst_pct) || 18);
           itemsTotal += qty * rate;
           await client.query(
-            `INSERT INTO work_order_items (wo_id, description, unit, quantity, rate, gst_rate, remarks)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [wo.id, item.description, item.unit, qty, rate, gstRate, item.remarks || null]
+            `INSERT INTO work_order_items (wo_id, description, unit, quantity, rate, gst_rate, remarks, sequence_no)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [wo.id, item.description, item.unit, qty, rate, gstRate, item.remarks || null, idx + 1]
           );
         }
         await client.query(
@@ -636,9 +637,9 @@ const updateWorkOrder = async (req, res) => {
           const gstRate = items[j].gst_rate !== undefined && items[j].gst_rate !== '' ? parseFloat(items[j].gst_rate) || 0 : (parseFloat(gst_pct) || 18);
           computedTotal += qty * rate;
           await client.query(
-            `INSERT INTO work_order_items (wo_id, description, unit, quantity, rate, gst_rate, remarks)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [req.params.id, items[j].description || '', items[j].unit || 'LS', qty, rate, gstRate, items[j].remarks || null]
+            `INSERT INTO work_order_items (wo_id, description, unit, quantity, rate, gst_rate, remarks, sequence_no)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [req.params.id, items[j].description || '', items[j].unit || 'LS', qty, rate, gstRate, items[j].remarks || null, j + 1]
           );
         }
         // Update header totals

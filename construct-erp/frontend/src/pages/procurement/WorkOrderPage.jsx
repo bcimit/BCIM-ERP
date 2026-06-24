@@ -765,14 +765,14 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
             </div>
             <div className="overflow-x-auto">
               <div className="min-w-[820px]">
-                <div className="grid gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100" style={{ gridTemplateColumns: '32px 2.5fr 100px 100px 120px 80px 130px 40px' }}>
-                  {['#', 'Description of Work', 'Unit', 'Qty', 'Rate (₹)', 'GST%', 'Amount', ''].map(h => (
+                <div className="grid gap-2 px-4 py-2 bg-slate-50 border-b border-slate-100" style={{ gridTemplateColumns: '32px 2.5fr 100px 100px 120px 80px 130px 44px 40px' }}>
+                  {['#', 'Description of Work', 'Unit', 'Qty', 'Rate (₹)', 'GST%', 'Amount', 'Order', ''].map(h => (
                     <div key={h} className={Z_LABEL}>{h}</div>
                   ))}
                 </div>
                 <div>
                   {items.map((it, i) => (
-                    <div key={i} className={clsx('grid gap-2 items-center px-4 py-2 border-b border-slate-100 last:border-b-0', i % 2 === 1 && 'bg-slate-50/50')} style={{ gridTemplateColumns: '32px 2.5fr 100px 100px 120px 80px 130px 40px' }}>
+                    <div key={i} className={clsx('grid gap-2 items-center px-4 py-2 border-b border-slate-100 last:border-b-0', i % 2 === 1 && 'bg-slate-50/50')} style={{ gridTemplateColumns: '32px 2.5fr 100px 100px 120px 80px 130px 44px 40px' }}>
                       <span className="text-xs text-slate-400 font-mono">{i + 1}</span>
                       <input className={Z_INP} placeholder="Description of work item" value={it.description}
                         onChange={e => setItems(p => p.map((x,j) => j===i?{...x,description:e.target.value}:x))} />
@@ -787,6 +787,18 @@ function CreateWOModal({ onClose, vendors, projects, onCreate, onUpdate, isPendi
                         onChange={e => setItems(p => p.map((x,j) => j===i?{...x,gst_rate:e.target.value}:x))} />
                       <div className="h-9 px-3 flex items-center justify-end bg-slate-50 border border-slate-200 rounded-md text-sm font-mono text-slate-700 font-semibold">
                         {inr(parseFloat(it.quantity||0)*parseFloat(it.rate||0))}
+                      </div>
+                      <div className="flex flex-col items-center justify-center gap-0.5">
+                        <button onClick={() => setItems(p => { const a=[...p]; if(i===0) return a; [a[i-1],a[i]]=[a[i],a[i-1]]; return a; })} disabled={i===0}
+                          title="Move up"
+                          className="text-slate-400 hover:text-blue-600 disabled:opacity-20 disabled:hover:text-slate-400">
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setItems(p => { const a=[...p]; if(i===a.length-1) return a; [a[i+1],a[i]]=[a[i],a[i+1]]; return a; })} disabled={i===items.length-1}
+                          title="Move down"
+                          className="text-slate-400 hover:text-blue-600 disabled:opacity-20 disabled:hover:text-slate-400">
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <button onClick={() => setItems(p => p.filter((_,j) => j!==i))} disabled={items.length===1}
                         className="w-9 h-9 flex items-center justify-center rounded-md border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-all disabled:opacity-30">

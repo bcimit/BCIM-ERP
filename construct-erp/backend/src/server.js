@@ -671,6 +671,8 @@ async function runAutoMigrations() {
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS client_advance_received NUMERIC(15,2) DEFAULT 0`);
     // 037 Per-item GST rate on Work Orders (mirrors po_items.gst_rate)
     await client.query(`ALTER TABLE work_order_items ADD COLUMN IF NOT EXISTS gst_rate NUMERIC(5,2) DEFAULT 18`);
+    // 037b Line-item display order on Work Orders (preserve the order items were entered/reordered)
+    await client.query(`ALTER TABLE work_order_items ADD COLUMN IF NOT EXISTS sequence_no INTEGER`);
     // 038 Head-wise material master fields on inventory
     await client.query(`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS major_head VARCHAR(50)`);
     await client.query(`ALTER TABLE inventory ADD COLUMN IF NOT EXISTS dc_idc     VARCHAR(10)`);
