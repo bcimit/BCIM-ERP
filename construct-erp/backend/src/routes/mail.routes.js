@@ -2,7 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
-const { sendTestMail, sendMail, isGraphConfigured, isSmtpConfigured } = require('../services/mail.service');
+const { query } = require('../config/database');
+const { sendTestMail, sendMail, sendWelcomeLoginMail, isGraphConfigured, isSmtpConfigured } = require('../services/mail.service');
+const { createPasswordResetToken, getResetBaseUrl } = require('../controllers/auth.controller');
 
 router.use(authenticate);
 router.use(authorize('super_admin', 'admin'));
@@ -39,6 +41,35 @@ router.post('/send', async (req, res) => {
   if (!to || !subject) return res.status(400).json({ error: 'to and subject required' });
   try {
     const result = await sendMail({ to, subject, html, text });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ sent: false, error: err.message });
+  }
+});
+
+// POST /api/v1/mail/welcome  body: { to }
+// Resends the "Login Access Details" welcome email (with a fresh password-reset
+// link) to an existing user, looked up by email.
+router.post('/welcome', async (req, res) => {
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ error: 'to is required' });
+  try {
+    const { rows } = await query(
+      `SELECT id, name, email, role FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      [to]
+    );
+    if (!rows.length) return res.status(404).json({ error: `No user found with email ${to}` });
+    const user = rows[0];
+
+    const baseUrl  = getResetBaseUrl();
+    const token    = await createPasswordResetToken(user.id);
+    const result   = await sendWelcomeLoginMail({
+      to:       user.email,
+      name:     user.name,
+      role:     user.role,
+      loginUrl: `${baseUrl}/login`,
+      resetUrl: `${baseUrl}/reset-password?token=${token}`,
+    });
     res.json(result);
   } catch (err) {
     res.status(500).json({ sent: false, error: err.message });
