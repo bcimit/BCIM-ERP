@@ -355,7 +355,7 @@ function DivisionView({ employees, onClick, searchQ }) {
         {filteredDivMap.map((entry, di) => {
           const { div, depts } = entry;
           const totalInDiv = Object.values(depts).flat().length;
-          const isOpen = !collapsed[div.key];
+          const isOpen = searchQ ? true : !collapsed[div.key];
           const DivIcon = div.icon;
 
           return (
@@ -396,7 +396,7 @@ function DivisionView({ employees, onClick, searchQ }) {
                     <div className="p-4 space-y-4">
                       {Object.entries(depts).map(([deptName, members]) => {
                         const deptKey = `${div.key}|${deptName}`;
-                        const isDeptOpen = !collapsed[deptKey];
+                        const isDeptOpen = searchQ ? true : !collapsed[deptKey];
                         return (
                           <div key={deptName} className="rounded-xl border border-gray-100 overflow-hidden">
                             {/* Dept header */}
@@ -508,7 +508,7 @@ function DepartmentView({ employees, onClick, searchQ }) {
       <div className="flex flex-wrap justify-center gap-6 px-4">
         {filtered.map(([dept, members], di) => {
           const divInfo = getDivision(dept);
-          const isOpen  = !collapsed[dept];
+          const isOpen  = searchQ ? true : !collapsed[dept];
           return (
             <motion.div key={dept} {...fade(di*0.05)} className="flex flex-col items-center">
               <div className="rounded-2xl border px-5 py-3 flex items-center gap-3 cursor-pointer hover:shadow-lg transition-all"
@@ -547,7 +547,7 @@ function DepartmentView({ employees, onClick, searchQ }) {
 // ── Reporting Hierarchy Tree ───────────────────────────────────────────────────
 function OrgTreeNode({ node, allEmps, collapsed, toggle, onClick, searchQ, depth=0 }) {
   const children = allEmps.filter(e => e._parent_id === node.id);
-  const isOpen   = !collapsed[node.id];
+  const isOpen   = searchQ ? true : !collapsed[node.id];
   const hl = searchQ && (
     node.name?.toLowerCase().includes(searchQ) ||
     node.designation?.toLowerCase().includes(searchQ) ||
@@ -691,7 +691,30 @@ function HierarchyView({ employees, onClick, searchQ }) {
   const toggle = (id) => setCollapsed(c => ({...c,[id]:!c[id]}));
 
   const { mode, employees: tree } = useMemo(() => buildHierarchy(employees), [employees]);
-  const roots = useMemo(() => tree.filter(e => !e._parent_id), [tree]);
+
+  // When searching, prune the tree to matching nodes + their ancestor path so
+  // matches are always visible (and their reporting line up to the MD).
+  const visibleTree = useMemo(() => {
+    if (!searchQ) return tree;
+    const byId = new Map(tree.map(e => [e.id, e]));
+    const matches = tree.filter(e =>
+      e.name?.toLowerCase().includes(searchQ) ||
+      e.designation?.toLowerCase().includes(searchQ) ||
+      e.department?.toLowerCase().includes(searchQ) ||
+      e.employee_code?.toLowerCase().includes(searchQ)
+    );
+    const keep = new Set();
+    matches.forEach(m => {
+      let cur = m;
+      while (cur && !keep.has(cur.id)) {   // walk up to root
+        keep.add(cur.id);
+        cur = cur._parent_id ? byId.get(cur._parent_id) : null;
+      }
+    });
+    return tree.filter(e => keep.has(e.id));
+  }, [tree, searchQ]);
+
+  const roots = useMemo(() => visibleTree.filter(e => !e._parent_id), [visibleTree]);
 
   return (
     <div className="pb-16 overflow-x-auto">
@@ -701,10 +724,16 @@ function HierarchyView({ employees, onClick, searchQ }) {
           <p className="text-xs">This tree is built automatically from each person&#39;s designation (e.g. Managing Director → GM → Manager → Engineer → Supervisor → Worker) and department, with the Managing Director at the top. To use actual reporting lines instead, set each employee&#39;s reporting manager under <strong>HR → Employees → Edit</strong>.</p>
         </div>
       )}
+      {searchQ && roots.length === 0 && (
+        <div className="flex flex-col items-center gap-3 text-gray-400 mt-12">
+          <Users size={40} className="text-gray-200"/>
+          <p className="text-sm">No employees match &quot;{searchQ}&quot;</p>
+        </div>
+      )}
       <div className="flex justify-center flex-wrap gap-8 px-4" style={{minWidth:'max-content'}}>
         {roots.map((root) => (
           <div key={root.id} className="flex flex-col items-center">
-            <OrgTreeNode node={root} allEmps={tree} collapsed={collapsed}
+            <OrgTreeNode node={root} allEmps={visibleTree} collapsed={collapsed}
               toggle={toggle} onClick={onClick} searchQ={searchQ}/>
           </div>
         ))}
