@@ -1474,4 +1474,388 @@ router.get('/employees/active', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLIANCE ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── COMPLIANCE STATUS DASHBOARD ────────────────────────────────────────────
+router.get('/compliance/status', async (req, res) => {
+  try {
+    // Returns a simple status map — extend with real due-date logic as needed
+    const m = new Date().getMonth() + 1;
+    const y = new Date().getFullYear();
+    // Check if payroll was run this month
+    const { rows: prRows } = await query(
+      `SELECT COUNT(*) AS cnt FROM hr_monthly_payroll WHERE company_id=$1 AND month=$2 AND year=$3`,
+      [req.user.company_id, m, y]
+    );
+    const hasPayroll = parseInt(prRows[0].cnt) > 0;
+    res.json({
+      data: {
+        pf:               hasPayroll ? 'ok'  : 'due',
+        esi:              hasPayroll ? 'ok'  : 'due',
+        professional_tax: hasPayroll ? 'ok'  : 'due',
+        tds:              hasPayroll ? 'ok'  : 'na',
+        gratuity:         'na',
+        bonus:            'na',
+        lwf:              'na',
+        minimum_wages:    hasPayroll ? 'ok'  : 'na',
+        statutory_regs:   'na',
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PF COMPLIANCE ───────────────────────────────────────────────────────────
+router.get('/compliance/pf', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              ep.uan,
+              COALESCE(p.basic, 0) AS gross_wages,
+              LEAST(COALESCE(p.basic, 0), 15000) AS pf_wages,
+              COALESCE(p.pf_employee, 0)  AS pf_employee,
+              COALESCE(p.pf_employer, 0)  AS pf_employer,
+              COALESCE(p.gross_earnings, 0) AS gross_wages_full,
+              ROUND(LEAST(COALESCE(p.basic,0),15000)*0.0833) AS eps,
+              GREATEST(0, COALESCE(p.pf_employer,0) - ROUND(LEAST(COALESCE(p.basic,0),15000)*0.0833)) AS epf_employer
+       FROM hr_monthly_payroll p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       WHERE p.company_id=$1 AND p.month=$2 AND p.year=$3
+         AND (p.pf_employee > 0 OR p.pf_employer > 0)
+       ORDER BY u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    res.json({ data: { employees: rows, summary: {} } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── ESI COMPLIANCE ──────────────────────────────────────────────────────────
+router.get('/compliance/esi', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              ep.ip_no,
+              COALESCE(p.gross_earnings, 0) AS gross_salary,
+              COALESCE(p.gross_earnings, 0) AS esi_wages,
+              COALESCE(p.esi_employee, 0)   AS esi_employee,
+              COALESCE(p.esi_employer, 0)   AS esi_employer
+       FROM hr_monthly_payroll p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       WHERE p.company_id=$1 AND p.month=$2 AND p.year=$3
+         AND (p.esi_employee > 0 OR p.esi_employer > 0)
+       ORDER BY u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    res.json({ data: { employees: rows } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PROFESSIONAL TAX ─────────────────────────────────────────────────────────
+router.get('/compliance/professional-tax', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              dep.name AS department,
+              COALESCE(p.gross_earnings, 0) AS gross_salary,
+              COALESCE(p.pt, 0) AS pt
+       FROM hr_monthly_payroll p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE p.company_id=$1 AND p.month=$2 AND p.year=$3
+       ORDER BY dep.name NULLS LAST, u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    res.json({ data: { employees: rows } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── TDS COMPLIANCE ───────────────────────────────────────────────────────────
+router.get('/compliance/tds', async (req, res) => {
+  try {
+    const { quarter, year } = req.query;
+    if (!quarter || !year) return res.status(400).json({ error: 'quarter and year required' });
+
+    const qtr = parseInt(quarter);
+    const yr  = parseInt(year);
+    // Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
+    const monthRanges = { 1:[4,5,6], 2:[7,8,9], 3:[10,11,12], 4:[1,2,3] };
+    const months = monthRanges[qtr] || [];
+    const qtrYear = qtr === 4 ? yr + 1 : yr;
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              ep.pan,
+              SUM(p.gross_earnings) AS gross_salary,
+              50000 AS standard_deduction,
+              0 AS chapter_vi_a,
+              GREATEST(0, SUM(p.gross_earnings) - 50000) AS taxable_income,
+              SUM(p.tds) AS tds_deducted,
+              SUM(p.tds) AS tds_annual,
+              FALSE AS form16_issued
+       FROM hr_monthly_payroll p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       WHERE p.company_id=$1
+         AND p.month = ANY($2) AND p.year=$3
+       GROUP BY u.id, u.employee_code, u.name, ep.pan
+       ORDER BY u.name`,
+      [req.user.company_id, months, qtrYear]
+    );
+
+    res.json({ data: { employees: rows } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GRATUITY ─────────────────────────────────────────────────────────────────
+router.get('/compliance/gratuity', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const asOf = new Date(year, 11, 31); // Dec 31 of the year
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              ep.date_of_joining AS doj,
+              EXTRACT(EPOCH FROM ($2::date - ep.date_of_joining::date)) / (365.25*86400) AS years_of_service,
+              COALESCE(es.basic_monthly, 0) AS last_basic,
+              ROUND(
+                COALESCE(es.basic_monthly,0) * 15 *
+                GREATEST(0, EXTRACT(EPOCH FROM ($2::date - ep.date_of_joining::date)) / (365.25*86400))
+                / 26
+              ) AS gratuity_amount
+       FROM users u
+       JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN LATERAL (
+         SELECT basic_monthly FROM hr_employee_salaries
+         WHERE user_id = u.id AND company_id = u.company_id
+         ORDER BY effective_from DESC LIMIT 1
+       ) es ON true
+       WHERE u.company_id=$1 AND u.is_active=TRUE AND u.role='employee'
+         AND ep.date_of_joining IS NOT NULL
+       ORDER BY years_of_service DESC`,
+      [req.user.company_id, asOf.toISOString().split('T')[0]]
+    );
+
+    const result = rows.map(r => ({
+      ...r,
+      years_of_service: parseFloat(r.years_of_service) || 0,
+      gratuity_amount: Math.min(parseFloat(r.gratuity_amount) || 0, 2000000),
+      eligible: (parseFloat(r.years_of_service) || 0) >= 5,
+    }));
+
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── BONUS ────────────────────────────────────────────────────────────────────
+router.get('/compliance/bonus', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    // FY Apr-Mar
+    const months = [4,5,6,7,8,9,10,11,12,1,2,3];
+    const y1 = year, y2 = year + 1;
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              SUM(p.basic) AS annual_basic,
+              COUNT(p.id) AS months_worked,
+              COUNT(p.id)*26 AS days_worked
+       FROM users u
+       LEFT JOIN hr_monthly_payroll p ON p.user_id = u.id
+         AND ((p.year=$2 AND p.month >= 4) OR (p.year=$3 AND p.month <= 3))
+       WHERE u.company_id=$1 AND u.is_active=TRUE AND u.role='employee'
+       GROUP BY u.id, u.employee_code, u.name
+       ORDER BY u.name`,
+      [req.user.company_id, y1, y2]
+    );
+
+    const result = rows.map(r => {
+      const annualBasic  = parseFloat(r.annual_basic) || 0;
+      const bonusWages   = Math.min(annualBasic, 7000 * 12);
+      const eligible     = annualBasic / 12 <= 21000;
+      const bonusAmount  = eligible ? Math.round(bonusWages * 0.0833) : 0;
+      return { ...r, annual_basic: annualBasic, bonus_wages: bonusWages, bonus_amount: bonusAmount, eligible };
+    });
+
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── LWF ──────────────────────────────────────────────────────────────────────
+router.get('/compliance/lwf', async (req, res) => {
+  try {
+    const { period, year } = req.query;
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              dep.name AS department,
+              COALESCE(es.basic_monthly, 0) + COALESCE(es.hra_monthly, 0) AS gross_salary,
+              6  AS lwf_employee,
+              12 AS lwf_employer
+       FROM users u
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN LATERAL (
+         SELECT basic_monthly, hra_monthly FROM hr_employee_salaries
+         WHERE user_id = u.id AND company_id = u.company_id
+         ORDER BY effective_from DESC LIMIT 1
+       ) es ON true
+       WHERE u.company_id=$1 AND u.is_active=TRUE AND u.role='employee'
+       ORDER BY dep.name NULLS LAST, u.name`,
+      [req.user.company_id]
+    );
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── MINIMUM WAGES ────────────────────────────────────────────────────────────
+router.get('/compliance/minimum-wages', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ error: 'month and year required' });
+
+    // Minimum wages by category (Maharashtra 2024 — update as needed)
+    const MW = { Unskilled: 11136, 'Semi-skilled': 12364, Skilled: 13657, 'Highly Skilled': 15270 };
+
+    const { rows } = await query(
+      `SELECT u.id, u.employee_code, u.name,
+              dep.name AS department,
+              ep.wage_category,
+              p.basic AS actual_basic
+       FROM hr_monthly_payroll p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE p.company_id=$1 AND p.month=$2 AND p.year=$3
+       ORDER BY dep.name NULLS LAST, u.name`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+
+    const result = rows.map(r => {
+      const category = r.wage_category || 'Unskilled';
+      const minWage  = MW[category] || MW.Unskilled;
+      const actual   = parseFloat(r.actual_basic) || 0;
+      return {
+        ...r,
+        wage_category: category,
+        min_wage: minWage,
+        actual_basic: actual,
+        compliance_status: actual >= minWage ? 'ok' : 'violation',
+      };
+    });
+
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── STATUTORY REGISTERS ──────────────────────────────────────────────────────
+router.get('/compliance/statutory-registers', async (req, res) => {
+  try {
+    const { register, month, year } = req.query;
+    if (!register) return res.status(400).json({ error: 'register type required' });
+
+    let rows = [];
+
+    if (register === 'form_c' || register === 'muster_roll') {
+      // Register of Adult Workers / Muster Roll
+      const result = await query(
+        `SELECT u.employee_code AS "Emp Code", u.name AS "Name",
+                ep.date_of_joining AS "DOJ",
+                dep.name AS "Department", des.name AS "Designation",
+                'Adult' AS "Category",
+                ep.father_name AS "Father/Husband Name"
+         FROM users u
+         LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+         LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+         LEFT JOIN hr_designations des ON des.id = ep.designation_id
+         WHERE u.company_id=$1 AND u.is_active=TRUE AND u.role='employee'
+         ORDER BY u.name`,
+        [req.user.company_id]
+      );
+      rows = result.rows;
+    } else if (register === 'form_14') {
+      // Register of Wages
+      const result = await query(
+        `SELECT u.employee_code AS "Emp Code", u.name AS "Name",
+                p.basic AS "Basic", p.hra AS "HRA",
+                p.gross_earnings AS "Gross",
+                p.total_deductions AS "Deductions",
+                p.net_pay AS "Net Pay",
+                p.working_days AS "Days Worked"
+         FROM hr_monthly_payroll p
+         JOIN users u ON u.id = p.user_id
+         WHERE p.company_id=$1 AND p.month=$2 AND p.year=$3
+         ORDER BY u.name`,
+        [req.user.company_id, parseInt(month)||new Date().getMonth()+1, parseInt(year)||new Date().getFullYear()]
+      );
+      rows = result.rows;
+    } else if (register === 'overtime') {
+      const result = await query(
+        `SELECT u.employee_code AS "Emp Code", u.name AS "Name",
+                ot.ot_hours AS "OT Hours", ot.ot_rate AS "Rate/hr",
+                ROUND(ot.ot_hours * ot.ot_rate) AS "OT Amount"
+         FROM hr_overtime ot
+         JOIN users u ON u.id = ot.user_id
+         WHERE ot.company_id=$1 AND ot.month=$2 AND ot.year=$3
+         ORDER BY u.name`,
+        [req.user.company_id, parseInt(month)||new Date().getMonth()+1, parseInt(year)||new Date().getFullYear()]
+      );
+      rows = result.rows;
+    } else {
+      // Generic employee list for other registers
+      const result = await query(
+        `SELECT u.employee_code AS "Emp Code", u.name AS "Name",
+                dep.name AS "Department", des.name AS "Designation",
+                ep.date_of_joining AS "Date of Joining"
+         FROM users u
+         LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+         LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+         LEFT JOIN hr_designations des ON des.id = ep.designation_id
+         WHERE u.company_id=$1 AND u.is_active=TRUE AND u.role='employee'
+         ORDER BY u.name`,
+        [req.user.company_id]
+      );
+      rows = result.rows;
+    }
+
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

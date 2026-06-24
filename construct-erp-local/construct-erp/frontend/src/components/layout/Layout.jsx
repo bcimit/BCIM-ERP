@@ -17,7 +17,8 @@ import {
   Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, IndianRupee,
   History, Mail, Image, FolderUp, MessageSquare, Database, Filter, UserCog, FileBadge, Network,
   GitCompare, TableProperties, PauseCircle, GalleryThumbnails, Archive, CalendarX, BookMarked,
-  StopCircle, Timer, BarChart2
+  StopCircle, Timer, BarChart2,
+  Scale, Heart, Gift, Award
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
@@ -189,6 +190,17 @@ const navGroups = [
     // Admin
     { to: '/hr-admin/departments',         icon: Building2,       label: 'Departments' },
     { to: '/hr-admin/appraisals',         icon: Star,            label: 'Appraisals' },
+    // Compliance
+    { to: '/hr-admin/compliance',          icon: ShieldCheck,     label: 'Compliance Dashboard' },
+    { to: '/hr-admin/pf-compliance',       icon: ShieldCheck,     label: 'PF Compliance' },
+    { to: '/hr-admin/esi-compliance',      icon: Shield,          label: 'ESI Compliance' },
+    { to: '/hr-admin/professional-tax',    icon: Landmark,        label: 'Professional Tax' },
+    { to: '/hr-admin/tds-compliance',      icon: Calculator,      label: 'TDS / Form 16' },
+    { to: '/hr-admin/gratuity-register',   icon: Award,           label: 'Gratuity Register' },
+    { to: '/hr-admin/bonus-register',      icon: Gift,            label: 'Statutory Bonus' },
+    { to: '/hr-admin/lwf',                 icon: Heart,           label: 'Labour Welfare Fund' },
+    { to: '/hr-admin/minimum-wages',       icon: Scale,           label: 'Minimum Wages' },
+    { to: '/hr-admin/statutory-registers', icon: BookMarked,      label: 'Statutory Registers' },
     // Reports & Docs
     { to: '/hr-admin/reports',            icon: FileBarChart,    label: 'HR Reports' },
     { to: '/hr-admin/documents',          icon: FolderSearch,    label: 'Documents' },
@@ -348,6 +360,7 @@ const NAV_SECTIONS = {
     { label: 'Setup',       paths: ['/hr-admin/letter-templates','/hr-admin/policies','/hr-admin/employee-segments','/hr-admin/employee-filters'] },
     { label: 'Time',        paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays','/hr-admin/essl-sync'] },
     { label: 'Payroll',     paths: ['/hr-admin/salary-revision-history','/hr-admin/salary-revision-analytics','/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/loans','/hr-admin/expenses','/hr-admin/lop-days','/hr-admin/arrears','/hr-admin/overtime','/hr-admin/stop-salary','/hr-admin/quick-salary-statement','/hr-admin/payroll-statement','/hr-admin/payroll-differences','/hr-admin/accounts-jv','/hr-admin/bank-transfer','/hr-admin/cheque-cash-statement','/hr-admin/hold-salary','/hr-admin/ytd-summary','/hr-admin/pf-ytd','/hr-admin/it-statement','/hr-admin/it-declaration','/hr-admin/loan-statement','/hr-admin/reimbursement-statement','/hr-admin/ctc-payslip','/hr-admin/pay-item-groups','/hr-admin/payroll-repository','/hr-admin/payslip-gallery','/hr-admin/departments','/hr-admin/appraisals'] },
+    { label: 'Compliance',  paths: ['/hr-admin/compliance','/hr-admin/pf-compliance','/hr-admin/esi-compliance','/hr-admin/professional-tax','/hr-admin/tds-compliance','/hr-admin/gratuity-register','/hr-admin/bonus-register','/hr-admin/lwf','/hr-admin/minimum-wages','/hr-admin/statutory-registers'] },
     { label: 'Reports',     paths: ['/hr-admin/reports'] },
     { label: 'Documents',   paths: ['/hr-admin/documents'] },
   ],

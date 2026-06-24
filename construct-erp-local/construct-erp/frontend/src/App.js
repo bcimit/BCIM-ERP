@@ -271,6 +271,17 @@ const OvertimeRegisterPage       = lazy(() => import('./pages/hr-admin/OvertimeR
 const PFYTDStatementPage         = lazy(() => import('./pages/hr-admin/PFYTDStatementPage'));
 const ReimbursementStatementPage = lazy(() => import('./pages/hr-admin/ReimbursementStatementPage'));
 const CTCPayslipPage             = lazy(() => import('./pages/hr-admin/CTCPayslipPage'));
+// Compliance pages
+const ComplianceDashboardPage    = lazy(() => import('./pages/hr-admin/ComplianceDashboardPage'));
+const PFCompliancePage           = lazy(() => import('./pages/hr-admin/PFCompliancePage'));
+const ESICompliancePage          = lazy(() => import('./pages/hr-admin/ESICompliancePage'));
+const ProfessionalTaxPage        = lazy(() => import('./pages/hr-admin/ProfessionalTaxPage'));
+const TDSCompliancePage          = lazy(() => import('./pages/hr-admin/TDSCompliancePage'));
+const GratuityRegisterPage       = lazy(() => import('./pages/hr-admin/GratuityRegisterPage'));
+const BonusRegisterPage          = lazy(() => import('./pages/hr-admin/BonusRegisterPage'));
+const LabourWelfareFundPage      = lazy(() => import('./pages/hr-admin/LabourWelfareFundPage'));
+const MinimumWagesPage           = lazy(() => import('./pages/hr-admin/MinimumWagesPage'));
+const StatutoryRegistersPage     = lazy(() => import('./pages/hr-admin/StatutoryRegistersPage'));
 
 // ── Home route resolver — sends each user to their first accessible page ──────
 const MODULE_HOME = {
@@ -650,6 +661,17 @@ export default function App() {
                 <Route path="hr-admin/pf-ytd" element={<RequireModule module="HR & Admin"><PFYTDStatementPage /></RequireModule>} />
                 <Route path="hr-admin/reimbursement-statement" element={<RequireModule module="HR & Admin"><ReimbursementStatementPage /></RequireModule>} />
                 <Route path="hr-admin/ctc-payslip" element={<RequireModule module="HR & Admin"><CTCPayslipPage /></RequireModule>} />
+                {/* Compliance */}
+                <Route path="hr-admin/compliance" element={<RequireModule module="HR & Admin"><ComplianceDashboardPage /></RequireModule>} />
+                <Route path="hr-admin/pf-compliance" element={<RequireModule module="HR & Admin"><PFCompliancePage /></RequireModule>} />
+                <Route path="hr-admin/esi-compliance" element={<RequireModule module="HR & Admin"><ESICompliancePage /></RequireModule>} />
+                <Route path="hr-admin/professional-tax" element={<RequireModule module="HR & Admin"><ProfessionalTaxPage /></RequireModule>} />
+                <Route path="hr-admin/tds-compliance" element={<RequireModule module="HR & Admin"><TDSCompliancePage /></RequireModule>} />
+                <Route path="hr-admin/gratuity-register" element={<RequireModule module="HR & Admin"><GratuityRegisterPage /></RequireModule>} />
+                <Route path="hr-admin/bonus-register" element={<RequireModule module="HR & Admin"><BonusRegisterPage /></RequireModule>} />
+                <Route path="hr-admin/lwf" element={<RequireModule module="HR & Admin"><LabourWelfareFundPage /></RequireModule>} />
+                <Route path="hr-admin/minimum-wages" element={<RequireModule module="HR & Admin"><MinimumWagesPage /></RequireModule>} />
+                <Route path="hr-admin/statutory-registers" element={<RequireModule module="HR & Admin"><StatutoryRegistersPage /></RequireModule>} />
 
                 {/* Site */}
                 <Route path="site/dpr" element={<DPRPage />} />
