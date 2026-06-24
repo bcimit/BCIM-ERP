@@ -96,6 +96,7 @@ async function ensureTable() {
   await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS director_name TEXT`);
   await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS md_name TEXT`);
   await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS note TEXT`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS terms_conditions TEXT`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS tqs_advance_recoveries (
@@ -196,13 +197,38 @@ router.get('/lookup/wos', async (req, res) => {
     const params = [company_id];
     applyProjectScope(req, wheres, params, 'wo', project_id);
     const { rows } = await query(`
-      SELECT wo.id, wo.wo_number, wo.subject, wo.total_value,
+      SELECT wo.id, wo.wo_number, wo.subject, wo.total_value, wo.wo_date,
              v.name AS vendor_name, v.id AS vendor_id
       FROM work_orders wo
       LEFT JOIN vendors v ON v.id = wo.vendor_id
       LEFT JOIN projects p ON p.id = wo.project_id
       WHERE ${wheres.join(' AND ')}
       ORDER BY wo.wo_number DESC
+      LIMIT 200
+    `, params);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET /tqs/advances/lookup/pos ──────────────────────────────────────────────
+router.get('/lookup/pos', async (req, res) => {
+  try {
+    const { company_id } = req.user;
+    const { project_id } = req.query;
+    const wheres = [`p.company_id=$1`, `COALESCE(po.status,'') NOT IN ('cancelled','rejected')`];
+    const params = [company_id];
+    applyProjectScope(req, wheres, params, 'po', project_id);
+    const { rows } = await query(`
+      SELECT po.id, COALESCE(po.po_number, po.serial_no_formatted) AS po_number,
+             po.po_date, po.grand_total AS total_value,
+             v.name AS vendor_name, v.id AS vendor_id
+      FROM purchase_orders po
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      LEFT JOIN projects p ON p.id = po.project_id
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY po.po_date DESC
       LIMIT 200
     `, params);
     res.json({ success: true, data: rows });
@@ -284,7 +310,7 @@ router.post('/', async (req, res) => {
       gross_certified_till_date, mobilisation_advance_deduction, retention_deduction,
       other_deductions, previous_certificates, balance_to_finish, current_net_payment_due,
       amount_in_words, prepared_by_name, director_name, md_name,
-      qs_handover_date, accts_received_date, remarks, note,
+      qs_handover_date, accts_received_date, remarks, note, terms_conditions,
     } = req.body;
 
     if (!vendor_name) return res.status(400).json({ success: false, message: 'vendor_name is required' });
@@ -302,8 +328,8 @@ router.post('/', async (req, res) => {
          gross_certified_till_date, mobilisation_advance_deduction, retention_deduction,
          other_deductions, previous_certificates, balance_to_finish, current_net_payment_due,
          amount_in_words, prepared_by_name, director_name, md_name,
-         qs_handover_date, accts_received_date, status, remarks, note, created_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,'pending',$32,$33,$34)
+         qs_handover_date, accts_received_date, status, remarks, note, terms_conditions, created_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,'pending',$32,$33,$34,$35)
       RETURNING *
     `, [
       company_id, project_id || null, sl_number, vendor_id || null, vendor_name,
@@ -326,7 +352,7 @@ router.post('/', async (req, res) => {
       director_name || null,
       md_name || null,
       qs_handover_date || null, accts_received_date || null,
-      remarks || null, note || null, user_id,
+      remarks || null, note || null, terms_conditions || null, user_id,
     ]);
 
     res.status(201).json({ success: true, data: rows[0] });
@@ -380,7 +406,7 @@ router.put('/:id', async (req, res) => {
       gross_certified_till_date, mobilisation_advance_deduction, retention_deduction,
       other_deductions, previous_certificates, balance_to_finish, current_net_payment_due,
       amount_in_words, prepared_by_name, director_name, md_name,
-      qs_handover_date, accts_received_date, remarks, note,
+      qs_handover_date, accts_received_date, remarks, note, terms_conditions,
     } = req.body;
 
     const { rows } = await query(`
@@ -395,8 +421,8 @@ router.put('/:id', async (req, res) => {
         balance_to_finish=$22, current_net_payment_due=$23, amount_in_words=$24,
         prepared_by_name=$25, director_name=$26, md_name=$27,
         qs_handover_date=$28, accts_received_date=$29,
-        remarks=$30, note=$31, updated_at=NOW()
-      WHERE id=$32 AND company_id=$33 AND is_deleted=FALSE
+        remarks=$30, note=$31, terms_conditions=$32, updated_at=NOW()
+      WHERE id=$33 AND company_id=$34 AND is_deleted=FALSE
       RETURNING *
     `, [
       vendor_id || null, vendor_name, project_id || null, work_desc || null,
@@ -418,7 +444,7 @@ router.put('/:id', async (req, res) => {
       director_name || null,
       md_name || null,
       qs_handover_date || null, accts_received_date || null,
-      remarks || null, note || null, id, company_id,
+      remarks || null, note || null, terms_conditions || null, id, company_id,
     ]);
 
     if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });

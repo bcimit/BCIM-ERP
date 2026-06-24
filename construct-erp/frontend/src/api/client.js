@@ -1689,6 +1689,7 @@ export const tqsAdvanceAPI = {
   recover:       (id, data) => api.post(`/tqs/advances/${id}/recover`, data),
   lookupVendors:       (params) => api.get('/tqs/advances/lookup/vendors', { params }),
   lookupWOs:           (params) => api.get('/tqs/advances/lookup/wos', { params }),
+  lookupPOs:           (params) => api.get('/tqs/advances/lookup/pos', { params }),
   lookupBillsByVendor: (params) => api.get('/tqs/advances/lookup/bills-by-vendor', { params }),
   importExcel:         (fd)     => api.post('/tqs/advances/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
   resyncFromBills:     ()       => api.post('/tqs/advances/resync-from-bills'),

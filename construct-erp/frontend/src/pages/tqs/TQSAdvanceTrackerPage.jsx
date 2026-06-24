@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import { tqsAdvanceAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, Theme } from '../../theme';
 import toast from 'react-hot-toast';
 import {
@@ -142,6 +143,7 @@ const EMPTY = {
   md_name: 'Mr. Stephen A',
   qs_handover_date: '', accts_received_date: '',
   remarks: '', note: '',
+  terms_conditions: 'Payment shall be released against certified RA bills, subject to applicable statutory deductions.\nThis advance shall be recovered proportionately from future running account bills.\nAll bills must reference this Payment Certification / Work Order number.\nRetention, if applicable, shall be released only after successful completion / DLP.',
 };
 
 function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
@@ -151,6 +153,8 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
   const [showVendors, setShowVendors] = useState(false);
   const [woSearch, setWoSearch] = useState('');
   const [showWOs, setShowWOs] = useState(false);
+  const [poSearch, setPoSearch] = useState('');
+  const [showPOs, setShowPOs] = useState(false);
 
   const { data: vendors = [] } = useQuery({
     queryKey: ['advance-vendors', vendorSearch],
@@ -161,6 +165,12 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
   const { data: wos = [] } = useQuery({
     queryKey: ['advance-wos', form.project_id],
     queryFn: () => tqsAdvanceAPI.lookupWOs({ project_id: form.project_id || undefined }).then(r => r.data?.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: pos = [] } = useQuery({
+    queryKey: ['advance-pos', form.project_id],
+    queryFn: () => tqsAdvanceAPI.lookupPOs({ project_id: form.project_id || undefined }).then(r => r.data?.data ?? []),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -201,6 +211,9 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
   const filteredWOs = wos.filter(w =>
     !woSearch || w.wo_number?.toLowerCase().includes(woSearch.toLowerCase()) || w.vendor_name?.toLowerCase().includes(woSearch.toLowerCase())
   );
+  const filteredPOs = pos.filter(p =>
+    !poSearch || p.po_number?.toLowerCase().includes(poSearch.toLowerCase()) || p.vendor_name?.toLowerCase().includes(poSearch.toLowerCase())
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
@@ -239,11 +252,27 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                   onBlur={() => setTimeout(() => setShowVendors(false), 150)}
                 />
                 {showVendors && vendors.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 max-h-44 overflow-y-auto">
-                    {vendors.slice(0, 8).map(v => (
+                  <div className="absolute z-10 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 max-h-64 overflow-y-auto">
+                    {vendors.map(v => (
                       <button key={v.id} type="button"
                         className="w-full text-left px-3 py-2 text-sm text-slate-900 hover:bg-blue-50"
-                        onMouseDown={() => { set('vendor_id', v.id); set('vendor_name', v.name); setVendorSearch(''); setShowVendors(false); }}>
+                        onMouseDown={() => {
+                          set('vendor_id', v.id); set('vendor_name', v.name); setVendorSearch(''); setShowVendors(false);
+                          // Auto-fill PO/WO no., date and value if this vendor has exactly one open WO or PO
+                          const vendorWOs = wos.filter(w => w.vendor_id === v.id);
+                          const vendorPOs = pos.filter(p => p.vendor_id === v.id);
+                          if (vendorWOs.length === 1 && !vendorPOs.length) {
+                            const w = vendorWOs[0];
+                            set('wo_number', w.wo_number);
+                            if (w.wo_date) set('po_date', w.wo_date.slice(0, 10));
+                            if (w.total_value) set('order_value', w.total_value);
+                          } else if (vendorPOs.length === 1 && !vendorWOs.length) {
+                            const p = vendorPOs[0];
+                            set('po_number', p.po_number);
+                            if (p.po_date) set('po_date', p.po_date.slice(0, 10));
+                            if (p.total_value) set('order_value', p.total_value);
+                          }
+                        }}>
                         {v.name} {v.vendor_code && <span className="text-slate-900 font-medium text-[13px] ml-1">({v.vendor_code})</span>}
                       </button>
                     ))}
@@ -272,13 +301,14 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                 />
                 {showWOs && filteredWOs.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 max-h-40 overflow-y-auto">
-                    {filteredWOs.slice(0, 6).map(w => (
+                    {filteredWOs.map(w => (
                       <button key={w.id} type="button"
                         className="w-full text-left px-3 py-2 text-sm text-slate-900 hover:bg-blue-50"
                         onMouseDown={() => {
                           set('wo_number', w.wo_number);
-                          if (w.vendor_name && !form.vendor_name) { set('vendor_name', w.vendor_name); set('vendor_id', w.vendor_id); }
-                          if (w.total_value && !form.order_value) set('order_value', w.total_value);
+                          if (w.vendor_name) { set('vendor_name', w.vendor_name); set('vendor_id', w.vendor_id); }
+                          if (w.total_value) set('order_value', w.total_value);
+                          if (w.wo_date) set('po_date', w.wo_date.slice(0, 10));
                           setWoSearch(''); setShowWOs(false);
                         }}>
                         <span className="font-medium">{w.wo_number}</span>
@@ -288,9 +318,32 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                   </div>
                 )}
               </div>
-              <div>
+              <div className="relative">
                 <Lbl>PO Number</Lbl>
-                <input className={F} value={form.po_number} onChange={e => set('po_number', e.target.value)} placeholder="PO number (if applicable)" />
+                <input className={F} placeholder="Search or type PO no..."
+                  value={poSearch || form.po_number}
+                  onChange={e => { setPoSearch(e.target.value); set('po_number', e.target.value); setShowPOs(true); }}
+                  onFocus={() => setShowPOs(true)}
+                  onBlur={() => setTimeout(() => setShowPOs(false), 150)}
+                />
+                {showPOs && filteredPOs.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 max-h-40 overflow-y-auto">
+                    {filteredPOs.map(p => (
+                      <button key={p.id} type="button"
+                        className="w-full text-left px-3 py-2 text-sm text-slate-900 hover:bg-blue-50"
+                        onMouseDown={() => {
+                          set('po_number', p.po_number);
+                          if (p.vendor_name) { set('vendor_name', p.vendor_name); set('vendor_id', p.vendor_id); }
+                          if (p.total_value) set('order_value', p.total_value);
+                          if (p.po_date) set('po_date', p.po_date.slice(0, 10));
+                          setPoSearch(''); setShowPOs(false);
+                        }}>
+                        <span className="font-medium">{p.po_number}</span>
+                        {p.vendor_name && <span className="text-slate-900 font-medium text-[13px] ml-2">— {p.vendor_name}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <Lbl>PO / WO Date</Lbl>
@@ -398,6 +451,15 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                 <div><Lbl>Managing Director</Lbl><input className={F} value={form.md_name} onChange={e => set('md_name', e.target.value)} /></div>
               </div>
             </div>
+          </div>
+
+          {/* ── Section 7: Terms & Conditions ── */}
+          <div>
+            <p className="text-[13px] font-medium text-slate-900 font-medium uppercase tracking-widest mb-3">Terms &amp; Conditions</p>
+            <Lbl>Printed on the voucher — one condition per line</Lbl>
+            <textarea className={F} rows={5} value={form.terms_conditions}
+              onChange={e => set('terms_conditions', e.target.value)}
+              placeholder="One term per line..." />
           </div>
 
         </div>
@@ -525,7 +587,8 @@ export default function TQSAdvanceTrackerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
 
-  const projectId    = searchParams.get('project') || '';
+  const { selectedProjectId } = useAuthStore();
+  const projectId    = searchParams.get('project') || selectedProjectId || '';
   const statusFilter = searchParams.get('status')  || 'all';
   const search       = searchParams.get('q')       || '';
 
