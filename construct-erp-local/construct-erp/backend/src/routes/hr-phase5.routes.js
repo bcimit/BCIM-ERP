@@ -2513,4 +2513,208 @@ router.post('/bulk-photo-upload', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Final Settlement (FnF) ────────────────────────────────────────────────────
+router.get('/final-settlement/:empId', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_final_settlements (
+        id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id            UUID REFERENCES companies(id) ON DELETE CASCADE,
+        employee_id           UUID NOT NULL,
+        settlement_date       DATE,
+        last_working_day      DATE,
+        days_worked           INT DEFAULT 0,
+        pro_rata_salary       NUMERIC(15,2) DEFAULT 0,
+        earned_leave_days     NUMERIC(8,2)  DEFAULT 0,
+        leave_encashment      NUMERIC(15,2) DEFAULT 0,
+        gratuity_years        NUMERIC(5,2)  DEFAULT 0,
+        gratuity_amount       NUMERIC(15,2) DEFAULT 0,
+        notice_period_days    INT DEFAULT 0,
+        notice_deduction      NUMERIC(15,2) DEFAULT 0,
+        arrears               NUMERIC(15,2) DEFAULT 0,
+        other_deductions      NUMERIC(15,2) DEFAULT 0,
+        gross_payable         NUMERIC(15,2) DEFAULT 0,
+        total_deductions      NUMERIC(15,2) DEFAULT 0,
+        net_payable           NUMERIC(15,2) DEFAULT 0,
+        status                TEXT DEFAULT 'Draft',
+        remarks               TEXT,
+        created_at            TIMESTAMPTZ DEFAULT NOW(),
+        updated_at            TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(company_id, employee_id)
+      )
+    `);
+
+    // Fetch existing settlement if any
+    const existing = await query(
+      `SELECT fs.*, u.name, u.employee_code, ep.designation, dep.name AS department
+       FROM hr_final_settlements fs
+       JOIN users u ON u.id = fs.employee_id
+       LEFT JOIN hr_employee_profiles ep ON ep.user_id = fs.employee_id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE fs.company_id = $1 AND fs.employee_id = $2`,
+      [req.user.company_id, req.params.empId]
+    );
+    if (existing.rows.length) return res.json({ data: existing.rows[0], calculated: false });
+
+    // Auto-calculate from separation + salary data
+    const emp = await query(
+      `SELECT u.id, u.name, u.employee_code, u.created_at AS joined_at,
+              ep.designation, ep.date_of_joining,
+              ss.basic_salary, ss.hra, ss.other_allowances,
+              dep.name AS department,
+              sep.last_working_day, sep.resignation_date, sep.reason
+       FROM users u
+       LEFT JOIN hr_employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       LEFT JOIN (
+         SELECT DISTINCT ON (employee_id) employee_id, basic, hra, other_allowances,
+           (basic + COALESCE(hra,0) + COALESCE(other_allowances,0)) AS basic_salary
+         FROM hr_salary_structures
+         WHERE company_id = $1
+         ORDER BY employee_id, created_at DESC
+       ) ss ON ss.employee_id = u.id
+       LEFT JOIN hr_separation sep ON sep.employee_id = u.id AND sep.company_id = $1
+       WHERE u.id = $2 AND u.company_id = $1`,
+      [req.user.company_id, req.params.empId]
+    );
+
+    if (!emp.rows.length) return res.status(404).json({ error: 'Employee not found' });
+    const e = emp.rows[0];
+
+    const monthlySalary = Number(e.basic_salary || 0);
+    const lwd = e.last_working_day ? new Date(e.last_working_day) : new Date();
+    const doj = e.date_of_joining ? new Date(e.date_of_joining) : (e.joined_at ? new Date(e.joined_at) : new Date());
+
+    // Days worked in current month
+    const daysWorked = lwd.getDate();
+    const proRata = monthlySalary > 0 ? Math.round((monthlySalary / 30) * daysWorked * 100) / 100 : 0;
+
+    // Gratuity: 15/26 × basic × years (eligible after 5 years)
+    const msInYear = 365.25 * 24 * 60 * 60 * 1000;
+    const yearsServed = Math.floor((lwd - doj) / msInYear * 100) / 100;
+    const gratuityYears = Math.floor(yearsServed);
+    const gratuityAmount = gratuityYears >= 5 ? Math.round((Number(e.basic || monthlySalary) / 26) * 15 * gratuityYears * 100) / 100 : 0;
+
+    // Leave encashment: assume 12 earned leave days default
+    const earnedLeaveDays = 12;
+    const leaveEncashment = monthlySalary > 0 ? Math.round((monthlySalary / 26) * earnedLeaveDays * 100) / 100 : 0;
+
+    const grossPayable = proRata + leaveEncashment + gratuityAmount;
+
+    res.json({
+      data: {
+        employee_id: e.id, name: e.name, employee_code: e.employee_code,
+        designation: e.designation, department: e.department,
+        date_of_joining: e.date_of_joining, last_working_day: e.last_working_day,
+        monthly_salary: monthlySalary, years_served: yearsServed,
+        days_worked: daysWorked, pro_rata_salary: proRata,
+        earned_leave_days: earnedLeaveDays, leave_encashment: leaveEncashment,
+        gratuity_years: gratuityYears, gratuity_amount: gratuityAmount,
+        notice_period_days: 0, notice_deduction: 0, arrears: 0,
+        other_deductions: 0, gross_payable: grossPayable,
+        total_deductions: 0, net_payable: grossPayable,
+        status: 'Draft', reason: e.reason,
+      },
+      calculated: true,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/final-settlement/:empId', async (req, res) => {
+  try {
+    const {
+      settlement_date, last_working_day, days_worked, pro_rata_salary,
+      earned_leave_days, leave_encashment, gratuity_years, gratuity_amount,
+      notice_period_days, notice_deduction, arrears, other_deductions,
+      gross_payable, total_deductions, net_payable, status, remarks,
+    } = req.body;
+    const { rows } = await query(
+      `INSERT INTO hr_final_settlements
+         (company_id, employee_id, settlement_date, last_working_day, days_worked,
+          pro_rata_salary, earned_leave_days, leave_encashment, gratuity_years,
+          gratuity_amount, notice_period_days, notice_deduction, arrears,
+          other_deductions, gross_payable, total_deductions, net_payable, status, remarks)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       ON CONFLICT (company_id, employee_id) DO UPDATE SET
+         settlement_date=$3, last_working_day=$4, days_worked=$5,
+         pro_rata_salary=$6, earned_leave_days=$7, leave_encashment=$8,
+         gratuity_years=$9, gratuity_amount=$10, notice_period_days=$11,
+         notice_deduction=$12, arrears=$13, other_deductions=$14,
+         gross_payable=$15, total_deductions=$16, net_payable=$17,
+         status=$18, remarks=$19, updated_at=NOW()
+       RETURNING *`,
+      [req.user.company_id, req.params.empId, settlement_date, last_working_day,
+       days_worked, pro_rata_salary, earned_leave_days, leave_encashment, gratuity_years,
+       gratuity_amount, notice_period_days, notice_deduction, arrears, other_deductions,
+       gross_payable, total_deductions, net_payable, status || 'Draft', remarks]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Resettlement ──────────────────────────────────────────────────────────────
+router.get('/resettlement', async (req, res) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_resettlement (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id  UUID REFERENCES companies(id) ON DELETE CASCADE,
+        employee_id UUID NOT NULL,
+        month       INT NOT NULL,
+        year        INT NOT NULL,
+        amount      NUMERIC(15,2) DEFAULT 0,
+        description TEXT,
+        reason      TEXT,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    const { month, year } = req.query;
+    const { rows } = await query(
+      `SELECT r.*, u.name, u.employee_code, dep.name AS department
+       FROM hr_resettlement r
+       JOIN users u ON u.id = r.employee_id
+       LEFT JOIN hr_employee_profiles ep ON ep.user_id = r.employee_id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE r.company_id = $1
+         AND ($2::int IS NULL OR r.month = $2::int)
+         AND ($3::int IS NULL OR r.year = $3::int)
+       ORDER BY u.name`,
+      [req.user.company_id, month || null, year || null]
+    );
+    if (rows.length) return res.json({ data: rows });
+
+    // Return all active employees with 0 resettlement
+    const emps = await query(
+      `SELECT u.id, u.name, u.employee_code, dep.name AS department
+       FROM users u
+       LEFT JOIN hr_employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE u.company_id = $1 AND u.role != 'superadmin'
+         AND COALESCE(ep.employment_status,'active') = 'active'
+       ORDER BY u.name LIMIT 100`,
+      [req.user.company_id]
+    );
+    res.json({ data: emps.rows.map(e => ({ ...e, employee_id: e.id, amount: 0, description: '', month: Number(month), year: Number(year) })) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/resettlement', async (req, res) => {
+  try {
+    const { month, year, entries } = req.body;
+    if (!Array.isArray(entries) || !entries.length) return res.json({ data: [] });
+    const values = entries.map((e, i) =>
+      `($1, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5}, $${i * 5 + 6})`
+    ).join(',');
+    const params = [req.user.company_id];
+    entries.forEach(e => params.push(e.employee_id, month, year, e.amount || 0, e.description || ''));
+    await query(
+      `INSERT INTO hr_resettlement (company_id, employee_id, month, year, amount, description)
+       VALUES ${values}
+       ON CONFLICT DO NOTHING`,
+      params
+    );
+    res.json({ success: true, saved: entries.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

@@ -266,6 +266,9 @@ const PayslipGalleryPage         = lazy(() => import('./pages/hr-admin/PayslipGa
 const ChequeCashStatementPage    = lazy(() => import('./pages/hr-admin/ChequeCashStatementPage'));
 const SalaryRevisionAnalyticsPage= lazy(() => import('./pages/hr-admin/SalaryRevisionAnalyticsPage'));
 const StopSalaryProcessingPage   = lazy(() => import('./pages/hr-admin/StopSalaryProcessingPage'));
+const ReleaseSalaryPage          = lazy(() => import('./pages/hr-admin/ReleaseSalaryPage'));
+const FinalSettlementPage        = lazy(() => import('./pages/hr-admin/FinalSettlementPage'));
+const ResettlementPage           = lazy(() => import('./pages/hr-admin/ResettlementPage'));
 const ArrearsPage                = lazy(() => import('./pages/hr-admin/ArrearsPage'));
 const OvertimeRegisterPage       = lazy(() => import('./pages/hr-admin/OvertimeRegisterPage'));
 const PFYTDStatementPage         = lazy(() => import('./pages/hr-admin/PFYTDStatementPage'));
@@ -656,6 +659,9 @@ export default function App() {
                 <Route path="hr-admin/cheque-cash-statement" element={<RequireModule module="HR & Admin"><ChequeCashStatementPage /></RequireModule>} />
                 <Route path="hr-admin/salary-revision-analytics" element={<RequireModule module="HR & Admin"><SalaryRevisionAnalyticsPage /></RequireModule>} />
                 <Route path="hr-admin/stop-salary" element={<RequireModule module="HR & Admin"><StopSalaryProcessingPage /></RequireModule>} />
+                <Route path="hr-admin/release-salary" element={<RequireModule module="HR & Admin"><ReleaseSalaryPage /></RequireModule>} />
+                <Route path="hr-admin/final-settlement" element={<RequireModule module="HR & Admin"><FinalSettlementPage /></RequireModule>} />
+                <Route path="hr-admin/resettlement" element={<RequireModule module="HR & Admin"><ResettlementPage /></RequireModule>} />
                 <Route path="hr-admin/arrears" element={<RequireModule module="HR & Admin"><ArrearsPage /></RequireModule>} />
                 <Route path="hr-admin/overtime" element={<RequireModule module="HR & Admin"><OvertimeRegisterPage /></RequireModule>} />
                 <Route path="hr-admin/pf-ytd" element={<RequireModule module="HR & Admin"><PFYTDStatementPage /></RequireModule>} />
