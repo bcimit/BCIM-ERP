@@ -74,6 +74,7 @@ const tabs = [
   { id: 'compliance',      label: 'Compliance Alerts',   icon: AlertTriangle  },
   { id: 'confirmation',    label: 'Confirmation',        icon: CheckCircle2   },
   { id: 'advanced',        label: 'Advanced HR',         icon: Briefcase      },
+  { id: 'emp-master',      label: 'Emp. Master',         icon: FileText       },
 ];
 
 function MonthFilter({ month, setMonth, year, setYear }) {
@@ -661,11 +662,219 @@ function AdvancedHRTab({ summary, jobs, candidates, training, goals, cases, exit
   );
 }
 
+// ── Employee Master Reports (8 reports, derived client-side from the master list) ──
+const SEPARATED = ['resigned', 'terminated', 'inactive', 'exited', 'separated', 'left'];
+
+function EmpMasterTab({ employees, headcountRows, month, year, expiryDays, setExpiryDays }) {
+  const list = Array.isArray(employees) ? employees : [];
+  const btnStyle = { background: 'linear-gradient(135deg,#0A1F5C,#1e3a8a)' };
+  const ExportBtn = ({ rows, filename }) => (
+    <button onClick={() => downloadCSV(rows, filename)}
+      className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black text-white" style={btnStyle}>
+      <Download className="h-4 w-4" /> Export
+    </button>
+  );
+  const fmtDate = (v) => (v ? String(v).slice(0, 10) : '-');
+  const statusBadge = (v) => <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-black text-blue-700">{v || 'active'}</span>;
+  const parseD = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
+
+  // 1. Master list — everyone
+  const master = list;
+
+  // 2. New joinees — joined in the selected month/year
+  const newJoinees = list.filter((e) => {
+    const d = parseD(e.date_of_joining);
+    return d && (d.getMonth() + 1) === month && d.getFullYear() === year;
+  });
+
+  // 3. Probation / confirmation due — has a probation end date and not separated
+  const probation = list.filter((e) =>
+    e.probation_end_date && !SEPARATED.includes(String(e.employment_status || '').toLowerCase())
+  );
+
+  // 4. Separations / exits — any employee marked separated
+  const separations = list.filter((e) =>
+    SEPARATED.includes(String(e.employment_status || '').toLowerCase())
+  );
+
+  // 5. Headcount summary — reuse backend headcount rows
+  const headcount = Array.isArray(headcountRows) ? headcountRows : [];
+
+  // 6. Contract expiry — contract-type employees, flag those expiring within the window
+  const today = new Date();
+  const contractAll = list.filter((e) =>
+    String(e.employment_type || '').toLowerCase().includes('contract')
+  ).map((e) => {
+    const end = parseD(e.contract_end_date || e.probation_end_date);
+    const daysLeft = end ? Math.round((end - today) / 86400000) : null;
+    return { ...e, _end: end, _daysLeft: daysLeft };
+  });
+  const contractExpiry = contractAll.filter((e) =>
+    e._daysLeft === null || (e._daysLeft >= 0 && e._daysLeft <= expiryDays)
+  );
+
+  // 7. Transfers — derived where data exists on the profile
+  const transfers = list.filter((e) => e.transfer_date || e.previous_department || e.previous_work_location);
+
+  // 8. Document checklist — Photo is the one document field present on the master list
+  const docChecklist = list;
+
+  return (
+    <div className="space-y-8">
+
+      {/* 1 */}
+      <ReportSection title="1. Employee Master List" subtitle="Complete master register of all employees"
+        action={<ExportBtn rows={master} filename="employee-master-list.csv" />}>
+        <div className="mb-3 text-sm font-bold text-slate-500">{master.length} employees</div>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'department_name', label: 'Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'designation_name', label: 'Designation', render: (r) => r.designation_name || r.designation || '-' },
+            { key: 'employment_type', label: 'Type', render: (r) => r.employment_type || 'permanent' },
+            { key: 'employment_status', label: 'Status', render: (r) => statusBadge(r.employment_status) },
+            { key: 'date_of_joining', label: 'DOJ', render: (r) => fmtDate(r.date_of_joining) },
+            { key: 'work_location', label: 'Location' },
+          ]}
+          rows={master}
+        />
+      </ReportSection>
+
+      {/* 2 */}
+      <ReportSection title={`2. New Joinee Report — ${MONTHS[month]} ${year}`} subtitle="Employees who joined in the selected month"
+        action={<ExportBtn rows={newJoinees} filename={`new-joinees-${MONTHS[month]}-${year}.csv`} />}>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'department_name', label: 'Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'designation_name', label: 'Designation', render: (r) => r.designation_name || r.designation || '-' },
+            { key: 'employment_type', label: 'Type', render: (r) => r.employment_type || 'permanent' },
+            { key: 'date_of_joining', label: 'DOJ', render: (r) => fmtDate(r.date_of_joining) },
+          ]}
+          rows={newJoinees}
+          empty={`No new joinees in ${MONTHS[month]} ${year}`}
+        />
+      </ReportSection>
+
+      {/* 3 */}
+      <ReportSection title="3. Employee Confirmation / Probation Report" subtitle="Employees on probation or due for confirmation"
+        action={<ExportBtn rows={probation} filename="probation-report.csv" />}>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'department_name', label: 'Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'date_of_joining', label: 'DOJ', render: (r) => fmtDate(r.date_of_joining) },
+            { key: 'probation_end_date', label: 'Probation End', render: (r) => fmtDate(r.probation_end_date) },
+            { key: 'employment_status', label: 'Status', render: (r) => statusBadge(r.employment_status) },
+          ]}
+          rows={probation}
+          empty="No employees on probation"
+        />
+      </ReportSection>
+
+      {/* 4 */}
+      <ReportSection title="4. Employee Separation / Exit Report" subtitle="Employees who have separated (resigned, terminated, exited)"
+        action={<ExportBtn rows={separations} filename="separations.csv" />}>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'department_name', label: 'Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'employment_status', label: 'Exit Type', render: (r) => statusBadge(r.employment_status) },
+            { key: 'date_of_leaving', label: 'Last Working Day', render: (r) => fmtDate(r.date_of_leaving) },
+            { key: 'leaving_reason', label: 'Reason' },
+          ]}
+          rows={separations}
+          empty="No separations recorded"
+        />
+      </ReportSection>
+
+      {/* 5 */}
+      <ReportSection title="5. Headcount Summary Report" subtitle="Department-wise headcount breakdown"
+        action={<ExportBtn rows={headcount} filename="headcount-summary.csv" />}>
+        <DataTable
+          columns={[
+            { key: 'department', label: 'Department', render: (r) => r.department || 'Unassigned' },
+            { key: 'total', label: 'Total' },
+            { key: 'active', label: 'Active' },
+            { key: 'permanent', label: 'Permanent' },
+            { key: 'contract', label: 'Contract' },
+            { key: 'probation', label: 'Probation' },
+          ]}
+          rows={headcount}
+        />
+      </ReportSection>
+
+      {/* 6 */}
+      <ReportSection title="6. Contract Expiry Alert Report" subtitle="Contract employees and upcoming contract endings"
+        action={
+          <div className="flex items-center gap-3">
+            <select value={expiryDays} onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 focus:outline-none">
+              {[30, 60, 90, 180].map((d) => <option key={d} value={d}>Next {d} days</option>)}
+            </select>
+            <ExportBtn rows={contractExpiry} filename="contract-expiry.csv" />
+          </div>
+        }>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'department_name', label: 'Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'employment_type', label: 'Type', render: (r) => r.employment_type || '-' },
+            { key: '_end', label: 'Contract End', render: (r) => fmtDate(r._end) },
+            { key: '_daysLeft', label: 'Days Left', render: (r) => (r._daysLeft === null ? 'Not set' : r._daysLeft) },
+          ]}
+          rows={contractExpiry}
+          empty="No contract employees found"
+        />
+      </ReportSection>
+
+      {/* 7 */}
+      <ReportSection title="7. Employee Transfer Report" subtitle="Inter-department / inter-location transfers"
+        action={<ExportBtn rows={transfers} filename="employee-transfers.csv" />}>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'previous_department', label: 'From Dept' },
+            { key: 'department_name', label: 'To Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'transfer_date', label: 'Date', render: (r) => fmtDate(r.transfer_date) },
+          ]}
+          rows={transfers}
+          empty="No transfer records found"
+        />
+      </ReportSection>
+
+      {/* 8 */}
+      <ReportSection title="8. Employee Document Checklist Report" subtitle="Profile photo on file; full document status lives in Employee Documents"
+        action={<ExportBtn rows={docChecklist.map((e) => ({ employee_code: e.employee_code, name: e.name, photo_on_file: e.profile_photo_url ? 'Yes' : 'No' }))} filename="document-checklist.csv" />}>
+        <DataTable
+          columns={[
+            { key: 'employee_code', label: 'Code' },
+            { key: 'name', label: 'Name' },
+            { key: 'department_name', label: 'Dept', render: (r) => r.department_name || r.department || '-' },
+            { key: 'photo', label: 'Photo', render: (r) => (r.profile_photo_url
+              ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              : <XCircle className="h-4 w-4 text-red-400" />) },
+          ]}
+          rows={docChecklist}
+        />
+      </ReportSection>
+
+    </div>
+  );
+}
+
 export default function HRReportsPage() {
   const now = new Date();
   const [activeTab, setActiveTab] = useState('overview');
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [expiryDays, setExpiryDays] = useState(60);
 
   const { data: empData, isLoading: loadingEmployees } = useQuery({
     queryKey: ['hr-report-employees'],
@@ -827,6 +1036,7 @@ export default function HRReportsPage() {
           {activeTab === 'compliance'   && <ComplianceTab compliance={compliance} />}
           {activeTab === 'confirmation' && <HRConfirmationReportPage embedded />}
           {activeTab === 'advanced'     && <AdvancedHRTab summary={advancedSummary} jobs={jobs} candidates={candidates} training={training} goals={goals} cases={cases} exits={exits} letters={letters} policies={policies} serviceRequests={serviceRequests} />}
+          {activeTab === 'emp-master'   && <EmpMasterTab employees={employees} headcountRows={headcountRows} month={month} year={year} expiryDays={expiryDays} setExpiryDays={setExpiryDays} />}
         </>
       )}
     </div>
