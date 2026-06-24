@@ -1528,7 +1528,7 @@ function LogoutScreen({ user, onDone }) {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const firstName = (user?.name || 'there').split(' ')[0];
+  const firstName = `Mr. ${(user?.name || 'there').split(' ')[0]}`;
 
   return (
     <>
