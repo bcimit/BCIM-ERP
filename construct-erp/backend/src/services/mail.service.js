@@ -413,8 +413,7 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
     `  2. Click this secure link to set your password: ${resetUrl}`,
     '     (the link expires in 24 hours)',
     '  3. Choose a strong password (min 8 characters with uppercase, numbers & symbols)',
-    '  4. Enable two-factor authentication (OTP) when prompted, for added security',
-    '  5. Complete your profile information',
+    '  4. Complete your profile information',
     '',
     `WHAT YOU CAN ACCESS (as ${displayRole} in ${displayDept}):`,
     ...c.modules.map(([m, p]) => `  • ${m} (${p})`),
@@ -423,7 +422,7 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
     ...c.features.map(f => `  • ${f}`),
     '',
     'YOUR FIRST STEPS:',
-    '  1. Complete password setup & two-factor authentication',
+    '  1. Complete your password setup',
     '  2. Update your profile picture and contact info',
     '  3. Review the dashboard tutorial (shown on first login)',
     `  4. Read the user guide for your department: ${guideUrl}`,
@@ -491,7 +490,6 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
           <li>Open the access portal above.</li>
           <li>Click the button below to set your password.</li>
           <li>Choose a strong password (min 8 chars with uppercase, numbers &amp; symbols).</li>
-          <li>Enable two-factor authentication (OTP) when prompted, for added security.</li>
           <li>Complete your profile information.</li>
         </ol>
         <p style="text-align:center;margin:22px 0">
@@ -521,7 +519,7 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
 
         ${sectionTitle('Your First Steps')}
         <ol style="margin:0;padding-left:20px;font-size:14px;color:#475569;line-height:1.6">
-          <li>Complete password setup &amp; two-factor authentication.</li>
+          <li>Complete your password setup.</li>
           <li>Update your profile picture and contact info.</li>
           <li>Review the dashboard tutorial (shown on first login).</li>
           <li>Read the <a href="${guideUrl}" style="color:#0a2057;text-decoration:none">user guide for your department</a>.</li>
