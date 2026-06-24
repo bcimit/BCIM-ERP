@@ -116,6 +116,60 @@ function GradeBadge({ grade }) {
   );
 }
 
+// ── Construction position ranking ───────────────────────────────────────────────
+// Ranks a designation title into a seniority level (1 = top). Keyword rules are
+// ordered most-specific → most-general; first match wins.
+const POSITION_RULES = [
+  // 1 — Apex
+  { rank: 1,  kw: ['chairman','managing director',' md','md ','proprietor','founder','owner','ceo','chief executive'] },
+  // 2 — Board / Directors
+  { rank: 2,  kw: ['executive director','whole time director','joint managing','director','president'] },
+  // 3 — C-suite
+  { rank: 3,  kw: ['cfo','coo','cto','chief operating','chief financial','chief technical','chief engineer'] },
+  // 4 — Vice President / GM
+  { rank: 4,  kw: ['vice president','vp ',' vp','sr. general manager','senior general manager','sr general manager','general manager',' gm','gm '] },
+  // 5 — Dy / Asst GM
+  { rank: 5,  kw: ['deputy general manager','dgm','assistant general manager','agm','associate vice'] },
+  // 6 — Senior Manager / Project Director / Head
+  { rank: 6,  kw: ['project director','sr. manager','senior manager','sr manager','head -','head of','department head','dept head'] },
+  // 7 — Manager (Project / Construction / Functional)
+  { rank: 7,  kw: ['project manager','construction manager','site manager','plant manager','procurement manager','hr manager','finance manager','accounts manager','manager'] },
+  // 8 — Dy / Asst Manager
+  { rank: 8,  kw: ['deputy manager','dy. manager','dy manager','assistant manager','asst. manager','asst manager'] },
+  // 9 — Senior Engineer / QS / Planning
+  { rank: 9,  kw: ['sr. engineer','senior engineer','sr engineer','planning engineer','billing engineer','quantity surveyor','qs engineer','qa/qc','qaqc','quality engineer','design engineer'] },
+  // 10 — Engineer / Officer
+  { rank: 10, kw: ['site engineer','execution engineer','civil engineer','mechanical engineer','electrical engineer','project engineer','engineer','officer','executive','accountant','surveyor','draughtsman','draftsman'] },
+  // 11 — Junior Engineer / Trainee
+  { rank: 11, kw: ['junior engineer','jr. engineer','jr engineer',' je','graduate engineer','get','trainee engineer','diploma engineer','assistant','asst.'] },
+  // 12 — Supervisor / Foreman
+  { rank: 12, kw: ['site supervisor','supervisor','foreman','charge hand','chargehand','overseer'] },
+  // 13 — Operator / Technician / Storekeeper
+  { rank: 13, kw: ['operator','technician','mechanic','electrician','storekeeper','store keeper','clerk','assistant'] },
+  // 14 — Skilled trades
+  { rank: 14, kw: ['mason','carpenter','bar bender','fitter','welder','plumber','painter','driver'] },
+  // 15 — Helpers / Labour
+  { rank: 15, kw: ['helper','labour','labor','worker','peon','office boy','watchman','security','gardener'] },
+];
+
+// Map explicit grade L1–L6 onto the same 1–15 scale so it can override titles.
+const GRADE_TO_RANK = { L1: 1, L2: 4, L3: 7, L4: 10, L5: 12, L6: 14 };
+
+function positionRank(designation = '') {
+  const t = ` ${String(designation).toLowerCase()} `;
+  for (const rule of POSITION_RULES) {
+    if (rule.kw.some(k => t.includes(k))) return rule.rank;
+  }
+  return 11; // sensible default for unknown white-collar titles
+}
+
+// Unified seniority: explicit grade wins, else derive from the position title.
+function seniority(emp) {
+  const g = String(emp?.grade || '').toUpperCase();
+  if (GRADE_TO_RANK[g]) return GRADE_TO_RANK[g];
+  return positionRank(emp?.designation);
+}
+
 // ── Avatar ────────────────────────────────────────────────────────────────────
 const AVATAR_COLORS = [
   ['#6366F1','#4F46E5'],['#0EA5E9','#0284C7'],['#10B981','#059669'],
@@ -249,11 +303,10 @@ function DivisionView({ employees, onClick, searchQ }) {
       if (!map[div.key].depts[deptKey]) map[div.key].depts[deptKey] = [];
       map[div.key].depts[deptKey].push(emp);
     });
-    // Sort members within each dept by grade (L1 first)
-    const gradeRank = (g) => g ? (parseInt(g.replace(/\D/g,''),10) || 99) : 99;
+    // Sort members within each dept by position/seniority (most senior first)
     Object.values(map).forEach(({ depts }) =>
       Object.values(depts).forEach(members =>
-        members.sort((a,b) => gradeRank(a.grade) - gradeRank(b.grade) || a.name.localeCompare(b.name))
+        members.sort((a,b) => seniority(a) - seniority(b) || a.name.localeCompare(b.name))
       )
     );
     // Sort divisions by predefined order
@@ -410,19 +463,17 @@ function DepartmentView({ employees, onClick, searchQ }) {
   const [collapsed, setCollapsed] = useState({});
   const toggle = (d) => setCollapsed(c => ({...c,[d]:!c[d]}));
 
-  const gradeRank = (g) => g ? (parseInt(g.replace(/\D/g,''),10) || 99) : 99;
-
   const grouped = useMemo(() => {
     const map = {};
     employees.forEach(e => { const d = e.department||'Unassigned'; if(!map[d]) map[d]=[]; map[d].push(e); });
-    // Sort members within each dept by grade (L1 first)
-    Object.values(map).forEach(members => members.sort((a,b) => gradeRank(a.grade) - gradeRank(b.grade) || a.name.localeCompare(b.name)));
-    // Sort depts: higher-grade dept first, then alpha; Unassigned last
+    // Sort members within each dept by position/seniority (most senior first)
+    Object.values(map).forEach(members => members.sort((a,b) => seniority(a) - seniority(b) || a.name.localeCompare(b.name)));
+    // Sort depts: most-senior dept first, then alpha; Unassigned last
     return Object.entries(map).sort(([a, ma],[b, mb]) => {
       if (a==='Unassigned') return 1;
       if (b==='Unassigned') return -1;
-      const topA = gradeRank(ma[0]?.grade);
-      const topB = gradeRank(mb[0]?.grade);
+      const topA = seniority(ma[0]);
+      const topB = seniority(mb[0]);
       return topA !== topB ? topA - topB : a.localeCompare(b);
     });
   }, [employees]);
@@ -573,11 +624,9 @@ function OrgTreeNode({ node, allEmps, collapsed, toggle, onClick, searchQ, depth
   );
 }
 
-const gradeRankH = (g) => g ? (parseInt(String(g).replace(/\D/g,''),10) || 99) : 99;
-
 // Build a top-down tree. Uses real reporting_manager_id when available;
-// otherwise auto-generates a hierarchy by seniority:
-//   MD (lowest grade) → division head → department head → staff chain
+// otherwise auto-generates a hierarchy by position/seniority:
+//   MD → division head → department head → staff chain
 function buildHierarchy(employees) {
   const byId = new Map(employees.map(e => [e.id, e]));
   const realCount = employees.filter(e => e.reporting_manager_id && byId.has(e.reporting_manager_id)).length;
@@ -590,12 +639,12 @@ function buildHierarchy(employees) {
     };
   }
 
-  // ── Auto hierarchy by seniority ───────────────────────────────────────────
+  // ── Auto hierarchy by position/seniority ──────────────────────────────────
   const sorted = [...employees].sort((a,b) =>
-    gradeRankH(a.grade) - gradeRankH(b.grade) || (a.name||'').localeCompare(b.name||''));
+    seniority(a) - seniority(b) || (a.name||'').localeCompare(b.name||''));
   if (!sorted.length) return { mode: 'auto', employees: [] };
 
-  const root = sorted[0];                       // MD / highest grade
+  const root = sorted[0];                       // MD / most senior position
   const parentOf = { [root.id]: null };
 
   // Group everyone else by division, then by department
@@ -616,14 +665,14 @@ function buildHierarchy(employees) {
     const { depts } = divMap[divKey];
     // The single most-senior person across the whole division reports to the MD.
     const allInDiv = Object.values(depts).flat()
-      .sort((a,b) => gradeRankH(a.grade) - gradeRankH(b.grade) || (a.name||'').localeCompare(b.name||''));
+      .sort((a,b) => seniority(a) - seniority(b) || (a.name||'').localeCompare(b.name||''));
     const divHead = allInDiv[0];
     parentOf[divHead.id] = root.id;
 
     // Each department forms a vertical chain (head → next → next …).
     // Department heads (other than the divHead) report to the divHead.
     Object.values(depts).forEach(members => {
-      members.sort((a,b) => gradeRankH(a.grade) - gradeRankH(b.grade) || (a.name||'').localeCompare(b.name||''));
+      members.sort((a,b) => seniority(a) - seniority(b) || (a.name||'').localeCompare(b.name||''));
       members.forEach((m, i) => {
         if (m.id === divHead.id) return;           // already parented to root
         parentOf[m.id] = i === 0 ? divHead.id : members[i-1].id;
@@ -648,8 +697,8 @@ function HierarchyView({ employees, onClick, searchQ }) {
     <div className="pb-16 overflow-x-auto">
       {mode === 'auto' && (
         <div className="mx-4 mb-6 bg-blue-50 border border-blue-200 rounded-2xl px-5 py-3 text-sm text-blue-800">
-          <p className="font-bold mb-0.5">ℹ️ Auto-generated by seniority</p>
-          <p className="text-xs">This tree is built automatically from each person&#39;s grade (L1 → L6) and department, with the Managing Director at the top. To use actual reporting lines, set each employee&#39;s reporting manager under <strong>HR → Employees → Edit</strong>.</p>
+          <p className="font-bold mb-0.5">ℹ️ Auto-generated by position</p>
+          <p className="text-xs">This tree is built automatically from each person&#39;s designation (e.g. Managing Director → GM → Manager → Engineer → Supervisor → Worker) and department, with the Managing Director at the top. To use actual reporting lines instead, set each employee&#39;s reporting manager under <strong>HR → Employees → Edit</strong>.</p>
         </div>
       )}
       <div className="flex justify-center flex-wrap gap-8 px-4" style={{minWidth:'max-content'}}>
