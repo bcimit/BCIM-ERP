@@ -168,10 +168,13 @@ router.get('/:id', async (req, res) => {
       `SELECT * FROM ign_items WHERE ign_id = $1 ORDER BY COALESCE(sort_order, sl_no)`,
       [req.params.id]
     );
-    // fetch linked bills
+    // fetch linked bills (enriched so Bill Booking can auto-pull without extra calls)
     const bills = await query(
-      `SELECT id, sl_number, inv_number, total_amount, workflow_status FROM tqs_bills
-       WHERE ign_id = $1 AND is_deleted = FALSE`,
+      `SELECT id, sl_number, inv_number, inv_date, vendor_name,
+              basic_amount, gst_amount, total_amount, workflow_status
+       FROM tqs_bills
+       WHERE ign_id = $1 AND is_deleted = FALSE
+       ORDER BY created_at`,
       [req.params.id]
     );
     res.json({ data: { ...ign.rows[0], items: items.rows, bills: bills.rows } });
