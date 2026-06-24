@@ -310,7 +310,6 @@ const DEPT_CONTENT = [
     label: 'Operations',
     modules: [['Material Requisitions','Create, Edit, View'],['Daily Progress Report','Create, View'],['Work Orders','View, Approve'],['Measurements / BOQ','Create, View']],
     features: ['Material Requisitions (create & track)','Site Progress & DPR','Work Orders (view & approve)','Reports & Analytics'],
-    approval: { po: '₹5,00,000', bills: '₹2,00,000', scope: 'your assigned projects' },
     guide: 'operations',
   },
   {
@@ -318,7 +317,6 @@ const DEPT_CONTENT = [
     label: 'Engineering & Technical',
     modules: [['BOQ & Estimation','Create, Edit, View'],['Drawings','View, Download'],['QA / QC Checklists','Create, Approve'],['Measurements','Create, View']],
     features: ['BOQ & Estimation','Drawing register','QA/QC inspections','Measurement sheets','Reports & Analytics'],
-    approval: { po: '₹2,00,000', bills: '₹1,00,000', scope: 'your assigned projects' },
     guide: 'engineering',
   },
   {
@@ -326,7 +324,6 @@ const DEPT_CONTENT = [
     label: 'Safety & HSE',
     modules: [['Safety Inspections','Create, Edit, View'],['Incident Reports','Create, Approve'],['Compliance Register','View, Download']],
     features: ['Safety inspections & audits','Incident & near-miss logging','Toolbox talks','Compliance reports'],
-    approval: { po: '₹50,000', bills: '₹50,000', scope: 'safety & PPE items' },
     guide: 'hse',
   },
   {
@@ -334,7 +331,6 @@ const DEPT_CONTENT = [
     label: 'Plant & Machinery',
     modules: [['Equipment Register','Create, Edit, View'],['Deployment & Logs','Create, View'],['Fuel & Maintenance','Create, Approve']],
     features: ['Equipment register','Deployment & daily logs','Fuel consumption','Maintenance schedules','Hire & rental'],
-    approval: { po: '₹2,00,000', bills: '₹1,00,000', scope: 'spares & maintenance' },
     guide: 'plant',
   },
   {
@@ -342,7 +338,6 @@ const DEPT_CONTENT = [
     label: 'Procurement & Store',
     modules: [['Purchase Orders','Create, Approve'],['Vendors','Create, Edit, View'],['GRN / Goods Receipt','Create, View'],['Stock & Inventory','Create, Edit']],
     features: ['Purchase Orders (create & approve)','Vendor management','GRN & material inward','Stock & Inventory','Reports & Analytics'],
-    approval: { po: '₹10,00,000', bills: '₹3,00,000', scope: 'all material categories' },
     guide: 'procurement',
   },
   {
@@ -350,7 +345,6 @@ const DEPT_CONTENT = [
     label: 'Finance & Accounts',
     modules: [['Bills & Payments','Process, Approve'],['Budget Tracking','View, Edit'],['Chart of Accounts','Create, View'],['Reports & Analytics','View, Download']],
     features: ['Bills & Payments (process & manage)','Budget tracking','Project cost control','Financial reports & dashboards'],
-    approval: { po: '₹25,00,000', bills: '₹25,00,000', scope: 'all company projects' },
     guide: 'finance',
   },
   {
@@ -358,7 +352,6 @@ const DEPT_CONTENT = [
     label: 'HR & Administration',
     modules: [['Employees','Create, Edit, View'],['Attendance & Leave','View, Approve'],['Payroll','Process, View'],['HR Reports','View, Download']],
     features: ['Employee management','Attendance & leave','Payroll processing','Compliance & statutory reports'],
-    approval: { po: '₹1,00,000', bills: '₹1,00,000', scope: 'admin & office expenses' },
     guide: 'hr',
   },
   {
@@ -366,7 +359,6 @@ const DEPT_CONTENT = [
     label: 'Business Development',
     modules: [['Tenders','Create, Edit, View'],['Clients','Create, View'],['Quotations','Create, Approve']],
     features: ['Tender management','Client & CRM','Quotations & estimates','Reports & Analytics'],
-    approval: { po: '—', bills: '—', scope: 'tender & BD expenses' },
     guide: 'business-development',
   },
 ];
@@ -375,7 +367,6 @@ const GENERAL_CONTENT = {
   label: 'General',
   modules: [['Dashboard','View'],['Reports','View, Download'],['My Profile','Edit, View']],
   features: ['Dashboards','Reports & Analytics','Notifications','My profile'],
-  approval: { po: '—', bills: '—', scope: 'as assigned by management' },
   guide: 'getting-started',
 };
 
@@ -398,6 +389,9 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
   const dashboardUrl = `${base}/dashboard`;
   const reportsUrl   = `${base}/hr-admin/reports`;
   const approvalsUrl = `${base}/approvals`;
+  const guideUrl     = `${base}/help/${c.guide}`;
+  const supportPhone = process.env.SUPPORT_PHONE || '+91 80 4710 0000';
+  const supportHours = 'Mon–Fri, 9:00 AM – 6:00 PM IST';
 
   const subject = `Welcome to BCIM ConstructERP — Login Access for ${displayName}`;
 
@@ -419,7 +413,8 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
     `  2. Click this secure link to set your password: ${resetUrl}`,
     '     (the link expires in 24 hours)',
     '  3. Choose a strong password (min 8 characters with uppercase, numbers & symbols)',
-    '  4. Complete your profile information',
+    '  4. Enable two-factor authentication (OTP) when prompted, for added security',
+    '  5. Complete your profile information',
     '',
     `WHAT YOU CAN ACCESS (as ${displayRole} in ${displayDept}):`,
     ...c.modules.map(([m, p]) => `  • ${m} (${p})`),
@@ -427,17 +422,29 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
     'KEY FEATURES YOU\'LL USE:',
     ...c.features.map(f => `  • ${f}`),
     '',
-    'APPROVAL LIMITS:',
-    `  • Purchase Orders up to : ${c.approval.po}`,
-    `  • Bills up to           : ${c.approval.bills}`,
-    `  • Requisition scope     : ${c.approval.scope}`,
+    'YOUR FIRST STEPS:',
+    '  1. Complete password setup & two-factor authentication',
+    '  2. Update your profile picture and contact info',
+    '  3. Review the dashboard tutorial (shown on first login)',
+    `  4. Read the user guide for your department: ${guideUrl}`,
+    '',
+    'QUICK SHORTCUTS:',
+    `  Dashboard         : ${dashboardUrl}`,
+    `  My Reports        : ${reportsUrl}`,
+    `  Approvals Pending : ${approvalsUrl}`,
     '',
     'SECURITY REMINDERS:',
     '  • Never share your password   • Log out after each session',
     '  • Change your password regularly   • Report suspicious activity immediately',
     '',
+    'SYSTEM DETAILS:',
+    '  Browser   : Chrome, Firefox or Safari (latest versions)',
+    '  Internet  : Works best with 5 Mbps+ connection',
+    '  Timezone  : IST (Indian Standard Time)',
+    '',
     'GETTING HELP:',
     '  Email support : support@bcim.in',
+    `  Phone support : ${supportPhone} (${supportHours})`,
     '  Help centre   : Click the ? icon on any page',
     '',
     '— BCIM Engineering',
@@ -484,6 +491,7 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
           <li>Open the access portal above.</li>
           <li>Click the button below to set your password.</li>
           <li>Choose a strong password (min 8 chars with uppercase, numbers &amp; symbols).</li>
+          <li>Enable two-factor authentication (OTP) when prompted, for added security.</li>
           <li>Complete your profile information.</li>
         </ol>
         <p style="text-align:center;margin:22px 0">
@@ -511,12 +519,13 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
           ${c.features.map(bullet).join('')}
         </ul>
 
-        ${sectionTitle('Approval Limits')}
-        <table style="width:100%;border-collapse:collapse;font-size:14px">
-          ${row('Purchase Orders up to', c.approval.po)}
-          ${row('Bills up to', c.approval.bills)}
-          ${row('Requisition scope', c.approval.scope)}
-        </table>
+        ${sectionTitle('Your First Steps')}
+        <ol style="margin:0;padding-left:20px;font-size:14px;color:#475569;line-height:1.6">
+          <li>Complete password setup &amp; two-factor authentication.</li>
+          <li>Update your profile picture and contact info.</li>
+          <li>Review the dashboard tutorial (shown on first login).</li>
+          <li>Read the <a href="${guideUrl}" style="color:#0a2057;text-decoration:none">user guide for your department</a>.</li>
+        </ol>
 
         ${sectionTitle('Quick Shortcuts')}
         <p style="font-size:14px;line-height:1.9;margin:0">
@@ -533,9 +542,17 @@ const sendWelcomeLoginMail = async ({ to, name, role, department, company, login
           ${bullet('Report suspicious activity immediately.')}
         </ul>
 
+        ${sectionTitle('System Details')}
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          ${row('Browser', 'Chrome, Firefox or Safari (latest versions)')}
+          ${row('Internet', 'Works best with a 5 Mbps+ connection')}
+          ${row('Timezone', 'IST (Indian Standard Time)')}
+        </table>
+
         ${sectionTitle('Getting Help')}
         <p style="font-size:14px;color:#475569;line-height:1.7;margin:0">
           <strong>Email support:</strong> <a href="mailto:support@bcim.in" style="color:#0a2057;text-decoration:none">support@bcim.in</a><br>
+          <strong>Phone support:</strong> ${supportPhone} <span style="color:#94a3b8">(${supportHours})</span><br>
           <strong>In-app help:</strong> Click the <strong>?</strong> icon on any page.
         </p>
 
