@@ -8,9 +8,27 @@ const fs     = require('fs');
 const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
+const { sendWelcomeLoginMail } = require('../services/mail.service');
+const { createPasswordResetToken, getResetBaseUrl } = require('../controllers/auth.controller');
 
 router.use(authenticate);
 router.use(authorize('super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'));
+
+// Fire-and-forget welcome email with a password-reset link — mirrors users.routes.js
+const sendWelcomeMail = ({ id, name, email, role }) => {
+  if (!email) return;
+  const baseUrl = getResetBaseUrl();
+  createPasswordResetToken(id)
+    .then(token => sendWelcomeLoginMail({
+      to:       email,
+      name,
+      role,
+      loginUrl: baseUrl,
+      resetUrl: `${baseUrl}/reset-password?token=${token}`,
+    }))
+    .then(r  => console.log(`[mail] Welcome email → ${email}: ${r.sent ? 'sent' : r.reason}`))
+    .catch(e => console.error(`[mail] Welcome email failed for ${email}:`, e.message));
+};
 
 // ─── Multer setup ─────────────────────────────────────────────────────────────
 const uploadDir = path.join(__dirname, '../../uploads/hr-docs');
@@ -422,6 +440,8 @@ router.post('/', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    sendWelcomeMail({ id: userId, name, email, role: role || 'viewer' });
 
     // Return full employee record
     const { rows } = await query(`${employeeSelect} WHERE u.id = $1`, [userId]);
