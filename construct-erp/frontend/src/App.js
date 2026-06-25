@@ -373,7 +373,7 @@ function getHomeRoute(user) {
   // Approver / manager roles → My Approvals page as home
   if (APPROVER_ROLES.includes(role)) return '/approvals';
   const mods = user.accessible_modules;
-  // Staff with no admin modules → ESS Portal (like GreytHR)
+  // Staff with no admin modules → ESS Portal
   if (!mods || mods.length === 0) return '/ess';
   const hasAdminModule = mods.some(m => MODULE_HOME[m]);
   if (!hasAdminModule) return '/ess';

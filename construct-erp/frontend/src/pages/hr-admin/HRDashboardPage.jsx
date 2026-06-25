@@ -701,7 +701,7 @@ export default function HRDashboardPage() {
               </div>
             </motion.div>
 
-            {/* ── GREYTHR-STYLE ANALYTICS CHARTS ───────────────────────── */}
+            {/* ── ANALYTICS CHARTS ─────────────────────────────────────── */}
             <div className="grid lg:grid-cols-2 gap-6">
 
               {/* Years In Service Distribution */}

@@ -2102,7 +2102,7 @@ export default function Layout() {
         </div>
       )}
 
-      {/* ── HR secondary nav (greytHR-style) ── */}
+      {/* ── HR secondary nav ── */}
       {pageGroup === 'HR & Admin' && <HREmployeeNav />}
 
       {/* ── Page content: sidebar + main ── */}
