@@ -326,18 +326,16 @@ function OpeningBalancesModal({ accounts, onClose }) {
   );
 }
 
-/* ── Sidebar filter item ─────────────────────────────────────────────────── */
-function FilterItem({ active, dot, label, count, onClick }) {
+/* ── Horizontal filter chip (top bar) ────────────────────────────────────── */
+function FilterChip({ active, dot, label, count, onClick }) {
   return (
     <button onClick={onClick}
-      className={clsx('w-full flex items-center justify-between px-2.5 py-2 rounded-md text-sm transition-colors',
-        active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100')}>
-      <span className="flex items-center gap-2 truncate">
-        {dot && <span className={clsx('w-2 h-2 rounded-full shrink-0', dot)} />}
-        <span className="truncate">{label}</span>
-      </span>
+      className={clsx('inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors whitespace-nowrap',
+        active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
+      {dot && <span className={clsx('w-2 h-2 rounded-full shrink-0', active ? 'bg-white/80' : dot)} />}
+      <span>{label}</span>
       {count != null && (
-        <span className={clsx('text-[11px] rounded-full px-1.5 py-0.5', active ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400')}>{count}</span>
+        <span className={clsx('text-[11px] rounded-full px-1.5 leading-5', active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400')}>{count}</span>
       )}
     </button>
   );
@@ -408,7 +406,6 @@ export default function ChartOfAccountsPage() {
   const rhs = (totals.liability || 0) + (totals.equity || 0) + netIncome;
   const diff = lhs - rhs;
   const balanced = Math.abs(diff) < 1;
-  const typesPresent = TYPES.filter(t => counts[t] > 0).length;
 
   // Apply client-side filters (type / normal-side / sub-group) to get displayed rows
   const displayed = useMemo(() => {
@@ -462,61 +459,8 @@ export default function ChartOfAccountsPage() {
   );
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-
-      {/* ── FILTER SIDEBAR ─────────────────────────────────────────────── */}
-      <aside className="w-60 shrink-0 bg-white border-r border-slate-200 sticky top-0 self-start max-h-screen overflow-y-auto py-5 hidden lg:block">
-        <div className="px-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1 mb-2">Filter by Type</p>
-          <div className="space-y-0.5">
-            <FilterItem active={!typeFilter} dot="bg-blue-400" label="All Accounts" count={allRows.length} onClick={() => setTypeFilter('')} />
-            {TYPES.map(t => (
-              <FilterItem key={t} active={typeFilter === t} dot={TYPE_META[t].dot} label={TYPE_META[t].label}
-                count={counts[t] || 0} onClick={() => setTypeFilter(typeFilter === t ? '' : t)} />
-            ))}
-          </div>
-        </div>
-
-        <div className="h-px bg-slate-100 my-4 mx-4" />
-
-        <div className="px-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-1 mb-2">Projects</p>
-          <div className="space-y-0.5">
-            <FilterItem active={!projectFilter} label="All Projects" onClick={() => setProjectFilter('')} />
-            {projects.map(p => (
-              <FilterItem key={p.id} active={projectFilter === p.id}
-                label={`${p.project_code ? p.project_code + ' — ' : ''}${p.name}`}
-                onClick={() => setProjectFilter(projectFilter === p.id ? '' : p.id)} />
-            ))}
-          </div>
-        </div>
-
-        <div className="h-px bg-slate-100 my-4 mx-4" />
-
-        {/* KPI mini stack */}
-        <div className="px-4 space-y-2">
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">Total Accounts</p>
-            <p className="text-xl font-bold text-blue-600 leading-none mt-1">{allRows.length}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Across {typesPresent} categor{typesPresent === 1 ? 'y' : 'ies'}</p>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">Accounting Equation</p>
-            <p className={clsx('text-sm font-bold leading-none mt-1.5', balanced ? 'text-emerald-600' : 'text-amber-600')}>
-              {balanced ? 'Balanced' : `Off by ₹${inr(Math.abs(diff))}`}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-1">A = L + E + Net Income</p>
-          </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">Net Income (YTD)</p>
-            <p className={clsx('text-sm font-bold font-mono leading-none mt-1.5', netIncome >= 0 ? 'text-emerald-600' : 'text-red-600')}>₹{inr(netIncome)}</p>
-            <p className="text-[11px] text-slate-400 mt-1">Income − Expense</p>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── MAIN ───────────────────────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 px-6 py-5 space-y-5">
+    <div className="min-h-screen bg-slate-50">
+      <main className="px-6 py-5 space-y-5">
 
         {/* Page header */}
         <div className="flex items-start justify-between flex-wrap gap-3">
@@ -546,6 +490,23 @@ export default function ChartOfAccountsPage() {
               className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
               <Plus className="w-4 h-4" /> New Account
             </button>
+          </div>
+        </div>
+
+        {/* Top filter bar — type chips (left) + quick stats (right) */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <FilterChip active={!typeFilter} dot="bg-blue-400" label="All" count={allRows.length} onClick={() => setTypeFilter('')} />
+          {TYPES.map(t => (
+            <FilterChip key={t} active={typeFilter === t} dot={TYPE_META[t].dot} label={TYPE_META[t].label}
+              count={counts[t] || 0} onClick={() => setTypeFilter(typeFilter === t ? '' : t)} />
+          ))}
+          <div className="ml-auto flex items-center gap-3 text-xs">
+            <span className={clsx('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-medium',
+              balanced ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100')}>
+              <Scale className="w-3.5 h-3.5" />
+              {balanced ? 'Balanced' : `Off by ₹${inr(Math.abs(diff))}`}
+            </span>
+            <span className="text-slate-400">Net Income <span className={clsx('font-mono font-semibold', netIncome >= 0 ? 'text-emerald-600' : 'text-red-600')}>₹{inr(netIncome)}</span></span>
           </div>
         </div>
 
@@ -589,6 +550,11 @@ export default function ChartOfAccountsPage() {
             value={subFilter} onChange={e => setSubFilter(e.target.value)}>
             <option value="">All Sub-groups</option>
             {subTypes.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="border border-slate-200 rounded-md px-3 py-2 text-sm bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-200 max-w-[200px]"
+            value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
+            <option value="">All Projects (company-wide)</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
           </select>
 
           <div className="ml-auto flex items-center gap-2">
