@@ -308,7 +308,13 @@ function ManualJETab({ accounts }) {
   const [showForm, setShowForm] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
   const [viewRecord, setViewRecord] = useState(null);
-  const [filters, setFilters] = useState({ status: '', search: '', from: '', to: '' });
+  const [filters, setFilters] = useState({ status: '', search: '', from: '', to: '', project_id: '' });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['je-list-projects'],
+    queryFn: () => projectAPI.list().then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const params = useMemo(() => Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), [filters]);
   const { data, isLoading } = useQuery({
@@ -343,6 +349,11 @@ function ManualJETab({ accounts }) {
           value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} />
         <input type="date" className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
           value={filters.to} onChange={e => setFilters(f => ({ ...f, to: e.target.value }))} />
+        <select className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          value={filters.project_id} onChange={e => setFilters(f => ({ ...f, project_id: e.target.value }))}>
+          <option value="">All Projects</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
+        </select>
         <div className="ml-auto flex gap-2">
           <button onClick={() => downloadCsv(`je-${dayjs().format('YYYY-MM-DD')}.csv`, exportRows())} disabled={!rows.length}
             className="flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50 disabled:opacity-40">
@@ -407,7 +418,13 @@ function ManualJETab({ accounts }) {
 // ── Automation Log tab ────────────────────────────────────────────────────────
 function AutomationLogTab() {
   const [viewRecord, setViewRecord] = useState(null);
-  const [filters, setFilters] = useState({ source: '', from: '', to: '' });
+  const [filters, setFilters] = useState({ source: '', from: '', to: '', project_id: '' });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['je-auto-projects'],
+    queryFn: () => projectAPI.list().then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const params = useMemo(() => Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), [filters]);
   const { data, isLoading, refetch } = useQuery({
@@ -478,11 +495,18 @@ function AutomationLogTab() {
           <option value="auto_tqs_bill">Bill Tracker</option>
           <option value="auto_tds_deposit">TDS Deposit</option>
           <option value="auto_retention_release">Retention</option>
+          <option value="auto_tqs_advance">Advance Paid</option>
+          <option value="auto_tqs_advance_recovery">Advance Recovery</option>
         </select>
         <input type="date" className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none"
           value={filters.from} onChange={e => setFilters(f => ({ ...f, from: e.target.value }))} />
         <input type="date" className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none"
           value={filters.to} onChange={e => setFilters(f => ({ ...f, to: e.target.value }))} />
+        <select className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none"
+          value={filters.project_id} onChange={e => setFilters(f => ({ ...f, project_id: e.target.value }))}>
+          <option value="">All Projects</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
+        </select>
         <button onClick={() => refetch()} className="flex items-center gap-1 px-3 py-2 text-sm border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>

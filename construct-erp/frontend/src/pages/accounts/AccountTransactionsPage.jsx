@@ -3,11 +3,12 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { Landmark } from 'lucide-react';
-import { chartOfAccountsAPI } from '../../api/client';
+import { chartOfAccountsAPI, projectAPI } from '../../api/client';
 import { inr } from '../dashboards/DashKPI';
 
 export default function AccountTransactionsPage() {
   const [accountId, setAccountId] = useState('');
+  const [projectId, setProjectId] = useState('');
 
   const { data: coaData } = useQuery({
     queryKey: ['chart-of-accounts-all'],
@@ -15,9 +16,15 @@ export default function AccountTransactionsPage() {
   });
   const accounts = coaData ?? [];
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ['account-tx-projects'],
+    queryFn: () => projectAPI.list().then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['account-transactions', accountId],
-    queryFn: () => chartOfAccountsAPI.transactions(accountId).then(r => r.data?.data),
+    queryKey: ['account-transactions', accountId, projectId],
+    queryFn: () => chartOfAccountsAPI.transactions(accountId, { project_id: projectId || undefined }).then(r => r.data?.data),
     enabled: !!accountId,
   });
 
@@ -35,11 +42,16 @@ export default function AccountTransactionsPage() {
         </div>
       </div>
 
-      <div className="px-6 py-5">
+      <div className="px-6 py-5 flex flex-wrap gap-2">
         <select className="border border-slate-200 rounded-md px-3 py-2 text-sm bg-white w-72 focus:outline-none focus:ring-2 focus:ring-blue-200"
           value={accountId} onChange={e => setAccountId(e.target.value)}>
           <option value="">— Select account —</option>
           {accounts.map(a => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+        </select>
+        <select className="border border-slate-200 rounded-md px-3 py-2 text-sm bg-white w-64 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          value={projectId} onChange={e => setProjectId(e.target.value)}>
+          <option value="">All Projects (company-wide)</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
         </select>
       </div>
 

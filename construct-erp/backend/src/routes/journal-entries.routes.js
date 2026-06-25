@@ -332,18 +332,20 @@ router.delete('/:id', authenticate, async (req, res) => {
 // ── AUTOMATION LOG — posted JVs from non-manual sources ──────────────────────
 router.get('/automation-log', authenticate, async (req, res) => {
   try {
-    const { source, from, to, limit = 200, offset = 0 } = req.query;
+    const { source, from, to, project_id, limit = 200, offset = 0 } = req.query;
     const conditions = [`je.company_id = $1`, `je.source != 'manual'`];
     const params = [req.user.company_id]; let p = 1;
     if (source) { conditions.push(`je.source = $${++p}`); params.push(source); }
     if (from)   { conditions.push(`je.entry_date >= $${++p}`); params.push(from); }
     if (to)     { conditions.push(`je.entry_date <= $${++p}`); params.push(to); }
+    if (project_id) { conditions.push(`je.project_id = $${++p}`); params.push(project_id); }
     const { rows } = await query(
-      `SELECT je.*, u.name AS created_by_name,
+      `SELECT je.*, u.name AS created_by_name, pr.name AS project_name, pr.project_code,
               COALESCE((SELECT SUM(debit) FROM journal_entry_lines WHERE journal_entry_id = je.id), 0) AS total_debit,
               COALESCE((SELECT SUM(credit) FROM journal_entry_lines WHERE journal_entry_id = je.id), 0) AS total_credit
        FROM journal_entries je
        LEFT JOIN users u ON u.id = je.created_by
+       LEFT JOIN projects pr ON pr.id = je.project_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY je.entry_date DESC, je.created_at DESC
        LIMIT $${++p} OFFSET $${++p}`,

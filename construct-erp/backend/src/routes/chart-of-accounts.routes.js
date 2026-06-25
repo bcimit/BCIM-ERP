@@ -108,7 +108,7 @@ async function getAccountBalance(accountId, companyId) {
 // ── LIST ─────────────────────────────────────────────────────────────────────
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { account_type, search } = req.query;
+    const { account_type, search, project_id } = req.query;
     const conditions = ['company_id = $1'];
     const params = [req.user.company_id];
     let p = 1;
@@ -116,9 +116,16 @@ router.get('/', authenticate, async (req, res) => {
     if (account_type) { conditions.push(`account_type = $${++p}`); params.push(account_type); }
     if (search) { conditions.push(`(code ILIKE $${++p} OR name ILIKE $${p})`); params.push(`%${search}%`); }
 
+    // Project-scoped balances exclude the company-wide opening_balance (it's not
+    // attributable to any one project) and restrict the movement to that
+    // project's own journal entries instead of every entry on the account.
+    let projectClause = '';
+    if (project_id) { projectClause = ` AND je.project_id = $${++p}`; params.push(project_id); }
+    const openingTerm = project_id ? '0' : 'COALESCE(ca.opening_balance, 0)';
+
     const rows = await query(
       `SELECT ca.*,
-              COALESCE(ca.opening_balance, 0)
+              ${openingTerm}
               + CASE WHEN ca.account_type IN ('asset','expense')  THEN  1 ELSE -1 END
                 * COALESCE(
                     (SELECT SUM(jel.debit) - SUM(jel.credit)
@@ -126,7 +133,7 @@ router.get('/', authenticate, async (req, res) => {
                      JOIN journal_entries je ON je.id = jel.journal_entry_id
                      WHERE jel.account_id = ca.id
                        AND je.company_id  = ca.company_id
-                       AND je.status = 'posted'),
+                       AND je.status = 'posted'${projectClause}),
                     0)
               AS balance
        FROM chart_of_accounts ca
@@ -143,28 +150,35 @@ router.get('/', authenticate, async (req, res) => {
 // ── ACCOUNT TRANSACTIONS (posted journal lines + running balance) ────────────
 router.get('/:id/transactions', authenticate, async (req, res) => {
   try {
+    const { project_id } = req.query;
     const acc = await query(`SELECT * FROM chart_of_accounts WHERE id = $1 AND company_id = $2`, [req.params.id, req.user.company_id]);
     if (!acc.rows.length) return res.status(404).json({ error: 'Account not found' });
     const account = acc.rows[0];
     const sign = ['asset', 'expense'].includes(account.account_type) ? 1 : -1;
+
+    const params = [req.params.id, req.user.company_id];
+    let projectClause = '';
+    if (project_id) { params.push(project_id); projectClause = ` AND je.project_id = $${params.length}`; }
 
     const r = await query(
       `SELECT jel.id, jel.debit, jel.credit, jel.description,
               je.id AS journal_entry_id, je.entry_no, je.entry_date, je.narration
        FROM journal_entry_lines jel
        JOIN journal_entries je ON je.id = jel.journal_entry_id
-       WHERE jel.account_id = $1 AND je.company_id = $2 AND je.status = 'posted'
+       WHERE jel.account_id = $1 AND je.company_id = $2 AND je.status = 'posted'${projectClause}
        ORDER BY je.entry_date ASC, je.created_at ASC`,
-      [req.params.id, req.user.company_id]
+      params
     );
 
-    let balance = parseFloat(account.opening_balance || 0);
+    // Project-scoped drill-down starts from zero — the account's opening_balance
+    // is a company-wide figure, not attributable to any single project.
+    let balance = project_id ? 0 : parseFloat(account.opening_balance || 0);
     const transactions = r.rows.map(row => {
       balance += (parseFloat(row.debit) - parseFloat(row.credit)) * sign;
       return { ...row, running_balance: balance };
     });
 
-    res.json({ data: { account, opening_balance: parseFloat(account.opening_balance || 0), transactions, closing_balance: balance } });
+    res.json({ data: { account, opening_balance: project_id ? 0 : parseFloat(account.opening_balance || 0), transactions, closing_balance: balance } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

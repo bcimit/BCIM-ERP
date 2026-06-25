@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import { BookOpen, Plus, Search, X, Sparkles, Trash2, Pencil } from 'lucide-react';
-import { chartOfAccountsAPI } from '../../api/client';
+import { chartOfAccountsAPI, projectAPI } from '../../api/client';
 import { inr } from '../dashboards/DashKPI';
 
 const TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
@@ -96,12 +96,19 @@ function AccountModal({ initial, onClose }) {
 export default function ChartOfAccountsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
   const [modal, setModal] = useState(null); // null | {} | account
   const qc = useQueryClient();
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ['coa-projects'],
+    queryFn: () => projectAPI.list().then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['chart-of-accounts', typeFilter, search],
-    queryFn: () => chartOfAccountsAPI.list({ account_type: typeFilter || undefined, search: search || undefined }).then(r => r.data),
+    queryKey: ['chart-of-accounts', typeFilter, search, projectFilter],
+    queryFn: () => chartOfAccountsAPI.list({ account_type: typeFilter || undefined, search: search || undefined, project_id: projectFilter || undefined }).then(r => r.data),
   });
   const rows = data?.data ?? [];
 
@@ -177,8 +184,20 @@ export default function ChartOfAccountsPage() {
           <option value="">All Types</option>
           {TYPES.map(t => <option key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</option>)}
         </select>
+        <select className="border border-slate-200 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+          value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
+          <option value="">All Projects (company-wide)</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
+        </select>
         <span className="ml-auto text-xs text-slate-400">{rows.length} account{rows.length !== 1 ? 's' : ''}</span>
       </div>
+      {projectFilter && (
+        <div className="px-6 pb-3 -mt-2">
+          <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-md px-3 py-1.5 inline-block">
+            Showing balances for this project only — opening balances aren't included since those are company-wide, not per-project.
+          </p>
+        </div>
+      )}
 
       <div className="px-6 pb-10">
         <div className="bg-white border border-slate-200 rounded-md overflow-hidden">

@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { BarChart3, Scale, FileBarChart, Download, FileDown, Clock3, Wallet, BookOpen } from 'lucide-react';
-import { chartOfAccountsAPI, reportAPI, journalEntryAPI } from '../../api/client';
+import { chartOfAccountsAPI, reportAPI, journalEntryAPI, projectAPI } from '../../api/client';
 import { inr } from '../dashboards/DashKPI';
 import { downloadCsv, downloadPdf } from '../../utils/exportCsv';
 import dayjs from 'dayjs';
@@ -156,10 +156,17 @@ export default function AccountingReportsPage({ initialTab }) {
   const [tab, setTab] = useState(initialTab || 'trial-balance');
   const [dbFrom, setDbFrom] = useState(dayjs().format('YYYY-MM-DD'));
   const [dbTo, setDbTo] = useState(dayjs().format('YYYY-MM-DD'));
+  const [projectId, setProjectId] = useState('');
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['reports-projects'],
+    queryFn: () => projectAPI.list().then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['chart-of-accounts', 'reports'],
-    queryFn: () => chartOfAccountsAPI.list().then(r => r.data),
+    queryKey: ['chart-of-accounts', 'reports', projectId],
+    queryFn: () => chartOfAccountsAPI.list({ project_id: projectId || undefined }).then(r => r.data),
     enabled: !['ar-aging', 'ap-aging', 'day-book'].includes(tab),
   });
 
@@ -309,6 +316,21 @@ export default function AccountingReportsPage({ initialTab }) {
           })}
         </div>
       </div>
+
+      {!['ar-aging', 'ap-aging', 'day-book'].includes(tab) && (
+        <div className="px-6 pt-4 flex flex-wrap items-center gap-2">
+          <select className="border border-slate-200 rounded-md px-3 py-2 text-sm bg-white w-64 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            value={projectId} onChange={e => setProjectId(e.target.value)}>
+            <option value="">All Projects (company-wide)</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
+          </select>
+          {projectId && (
+            <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-md px-3 py-1.5">
+              Scoped to this project — opening balances excluded (company-wide, not per-project).
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="px-6 py-5">
         {(tab === 'ar-aging' && arLoading) || (tab === 'ap-aging' && apLoading) || (tab === 'day-book' && dayBookLoading) || (!['ar-aging','ap-aging','day-book'].includes(tab) && isLoading) ? (
