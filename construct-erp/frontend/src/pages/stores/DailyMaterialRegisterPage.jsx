@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { projectAPI } from '../../api/client';
 import { Calendar, Download, TrendingUp, AlertCircle, ArrowDown, ArrowUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -8,7 +9,8 @@ const inr = (v) => `₹${Number(v||0).toLocaleString('en-IN',{maximumFractionDig
 const fmt_date = (d) => d ? new Date(d).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : '—';
 
 export default function DailyMaterialRegisterPage() {
-  const [projectId, setProjectId] = useState('');
+  const [searchParams] = useSearchParams();
+  const [projectId, setProjectId] = useState(searchParams.get('project') || '');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [materialType, setMaterialType] = useState('');
