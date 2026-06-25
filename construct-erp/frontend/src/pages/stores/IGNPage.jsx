@@ -15,7 +15,7 @@ import { ignAPI, projectAPI, grsAPI, poAPI, vendorAPI, inventoryAPI } from '../.
 import useAuthStore from '../../store/authStore';
 import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
-import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
+import { PageHeader, Theme } from '../../theme';
 import { CONSTRUCTION_UNITS as UNITS } from '../../constants/units';
 import IGNPrintTemplate from './IGNPrintTemplate';
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
@@ -419,13 +419,6 @@ export default function IGNPage() {
     URL.revokeObjectURL(url); toast.success('CSV exported');
   };
 
-  const STATUS_FILTERS = [
-    { key: 'all',       label: 'All',       count: ignList.length },
-    { key: 'pending',   label: 'Pending',   count: counts.pending,   color: 'bg-amber-500' },
-    { key: 'inspected', label: 'Inspected', count: counts.inspected, color: 'bg-blue-500' },
-    { key: 'approved',  label: 'Approved',  count: counts.approved,  color: 'bg-emerald-500' },
-  ];
-
   return (
     <div style={{ background: Theme.pageBg, minHeight: '100vh' }}>
       <PageHeader
@@ -451,11 +444,33 @@ export default function IGNPage() {
       />
 
       <div className="p-6 md:p-8 max-w-full mx-auto">
+        {/* KPI summary cards — also act as status filters */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <ThemeKpiCard icon={FileText}     label="Total IGNs"  value={ignList.length}     color="slate" />
-          <ThemeKpiCard icon={Clock}        label="Pending"     value={counts.pending}     color="amber" />
-          <ThemeKpiCard icon={Eye}          label="Inspected"   value={counts.inspected}   color="blue" />
-          <ThemeKpiCard icon={CheckCircle2} label="Approved"    value={counts.approved}    color="emerald" />
+          {[
+            { key: 'all',       label: 'Total IGNs', value: ignList.length,   icon: FileText,     topbar: 'before:bg-slate-400',   soft: 'bg-slate-100',  text: 'text-slate-600' },
+            { key: 'pending',   label: 'Pending',    value: counts.pending,   icon: Clock,        topbar: 'before:bg-amber-500',   soft: 'bg-amber-50',   text: 'text-amber-600' },
+            { key: 'inspected', label: 'Inspected',  value: counts.inspected, icon: Eye,          topbar: 'before:bg-blue-500',    soft: 'bg-blue-50',    text: 'text-blue-600' },
+            { key: 'approved',  label: 'Approved',   value: counts.approved,  icon: CheckCircle2, topbar: 'before:bg-emerald-500', soft: 'bg-emerald-50', text: 'text-emerald-600' },
+          ].map(c => {
+            const Icon = c.icon;
+            const active = statusFilter === c.key;
+            return (
+              <button key={c.key} onClick={() => setStatusFilter(c.key)}
+                className={clsx(
+                  'relative bg-white border rounded-xl p-4 text-left transition-all hover:shadow-md overflow-hidden',
+                  "before:content-[''] before:absolute before:top-0 before:left-0 before:right-0 before:h-1", c.topbar,
+                  active ? 'border-slate-900 ring-2 ring-slate-200' : 'border-slate-200')}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{c.label}</span>
+                  <span className={clsx('w-7 h-7 rounded-lg flex items-center justify-center', c.soft)}>
+                    <Icon className={clsx('w-4 h-4', c.text)} />
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-slate-800 mt-2 tabular-nums">{c.value}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{active ? '● Filtering by this' : 'Tap to filter'}</div>
+              </button>
+            );
+          })}
         </div>
 
         {counts.pending > 0 && (
@@ -469,33 +484,27 @@ export default function IGNPage() {
         )}
 
         <div className="bg-white border border-slate-200 rounded-xl p-3 mb-5 flex flex-wrap items-center gap-3 shadow-sm">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {STATUS_FILTERS.map(f => (
-              <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
-                  statusFilter === f.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'
-                )}>
-                {f.color && <span className={clsx('w-1.5 h-1.5 rounded-full', f.color)} />}
-                {f.label}
-                <span className={clsx('px-1.5 py-0.5 rounded text-[10px] font-medium',
-                  statusFilter === f.key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-                )}>{f.count}</span>
-              </button>
-            ))}
+          {statusFilter !== 'all' && (
+            <button onClick={() => setStatusFilter('all')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 text-white">
+              {STATUS_CONFIG[statusFilter]?.label || statusFilter}
+              <X size={12} />
+            </button>
+          )}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search IGN, supplier, DC…"
+              className="h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-indigo-400 transition w-64" />
           </div>
-          <div className="flex-1" />
           <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)}
             className="h-9 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm text-slate-700 outline-none focus:border-indigo-400">
             <option value="">All Projects</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search IGN, supplier, DC…"
-              className="h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none focus:border-indigo-400 transition w-56" />
-          </div>
-          <span className="text-xs text-slate-500">{filtered.length} of {ignList.length}</span>
+          <span className="ml-auto text-xs text-slate-500 font-medium">
+            {filtered.length} <span className="text-slate-400">of {ignList.length}</span>
+          </span>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -517,7 +526,11 @@ export default function IGNPage() {
                   ))
                 ) : filtered.map(ign => (
                   <tr key={ign.id} onClick={() => setSelectedId(ign.id)}
-                    className="cursor-pointer hover:bg-indigo-50/30 transition-colors group">
+                    className={clsx('cursor-pointer hover:bg-indigo-50/30 transition-colors group border-l-2',
+                      ign.status === 'approved' ? 'border-l-emerald-400'
+                        : ign.status === 'inspected' ? 'border-l-blue-400'
+                        : ign.status === 'cancelled' ? 'border-l-red-300'
+                        : 'border-l-amber-400')}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
