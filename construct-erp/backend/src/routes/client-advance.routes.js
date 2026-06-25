@@ -185,7 +185,9 @@ router.post('/:id/receive', authorize('super_admin','admin','finance_manager','a
           WHERE id = $2`, [recv, car.project_id]);
       }
 
-      // ── Auto-post journal entry: Dr Bank, Cr Accounts Receivable (advance from client) ──
+      // ── Auto-post journal entry: Dr Bank, Cr Client Advances (liability) ──
+      // An advance received before billing is a liability (unearned), not a
+      // reduction of receivables. It is drained as RA bills are raised.
       await postAutoJournal(client, {
         companyId: req.user.company_id,
         userId: req.user.id,
@@ -196,7 +198,7 @@ router.post('/:id/receive', authorize('super_admin','admin','finance_manager','a
         source: 'auto_client_advance',
         lines: [
           { code: '1010', debit: recv, description: `Advance receipt — ${car.client_name || ''}` },
-          { code: '1100', credit: recv, description: `Advance receipt — ${car.client_name || ''}` },
+          { code: '2050', credit: recv, description: `Client advance (liability) — ${car.client_name || ''}` },
         ],
       });
 

@@ -58,6 +58,7 @@ const STANDARD_COA = [
   { code: '1510', name: 'Office Equipment',        account_type: 'asset',     sub_type: 'Fixed Asset' },
   { code: '2000', name: 'Accounts Payable',        account_type: 'liability', sub_type: 'Current Liability' },
   { code: '2010', name: 'Goods Received Not Invoiced (GRIN)', account_type: 'liability', sub_type: 'Current Liability' },
+  { code: '2050', name: 'Client Advances (Advance from Customers)', account_type: 'liability', sub_type: 'Current Liability' },
   { code: '2100', name: 'Output GST Payable',      account_type: 'liability', sub_type: 'Current Liability' },
   { code: '2200', name: 'TDS Payable',             account_type: 'liability', sub_type: 'Current Liability' },
   { code: '2300', name: 'Retention Payable',        account_type: 'liability', sub_type: 'Current Liability' },
