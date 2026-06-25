@@ -82,22 +82,27 @@ export default function BOQBudgetBreakdownPage() {
   const totals = useMemo(() => {
     const t = {};
     const ta = {};
-    for (const h of costHeads) { t[h] = 0; ta[h] = 0; }
+    const ti = {};
+    for (const h of costHeads) { t[h] = 0; ta[h] = 0; ti[h] = 0; }
     let grand = 0;
     let grandActual = 0;
+    let grandInvoiced = 0;
     let unallocated = 0;
     for (const item of items) {
       for (const h of costHeads) {
         const v = item.breakdown?.[h]?.amount || 0;
         const a = item.breakdown?.[h]?.actual || 0;
+        const inv = item.breakdown?.[h]?.invoiced || 0;
         t[h] += v;
         ta[h] += a;
+        ti[h] += inv;
         grand += v;
         grandActual += a;
+        grandInvoiced += inv;
       }
       unallocated += item.unallocated_actual || 0;
     }
-    return { byHead: t, byHeadActual: ta, grand, grandActual, unallocated };
+    return { byHead: t, byHeadActual: ta, byHeadInvoiced: ti, grand, grandActual, grandInvoiced, unallocated };
   }, [items, costHeads]);
 
   return (
@@ -144,7 +149,11 @@ export default function BOQBudgetBreakdownPage() {
                 <th className="px-3 py-2 text-left font-medium text-slate-600 min-w-[220px]">Description</th>
                 <th className="px-3 py-2 text-right font-medium text-slate-600">Amount</th>
                 {costHeads.map(h => (
-                  <th key={h} className="px-3 py-2 text-right font-medium text-slate-600 whitespace-nowrap">{h}</th>
+                  <React.Fragment key={h}>
+                    <th className="px-3 py-2 text-center font-medium text-slate-600 bg-blue-50 border-l border-slate-200 whitespace-nowrap">{h}</th>
+                    <th className="px-3 py-2 text-center font-medium text-slate-600 bg-blue-50 whitespace-nowrap text-[11px]">Actual Budget</th>
+                    <th className="px-3 py-2 text-center font-medium text-slate-600 bg-blue-50 border-r border-slate-200 whitespace-nowrap text-[11px]">Invoiced Budget</th>
+                  </React.Fragment>
                 ))}
                 <th className="px-3 py-2 text-right font-medium text-amber-600 whitespace-nowrap">Unallocated</th>
                 <th className="px-3 py-2 text-right font-medium text-slate-600">Status</th>
@@ -162,21 +171,29 @@ export default function BOQBudgetBreakdownPage() {
                     {costHeads.map(h => {
                       const cell = item.breakdown?.[h] || {};
                       const actual = cell.actual || 0;
+                      const invoiced = cell.invoiced || 0;
                       const budgetAmt = cell.amount || 0;
                       const overActual = actual > budgetAmt + 0.01;
                       return (
-                        <td key={h} className="px-1 py-1">
-                          <EditableCell
-                            value={mode === 'pct' ? cell.pct : cell.amount}
-                            mode={mode}
-                            onSave={v => saveCell(item, h, mode, v)}
-                          />
-                          {actual > 0 && (
-                            <div className={clsx('text-[10px] text-right pr-1', overActual ? 'text-rose-500' : 'text-emerald-600')}>
-                              Actual: {inr(actual)}
-                            </div>
-                          )}
-                        </td>
+                        <React.Fragment key={h}>
+                          <td className="px-1 py-1 bg-white border-l border-slate-200">
+                            <EditableCell
+                              value={mode === 'pct' ? cell.pct : cell.amount}
+                              mode={mode}
+                              onSave={v => saveCell(item, h, mode, v)}
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-right text-xs bg-blue-50">
+                            <span className={clsx(overActual ? 'text-rose-600 font-medium' : 'text-emerald-600')}>
+                              {actual > 0 ? inr(actual) : <span className="text-slate-300">—</span>}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-right text-xs bg-blue-50 border-r border-slate-200">
+                            <span className="text-slate-700">
+                              {invoiced > 0 ? inr(invoiced) : <span className="text-slate-300">—</span>}
+                            </span>
+                          </td>
+                        </React.Fragment>
                       );
                     })}
                     <td className="px-3 py-2 text-right text-amber-600">
@@ -196,19 +213,22 @@ export default function BOQBudgetBreakdownPage() {
               )}
             </tbody>
             {items.length > 0 && (
-              <tfoot className="bg-slate-50 font-medium">
+              <tfoot className="bg-slate-50 font-medium text-xs">
                 <tr>
                   <td className="px-3 py-2 sticky left-0 bg-slate-50" colSpan={2}>Total</td>
                   <td className="px-3 py-2 text-right">
                     {inr(items.reduce((s, i) => s + parseFloat(i.amount || 0), 0))}
                   </td>
                   {costHeads.map(h => (
-                    <td key={h} className="px-3 py-2 text-right">
-                      {inr(totals.byHead[h])}
-                      {totals.byHeadActual[h] > 0 && (
-                        <div className="text-[10px] text-emerald-600 font-normal">Actual: {inr(totals.byHeadActual[h])}</div>
-                      )}
-                    </td>
+                    <React.Fragment key={h}>
+                      <td className="px-1 py-2 text-right border-l border-slate-200 bg-blue-50">{inr(totals.byHead[h])}</td>
+                      <td className="px-2 py-2 text-right bg-blue-50 text-emerald-600">
+                        {totals.byHeadActual[h] > 0 ? inr(totals.byHeadActual[h]) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-right border-r border-slate-200 bg-blue-50 text-slate-700">
+                        {totals.byHeadInvoiced[h] > 0 ? inr(totals.byHeadInvoiced[h]) : <span className="text-slate-300">—</span>}
+                      </td>
+                    </React.Fragment>
                   ))}
                   <td className="px-3 py-2 text-right text-amber-600">{totals.unallocated > 0 ? inr(totals.unallocated) : '—'}</td>
                   <td className="px-3 py-2 text-right">{inr(totals.grand)}</td>
