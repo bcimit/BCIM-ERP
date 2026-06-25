@@ -378,7 +378,7 @@ export default function TQSAdvanceVoucherDetailPage() {
       <div className="text-center">
         <AlertTriangle size={40} className="mx-auto text-red-400 mb-3" />
         <p className="text-sm font-medium text-gray-600">Voucher not found</p>
-        <button onClick={() => navigate('/tqs/advance-tracker')} className="mt-3 text-sm text-blue-600 hover:underline">Back to list</button>
+        <button onClick={() => navigate('/procurement/advance-tracker')} className="mt-3 text-sm text-blue-600 hover:underline">Back to list</button>
       </div>
     </div>
   );
@@ -395,14 +395,14 @@ export default function TQSAdvanceVoucherDetailPage() {
       {/* ── Header ── */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         {/* Breadcrumb */}
-        <button onClick={() => navigate('/tqs/advance-tracker')}
+        <button onClick={() => navigate('/procurement/advance-tracker')}
           className="flex items-center gap-1.5 text-xs text-slate-900 font-medium hover:text-blue-600 mb-3 transition-colors">
           <ArrowLeft size={13} /> Back to Advance Tracker
         </button>
 
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <p className="text-[10px] font-medium text-slate-900 font-medium uppercase tracking-widest mb-1">Bill Tracker · Advance Voucher</p>
+            <p className="text-[10px] font-medium text-slate-900 font-medium uppercase tracking-widest mb-1">Procurement · Advance Voucher</p>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-medium text-slate-900">
                 {voucher.voucher_number || voucher.sl_number}
