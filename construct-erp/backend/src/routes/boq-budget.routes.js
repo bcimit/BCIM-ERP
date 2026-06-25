@@ -67,11 +67,63 @@ router.get('/:project_id', async (req, res) => {
       GROUP BY swi.boq_item_id, bi.cost_head
     `, [project_id]);
 
+    // Link advances to BOQ items via: advance.wo_number → sc_work_orders → sc_wo_items.boq_item_id
+    // When one WO has multiple BOQ-linked items, split the advance proportionally by item amount.
+    // Fallback: advances whose WO has no BOQ-linked items are linked via vendor_id → boq_sc_mapping.
     const advanceActuals = await query(`
-      SELECT NULL::uuid AS boq_item_id, 'Sub Con' AS cost_head, SUM(paid_amount) AS actual
-      FROM tqs_advance_vouchers
-      WHERE project_id = $1 AND status IN ('issued','partial','recovered') AND is_deleted = false
-      GROUP BY cost_head
+      WITH wo_linked AS (
+        -- Advances whose WO has at least one BOQ-linked item
+        SELECT
+          av.id AS advance_id,
+          wi.boq_item_id,
+          av.paid_amount * (wi.qty * wi.rate) / NULLIF(tot.total_amount, 0) AS share
+        FROM tqs_advance_vouchers av
+        JOIN sc_work_orders wo
+          ON wo.wo_number = av.wo_number AND wo.project_id = $1
+        JOIN sc_wo_items wi
+          ON wi.wo_id = wo.id AND wi.boq_item_id IS NOT NULL
+        JOIN (
+          SELECT wo2.wo_number, SUM(wi2.qty * wi2.rate) AS total_amount
+          FROM sc_work_orders wo2
+          JOIN sc_wo_items wi2 ON wi2.wo_id = wo2.id AND wi2.boq_item_id IS NOT NULL
+          WHERE wo2.project_id = $1
+          GROUP BY wo2.wo_number
+        ) tot ON tot.wo_number = wo.wo_number
+        WHERE av.project_id = $1
+          AND av.status IN ('issued','partial','recovered')
+          AND av.is_deleted = false
+          AND av.paid_amount > 0
+      ),
+      sc_linked AS (
+        -- Fallback: advances not covered by wo_linked, linked via vendor_id → boq_sc_mapping
+        SELECT
+          av.id AS advance_id,
+          m.boq_item_id,
+          av.paid_amount * m.sc_amount / NULLIF(tot2.total_sc, 0) AS share
+        FROM tqs_advance_vouchers av
+        JOIN boq_sc_mapping m
+          ON m.sc_id = av.vendor_id AND m.project_id = $1 AND m.status != 'cancelled'
+        JOIN (
+          SELECT m2.sc_id, SUM(m2.sc_amount) AS total_sc
+          FROM boq_sc_mapping m2
+          WHERE m2.project_id = $1 AND m2.status != 'cancelled'
+          GROUP BY m2.sc_id
+        ) tot2 ON tot2.sc_id = m.sc_id
+        WHERE av.project_id = $1
+          AND av.status IN ('issued','partial','recovered')
+          AND av.is_deleted = false
+          AND av.paid_amount > 0
+          AND av.vendor_id IS NOT NULL
+          AND av.id NOT IN (SELECT DISTINCT advance_id FROM wo_linked)
+      )
+      SELECT boq_item_id, 'Sub Con' AS cost_head, SUM(share) AS actual
+      FROM (
+        SELECT advance_id, boq_item_id, share FROM wo_linked
+        UNION ALL
+        SELECT advance_id, boq_item_id, share FROM sc_linked
+      ) combined
+      WHERE boq_item_id IS NOT NULL
+      GROUP BY boq_item_id
     `, [project_id]);
 
     const tqsActuals = await query(`
