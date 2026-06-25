@@ -492,6 +492,35 @@ router.use(loadProjectScope);
     console.error('[mrs] project workflow init failed:', e.message);
   }
 
+  // ── One-time repair: LANCO LH10 runaway MR serials ───────────────────────────
+  // The prefix "MR-LANCHO-HYD-LH10" ends in digits with no separator, so the
+  // auto-numbering's trailing-digit read-back fused the prefix's "10" into the
+  // sequence and the serial grew exponentially (LH10008 → LH1010009 → … → crash).
+  // Renumber every non-conforming LH10 serial to the clean dashed format in
+  // creation order, resuming after the already-correct "-007". Idempotent: the
+  // regex guard skips rows already matching "…LH10-0NN", so this no-ops once healed.
+  try {
+    const r = await query(
+      `WITH corrupt AS (
+         SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) AS rn
+         FROM material_requisitions
+         WHERE serial_no_formatted LIKE 'MR-LANCHO-HYD-LH10%'
+           AND serial_no_formatted !~ '^MR-LANCHO-HYD-LH10-[0-9]{3}$'
+       )
+       UPDATE material_requisitions m
+         SET serial_no_formatted = 'MR-LANCHO-HYD-LH10-' || LPAD((c.rn + 7)::text, 3, '0'),
+             mrs_number          = 'MR-LANCHO-HYD-LH10-' || LPAD((c.rn + 7)::text, 3, '0'),
+             updated_at = NOW()
+       FROM corrupt c
+       WHERE m.id = c.id`
+    );
+    if (r.rowCount > 0) {
+      console.log(`[mrs] repaired ${r.rowCount} corrupt LH10 MR serial(s) → LH10-008…`);
+    }
+  } catch (e) {
+    console.error('[mrs] LH10 serial repair failed:', e.message);
+  }
+
   console.log('[mrs] schema OK');
 })();
 
@@ -782,8 +811,13 @@ router.post('/', async (req, res) => {
           const mrsPrefix = proj.rows[0].mrs_prefix;
           const deptCode  = (department || 'GEN').substring(0, 3).toUpperCase();
           const projectCode = proj.rows[0].project_code || 'PRJ';
+          // If the custom prefix ends in a digit (e.g. "…LH10"), insert a "-" before the
+          // sequence. Without it the seq digits fuse with the prefix's trailing digits, and
+          // the next-number extraction (trailing-digit regex above) re-reads the whole run —
+          // making the serial grow exponentially every time (LH10008 → LH1010009 → …).
+          const sep = mrsPrefix && /[0-9]$/.test(mrsPrefix) ? '-' : '';
           const serial_no_formatted = mrsPrefix
-            ? `${mrsPrefix}${seq}`
+            ? `${mrsPrefix}${sep}${seq}`
             : `BCIM-${projectCode}-${deptCode}-MR-${seq}`;
           // Globally-unique key = the project-scoped serial (embeds project identity)
           const mrs_number = serial_no_formatted;
