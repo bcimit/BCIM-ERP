@@ -1009,7 +1009,7 @@ router.patch('/:id', authorize(...PROCUREMENT_ROLES), async (req, res) => {
       vendor_id, po_date, delivery_date, payment_terms, tcs_amount,
       po_req_no, po_req_date, approval_no, delivery_address,
       order_intro, notes, terms_conditions, bank_details, items,
-      mrs_id, mrs_ids,
+      mrs_id, mrs_ids, cost_head,
     } = req.body;
 
     const result = await withTransaction(async (client) => {
@@ -1030,6 +1030,7 @@ router.patch('/:id', authorize(...PROCUREMENT_ROLES), async (req, res) => {
       if (notes            !== undefined) { sets.push(`notes = $${i++}`);              params.push(notes || null); }
       if (terms_conditions !== undefined) { sets.push(`terms_conditions = $${i++}`);   params.push(terms_conditions || null); }
       if (bank_details     !== undefined) { sets.push(`bank_details = $${i++}`);       params.push(bank_details || null); }
+      if (cost_head        !== undefined) { sets.push(`cost_head = $${i++}`);          params.push(cost_head || null); }
       if (mrs_id !== undefined || mrs_ids !== undefined) {
         const list = (Array.isArray(mrs_ids) ? mrs_ids : (mrs_id ? [mrs_id] : [])).filter(Boolean);
         sets.push(`mrs_ids = $${i++}`);  params.push(list.length ? list : null);
@@ -1221,7 +1222,7 @@ router.post('/', async (req, res) => {
       po_req_no, po_req_date, approval_no, delivery_address, order_intro,
       department, currency, billing_address, freight_mode, transport_mode, tax_type,
       freight_charges, loading_unloading_charges, insurance_charges, tds_percent,
-      internal_remarks, delivery_instructions
+      internal_remarks, delivery_instructions, cost_head
     } = req.body;
 
     if (!project_id || !vendor_id || !items?.length) {
@@ -1251,14 +1252,14 @@ router.post('/', async (req, res) => {
           status, created_by, mrs_id, po_ref_no, serial_no_formatted, mrs_ids,
           department, currency, billing_address, freight_mode, transport_mode, tax_type,
           freight_charges, loading_unloading_charges, insurance_charges, tds_percent,
-          internal_remarks, delivery_instructions
+          internal_remarks, delivery_instructions, cost_head
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-          $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33) RETURNING *`,
+          $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34) RETURNING *`,
         [project_id, vendor_id, po_number, po_date || null, delivery_date || null, terms_conditions || null, notes || null, bank_details || null, payment_terms || null, parseFloat(tcs_amount) || 0, po_req_no || null, po_req_date || null, approval_no || null, delivery_address || null, order_intro || null, 'pending', req.user.id, primaryMrsId]
           .concat([po_number, po_number, mrsIdList.length ? mrsIdList : null])
           .concat([department || null, currency || 'INR', billing_address || null, freight_mode || null, transport_mode || null, tax_type || 'intra',
             parseFloat(freight_charges) || 0, parseFloat(loading_unloading_charges) || 0, parseFloat(insurance_charges) || 0, parseFloat(tds_percent) || 0,
-            internal_remarks || null, delivery_instructions || null])
+            internal_remarks || null, delivery_instructions || null, cost_head || null])
       );
       const poId = headerRes.rows[0].id;
 

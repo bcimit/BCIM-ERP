@@ -14,6 +14,11 @@ const inr  = (v) => `₹${(parseFloat(v) || 0).toLocaleString('en-IN', { maximum
 const inr2 = (v) => `₹${(parseFloat(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num  = (v) => parseFloat(v) || 0;
 
+// Synthetic row for cost-head spend (mainly material POs) that isn't tied to
+// one specific BOQ item — see boq-budget.routes.js. It has no real budget to
+// set, so its cells render read-only instead of going through the save API.
+const isUnlinkedRow = (item) => item.id === 'project-level-unlinked';
+
 // ─── Inline editable budget cell ──────────────────────────────────────────────
 function EditableBudget({ value, onSave, mode, itemAmount }) {
   const [editing, setEditing] = useState(false);
@@ -53,6 +58,7 @@ function EditableBudget({ value, onSave, mode, itemAmount }) {
 // ─── Cost-head detail table (shown when a BOQ item is expanded) ────────────────
 function CostHeadDetail({ item, costHeads, mode, onSave }) {
   const itemAmount = num(item.amount);
+  const readOnly = isUnlinkedRow(item);
 
   // Split rows into "active" (has budget or actuals) and "empty" for clarity
   const rows = costHeads.map(h => {
@@ -73,11 +79,15 @@ function CostHeadDetail({ item, costHeads, mode, onSave }) {
     <tr className={clsx('border-b border-slate-100', dim && 'opacity-60', r.over && 'bg-rose-50/40')}>
       <td className="px-3 py-2 font-medium text-slate-700">{r.h}</td>
       <td className="px-3 py-2 text-right">
-        <EditableBudget
-          value={mode === 'pct' ? r.cell.pct : r.cell.amount}
-          mode={mode} itemAmount={itemAmount}
-          onSave={v => onSave(item, r.h, mode, v)}
-        />
+        {readOnly ? (
+          <span className="w-28 inline-block text-right text-xs text-slate-300">—</span>
+        ) : (
+          <EditableBudget
+            value={mode === 'pct' ? r.cell.pct : r.cell.amount}
+            mode={mode} itemAmount={itemAmount}
+            onSave={v => onSave(item, r.h, mode, v)}
+          />
+        )}
       </td>
       <td className="px-3 py-2 text-right text-purple-600 font-medium">
         {r.advance > 0 ? inr(r.advance) : <span className="text-slate-300">—</span>}
@@ -90,13 +100,19 @@ function CostHeadDetail({ item, costHeads, mode, onSave }) {
       </td>
       <td className={clsx('px-3 py-2 text-right font-bold', r.balance < 0 ? 'text-rose-600' : r.budget > 0 ? 'text-emerald-600' : 'text-slate-300')}>
         {r.budget > 0 || r.spent > 0 ? inr(r.balance) : '—'}
-        {r.over && <div className="text-[9px] text-rose-500 font-bold">⚠ over budget</div>}
+        {r.over && !readOnly && <div className="text-[9px] text-rose-500 font-bold">⚠ over budget</div>}
       </td>
     </tr>
   );
 
   return (
     <div className="bg-slate-50 px-4 py-4">
+      {readOnly && (
+        <div className="mb-2 flex items-center gap-2 text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
+          <Layers size={13} />
+          Cost-head spend from POs/bills not linked to a specific BOQ item — no budget to set here, totals only.
+        </div>
+      )}
       <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
         <table className="w-full text-xs">
           <thead>
@@ -259,10 +275,10 @@ export default function BOQBudgetBreakdownPage() {
             {/* Summary KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <ThemeKpiCard icon={IndianRupee} label="BOQ Value"     value={inr(totals.boq)}      color="blue"    sub="Total contract value" />
-              <ThemeKpiCard icon={Wallet}      label="Budgeted"      value={inr(totals.budgeted)} color="indigo"  sub={`${totals.allocated}/${items.length} items allocated`} />
-              <ThemeKpiCard icon={IndianRupee} label="Advance Paid"  value={inr(totals.advance)}  color="purple"  sub="Paid to vendors" />
+              <ThemeKpiCard icon={Wallet}      label="Budgeted"      value={inr(totals.budgeted)} color="slate"   sub={`${totals.allocated}/${items.length} items allocated`} />
+              <ThemeKpiCard icon={IndianRupee} label="Advance Paid"  value={inr(totals.advance)}  color="amber"   sub="Paid to vendors" />
               <ThemeKpiCard icon={IndianRupee} label="Invoiced"      value={inr(totals.invoiced)} color="emerald" sub="Billed actuals" />
-              <ThemeKpiCard icon={CheckCircle2} label="Budget Balance" value={inr(totals.balance)} color={totals.balance >= 0 ? 'teal' : 'red'} sub="Budget minus spent" />
+              <ThemeKpiCard icon={CheckCircle2} label="Budget Balance" value={inr(totals.balance)} color={totals.balance >= 0 ? 'emerald' : 'red'} sub="Budget minus spent" />
             </div>
 
             {/* Master list */}
@@ -283,18 +299,19 @@ export default function BOQBudgetBreakdownPage() {
               <div className="divide-y divide-slate-100">
                 {items.map(item => {
                   const isOpen = expanded[item.id];
+                  const unlinked = isUnlinkedRow(item);
                   return (
                     <div key={item.id}>
                       {/* Summary row */}
                       <button onClick={() => toggle(item.id)}
                         className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
-                          isOpen && 'bg-indigo-50/40')}>
+                          isOpen && 'bg-indigo-50/40', unlinked && 'italic bg-slate-50/60')}>
                         <span className="w-4 text-slate-400">
                           {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </span>
                         <span className="font-mono font-bold text-indigo-700 truncate">{item.item_no}</span>
                         <span className="text-slate-700 font-medium truncate pr-2" title={item.description}>{item.description}</span>
-                        <span className="text-right font-semibold text-slate-800">{inr(item.amount)}</span>
+                        <span className="text-right font-semibold text-slate-800">{unlinked ? <span className="text-slate-300">—</span> : inr(item.amount)}</span>
                         <span className={clsx('text-right font-semibold', item.over ? 'text-rose-600' : item.allocated ? 'text-indigo-700' : 'text-slate-300')}>
                           {item.budgeted > 0 ? inr(item.budgeted) : '—'}
                         </span>
@@ -304,11 +321,13 @@ export default function BOQBudgetBreakdownPage() {
                           {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
                         </span>
                         <span className="text-right">
-                          {!item.allocated
-                            ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Not set</span>
-                            : item.over
-                              ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
-                              : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
+                          {unlinked
+                            ? <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Unlinked</span>
+                            : !item.allocated
+                              ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Not set</span>
+                              : item.over
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
+                                : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
                         </span>
                       </button>
 

@@ -126,11 +126,15 @@ router.get('/:project_id', async (req, res) => {
       GROUP BY boq_item_id
     `, [project_id]);
 
+    // Material lines rarely map to a single BOQ item (a cement PO can feed
+    // dozens of items), so unlike RA/SC actuals this is NOT filtered to
+    // boq_item_id IS NOT NULL — lines with a cost_head but no specific BOQ
+    // item still come through and get rolled up at the project level below.
     const tqsActuals = await query(`
       SELECT li.boq_item_id, li.cost_head, SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li
       JOIN tqs_bills tb ON tb.id = li.bill_id
-      WHERE tb.project_id = $1 AND tb.workflow_status = 'paid' AND li.boq_item_id IS NOT NULL
+      WHERE tb.project_id = $1 AND tb.workflow_status = 'paid'
       GROUP BY li.boq_item_id, li.cost_head
     `, [project_id]);
 
@@ -147,21 +151,24 @@ router.get('/:project_id', async (req, res) => {
     }
 
     const unallocated = {};
+    // Cost-head spend with no specific BOQ item to attach to (material POs
+    // tagged by cost head only) rolls up here instead of disappearing.
+    const projectLevel = {};
     const addActual = (rows, isAdvance = false) => {
       for (const row of rows) {
         const itemId = row.boq_item_id;
         const amt = parseFloat(row.actual) || 0;
         if (!row.cost_head || !BOQ_COST_HEADS.includes(row.cost_head)) {
-          unallocated[itemId] = (unallocated[itemId] || 0) + amt;
+          if (itemId) unallocated[itemId] = (unallocated[itemId] || 0) + amt;
           continue;
         }
-        if (!byItem[itemId]) byItem[itemId] = {};
-        if (!byItem[itemId][row.cost_head]) byItem[itemId][row.cost_head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
+        const bucket = itemId ? (byItem[itemId] ||= {}) : projectLevel;
+        if (!bucket[row.cost_head]) bucket[row.cost_head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
         if (isAdvance) {
-          byItem[itemId][row.cost_head].advance += amt;
+          bucket[row.cost_head].advance += amt;
         } else {
-          byItem[itemId][row.cost_head].invoiced += amt;
-          byItem[itemId][row.cost_head].actual += amt;
+          bucket[row.cost_head].invoiced += amt;
+          bucket[row.cost_head].actual += amt;
         }
       }
     };
@@ -175,6 +182,22 @@ router.get('/:project_id', async (req, res) => {
       breakdown: byItem[item.id] || {},
       unallocated_actual: unallocated[item.id] || 0,
     }));
+
+    if (Object.keys(projectLevel).length) {
+      data.push({
+        id: 'project-level-unlinked',
+        chapter_no: null,
+        chapter_name: null,
+        item_no: '—',
+        description: 'Unlinked material / procurement spend — cost-head spend not tied to a specific BOQ item',
+        unit: null,
+        quantity: null,
+        rate: null,
+        amount: 0,
+        breakdown: projectLevel,
+        unallocated_actual: 0,
+      });
+    }
 
     res.json({ data, cost_heads: BOQ_COST_HEADS });
   } catch (err) {

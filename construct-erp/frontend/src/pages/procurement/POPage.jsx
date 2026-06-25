@@ -18,6 +18,7 @@ import { poAPI, vendorAPI, projectAPI, mrsAPI, inventoryAPI, companySettingsAPI 
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import VendorSelect from '../../components/shared/VendorSelect';
+import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
 import { getBillingAddress, getDeliveryAddress } from '../../constants/poAddresses';
 import { Z_INP, Z_CARD, Z_HEAD, Z_LABEL } from '../../constants/zohoStyles';
 import { FIELD_HL } from '../../constants/fieldStyles';
@@ -300,6 +301,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
     terms_conditions: editingPO?.terms_conditions || DEFAULT_PO_TERMS,
     // ── Mockup parity fields ──
     department:       editingPO?.department   || '',
+    cost_head:        editingPO?.cost_head    || '',
     currency:         editingPO?.currency     || 'INR',
     billing_address:  editingPO?.billing_address || '',
     freight_mode:     editingPO?.freight_mode || 'FOB – Destination',
@@ -656,6 +658,12 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                 <select className={INP} value={form.department} onChange={e => set('department', e.target.value)}>
                   <option value="">— Select —</option>
                   {['Civil Works', 'MEP', 'Finishing', 'Admin'].map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </Field>
+              <Field label="Cost Head">
+                <select className={INP} value={form.cost_head} onChange={e => set('cost_head', e.target.value)}>
+                  <option value="">— Select —</option>
+                  {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
                 </select>
               </Field>
               <Field label="Currency">

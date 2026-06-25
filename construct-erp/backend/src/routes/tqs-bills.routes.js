@@ -2098,6 +2098,15 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // Material lines rarely map to one BOQ row, so cost head is usually set
+      // at the PO level, not per line — default any blank line cost_head from
+      // the linked PO so spend still rolls up under the right cost head.
+      let poDefaultCostHead = null;
+      if (po_id) {
+        const poRes = await client.query(`SELECT cost_head FROM purchase_orders WHERE id = $1`, [po_id]);
+        poDefaultCostHead = poRes.rows[0]?.cost_head || null;
+      }
+
       for (let idx = 0; idx < items.length; idx++) {
         const it = items[idx];
         const gross = parseFloat(it.quantity || 0) * parseFloat(it.rate || 0);
@@ -2111,7 +2120,7 @@ router.post('/', async (req, res) => {
         if (mode === 'interstate') { igP = gstPct; igA = basic * igP / 100; }
         else { cgP = gstPct / 2; sgP = gstPct / 2; cgA = basic * cgP / 100; sgA = basic * sgP / 100; }
         const gst_a = cgA + sgA + igA;
-        const costHead = BOQ_COST_HEADS.includes(it.cost_head) ? it.cost_head : null;
+        const costHead = BOQ_COST_HEADS.includes(it.cost_head) ? it.cost_head : poDefaultCostHead;
         await client.query(`
           INSERT INTO tqs_bill_line_items
             (bill_id, category, item_code, item_name, unit, quantity, rate,
