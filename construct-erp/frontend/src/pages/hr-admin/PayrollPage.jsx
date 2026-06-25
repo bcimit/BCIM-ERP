@@ -8,7 +8,7 @@ import {
   CheckCircle, Clock, Banknote, TrendingDown, Users, X, ChevronDown,
   FileText, ArrowRight,
 } from 'lucide-react';
-import { hrPayrollAPI } from '../../api/client';
+import { hrPayrollAPI, hrEmployeesAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -178,6 +178,7 @@ export default function PayrollPage() {
   const [month,    setMonth]    = useState(now.getMonth() + 1);
   const [year,     setYear]     = useState(now.getFullYear());
   const [payModal, setPayModal] = useState(false);
+  const [singleEmpId, setSingleEmpId] = useState('');
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['hr-payroll', month, year],
@@ -186,9 +187,22 @@ export default function PayrollPage() {
   const records = data?.data   || [];
   const totals  = data?.totals || {};
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ['hr-employees-active'],
+    queryFn: () => hrEmployeesAPI.list({ is_active: true }).then(r => r.data?.data || r.data || []),
+  });
+
   const runMut = useMutation({
-    mutationFn: () => hrPayrollAPI.run({ month, year }),
-    onSuccess: res => { toast.success(`Payroll generated for ${res.data?.data?.length || 0} employees`); refetch(); },
+    mutationFn: (user_id) => hrPayrollAPI.run(user_id ? { month, year, user_id } : { month, year }),
+    onSuccess: (res, user_id) => {
+      const first = res.data?.data?.[0];
+      if (user_id) {
+        toast.success(first?.skipped ? `Already ${first.status} for this employee` : 'Payroll generated for this employee');
+      } else {
+        toast.success(`Payroll generated for ${res.data?.data?.length || 0} employees`);
+      }
+      refetch();
+    },
     onError: e => toast.error(e.response?.data?.error || 'Failed to generate payroll'),
   });
 
@@ -274,6 +288,26 @@ export default function PayrollPage() {
               <Play className="w-4 h-4" />
               {runMut.isPending ? 'Generating…' : records.length > 0 ? 'Regenerate' : 'Generate Payroll'}
             </button>
+
+            {/* Single-employee run */}
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1.5">
+              <select value={singleEmpId} onChange={e => setSingleEmpId(e.target.value)}
+                className="bg-transparent text-sm text-slate-900 focus:outline-none max-w-[180px]">
+                <option value="">One employee…</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.name}{emp.employee_code ? ` (${emp.employee_code})` : ''}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => runMut.mutate(singleEmpId)}
+                disabled={!singleEmpId || runMut.isPending}
+                title="Generate payroll for just this employee"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-medium disabled:opacity-40 transition-all hover:shadow-sm active:scale-95"
+                style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}
+              >
+                <Play className="w-3.5 h-3.5" /> Run
+              </button>
+            </div>
 
             {hasDraft && (
               <button onClick={approveAll} disabled={approvingAll}
@@ -414,6 +448,12 @@ export default function PayrollPage() {
                         <button onClick={() => approveMut.mutate(r.id)} title="Approve"
                           className="w-6 h-6 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-colors">
                           <Check className="w-3 h-3" />
+                        </button>
+                      )}
+                      {r.status === 'draft' && (
+                        <button onClick={() => runMut.mutate(r.user_id)} disabled={runMut.isPending} title="Regenerate this employee's payslip"
+                          className="w-6 h-6 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-colors disabled:opacity-40">
+                          <Play className="w-3 h-3" />
                         </button>
                       )}
                       <button onClick={() => navigate(`/hr-admin/payroll/${r.id}/payslip`)} title="View Payslip"

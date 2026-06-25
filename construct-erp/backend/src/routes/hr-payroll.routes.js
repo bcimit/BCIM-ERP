@@ -179,14 +179,14 @@ router.get('/:id', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 router.post('/run', async (req, res) => {
   try {
-    const { month, year } = req.body;
+    const { month, year, user_id } = req.body;
     const m = parseInt(month);
     const y = parseInt(year);
     const workDays = workingDaysInMonth(m, y);
 
-    // Get all active employees with salary
-    const employees = await query(
-      `SELECT u.id as user_id,
+    // Get active employee(s) with salary — optionally scoped to one employee
+    let employeeSql = `
+      SELECT u.id as user_id,
               u.name as employee_name,
               es.basic, es.hra, es.conveyance, es.medical,
               es.special_allowance, es.other_allowance, es.gross_monthly,
@@ -195,13 +195,19 @@ router.post('/run', async (req, res) => {
        JOIN hr_employee_salaries es ON es.user_id = u.id
          AND es.effective_from <= make_date($3,$1,1)
          AND (es.effective_to IS NULL OR es.effective_to >= make_date($3,$1,1))
-       WHERE u.company_id = $2 AND u.is_active = TRUE`,
-      [m, req.user.company_id, y]
-    );
+       WHERE u.company_id = $2 AND u.is_active = TRUE`;
+    const employeeParams = [m, req.user.company_id, y];
+    if (user_id) {
+      employeeSql += ` AND u.id = $4`;
+      employeeParams.push(user_id);
+    }
+    const employees = await query(employeeSql, employeeParams);
 
     if (!employees.rows.length) {
       return res.status(400).json({
-        error: 'No active employee salaries configured. Assign employee salaries before payroll generation.',
+        error: user_id
+          ? 'No active salary record found for this employee in the selected month.'
+          : 'No active employee salaries configured. Assign employee salaries before payroll generation.',
       });
     }
 
