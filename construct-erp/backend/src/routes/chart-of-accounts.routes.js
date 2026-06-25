@@ -286,6 +286,30 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
+// ── BULK OPENING BALANCE UPDATE ───────────────────────────────────────────────
+// Body: { balances: [{ code: '1100', opening_balance: 50000 }, ...] }
+// Idempotent — safe to re-run. Only finance_manager/admin can call.
+router.post('/opening-balances', authenticate, authorize('super_admin','admin','finance_manager'), async (req, res) => {
+  try {
+    const { balances } = req.body;
+    if (!Array.isArray(balances) || !balances.length)
+      return res.status(400).json({ error: 'balances array required' });
+    const results = [];
+    for (const { code, opening_balance } of balances) {
+      if (!code || opening_balance == null) continue;
+      const r = await query(
+        `UPDATE chart_of_accounts SET opening_balance = $1, updated_at = NOW()
+         WHERE company_id = $2 AND code = $3 RETURNING code, name, opening_balance`,
+        [parseFloat(opening_balance), req.user.company_id, code]
+      );
+      if (r.rows[0]) results.push(r.rows[0]);
+    }
+    res.json({ updated: results.length, data: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DELETE ───────────────────────────────────────────────────────────────────
 router.delete('/:id', authenticate, async (req, res) => {
   try {

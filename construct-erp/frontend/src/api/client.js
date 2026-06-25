@@ -636,6 +636,7 @@ export const chartOfAccountsAPI = {
   seed:   ()       => api.post('/chart-of-accounts/seed'),
   transactions: (id, params) => api.get(`/chart-of-accounts/${id}/transactions`, { params }),
   taxMonthlySummary: (params) => api.get('/chart-of-accounts/tax/monthly-summary', { params }),
+  setOpeningBalances: (balances) => api.post('/chart-of-accounts/opening-balances', { balances }),
 };
 
 export const journalEntryAPI = {

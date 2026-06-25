@@ -7,6 +7,7 @@ const { runSchemaInit } = require('../utils/schemaInit');
 const { loadProjectScope, appendProjectScope } = require('../middleware/projectScope');
 const { logAudit } = require('../utils/auditLog');
 const { BOQ_COST_HEADS } = require('../constants/boqCostHeads');
+const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 router.use(authenticate);
 router.use(loadProjectScope);
 
@@ -290,8 +291,50 @@ router.patch('/:id/approve', authorize('super_admin','admin','project_manager'),
       [req.user.id, req.params.id, req.user.company_id]
     );
     if (!result.rows.length) return res.status(400).json({ error: 'Bill not found or not in verified status' });
-    await logAudit(req, { action: 'approve', tableName: 'ra_bills', recordId: req.params.id, newValues: { bill_number: result.rows[0].bill_number, status: 'certified', net_payable: result.rows[0].net_payable } });
-    res.json({ data: result.rows[0] });
+    const bill = result.rows[0];
+    await logAudit(req, { action: 'approve', tableName: 'ra_bills', recordId: req.params.id, newValues: { bill_number: bill.bill_number, status: 'certified', net_payable: bill.net_payable } });
+
+    // ── Auto-post GL journal on certification ──────────────────────────────
+    // Dr 1100 AR (gross incl. GST), Cr 4000 Revenue, Cr 2100 Output GST.
+    // If advance recovery was applied, drain 2050 and reduce AR accordingly.
+    try {
+      const nn = v => parseFloat(v || 0);
+      const gross   = nn(bill.gross_amount) + nn(bill.price_escalation);
+      const gst     = nn(bill.gst_amount);
+      const grossWG = nn(bill.gross_with_gst);
+      const advRec  = nn(bill.mobilization_advance_recovery) + nn(bill.adhoc_advance_recovery);
+      const ref     = bill.bill_number || bill.id;
+
+      if (grossWG > 0) {
+        // Delete any prior auto JV for this bill (re-certification re-posts correctly)
+        await query(
+          `DELETE FROM journal_entries WHERE company_id = $1 AND source = 'auto_ra_bill' AND reference = $2`,
+          [req.user.company_id, ref]
+        ).catch(() => {});
+
+        const lines = [
+          { code: '1100', debit: grossWG - advRec, description: `AR — ${bill.bill_number || ''}` },
+        ];
+        if (advRec > 0)
+          lines.push({ code: '2050', debit: advRec, description: `Advance recovery — ${ref}` });
+        lines.push({ code: '4000', credit: gross,   description: `Contract revenue — ${ref}` });
+        if (gst > 0)
+          lines.push({ code: '2100', credit: gst,   description: `Output GST — ${ref}` });
+
+        await postAutoJournalStandalone({
+          companyId: req.user.company_id,
+          userId:    req.user.id,
+          entryDate: bill.certified_date || bill.bill_date,
+          projectId: bill.project_id || null,
+          reference: ref,
+          narration: `RA Bill certified — ${bill.contractor_name || ''} (${ref})`,
+          source:    'auto_ra_bill',
+          lines,
+        });
+      }
+    } catch (_) { /* best-effort — never block certification */ }
+
+    res.json({ data: bill });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

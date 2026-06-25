@@ -219,6 +219,85 @@ function AccountRow({ a, onOpen, onEdit, onDelete }) {
   );
 }
 
+/* ── Opening Balances bulk-edit modal ────────────────────────────────────── */
+function OpeningBalancesModal({ accounts, onClose }) {
+  const qc = useQueryClient();
+  const [vals, setVals] = useState(() => {
+    const m = {};
+    accounts.forEach(a => { m[a.code] = a.opening_balance != null ? String(a.opening_balance) : ''; });
+    return m;
+  });
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const balances = Object.entries(vals)
+        .filter(([, v]) => v !== '' && !isNaN(parseFloat(v)))
+        .map(([code, v]) => ({ code, opening_balance: parseFloat(v) }));
+      return chartOfAccountsAPI.setOpeningBalances(balances).then(r => r.data);
+    },
+    onSuccess: d => {
+      toast.success(`Updated opening balances for ${d.updated} account(s)`);
+      qc.invalidateQueries({ queryKey: ['chart-of-accounts'] });
+      onClose();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Save failed'),
+  });
+
+  const byType = useMemo(() => {
+    const m = {};
+    accounts.forEach(a => { (m[a.account_type] = m[a.account_type] || []).push(a); });
+    return m;
+  }, [accounts]);
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-2xl rounded-xl border border-slate-200 shadow-xl flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Set Opening Balances</p>
+            <p className="text-xs text-slate-400 mt-0.5">Enter your trial balance figures as of your accounting start date</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+          {TYPES.filter(t => byType[t]?.length).map(t => {
+            const m = TYPE_META[t];
+            return (
+              <div key={t}>
+                <p className={clsx('text-xs font-semibold uppercase tracking-wide mb-2', m.text)}>{m.label} — {m.nature}-natured</p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {(byType[t] || []).map(a => (
+                    <div key={a.code} className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-slate-400 w-12 shrink-0">{a.code}</span>
+                      <span className="text-sm text-slate-700 flex-1 truncate">{a.name}</span>
+                      <input
+                        type="number" step="0.01" placeholder="0.00"
+                        className="w-36 border border-slate-200 rounded px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        value={vals[a.code] ?? ''}
+                        onChange={e => setVals(v => ({ ...v, [a.code]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 bg-slate-50/60">
+          <p className="text-xs text-slate-400">Blank fields are skipped. Enter Dr-side amounts as positive, Cr-side as negative if contra.</p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+              {saveMut.isPending ? 'Saving…' : 'Save Opening Balances'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main page ───────────────────────────────────────────────────────────── */
 export default function ChartOfAccountsPage() {
   const [search, setSearch] = useState('');
@@ -227,6 +306,7 @@ export default function ChartOfAccountsPage() {
   const [modal, setModal] = useState(null);     // null | {} | account
   const [drill, setDrill] = useState(null);      // account being viewed
   const [collapsed, setCollapsed] = useState({}); // { [type]: true }
+  const [obModal, setObModal] = useState(false);  // opening balances
   const qc = useQueryClient();
 
   const { data: projects = [] } = useQuery({
@@ -317,6 +397,12 @@ export default function ChartOfAccountsPage() {
               <button onClick={() => seedMut.mutate()} disabled={seedMut.isPending}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm border border-blue-200 text-blue-600 rounded-md hover:bg-blue-50 disabled:opacity-50">
                 <Sparkles className="w-4 h-4" /> {seedMut.isPending ? 'Seeding…' : 'Seed Standard COA'}
+              </button>
+            )}
+            {rows.length > 0 && (
+              <button onClick={() => setObModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 text-slate-600 rounded-md hover:bg-slate-50">
+                <Scale className="w-4 h-4" /> Opening Balances
               </button>
             )}
             <button onClick={() => setModal({})}
@@ -480,6 +566,7 @@ export default function ChartOfAccountsPage() {
 
       {modal !== null && <AccountModal initial={modal.id ? modal : null} onClose={() => setModal(null)} />}
       {drill && <LedgerDrawer account={drill} projectId={projectFilter} onClose={() => setDrill(null)} />}
+      {obModal && <OpeningBalancesModal accounts={rows} onClose={() => setObModal(false)} />}
     </div>
   );
 }
