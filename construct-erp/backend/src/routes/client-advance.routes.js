@@ -190,6 +190,7 @@ router.post('/:id/receive', authorize('super_admin','admin','finance_manager','a
         companyId: req.user.company_id,
         userId: req.user.id,
         entryDate: dt,
+        projectId: car.project_id || null,
         reference: bank_reference || car.id,
         narration: `Client advance received — ${car.client_name || car.project_name || ''}`,
         source: 'auto_client_advance',

@@ -3331,6 +3331,7 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
           companyId: req.user.company_id,
           userId:    req.user.id,
           entryDate: accts_jv_date,
+          projectId: bill.project_id || null,
           reference: ref,
           narration: `Bill booking — ${bill.vendor_name || ''} (${ref})`,
           source:    'auto_tqs_bill',
@@ -3986,7 +3987,7 @@ router.post('/backfill-jv', async (req, res) => {
 
     const candidates = await query(`
       SELECT b.id, b.sl_number, b.bill_type, b.total_amount, b.gst_amount,
-             b.vendor_name, b.wo_number, b.po_number, b.grn_id,
+             b.vendor_name, b.wo_number, b.po_number, b.grn_id, b.project_id,
              COALESCE(u.tds_deduction, 0)   AS tds_deduction,
              COALESCE(u.retention_money, 0) AS retention_money,
              COALESCE(u.accts_jv_date, u.qs_certified_date, b.received_date, b.inv_date, CURRENT_DATE) AS jv_date
@@ -4037,6 +4038,7 @@ router.post('/backfill-jv', async (req, res) => {
         companyId: company_id,
         userId:    req.user.id,
         entryDate: bill.jv_date,
+        projectId: bill.project_id || null,
         reference: ref,
         narration: `Bill booking (backfill) — ${bill.vendor_name || ''} (${ref})`,
         source:    'auto_tqs_bill',

@@ -189,6 +189,7 @@ router.post('/', authenticate, async (req, res) => {
         companyId: req.user.company_id,
         userId: req.user.id,
         entryDate: dn_date,
+        projectId: project_id || null,
         reference: dn_number,
         narration: `Debit Note ${dn_number} — ${vendor_name}`,
         source: 'auto_debit_note',

@@ -765,6 +765,7 @@ router.post('/expenses/:id/approve', async (req, res) => {
         companyId: req.user.company_id,
         userId:    req.user.id,
         entryDate: row.expense_date,
+        projectId: row.project_id || null,
         reference: row.voucher_number,
         narration: `Petty cash — ${row.description}`,
         source:    'auto_petty_cash',

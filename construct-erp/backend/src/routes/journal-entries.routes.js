@@ -2,7 +2,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
-const { postAutoJournal } = require('../services/journalAutoPost');
+const { postAutoJournal, nextEntryNo } = require('../services/journalAutoPost');
 const router = express.Router();
 
 // ── Auto-migrate ─────────────────────────────────────────────────────────────
@@ -28,6 +28,10 @@ const router = express.Router();
   `);
   // Idempotent: add source column to existing tables
   await safe(`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'`);
+  // Project-specific entry numbering (<ProjectCode>/JE/NNNN) needs a project_id;
+  // entries with no project keep the old company-wide JE/YYYY/NNNN scheme.
+  await safe(`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id)`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_journal_entries_project ON journal_entries(project_id)`);
 
   await safe(`
     CREATE TABLE IF NOT EXISTS journal_entry_lines (
@@ -88,21 +92,12 @@ const router = express.Router();
 
 const n = (v) => parseFloat(v) || 0;
 
-async function nextEntryNo(client, companyId) {
-  const yr = new Date().getFullYear();
-  const r = await client.query(
-    `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(entry_no, '^JE/[0-9]+/', '') AS INTEGER)), 0) AS last_seq
-     FROM journal_entries WHERE company_id = $1 AND entry_no LIKE $2`,
-    [companyId, `JE/${yr}/%`]
-  );
-  return `JE/${yr}/${String(parseInt(r.rows[0].last_seq) + 1).padStart(4, '0')}`;
-}
-
 async function getJE(id, companyId) {
   const r = await query(
-    `SELECT je.*, u.name AS created_by_name
+    `SELECT je.*, u.name AS created_by_name, pr.name AS project_name, pr.project_code
      FROM journal_entries je
      LEFT JOIN users u ON u.id = je.created_by
+     LEFT JOIN projects pr ON pr.id = je.project_id
      WHERE je.id = $1 AND je.company_id = $2`,
     [id, companyId]
   );
@@ -120,7 +115,7 @@ async function getJE(id, companyId) {
 // ── LIST ─────────────────────────────────────────────────────────────────────
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { status, from, to, search, source, limit = 100, offset = 0 } = req.query;
+    const { status, from, to, search, source, project_id, limit = 100, offset = 0 } = req.query;
     const conditions = ['je.company_id = $1'];
     const params = [req.user.company_id];
     let p = 1;
@@ -129,6 +124,7 @@ router.get('/', authenticate, async (req, res) => {
     if (from)   { conditions.push(`je.entry_date >= $${++p}`); params.push(from); }
     if (to)     { conditions.push(`je.entry_date <= $${++p}`); params.push(to); }
     if (search) { conditions.push(`(je.entry_no ILIKE $${++p} OR je.narration ILIKE $${p} OR je.reference ILIKE $${p})`); params.push(`%${search}%`); }
+    if (project_id) { conditions.push(`je.project_id = $${++p}`); params.push(project_id); }
     if (source) {
       // Legacy rows may have NULL source; treat them as 'manual'
       if (source === 'manual') conditions.push(`(je.source = 'manual' OR je.source IS NULL)`);
@@ -137,11 +133,12 @@ router.get('/', authenticate, async (req, res) => {
 
     const where = conditions.join(' AND ');
     const rows = await query(
-      `SELECT je.*, u.name AS created_by_name,
+      `SELECT je.*, u.name AS created_by_name, pr.name AS project_name, pr.project_code,
               COALESCE((SELECT SUM(debit) FROM journal_entry_lines WHERE journal_entry_id = je.id), 0) AS total_debit,
               COALESCE((SELECT SUM(credit) FROM journal_entry_lines WHERE journal_entry_id = je.id), 0) AS total_credit
        FROM journal_entries je
        LEFT JOIN users u ON u.id = je.created_by
+       LEFT JOIN projects pr ON pr.id = je.project_id
        WHERE ${where}
        ORDER BY je.entry_date DESC, je.created_at DESC
        LIMIT $${++p} OFFSET $${++p}`,
@@ -212,7 +209,7 @@ router.get('/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) => {
 // ── CREATE ───────────────────────────────────────────────────────────────────
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { entry_date, reference, narration, status = 'draft', lines = [] } = req.body;
+    const { entry_date, project_id, reference, narration, status = 'draft', lines = [] } = req.body;
     if (!entry_date) return res.status(400).json({ error: 'entry_date is required' });
     if (!Array.isArray(lines) || lines.length < 2) {
       return res.status(400).json({ error: 'At least two journal lines are required' });
@@ -228,11 +225,11 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     const result = await withTransaction(async (client) => {
-      const entry_no = await nextEntryNo(client, req.user.company_id);
+      const entry_no = await nextEntryNo(client, req.user.company_id, project_id || null);
       const r = await client.query(
-        `INSERT INTO journal_entries (company_id, entry_no, entry_date, reference, narration, status, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [req.user.company_id, entry_no, entry_date, reference || null, narration || null, status === 'posted' ? 'posted' : 'draft', req.user.id]
+        `INSERT INTO journal_entries (company_id, entry_no, entry_date, project_id, reference, narration, status, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [req.user.company_id, entry_no, entry_date, project_id || null, reference || null, narration || null, status === 'posted' ? 'posted' : 'draft', req.user.id]
       );
       const jeId = r.rows[0].id;
 
@@ -263,7 +260,7 @@ router.patch('/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Journal entry not found' });
     if (existing.status !== 'draft') return res.status(400).json({ error: 'Only draft entries can be edited' });
 
-    const { entry_date, reference, narration, lines = [] } = req.body;
+    const { entry_date, project_id, reference, narration, lines = [] } = req.body;
     if (!Array.isArray(lines) || lines.length < 2) {
       return res.status(400).json({ error: 'At least two journal lines are required' });
     }
@@ -279,8 +276,8 @@ router.patch('/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) => {
 
     await withTransaction(async (client) => {
       await client.query(
-        `UPDATE journal_entries SET entry_date = $1, reference = $2, narration = $3, updated_at = NOW() WHERE id = $4`,
-        [entry_date || existing.entry_date, reference || null, narration || null, req.params.id]
+        `UPDATE journal_entries SET entry_date = $1, project_id = $2, reference = $3, narration = $4, updated_at = NOW() WHERE id = $5`,
+        [entry_date || existing.entry_date, project_id !== undefined ? (project_id || null) : existing.project_id, reference || null, narration || null, req.params.id]
       );
       await client.query(`DELETE FROM journal_entry_lines WHERE journal_entry_id = $1`, [req.params.id]);
       for (let i = 0; i < lines.length; i++) {

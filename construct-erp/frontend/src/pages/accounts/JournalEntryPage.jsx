@@ -8,7 +8,7 @@ import {
   ScrollText, Plus, X, Trash2, Check, ChevronRight, Download,
   Zap, RefreshCw, Play, ToggleLeft, ToggleRight, Calendar, BookOpen
 } from 'lucide-react';
-import { journalEntryAPI, chartOfAccountsAPI, tqsBillsAPI } from '../../api/client';
+import { journalEntryAPI, chartOfAccountsAPI, tqsBillsAPI, projectAPI } from '../../api/client';
 import { inr } from '../dashboards/DashKPI';
 import { downloadCsv, downloadPdf } from '../../utils/exportCsv';
 
@@ -142,8 +142,15 @@ function JEForm({ onClose, accounts, entry }) {
   const qc = useQueryClient();
   const isEdit = !!entry;
   const [entry_date, setDate] = useState(entry ? dayjs(entry.entry_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
+  const [project_id, setProjectId] = useState(entry?.project_id || '');
   const [reference, setReference] = useState(entry?.reference || '');
   const [narration, setNarration] = useState(entry?.narration || '');
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['je-projects'],
+    queryFn: () => projectAPI.list().then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
   const [lines, setLines] = useState(
     entry?.lines?.length
       ? entry.lines.map(l => ({
@@ -169,8 +176,8 @@ function JEForm({ onClose, accounts, entry }) {
 
   const saveMut = useMutation({
     mutationFn: (status) => isEdit
-      ? journalEntryAPI.update(entry.id, { entry_date, reference, narration, lines })
-      : journalEntryAPI.create({ entry_date, reference, narration, status, lines }),
+      ? journalEntryAPI.update(entry.id, { entry_date, project_id: project_id || null, reference, narration, lines })
+      : journalEntryAPI.create({ entry_date, project_id: project_id || null, reference, narration, status, lines }),
     onSuccess: () => {
       toast.success(isEdit ? 'Journal entry updated' : 'Journal entry saved');
       qc.invalidateQueries({ queryKey: ['journal-entries'] });
@@ -193,10 +200,17 @@ function JEForm({ onClose, accounts, entry }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Date</label>
               <input type="date" className={F} value={entry_date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Project</label>
+              <select className={F} value={project_id} onChange={e => setProjectId(e.target.value)}>
+                <option value="">— No project (company-wide numbering) —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Reference</label>

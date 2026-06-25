@@ -185,6 +185,7 @@ router.patch('/:id/authorize', authorize('super_admin','admin'), async (req, res
           companyId: inv.company_id,
           userId: req.user.id,
           entryDate: inv.invoice_date,
+          projectId: inv.project_id || null,
           reference: inv.invoice_number,
           narration: `Invoice booking — ${inv.vendor_name} (${inv.invoice_number})`,
           source: 'auto_invoice',

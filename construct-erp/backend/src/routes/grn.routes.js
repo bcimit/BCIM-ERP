@@ -602,7 +602,7 @@ router.patch('/:id/approve-qc', async (req, res) => {
       const grnFull = await query(`SELECT g.*, v.name AS vendor_name, p.name AS project_name FROM grn g LEFT JOIN vendors v ON v.id=g.vendor_id JOIN projects p ON p.id=g.project_id WHERE g.id=$1`, [req.params.id]);
       if (grnFull.rows.length) notifyGrnApproved(req.user.company_id, grnFull.rows[0], req.user.name);
 
-      return { status: 'approved', provisionalValue, grn_number: grn.grn_number, grn_date: grn.grn_date };
+      return { status: 'approved', provisionalValue, grn_number: grn.grn_number, grn_date: grn.grn_date, project_id: grn.project_id };
     });
 
     // No bill exists for this GRN yet — post a provisional "goods received, not
@@ -615,6 +615,7 @@ router.patch('/:id/approve-qc', async (req, res) => {
         companyId: req.user.company_id,
         userId:    req.user.id,
         entryDate: result.grn_date,
+        projectId: result.project_id || null,
         reference: result.grn_number,
         narration: `Goods received (bill pending) — GRN ${result.grn_number}`,
         source:    'auto_grn_provisional',

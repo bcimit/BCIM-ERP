@@ -252,6 +252,7 @@ router.post('/', authorize('super_admin', 'admin', 'accountant'), async (req, re
         companyId: req.user.company_id,
         userId: req.user.id,
         entryDate: payment_date,
+        projectId: project_id || null,
         reference: reference_number || payment.id,
         narration: `Payment to ${entity_name}`,
         source: 'auto_payment',

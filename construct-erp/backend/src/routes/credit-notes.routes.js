@@ -225,6 +225,7 @@ router.post('/', authenticate, async (req, res) => {
         companyId: req.user.company_id,
         userId: req.user.id,
         entryDate: cn_date,
+        projectId: project_id || null,
         reference: cn_number,
         narration: `Credit Note ${cn_number} — ${vendor_name}`,
         source: 'auto_credit_note',

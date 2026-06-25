@@ -503,6 +503,7 @@ router.patch('/:id/issue', async (req, res) => {
         companyId: company_id,
         userId: user_id,
         entryDate: pay_date || new Date().toISOString().slice(0, 10),
+        projectId: voucher.project_id || null,
         reference: ref,
         narration: `Advance paid — ${voucher.vendor_name || ''} (${ref})`,
         source: 'auto_tqs_advance',
@@ -534,7 +535,7 @@ router.post('/:id/recover', async (req, res) => {
     await withTransaction(async (client) => {
       // Verify voucher belongs to company
       const { rows: [vch] } = await client.query(
-        `SELECT id, vendor_name, voucher_number, sl_number, advance_value, recovered_amount FROM tqs_advance_vouchers WHERE id=$1 AND company_id=$2 AND is_deleted=FALSE FOR UPDATE`,
+        `SELECT id, project_id, vendor_name, voucher_number, sl_number, advance_value, recovered_amount FROM tqs_advance_vouchers WHERE id=$1 AND company_id=$2 AND is_deleted=FALSE FOR UPDATE`,
         [id, company_id]
       );
       if (!vch) throw Object.assign(new Error('Not found'), { status: 404 });
@@ -564,6 +565,7 @@ router.post('/:id/recover', async (req, res) => {
         companyId: company_id,
         userId: user_id,
         entryDate: recovery_date,
+        projectId: vch.project_id || null,
         reference: ref,
         narration: `Advance recovery — ${vch.vendor_name || ''} (${ref})`,
         source: 'auto_tqs_advance_recovery',

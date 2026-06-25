@@ -230,7 +230,7 @@ router.post('/retention-release/:billId', async (req, res) => {
   try {
     const { release_date } = req.body;
     const { rows: [bill] } = await query(`
-      SELECT b.id, b.sl_number, b.vendor_name, b.company_id,
+      SELECT b.id, b.sl_number, b.vendor_name, b.company_id, b.project_id,
              u.retention_money, u.retention_released_date
       FROM tqs_bills b
       JOIN tqs_bill_updates u ON u.bill_id = b.id
@@ -247,6 +247,7 @@ router.post('/retention-release/:billId', async (req, res) => {
       companyId: req.user.company_id,
       userId: req.user.id,
       entryDate: relDate,
+      projectId: bill.project_id || null,
       reference: bill.sl_number,
       narration: `Retention released — ${bill.vendor_name || ''} (${bill.sl_number})`,
       source: 'auto_retention_release',
