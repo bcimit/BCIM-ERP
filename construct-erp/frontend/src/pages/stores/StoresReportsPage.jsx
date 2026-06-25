@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { projectAPI } from '../../api/client';
 import { BarChart3, Truck, Calendar, TrendingUp } from 'lucide-react';
 
@@ -38,7 +39,7 @@ export default function StoresReportsPage() {
       title: 'Stock Analysis',
       icon: TrendingUp,
       description: 'Current inventory, stock levels, and movement trends',
-      link: '/stores/reports/stock-analysis',
+      link: null,
       color: 'from-purple-500 to-purple-600',
     },
     {
@@ -46,7 +47,7 @@ export default function StoresReportsPage() {
       title: 'Purchase Analysis',
       icon: BarChart3,
       description: 'PO trends, spending analysis, and supplier comparison',
-      link: '/stores/reports/purchase-analysis',
+      link: null,
       color: 'from-orange-500 to-orange-600',
     },
   ];
@@ -93,29 +94,41 @@ export default function StoresReportsPage() {
         }}>
           {reports.map(report => {
             const Icon = report.icon;
-            return (
-              <a
-                key={report.id}
-                href={`${report.link}${projectId ? `?project=${projectId}` : ''}`}
-                style={{
-                  textDecoration: 'none',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                  transition: 'all 0.3s ease',
-                  backgroundColor: '#fff',
-                  border: '1px solid #E2E8F0',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.1)';
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
+            const disabled = !report.link;
+            const cardStyle = {
+              textDecoration: 'none',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              transition: 'all 0.3s ease',
+              backgroundColor: '#fff',
+              border: '1px solid #E2E8F0',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              opacity: disabled ? 0.55 : 1,
+              display: 'block',
+              position: 'relative',
+            };
+            const hoverHandlers = disabled ? {} : {
+              onMouseEnter: e => {
+                e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.1)';
+                e.currentTarget.style.transform = 'translateY(-4px)';
+              },
+              onMouseLeave: e => {
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              },
+            };
+            const cardContent = (
+              <>
+                {disabled && (
+                  <span style={{
+                    position: 'absolute', top: 10, right: 10, fontSize: '10px', fontWeight: 'bold',
+                    color: '#fff', background: 'rgba(0,0,0,0.35)', padding: '2px 8px',
+                    borderRadius: '999px', letterSpacing: '0.04em', zIndex: 1,
+                  }}>
+                    COMING SOON
+                  </span>
+                )}
                 {/* Header with gradient */}
                 <div style={{
                   background: `linear-gradient(135deg, ${report.color.split(' ')[1]} 0%, ${report.color.split(' ')[3]} 100%)`,
@@ -143,16 +156,32 @@ export default function StoresReportsPage() {
                   }}>
                     {report.description}
                   </p>
-                  <div style={{
-                    marginTop: '1rem',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    color: '#3B82F6',
-                  }}>
-                    View Report →
-                  </div>
+                  {!disabled && (
+                    <div style={{
+                      marginTop: '1rem',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      color: '#3B82F6',
+                    }}>
+                      View Report →
+                    </div>
+                  )}
                 </div>
-              </a>
+              </>
+            );
+
+            if (disabled) {
+              return <div key={report.id} style={cardStyle}>{cardContent}</div>;
+            }
+            return (
+              <Link
+                key={report.id}
+                to={`${report.link}${projectId ? `?project=${projectId}` : ''}`}
+                style={cardStyle}
+                {...hoverHandlers}
+              >
+                {cardContent}
+              </Link>
             );
           })}
         </div>

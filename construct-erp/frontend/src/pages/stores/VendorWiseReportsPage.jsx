@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { vendorAPI, projectAPI } from '../../api/client';
 import { Search, Download, TrendingUp, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -7,7 +8,8 @@ import * as XLSX from 'xlsx';
 const inr = (v) => `₹${Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`;
 
 export default function VendorWiseReportsPage() {
-  const [projectId, setProjectId] = useState('');
+  const [searchParams] = useSearchParams();
+  const [projectId, setProjectId] = useState(searchParams.get('project') || '');
   const [search, setSearch] = useState('');
 
   const { data: projects = [] } = useQuery({
