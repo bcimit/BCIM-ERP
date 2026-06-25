@@ -45,6 +45,8 @@ const ROLES = [
   { value: 'quality_manager',       label: 'Quality Manager',        color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
   { value: 'qa_qc_engineer',        label: 'QA/QC Engineer',         color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
   { value: 'hr',                    label: 'HR',                     color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+  { value: 'hr_admin',              label: 'HR Admin',               color: '#6D28D9', bg: '#F5F3FF', border: '#C4B5FD' },
+  { value: 'hr_manager',            label: 'HR Manager',             color: '#5B21B6', bg: '#F5F3FF', border: '#A78BFA' },
   { value: 'document_controller',   label: 'Document Controller',    color: '#475569', bg: '#F8FAFC', border: '#E2E8F0' },
   { value: 'subcontractor_manager', label: 'SC Manager',             color: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' },
   { value: 'sc_coordinator',        label: 'SC Coordinator',         color: '#F97316', bg: '#FFF7ED', border: '#FED7AA' },
