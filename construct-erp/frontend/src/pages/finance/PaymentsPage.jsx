@@ -387,9 +387,9 @@ export default function PaymentsPage() {
   const advanceMut = useMutation({
     mutationFn: d => tqsBillsAPI.recordAdvance(d),
     onSuccess: () => {
-      toast.success('Advance recorded & linked to Bill Tracker');
+      toast.success('Advance recorded & linked to Procurement');
       qc.invalidateQueries({ queryKey: ['payments'] });
-      qc.invalidateQueries({ queryKey: ['tqs-advances'] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances'] });
       qc.invalidateQueries({ queryKey: ['liability-summary'] });
       setShowModal(false);
       resetModal();
