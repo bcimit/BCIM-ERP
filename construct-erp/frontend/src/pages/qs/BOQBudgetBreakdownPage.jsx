@@ -8,30 +8,46 @@ import { boqBudgetAPI, projectAPI } from '../../api/client';
 
 const inr = (v) => `₹${(parseFloat(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function EditableCell({ value, onSave, mode }) {
+function EditableCell({ value, onSave, mode, maxBudget, itemAmount }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
+  const [error, setError] = useState('');
 
   const commit = () => {
     setEditing(false);
-    if (parseFloat(val || 0) !== parseFloat(value || 0)) onSave(parseFloat(val) || 0);
+    setError('');
+    const newVal = parseFloat(val || 0);
+
+    // Validation: Check if exceeds item budget
+    if (mode === 'amount' && itemAmount && newVal > itemAmount + 0.01) {
+      setError(`Cannot exceed item amount: ${inr(itemAmount)}`);
+      toast.error(`Cannot exceed item amount: ${inr(itemAmount)}`);
+      return;
+    }
+
+    if (parseFloat(val || 0) !== parseFloat(value || 0)) onSave(newVal);
   };
 
   if (editing) return (
-    <input
-      autoFocus
-      type="number"
-      value={val}
-      onChange={e => setVal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-      className="w-20 border border-blue-400 rounded px-1 py-0.5 text-xs text-right focus:outline-none"
-    />
+    <div className="relative">
+      <input
+        autoFocus
+        type="number"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+        className={clsx('w-20 border rounded px-1 py-0.5 text-xs text-right focus:outline-none',
+          error ? 'border-rose-400 bg-rose-50' : 'border-blue-400'
+        )}
+      />
+      {error && <div className="absolute left-0 top-6 text-[9px] text-rose-600 font-medium whitespace-nowrap">{error}</div>}
+    </div>
   );
 
   return (
     <button
-      onClick={() => { setVal(value ?? ''); setEditing(true); }}
+      onClick={() => { setVal(value ?? ''); setEditing(true); setError(''); }}
       className="w-20 text-right text-xs hover:bg-blue-50 rounded px-1 py-0.5"
     >
       {value ? (mode === 'pct' ? `${parseFloat(value).toFixed(1)}%` : inr(value)) : <span className="text-slate-400 italic">—</span>}
@@ -180,18 +196,21 @@ export default function BOQBudgetBreakdownPage() {
                             <EditableCell
                               value={mode === 'pct' ? cell.pct : cell.amount}
                               mode={mode}
+                              itemAmount={parseFloat(item.amount || 0)}
                               onSave={v => saveCell(item, h, mode, v)}
                             />
                           </td>
-                          <td className="px-2 py-2 text-right text-xs bg-green-50">
-                            <span className={clsx(isOverBudget ? 'text-rose-600 font-medium' : 'text-slate-700')}>
+                          <td className={clsx('px-2 py-2 text-right text-xs', isOverBudget ? 'bg-rose-50 border-l border-rose-300' : 'bg-green-50')}>
+                            <span className={clsx(isOverBudget ? 'text-rose-600 font-bold' : 'text-slate-700')}>
                               {spent > 0 ? inr(spent) : <span className="text-slate-300">—</span>}
                             </span>
+                            {isOverBudget && <div className="text-[9px] text-rose-600 font-bold">⚠ Over Budget</div>}
                           </td>
-                          <td className="px-2 py-2 text-right text-xs bg-amber-50 border-r border-slate-200">
-                            <span className={clsx(balance < 0 ? 'text-rose-600 font-medium' : 'text-emerald-600')}>
+                          <td className={clsx('px-2 py-2 text-right text-xs border-r border-slate-200', balance < 0 ? 'bg-rose-50 border-r border-rose-300' : 'bg-amber-50')}>
+                            <span className={clsx(balance < 0 ? 'text-rose-600 font-bold' : 'text-emerald-600')}>
                               {balance !== 0 ? inr(balance) : <span className="text-slate-300">—</span>}
                             </span>
+                            {balance < 0 && <div className="text-[9px] text-rose-600 font-bold">⚠ Over Budget</div>}
                           </td>
                         </React.Fragment>
                       );
