@@ -39,6 +39,9 @@ export const Theme = {
   emerald: { from: '#34d399', to: '#059669', shadow: '#047857' },
   red:     { from: '#f87171', to: '#dc2626', shadow: '#b91c1c' },
   orange:  { from: '#fb923c', to: '#e8431a', shadow: '#c2410c' },
+  indigo:  { from: '#818cf8', to: '#4f46e5', shadow: '#3730a3' },
+  purple:  { from: '#c084fc', to: '#9333ea', shadow: '#6b21a8' },
+  teal:    { from: '#2dd4bf', to: '#0d9488', shadow: '#0f766e' },
   slate:   { from: '#64748b', to: '#334155', shadow: '#1e293b' },
 };
 
