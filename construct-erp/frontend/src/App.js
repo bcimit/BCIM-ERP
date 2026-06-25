@@ -291,6 +291,7 @@ const ESSPortalPage           = lazy(() => import('./pages/hr-admin/ESSPortalPag
 const HRShiftManagementPage   = lazy(() => import('./pages/hr-admin/ShiftManagementPage'));
 const HRFnFSettlementPage     = lazy(() => import('./pages/hr-admin/FnFSettlementPage'));
 const HRLOPDaysPage           = lazy(() => import('./pages/hr-admin/LOPDaysPage'));
+const HRStopSalaryPage        = lazy(() => import('./pages/hr-admin/StopSalaryPage'));
 const HRLetterGenerationPage  = lazy(() => import('./pages/hr-admin/LetterGenerationPage'));
 const HRTrainingPage          = lazy(() => import('./pages/hr-admin/TrainingPage'));
 const HREmployeeAssetsPage    = lazy(() => import('./pages/hr-admin/EmployeeAssetsPage'));
@@ -373,7 +374,7 @@ function getHomeRoute(user) {
   // Approver / manager roles → My Approvals page as home
   if (APPROVER_ROLES.includes(role)) return '/approvals';
   const mods = user.accessible_modules;
-  // Staff with no admin modules → ESS Portal (like GreytHR)
+  // Staff with no admin modules → ESS Portal
   if (!mods || mods.length === 0) return '/ess';
   const hasAdminModule = mods.some(m => MODULE_HOME[m]);
   if (!hasAdminModule) return '/ess';
@@ -788,6 +789,7 @@ export default function App() {
                 <Route path="hr-admin/shifts"       element={<RequireModule module="HR & Admin"><HRShiftManagementPage /></RequireModule>} />
                 <Route path="hr-admin/fnf"          element={<RequireModule module="HR & Admin"><HRFnFSettlementPage /></RequireModule>} />
                 <Route path="hr-admin/lop-days"     element={<RequireModule module="HR & Admin"><HRLOPDaysPage /></RequireModule>} />
+                <Route path="hr-admin/stop-salary"  element={<RequireModule module="HR & Admin"><HRStopSalaryPage /></RequireModule>} />
                 <Route path="hr-admin/letters"      element={<RequireModule module="HR & Admin"><HRLetterGenerationPage /></RequireModule>} />
                 <Route path="hr-admin/training"     element={<RequireModule module="HR & Admin"><HRTrainingPage /></RequireModule>} />
                 <Route path="hr-admin/emp-assets"   element={<RequireModule module="HR & Admin"><HREmployeeAssetsPage /></RequireModule>} />

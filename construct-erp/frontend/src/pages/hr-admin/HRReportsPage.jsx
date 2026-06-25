@@ -67,7 +67,7 @@ function asRows(payload) {
   return Array.isArray(payload) ? payload : payload?.data || [];
 }
 
-// ── Report catalog (greytHR-style directory of category cards) ──
+// ── Report catalog (category card directory) ──
 const REPORT_CATALOG = [
   { title: 'Employee Master', icon: Users, items: [
     { id: 'empm:master',          label: 'Employee Master List' },

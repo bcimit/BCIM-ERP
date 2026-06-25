@@ -46,7 +46,7 @@ function FileDropzone({ onFile, file }) {
         </div>
       ) : (
         <div>
-          <p className="text-gray-700 font-bold">Drop your Greythr CSV here</p>
+          <p className="text-gray-700 font-bold">Drop your HR CSV here</p>
           <p className="text-gray-400 text-sm mt-1">or click to browse — CSV files only, max 10 MB</p>
         </div>
       )}
@@ -163,14 +163,14 @@ function EmployeeImportTab() {
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 space-y-1">
-        <p className="font-black text-blue-900">How to export from Greythr:</p>
-        <p>1. Greythr → <strong>HR</strong> → <strong>Employee</strong> → <strong>Export</strong> → Download CSV</p>
-        <p>2. Upload the CSV below. We auto-map all standard Greythr columns.</p>
+        <p className="font-black text-blue-900">How to prepare the employee CSV:</p>
+        <p>1. Export employees from your HR system → Download CSV</p>
+        <p>2. Upload the CSV below. We auto-map all standard column formats.</p>
         <p>3. <strong>Create mode</strong> → new employees created (default password = employee code).</p>
         <p>4. <strong>Update mode</strong> → only updates existing employee profiles.</p>
       </div>
 
-      <button onClick={()=>downloadSample(EMPLOYEE_SAMPLE,'greythr-employee-sample.csv')}
+      <button onClick={()=>downloadSample(EMPLOYEE_SAMPLE,'employee-sample.csv')}
         className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 font-bold transition-colors">
         <Download className="w-3.5 h-3.5"/> Download sample CSV format
       </button>
@@ -255,13 +255,13 @@ function AttendanceImportTab() {
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 space-y-1">
-        <p className="font-black text-blue-900">How to export attendance from Greythr:</p>
-        <p>1. Greythr → <strong>Attendance</strong> → <strong>Reports</strong> → <strong>Monthly Attendance Summary</strong> → Export CSV</p>
+        <p className="font-black text-blue-900">How to prepare the attendance CSV:</p>
+        <p>1. Export monthly attendance from your HR system → Monthly Attendance Summary → Export CSV</p>
         <p>2. We support both formats: <strong>Wide</strong> (one row/employee, columns=days) &amp; <strong>Long</strong> (one row per date)</p>
         <p>3. Status codes: P=Present, A=Absent, H=Half Day, WO=Week Off, L/PL/CL/SL=Leave, HO=Holiday</p>
       </div>
 
-      <button onClick={()=>downloadSample(ATTENDANCE_WIDE_SAMPLE,'greythr-attendance-sample.csv')}
+      <button onClick={()=>downloadSample(ATTENDANCE_WIDE_SAMPLE,'attendance-sample.csv')}
         className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 font-bold transition-colors">
         <Download className="w-3.5 h-3.5"/> Download sample CSV format (wide)
       </button>
@@ -341,8 +341,8 @@ export default function HRImportPage() {
             <Upload className="w-5 h-5 text-white"/>
           </div>
           <div>
-            <h1 className="text-2xl font-black text-white">Import from Greythr</h1>
-            <p className="text-white/55 text-sm mt-0.5">Upload Greythr CSV exports to sync employees &amp; attendance</p>
+            <h1 className="text-2xl font-black text-white">Import HR Data</h1>
+            <p className="text-white/55 text-sm mt-0.5">Upload CSV files to sync employees &amp; attendance records</p>
           </div>
         </div>
       </motion.div>

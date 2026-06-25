@@ -623,6 +623,11 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
     remarks: '', issues_notes: '', inspection_notes: '',
   });
   const [items, setItems] = useState([emptyItem()]);
+  // When items are sourced from a linked GRS, the PO auto-populate effect must NOT
+  // overwrite them with the full PO line list. Selecting a GRS also sets po_id (to
+  // link the bill), which would otherwise trigger the PO effect and clobber the
+  // GRS-received items. This ref guards against that race.
+  const itemsFromGrsRef = useRef(false);
   const [createBill, setCreateBill] = useState(false);
   const emptyBillForm = () => ({
     inv_number: '', inv_date: '', tax_mode: 'intrastate', gst_pct: '18',
@@ -667,7 +672,29 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   // Pre-populate items when PO detail loads
   useEffect(() => {
     if (!selectedPODetail?.items?.length) return;
-    setItems(selectedPODetail.items.map(it => ({
+    const poItems = selectedPODetail.items;
+    const norm = (s) => (s || '').trim().toLowerCase();
+
+    // Items received from a linked GRS are the source of truth for WHAT arrived,
+    // but the rate must still come from the PO. Merge the PO rate (and po_item_id
+    // for linkage) into the GRS items by matching material name — don't replace
+    // the list with the full PO lines.
+    if (itemsFromGrsRef.current) {
+      setItems(prev => prev.map(it => {
+        const match = poItems.find(p => norm(p.material_name) === norm(it.material_name));
+        if (!match) return it;
+        return {
+          ...it,
+          rate: it.rate || (match.rate != null ? String(match.rate) : ''),
+          unit: it.unit || match.unit || 'Nos',
+          po_item_id: it.po_item_id || match.id || null,
+        };
+      }));
+      return;
+    }
+
+    // No GRS link — populate the full PO line list with rates.
+    setItems(poItems.map(it => ({
       ...emptyItem(),
       material_name: it.material_name || '',
       unit: it.unit || 'Nos',
@@ -684,6 +711,29 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
     enabled: !!form.project_id,
   });
 
+  // Pull the PO rate into GRS-sourced items. The GRS carries WHAT/HOW-MUCH arrived
+  // (material + qty); the rate must come from the PO. Match by material name so the
+  // user never has to re-enter a rate that's already agreed on the PO.
+  const mergePoRatesIntoGrsItems = async (grsItems, poId) => {
+    if (!poId) return grsItems;
+    try {
+      const res = await poAPI.get(poId);
+      const po = res.data?.data ?? res.data;
+      const poItems = po?.items || [];
+      const norm = (s) => (s || '').trim().toLowerCase();
+      return grsItems.map(it => {
+        const m = poItems.find(p => norm(p.material_name) === norm(it.material_name));
+        if (!m) return it;
+        return {
+          ...it,
+          rate: it.rate || (m.rate != null ? String(m.rate) : ''),
+          unit: it.unit || m.unit || '',
+          po_item_id: it.po_item_id || m.id || null,
+        };
+      });
+    } catch (_) { return grsItems; }
+  };
+
   // Pre-fill from GRS when opened via quick-link
   useEffect(() => {
     if (!fromGrsId) return;
@@ -698,14 +748,16 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
         if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
         if (detail.po_number) setField('po_number', detail.po_number);
         if (detail.po_id) setField('po_id', detail.po_id);
-        const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
+        let grsItems = (detail.items || []).filter(it => it.particulars?.trim()).map(it => ({
+          ...emptyItem(),
+          material_name: it.particulars || '',
+          unit: it.unit || '',
+          qty_as_per_dc: it.quantity ? String(it.quantity) : '',
+        }));
         if (grsItems.length > 0) {
-          setItems(grsItems.map(it => ({
-            ...emptyItem(),
-            material_name: it.particulars || '',
-            unit: it.unit || '',
-            qty_as_per_dc: it.quantity ? String(it.quantity) : '',
-          })));
+          grsItems = await mergePoRatesIntoGrsItems(grsItems, detail.po_id);
+          itemsFromGrsRef.current = true;
+          setItems(grsItems);
         }
       } catch (_) {}
     })();
@@ -740,7 +792,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
 
   const handleGrsSelect = async (grsId) => {
     setField('grs_id', grsId);
-    if (!grsId) { setField('grs_number', ''); return; }
+    if (!grsId) { setField('grs_number', ''); itemsFromGrsRef.current = false; return; }
     const grs = grsList.find(g => g.id === grsId);
     setField('grs_number', grs?.grs_number || '');
     if (grs?.vehicle_no) setField('vehicle_no', grs.vehicle_no);
@@ -750,20 +802,25 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
       if (detail.po_number) setField('po_number', detail.po_number);
       if (detail.po_id) setField('po_id', detail.po_id);
       if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
-      const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
+      let grsItems = (detail.items || []).filter(it => it.particulars?.trim()).map(it => ({
+        ...emptyItem(),
+        material_name: it.particulars || '',
+        unit: it.unit || '',
+        qty_as_per_dc: it.quantity ? String(it.quantity) : '',
+      }));
       if (grsItems.length > 0) {
-        setItems(grsItems.map(it => ({
-          ...emptyItem(),
-          material_name: it.particulars || '',
-          unit: it.unit || '',
-          qty_as_per_dc: it.quantity ? String(it.quantity) : '',
-        })));
+        grsItems = await mergePoRatesIntoGrsItems(grsItems, detail.po_id);
+        itemsFromGrsRef.current = true;
+        setItems(grsItems);
         toast.success(`${grsItems.length} item(s) loaded from GRS`);
       }
     } catch (_) {}
   };
 
   function handlePOSelect(poId) {
+    // Explicit PO selection means the user wants the PO line list — release the
+    // GRS guard so the PO auto-populate effect can run.
+    itemsFromGrsRef.current = false;
     if (!poId) {
       setForm(p => ({ ...p, po_id: '', po_number: '' }));
       setItems([emptyItem()]);
@@ -786,7 +843,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   const calcBillAmounts = (billIdx) => {
     const b = bills[billIdx] || {};
     const overrides = allGstOverrides[billIdx] || {};
-    const defaultGst = parseFloat(b.gst_pct) || 18;
+    const defaultGst = parseFloat(b.gst_pct || '18');
     const mode = b.tax_mode || 'intrastate';
     let basic = 0, cgst = 0, sgst = 0, igst = 0;
     items.filter(it => it.material_name?.trim()).forEach((it, i) => {
@@ -799,7 +856,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
       else { cgst += li_basic * gstPct / 200; sgst += li_basic * gstPct / 200; }
     });
     const tc = parseFloat(b.transport_charges) || 0;
-    const tgst = tc * (parseFloat(b.transport_gst_pct) || 18) / 100;
+    const tgst = tc * parseFloat(b.transport_gst_pct || '18') / 100;
     const oc = parseFloat(b.other_charges) || 0;
     const gst = cgst + sgst + igst;
     return { basic, cgst, sgst, igst, gst, tc, tgst, oc, total: basic + gst + tc + tgst + oc };

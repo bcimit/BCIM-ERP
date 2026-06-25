@@ -1,5 +1,5 @@
 // src/routes/hr-import.routes.js
-// Greythr CSV import — Employees & Attendance
+// CSV import — Employees & Attendance
 const express  = require('express');
 const multer   = require('multer');
 const bcrypt   = require('bcryptjs');
@@ -59,7 +59,7 @@ function normaliseTime(val) {
   return null;
 }
 
-// ─── helper: map Greythr status codes ────────────────────────────────────────
+// ─── helper: map attendance status codes ─────────────────────────────────────
 function mapAttendanceStatus(raw) {
   if (!raw) return 'absent';
   const s = raw.trim().toUpperCase();
@@ -122,7 +122,7 @@ router.post('/preview-attendance', upload.single('file'), async (req, res) => {
 
 /* ════════════════════════════════════════════════════════════════════════════
    POST /hr-admin/import/employees
-   Import employees from Greythr CSV.
+   Import employees from CSV.
    Supports two modes:
      mode=create  → create new users + employee_profiles (skips existing emp codes)
      mode=update  → only update employee_profiles for existing users
@@ -148,7 +148,7 @@ router.post('/employees', upload.single('file'), async (req, res) => {
       const rowNum = i + 2; // 1-indexed + header row
 
       try {
-        // ── Map Greythr columns (handles various column name formats) ──
+        // ── Map columns (handles various column name formats) ──
         const empCode  = pick(row, 'Employee Code', 'EmployeeCode', 'Emp Code', 'EmpCode', 'employee_code');
         const name     = pick(row, 'Employee Name', 'EmployeeName', 'Name', 'Full Name');
         const email    = pick(row, 'Email', 'Email ID', 'Official Email', 'Work Email', 'email');
@@ -315,8 +315,8 @@ router.post('/employees', upload.single('file'), async (req, res) => {
 
 /* ════════════════════════════════════════════════════════════════════════════
    POST /hr-admin/import/attendance
-   Import monthly attendance from Greythr CSV.
-   Greythr exports attendance in two formats:
+   Import monthly attendance from CSV.
+   Supports two attendance CSV formats:
      Format A (wide): columns = Emp Code | Emp Name | 01 | 02 | 03 ... 31
      Format B (long): columns = Emp Code | Date | Status | In Time | Out Time
    We auto-detect the format.
@@ -381,9 +381,9 @@ router.post('/attendance', upload.single('file'), async (req, res) => {
           try {
             const r = await query(
               `INSERT INTO hr_attendance (user_id, company_id, attendance_date, status, source)
-               VALUES ($1,$2,$3,$4,'greythr')
+               VALUES ($1,$2,$3,$4,'csv_import')
                ON CONFLICT (user_id, attendance_date) DO UPDATE
-                 SET status=$4, source='greythr'
+                 SET status=$4, source='csv_import'
                RETURNING xmax`,
               [userId, companyId, dateStr, status]
             );
@@ -429,11 +429,11 @@ router.post('/attendance', upload.single('file'), async (req, res) => {
           const r = await query(
             `INSERT INTO hr_attendance
                (user_id, company_id, attendance_date, status, in_time, out_time, late_minutes, source)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,'greythr')
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'csv_import')
              ON CONFLICT (user_id, attendance_date) DO UPDATE
                SET status=$4, in_time=COALESCE($5, hr_attendance.in_time),
                    out_time=COALESCE($6, hr_attendance.out_time),
-                   late_minutes=$7, source='greythr'
+                   late_minutes=$7, source='csv_import'
              RETURNING xmax`,
             [userId, companyId, dateStr, status, inTime||null, outTime||null, lateMin]
           );

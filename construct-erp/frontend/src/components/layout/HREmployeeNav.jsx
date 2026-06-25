@@ -1,4 +1,4 @@
-// HREmployeeNav.jsx — greytHR-style secondary nav bar for HR & Admin module
+// HREmployeeNav.jsx — secondary nav bar for HR & Admin module
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
