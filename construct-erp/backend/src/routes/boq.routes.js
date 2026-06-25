@@ -225,7 +225,7 @@ async function nextMappingWONumber(companyId, projectId) {
   return `WO-${code}-${String(parseInt(r.rows[0].count)+1).padStart(3,'0')}`;
 }
 
-// GET /boq/:project_id/mappings — all mappings for a project
+// GET /boq/:project_id/mappings — all mappings for a project with advance & billing data
 router.get('/:project_id/mappings', async (req, res) => {
   try {
     const { project_id } = req.params;
@@ -234,7 +234,14 @@ router.get('/:project_id/mappings', async (req, res) => {
              bi.item_no, bi.description AS boq_description, bi.unit, bi.chapter_no, bi.chapter_name,
              bi.quantity AS boq_total_qty,
              sc.name AS sc_name, sc.sc_code, sc.contractor_type,
-             wo.wo_number, wo.status AS wo_status
+             wo.wo_number, wo.status AS wo_status,
+             COALESCE((SELECT SUM(paid_amount) FROM tqs_advance_vouchers
+                       WHERE project_id = $1 AND vendor_id = m.sc_id
+                       AND status IN ('issued','partial','recovered') AND is_deleted = false), 0) AS advance_paid,
+             COALESCE((SELECT SUM(sbi.curr_qty * sbi.rate) FROM sc_bill_items sbi
+                       JOIN sc_bills sb ON sb.id = sbi.bill_id
+                       WHERE sb.project_id = $1 AND sbi.sc_id = m.sc_id
+                       AND sb.status IN ('approved','paid')), 0) AS billed_amount
       FROM boq_sc_mapping m
       JOIN boq_items bi ON bi.id = m.boq_item_id
       LEFT JOIN sc_subcontractors sc ON sc.id = m.sc_id

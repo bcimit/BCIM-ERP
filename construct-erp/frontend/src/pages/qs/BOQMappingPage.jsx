@@ -606,13 +606,18 @@ export default function BOQMappingPage() {
       if (!allocs.length) {
         rows.push({ 'BOQ No.':item.item_no,'Description':boqDesc(item),'Unit':item.unit,
           'Client Qty':item.client_qty,'Client Rate':item.client_rate,'Client Amount':item.client_amount,
-          'SC Vendor':'— Not mapped —','SC Qty':'','SC Rate':'','SC Amount':'',
+          'SC Vendor':'— Not mapped —','SC Qty':'','SC Rate':'','SC Amount':'','Advance Paid':'','Billed Amt':'','Balance':'',
           'Margin ₹':'','Margin %':'' });
       } else {
         for (const a of allocs) {
+          const allocated_amt = num(a.allocated_qty) * num(a.sc_rate);
+          const advance_paid = num(a.advance_paid) || 0;
+          const billed_amt = num(a.billed_amount) || 0;
+          const balance = allocated_amt - advance_paid - billed_amt;
           rows.push({ 'BOQ No.':item.item_no,'Description':boqDesc(item),'Unit':item.unit,
             'Client Qty':item.client_qty,'Client Rate':item.client_rate,'Client Amount':item.client_amount,
             'SC Vendor':a.sc_name,'SC Qty':a.allocated_qty,'SC Rate':a.sc_rate,'SC Amount':a.sc_amount,
+            'Advance Paid':advance_paid,'Billed Amt':billed_amt,'Balance':balance,
             'Margin ₹':a.margin_amount,'Margin %':item.margin_pct });
         }
       }
@@ -723,7 +728,7 @@ export default function BOQMappingPage() {
                         <thead>
                           <tr style={{background:`linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)`}}>
                             {['BOQ No.','Description','Unit','Client Qty','Client Rate','Client Amt',
-                              'SC Vendor','SC Qty','SC Rate','SC Amt','Margin ₹','Margin %','Actions'].map(h=>(
+                              'SC Vendor','SC Qty','SC Rate','SC Amt','Advance Paid','Billed Amt','Balance','Margin ₹','Margin %','Actions'].map(h=>(
                               <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-white/80 whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
@@ -744,7 +749,7 @@ export default function BOQMappingPage() {
                                   <td className="px-3 py-2.5 text-right">{item.client_qty}</td>
                                   <td className="px-3 py-2.5 text-right font-mono">{fmt2(item.client_rate)}</td>
                                   <td className="px-3 py-2.5 text-right font-semibold">{fmt(item.client_amount)}</td>
-                                  <td colSpan={5} className="px-3 py-2.5 text-center">
+                                  <td colSpan={7} className="px-3 py-2.5 text-center">
                                     <span className="text-amber-600 font-semibold flex items-center gap-1 justify-center">
                                       <AlertTriangle className="w-3.5 h-3.5"/> Not allocated
                                     </span>
@@ -765,6 +770,12 @@ export default function BOQMappingPage() {
                             }
 
                             return allocs.map((alloc, ai) => {
+                              const allocated_amt = num(alloc.allocated_qty) * num(alloc.sc_rate);
+                              const advance_paid = num(alloc.advance_paid) || 0;
+                              const billed_amt = num(alloc.billed_amount) || 0;
+                              const balance = allocated_amt - advance_paid - billed_amt;
+                              const isOverBilled = billed_amt > allocated_amt + 0.01;
+
                               const amc = marginColor(
                                 alloc.margin_amount > 0 && num(alloc.sc_amount) > 0
                                   ? (alloc.margin_amount / (num(alloc.allocated_qty)*num(item.client_rate)))*100 : 0
@@ -806,6 +817,9 @@ export default function BOQMappingPage() {
                                   <td className="px-3 py-2.5 text-right font-mono">{alloc.allocated_qty}</td>
                                   <td className="px-3 py-2.5 text-right font-mono">{fmt2(alloc.sc_rate)}</td>
                                   <td className="px-3 py-2.5 text-right font-semibold text-orange-700">{fmt(alloc.sc_amount)}</td>
+                                  <td className="px-3 py-2.5 text-right font-semibold text-purple-600">{fmt(advance_paid)}</td>
+                                  <td className={clsx('px-3 py-2.5 text-right font-semibold', isOverBilled ? 'text-red-600 bg-red-50' : 'text-green-600')}>{fmt(billed_amt)}</td>
+                                  <td className={clsx('px-3 py-2.5 text-right font-bold', balance < 0 ? 'text-red-600' : 'text-emerald-600')}>{fmt(balance)}</td>
                                   <td className={clsx('px-3 py-2.5 text-right font-bold', amc.text)}>{fmt(alloc.margin_amount)}</td>
                                   <td className="px-3 py-2.5">
                                     {ai === allocs.length - 1 && (
