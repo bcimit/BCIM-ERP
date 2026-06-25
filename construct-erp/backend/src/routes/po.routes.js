@@ -890,8 +890,11 @@ router.get('/:id/amendment-context', async (req, res) => {
 // POST /:id/amend — create the revised PO (new -A{n} record) + a po_amendments log entry
 router.post('/:id/amend', async (req, res) => {
   try {
-    const { items = [], reason_code, reason_remarks, raised_by } = req.body;
-    if (!items.length) return res.status(400).json({ error: 'At least one line item is required' });
+    const {
+      items = [], reason_code, reason_remarks, raised_by,
+      // Optional commercial-terms changes (payment terms / T&C / delivery date amendments)
+      terms_conditions, payment_terms, delivery_date,
+    } = req.body;
 
     const basePo = await getAccessiblePo(req, req.params.id);
     if (!userCanAccessProject(req, basePo.project_id)) {
@@ -908,6 +911,11 @@ router.post('/:id/amend', async (req, res) => {
       const suffix = await nextAmendSuffix((sql, params) => client.query(sql, params), req.user.company_id, baseRef);
       const newRef = `${baseRef}-A${suffix}`;
 
+      // Use submitted commercial terms when provided, else carry over from base PO
+      const newTerms     = terms_conditions !== undefined ? terms_conditions : base.terms_conditions;
+      const newPayment   = payment_terms    !== undefined ? payment_terms    : base.payment_terms;
+      const newDelivery  = delivery_date    !== undefined && delivery_date   ? delivery_date : base.delivery_date;
+
       const headerRes = await client.query(
         `INSERT INTO purchase_orders (
           project_id, vendor_id, po_number, po_date, delivery_date,
@@ -918,8 +926,8 @@ router.post('/:id/amend', async (req, res) => {
           internal_remarks, delivery_instructions
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
         RETURNING *`,
-        [base.project_id, base.vendor_id, newRef, base.po_date, base.delivery_date,
-         base.terms_conditions, reason_remarks || base.notes, base.bank_details, base.payment_terms, base.tcs_amount,
+        [base.project_id, base.vendor_id, newRef, base.po_date, newDelivery,
+         newTerms, reason_remarks || base.notes, base.bank_details, newPayment, base.tcs_amount,
          req.user.id, newRef,
          base.department, base.currency, base.billing_address, base.freight_mode, base.transport_mode, base.tax_type,
          base.freight_charges, base.loading_unloading_charges, base.insurance_charges, base.tds_percent,
@@ -927,9 +935,21 @@ router.post('/:id/amend', async (req, res) => {
       );
       const newPoId = headerRes.rows[0].id;
 
+      // If no line items were submitted (pure terms/payment/delivery amendment),
+      // carry the base PO's items over unchanged so the revised PO stays complete.
+      let lineItems = items;
+      if (!lineItems.length) {
+        const baseItems = await client.query(
+          `SELECT material_name, make_model, hsn_code, quantity, unit, rate, gst_rate, req_date, mrs_item_id, item_code
+           FROM po_items WHERE po_id = $1 ORDER BY sort_order`,
+          [req.params.id]
+        );
+        lineItems = baseItems.rows.map(it => ({ ...it, quantity: it.quantity, rate: it.rate }));
+      }
+
       let subTotal = 0, totalGst = 0;
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
+      for (let i = 0; i < lineItems.length; i++) {
+        const it = lineItems[i];
         const qty = parseFloat(it.quantity) || 0;
         const rate = parseFloat(it.rate) || 0;
         const gstRate = parseFloat(it.gst_rate) || 0;
@@ -939,7 +959,7 @@ router.post('/:id/amend', async (req, res) => {
           `INSERT INTO po_items (po_id, material_name, make_model, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order, mrs_item_id, item_code)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
           [newPoId, it.material_name, it.make_model || null, it.hsn_code || null, qty, it.unit || 'Nos',
-           rate, gstRate, it.req_date || null, i + 1, it.po_item_id || null, it.item_code || null]
+           rate, gstRate, it.req_date || null, i + 1, it.mrs_item_id || it.po_item_id || null, it.item_code || null]
         );
         subTotal += basic; totalGst += gst;
       }

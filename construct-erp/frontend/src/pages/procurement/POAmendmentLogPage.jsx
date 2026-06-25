@@ -53,6 +53,12 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
   const [remarks, setRemarks] = useState('');
   const [raisedBy, setRaisedBy] = useState(user?.name || '');
   const [items, setItems] = useState([]);
+  // Commercial terms (editable for payment-terms / T&C / delivery amendments)
+  const [showTerms, setShowTerms] = useState(false);
+  const [termsConditions, setTermsConditions] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [origTerms, setOrigTerms] = useState({ tc: '', pay: '', del: '' });
 
   const ctxQuery = useQuery({
     queryKey: ['po-amend-context', selectedPoId],
@@ -75,7 +81,25 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
       revised_rate: num(it.rate),
       received_qty: num(it.received_quantity),
     })));
+    const tc = ctx.terms_conditions || '';
+    const pay = ctx.payment_terms || '';
+    const del = ctx.delivery_date ? String(ctx.delivery_date).slice(0, 10) : '';
+    setTermsConditions(tc);
+    setPaymentTerms(pay);
+    setDeliveryDate(del);
+    setOrigTerms({ tc, pay, del });
   }, [ctx]);
+
+  // Auto-expand the terms section when a terms-related reason is picked
+  const TERMS_REASONS = ['Payment Terms Change', 'Specification Change', 'Delivery Date Extension', 'Others'];
+  useEffect(() => {
+    if (TERMS_REASONS.includes(reasonCode)) setShowTerms(true);
+  }, [reasonCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const termsChanged =
+    termsConditions !== origTerms.tc ||
+    paymentTerms !== origTerms.pay ||
+    deliveryDate !== origTerms.del;
 
   const updateItem = (idx, field, value) => setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   const removeItem = idx => setItems(prev => prev.filter((_, i) => i !== idx));
@@ -101,6 +125,9 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
       reason_code: reasonCode,
       reason_remarks: remarks,
       raised_by: raisedBy,
+      terms_conditions: termsConditions,
+      payment_terms: paymentTerms,
+      delivery_date: deliveryDate || null,
       items: items.filter(it => it.material_name?.trim()).map(it => ({
         po_item_id: it.po_item_id,
         material_name: it.material_name,
@@ -120,7 +147,9 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
   const handleSubmit = () => {
     if (!selectedPoId) return toast.error('Select a PO to amend');
     if (!raisedBy.trim()) return toast.error('Enter who is raising this amendment');
-    if (!items.some(it => it.material_name?.trim())) return toast.error('Add at least one line item');
+    if (!items.some(it => it.material_name?.trim()) && !termsChanged) {
+      return toast.error('Change at least one line item or a commercial term');
+    }
     submitMut.mutate();
   };
 
@@ -311,6 +340,59 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
                     {difference !== 0 ? `${difference > 0 ? '+' : ''}${inrFull(difference)}` : '—'}
                   </div>
                 </div>
+              </div>
+
+              {/* ─── Commercial Terms (payment terms / T&C / delivery date) ─── */}
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <button type="button" onClick={() => setShowTerms(s => !s)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors">
+                  <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <FileText className="w-4 h-4 text-indigo-500" />
+                    Payment Terms / Terms &amp; Conditions / Delivery
+                    {termsChanged && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">edited</span>}
+                  </span>
+                  <span className="text-xs text-indigo-600 font-medium">{showTerms ? 'Hide' : 'Edit terms'}</span>
+                </button>
+
+                {showTerms && (
+                  <div className="p-4 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1.5">
+                          <CalendarDays className="w-3.5 h-3.5" /> Delivery Date
+                        </label>
+                        <input type="date" value={deliveryDate}
+                          onChange={e => setDeliveryDate(e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400" />
+                        {deliveryDate !== origTerms.del && origTerms.del && (
+                          <p className="text-[11px] text-slate-400 mt-1">was {dayjs(origTerms.del).format('DD MMM YYYY')}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Payment Terms</label>
+                      <textarea rows={2} value={paymentTerms}
+                        onChange={e => setPaymentTerms(e.target.value)}
+                        placeholder="e.g. 50% advance, 50% on delivery within 30 days…"
+                        className={clsx('w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-none',
+                          paymentTerms !== origTerms.pay ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200')} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Terms &amp; Conditions</label>
+                      <textarea rows={5} value={termsConditions}
+                        onChange={e => setTermsConditions(e.target.value)}
+                        placeholder="Full terms and conditions text…"
+                        className={clsx('w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 resize-y',
+                          termsConditions !== origTerms.tc ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200')} />
+                    </div>
+                    {termsChanged && (
+                      <p className="text-[11px] text-indigo-600 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        These changes will be saved on the new {ctx?.next_amendment_ref || 'revised'} PO.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
