@@ -764,7 +764,7 @@ router.post('/', async (req, res) => {
             `SELECT COALESCE(MAX(
                CASE
                  WHEN serial_no_formatted ~ '[0-9]+$'
-                 THEN CAST(REGEXP_REPLACE(serial_no_formatted, '^.*?([0-9]+)$', '\\1') AS INTEGER)
+                 THEN CAST(REGEXP_REPLACE(serial_no_formatted, '^.*?([0-9]+)$', '\\1') AS BIGINT)
                  ELSE 0
                END
              ), 0) AS last_seq
