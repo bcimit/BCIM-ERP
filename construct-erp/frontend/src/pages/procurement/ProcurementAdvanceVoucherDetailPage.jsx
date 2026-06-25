@@ -67,9 +67,9 @@ function IssueModal({ voucher, onClose }) {
   const mutation = useMutation({
     mutationFn: () => procurementAdvanceAPI.issue(voucher.id, form),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tqs-advance', String(voucher.id)] });
-      qc.invalidateQueries({ queryKey: ['tqs-advances'] });
-      qc.invalidateQueries({ queryKey: ['tqs-advances-summary'] });
+      qc.invalidateQueries({ queryKey: ['procurement-advance', String(voucher.id)] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances'] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances-summary'] });
       toast.success('Advance marked as issued');
       onClose();
     },
@@ -135,9 +135,9 @@ function RecoveryModal({ voucher, onClose }) {
       bill_id: form.bill_id || null,
     }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tqs-advance', String(voucher.id)] });
-      qc.invalidateQueries({ queryKey: ['tqs-advances'] });
-      qc.invalidateQueries({ queryKey: ['tqs-advances-summary'] });
+      qc.invalidateQueries({ queryKey: ['procurement-advance', String(voucher.id)] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances'] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances-summary'] });
       toast.success('Recovery recorded');
       onClose();
     },
@@ -240,7 +240,7 @@ function EditPanel({ voucher, projects, onCancel, onSaved }) {
   const mutation = useMutation({
     mutationFn: () => procurementAdvanceAPI.update(voucher.id, form),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tqs-advance', String(voucher.id)] });
+      qc.invalidateQueries({ queryKey: ['procurement-advance', String(voucher.id)] });
       toast.success('Voucher updated');
       onSaved();
     },
@@ -348,7 +348,7 @@ function EditPanel({ voucher, projects, onCancel, onSaved }) {
 }
 
 // ── Detail Page ───────────────────────────────────────────────────────────────
-export default function TQSAdvanceVoucherDetailPage() {
+export default function ProcurementAdvanceVoucherDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [showEdit,    setShowEdit]    = useState(false);
@@ -362,7 +362,7 @@ export default function TQSAdvanceVoucherDetailPage() {
   });
 
   const { data: voucher, isLoading, isError } = useQuery({
-    queryKey: ['tqs-advance', id],
+    queryKey: ['procurement-advance', id],
     queryFn: () => procurementAdvanceAPI.get(id).then(r => r.data?.data),
     staleTime: 5 * 60 * 1000,
   });
