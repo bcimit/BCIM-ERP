@@ -623,6 +623,11 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
     remarks: '', issues_notes: '', inspection_notes: '',
   });
   const [items, setItems] = useState([emptyItem()]);
+  // When items are sourced from a linked GRS, the PO auto-populate effect must NOT
+  // overwrite them with the full PO line list. Selecting a GRS also sets po_id (to
+  // link the bill), which would otherwise trigger the PO effect and clobber the
+  // GRS-received items. This ref guards against that race.
+  const itemsFromGrsRef = useRef(false);
   const [createBill, setCreateBill] = useState(false);
   const emptyBillForm = () => ({
     inv_number: '', inv_date: '', tax_mode: 'intrastate', gst_pct: '18',
@@ -667,6 +672,9 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   // Pre-populate items when PO detail loads
   useEffect(() => {
     if (!selectedPODetail?.items?.length) return;
+    // Don't clobber items received from a linked GRS — the GRS is the source of
+    // truth for what physically arrived, not the full PO line list.
+    if (itemsFromGrsRef.current) return;
     setItems(selectedPODetail.items.map(it => ({
       ...emptyItem(),
       material_name: it.material_name || '',
@@ -700,6 +708,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
         if (detail.po_id) setField('po_id', detail.po_id);
         const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
         if (grsItems.length > 0) {
+          itemsFromGrsRef.current = true;
           setItems(grsItems.map(it => ({
             ...emptyItem(),
             material_name: it.particulars || '',
@@ -740,7 +749,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
 
   const handleGrsSelect = async (grsId) => {
     setField('grs_id', grsId);
-    if (!grsId) { setField('grs_number', ''); return; }
+    if (!grsId) { setField('grs_number', ''); itemsFromGrsRef.current = false; return; }
     const grs = grsList.find(g => g.id === grsId);
     setField('grs_number', grs?.grs_number || '');
     if (grs?.vehicle_no) setField('vehicle_no', grs.vehicle_no);
@@ -752,6 +761,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
       if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
       const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
       if (grsItems.length > 0) {
+        itemsFromGrsRef.current = true;
         setItems(grsItems.map(it => ({
           ...emptyItem(),
           material_name: it.particulars || '',
@@ -764,6 +774,9 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   };
 
   function handlePOSelect(poId) {
+    // Explicit PO selection means the user wants the PO line list — release the
+    // GRS guard so the PO auto-populate effect can run.
+    itemsFromGrsRef.current = false;
     if (!poId) {
       setForm(p => ({ ...p, po_id: '', po_number: '' }));
       setItems([emptyItem()]);
