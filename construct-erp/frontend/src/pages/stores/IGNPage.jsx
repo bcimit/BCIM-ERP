@@ -672,10 +672,29 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   // Pre-populate items when PO detail loads
   useEffect(() => {
     if (!selectedPODetail?.items?.length) return;
-    // Don't clobber items received from a linked GRS — the GRS is the source of
-    // truth for what physically arrived, not the full PO line list.
-    if (itemsFromGrsRef.current) return;
-    setItems(selectedPODetail.items.map(it => ({
+    const poItems = selectedPODetail.items;
+    const norm = (s) => (s || '').trim().toLowerCase();
+
+    // Items received from a linked GRS are the source of truth for WHAT arrived,
+    // but the rate must still come from the PO. Merge the PO rate (and po_item_id
+    // for linkage) into the GRS items by matching material name — don't replace
+    // the list with the full PO lines.
+    if (itemsFromGrsRef.current) {
+      setItems(prev => prev.map(it => {
+        const match = poItems.find(p => norm(p.material_name) === norm(it.material_name));
+        if (!match) return it;
+        return {
+          ...it,
+          rate: it.rate || (match.rate != null ? String(match.rate) : ''),
+          unit: it.unit || match.unit || 'Nos',
+          po_item_id: it.po_item_id || match.id || null,
+        };
+      }));
+      return;
+    }
+
+    // No GRS link — populate the full PO line list with rates.
+    setItems(poItems.map(it => ({
       ...emptyItem(),
       material_name: it.material_name || '',
       unit: it.unit || 'Nos',
@@ -692,6 +711,29 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
     enabled: !!form.project_id,
   });
 
+  // Pull the PO rate into GRS-sourced items. The GRS carries WHAT/HOW-MUCH arrived
+  // (material + qty); the rate must come from the PO. Match by material name so the
+  // user never has to re-enter a rate that's already agreed on the PO.
+  const mergePoRatesIntoGrsItems = async (grsItems, poId) => {
+    if (!poId) return grsItems;
+    try {
+      const res = await poAPI.get(poId);
+      const po = res.data?.data ?? res.data;
+      const poItems = po?.items || [];
+      const norm = (s) => (s || '').trim().toLowerCase();
+      return grsItems.map(it => {
+        const m = poItems.find(p => norm(p.material_name) === norm(it.material_name));
+        if (!m) return it;
+        return {
+          ...it,
+          rate: it.rate || (m.rate != null ? String(m.rate) : ''),
+          unit: it.unit || m.unit || '',
+          po_item_id: it.po_item_id || m.id || null,
+        };
+      });
+    } catch (_) { return grsItems; }
+  };
+
   // Pre-fill from GRS when opened via quick-link
   useEffect(() => {
     if (!fromGrsId) return;
@@ -706,15 +748,16 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
         if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
         if (detail.po_number) setField('po_number', detail.po_number);
         if (detail.po_id) setField('po_id', detail.po_id);
-        const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
+        let grsItems = (detail.items || []).filter(it => it.particulars?.trim()).map(it => ({
+          ...emptyItem(),
+          material_name: it.particulars || '',
+          unit: it.unit || '',
+          qty_as_per_dc: it.quantity ? String(it.quantity) : '',
+        }));
         if (grsItems.length > 0) {
+          grsItems = await mergePoRatesIntoGrsItems(grsItems, detail.po_id);
           itemsFromGrsRef.current = true;
-          setItems(grsItems.map(it => ({
-            ...emptyItem(),
-            material_name: it.particulars || '',
-            unit: it.unit || '',
-            qty_as_per_dc: it.quantity ? String(it.quantity) : '',
-          })));
+          setItems(grsItems);
         }
       } catch (_) {}
     })();
@@ -759,15 +802,16 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
       if (detail.po_number) setField('po_number', detail.po_number);
       if (detail.po_id) setField('po_id', detail.po_id);
       if (detail.vendor_name) setField('supplier_name', detail.vendor_name);
-      const grsItems = (detail.items || []).filter(it => it.particulars?.trim());
+      let grsItems = (detail.items || []).filter(it => it.particulars?.trim()).map(it => ({
+        ...emptyItem(),
+        material_name: it.particulars || '',
+        unit: it.unit || '',
+        qty_as_per_dc: it.quantity ? String(it.quantity) : '',
+      }));
       if (grsItems.length > 0) {
+        grsItems = await mergePoRatesIntoGrsItems(grsItems, detail.po_id);
         itemsFromGrsRef.current = true;
-        setItems(grsItems.map(it => ({
-          ...emptyItem(),
-          material_name: it.particulars || '',
-          unit: it.unit || '',
-          qty_as_per_dc: it.quantity ? String(it.quantity) : '',
-        })));
+        setItems(grsItems);
         toast.success(`${grsItems.length} item(s) loaded from GRS`);
       }
     } catch (_) {}
