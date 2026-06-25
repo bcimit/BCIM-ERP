@@ -75,29 +75,7 @@ runSchemaInit('users_role_schema', ensureRoleSchema);
   }
 })();
 
-// ── One-time role fixes ───────────────────────────────────────────────────────
-// Idempotent: only updates role if the user currently has a non-HR role.
-(async () => {
-  const roleFixes = [
-    { email: 'raja@bcim.in', role: 'hr' },
-  ];
-  for (const { email, role } of roleFixes) {
-    try {
-      const r = await query(
-        `UPDATE users SET role = $1
-         WHERE LOWER(email) = $2
-           AND role <> $1
-         RETURNING id, name, email, role`,
-        [role, email.toLowerCase()]
-      );
-      if (r.rowCount > 0) {
-        console.log(`[users] Role updated to "${role}" for ${email}`);
-      }
-    } catch (e) {
-      console.error(`[users] Role fix failed for ${email}:`, e.message);
-    }
-  }
-})();
+// ── One-time role fixes — REMOVED (raja@bcim.in promoted to hr_admin) ────────
 
 // ── One-time employee profile creation for existing users ────────────────────
 // Creates a minimal employee_profile if the user exists but has no profile yet.
