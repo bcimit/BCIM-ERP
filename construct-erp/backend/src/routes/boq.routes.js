@@ -377,7 +377,7 @@ router.post('/link-existing-wo-item', authorize(...BOQ_ROLES), async (req, res) 
     const woItem = itemR.rows[0];
 
     const woAmount = Number(woItem.wo_amount || 0);
-    if (!woAmount || woAmount <= 0) return res.status(400).json({ error: 'WO item amount must be greater than zero' });
+    // Allow zero-rate items to be linked for tracking purposes; margin will show as 100% until rate is updated
 
     // Load all selected BOQ items, validate company + project + active
     const boqR = await query(`

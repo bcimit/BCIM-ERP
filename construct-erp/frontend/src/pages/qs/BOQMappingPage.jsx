@@ -441,7 +441,8 @@ function ExistingWOLinkModal({ projectId, boqItems, onClose }) {
     onError: e => toast.error(e?.response?.data?.error || 'Failed to link WO'),
   });
 
-  const canSave = form.wo_item_id && form.boq_item_ids.length > 0 && woAmount > 0;
+  const isZeroRate = form.wo_item_id && selectedWO && woAmount === 0;
+  const canSave = form.wo_item_id && form.boq_item_ids.length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -477,6 +478,11 @@ function ExistingWOLinkModal({ projectId, boqItems, onClose }) {
                   <p className="mt-2 font-semibold text-slate-700">
                     Qty: {selectedWO.qty || 0} {selectedWO.unit || ''} | WO Rate: {fmt2(selectedWO.rate)} | Amount: {fmt(selectedWO.amount)}
                   </p>
+                </div>
+              )}
+              {isZeroRate && (
+                <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-700 font-semibold">
+                  ⚠ This WO item has rate ₹0 — it will be linked for tracking with ₹0 SC cost. Update the WO rate later to get accurate margin.
                 </div>
               )}
             </div>
