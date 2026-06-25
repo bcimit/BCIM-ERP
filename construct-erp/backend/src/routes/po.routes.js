@@ -972,13 +972,18 @@ router.post('/:id/amend', async (req, res) => {
       const diff = grandTotal - parseFloat(base.grand_total || 0);
       const impactType = diff > 0 ? 'increase' : diff < 0 ? 'decrease' : 'none';
 
+      // Only consider amendment numbers in this endpoint's own AMD-YYYY-NNN format.
+      // Other flows store the revised PO ref (e.g. "POTQS001-A4") in amendment_no,
+      // which would break the integer cast on the trailing segment ("A4").
+      const yr = new Date().getFullYear();
       const countRes = await client.query(
         `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(amendment_no, '^.*-', '') AS INTEGER)), 0)::int AS last_seq
-         FROM po_amendments WHERE company_id = $1 AND amendment_no ~ '[0-9]+$'`,
-        [req.user.company_id]
+         FROM po_amendments
+         WHERE company_id = $1 AND amendment_no ~ ('^AMD-' || $2 || '-[0-9]+$')`,
+        [req.user.company_id, String(yr)]
       );
       const seq = String(countRes.rows[0].last_seq + 1).padStart(3, '0');
-      const amendmentNo = `AMD-${new Date().getFullYear()}-${seq}`;
+      const amendmentNo = `AMD-${yr}-${seq}`;
 
       const amendRes = await client.query(
         `INSERT INTO po_amendments (

@@ -241,13 +241,17 @@ router.post('/', authorize(...WRITE_ROLES), async (req, res) => {
       return res.status(403).json({ error: 'Access denied for this project.' });
     }
 
+    // Only count AMD-YYYY-NNN numbers — other flows store the revised PO ref
+    // (e.g. "POTQS001-A4") in amendment_no, which breaks the trailing int cast.
+    const yr = new Date().getFullYear();
     const countRes = await query(
       `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(amendment_no, '^.*-', '') AS INTEGER)), 0)::int AS last_seq
-       FROM po_amendments WHERE company_id = $1 AND amendment_no ~ '[0-9]+$'`,
-      [req.user.company_id]
+       FROM po_amendments
+       WHERE company_id = $1 AND amendment_no ~ ('^AMD-' || $2 || '-[0-9]+$')`,
+      [req.user.company_id, String(yr)]
     );
     const seq = String(countRes.rows[0].last_seq + 1).padStart(3, '0');
-    const amendment_no = `AMD-${new Date().getFullYear()}-${seq}`;
+    const amendment_no = `AMD-${yr}-${seq}`;
 
     const insertRes = await query(
       `INSERT INTO po_amendments (
