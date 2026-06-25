@@ -36,6 +36,20 @@ const REASON_OPTIONS = [
   'Others',
 ];
 
+// What each amendment reason lets you edit — drives the contextual hint and
+// which section (line items vs commercial terms) auto-opens & is highlighted.
+const REASON_CONFIG = {
+  'Quantity Revision':      { focus: 'items', hint: 'Edit the Rev Qty column in the line items below.' },
+  'Rate Revision':          { focus: 'items', hint: 'Edit the Rev Rate column in the line items below.' },
+  'Scope Addition':         { focus: 'items', hint: 'Use “Add line item” below to add new scope.' },
+  'Scope Deletion':         { focus: 'items', hint: 'Remove line items below using the delete (🗑) button.' },
+  'GST Correction':         { focus: 'items', hint: 'Edit the Rev GST% column in the line items below.' },
+  'Delivery Date Extension':{ focus: 'terms', hint: 'Update the Delivery Date in the terms section below.' },
+  'Payment Terms Change':   { focus: 'terms', hint: 'Edit the Payment Terms in the terms section below.' },
+  'Specification Change':   { focus: 'terms', hint: 'Update Terms & Conditions / specifications below. You can also revise line items.' },
+  'Others':                 { focus: 'both',  hint: 'Edit line items and/or the commercial terms below as needed.' },
+};
+
 const APPROVAL_THRESHOLD = 200000; // ₹2,00,000 — increase beyond this needs higher authority re-approval
 const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 const inrFull = v => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
@@ -90,10 +104,10 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
     setOrigTerms({ tc, pay, del });
   }, [ctx]);
 
-  // Auto-expand the terms section when a terms-related reason is picked
-  const TERMS_REASONS = ['Payment Terms Change', 'Specification Change', 'Delivery Date Extension', 'Others'];
+  // Reason-driven section focus: open the right section for the chosen reason
+  const reasonCfg = REASON_CONFIG[reasonCode] || REASON_CONFIG['Others'];
   useEffect(() => {
-    if (TERMS_REASONS.includes(reasonCode)) setShowTerms(true);
+    if (reasonCfg.focus === 'terms' || reasonCfg.focus === 'both') setShowTerms(true);
   }, [reasonCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const termsChanged =
@@ -208,6 +222,14 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 resize-none" />
           </div>
 
+          {/* Contextual hint — tells the user what to edit for the chosen reason */}
+          {selectedPoId && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 text-xs">
+              <ClipboardList className="w-4 h-4 mt-0.5 shrink-0" />
+              <span><span className="font-semibold">{reasonCode}:</span> {reasonCfg.hint}</span>
+            </div>
+          )}
+
           {!selectedPoId ? (
             <div className="py-10 text-center text-sm text-slate-400">Select a purchase order above to load its line items.</div>
           ) : ctxQuery.isLoading ? (
@@ -220,7 +242,14 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
             </div>
           ) : (
             <>
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Line Items</span>
+                {(reasonCfg.focus === 'items' || reasonCfg.focus === 'both') && (
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">edit here</span>
+                )}
+              </div>
+              <div className={clsx('border rounded-lg overflow-hidden',
+                (reasonCfg.focus === 'items' || reasonCfg.focus === 'both') ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-slate-200')}>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -343,13 +372,17 @@ function POAmendEditor({ poId, pos, onClose, onSubmitted }) {
               </div>
 
               {/* ─── Commercial Terms (payment terms / T&C / delivery date) ─── */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className={clsx('border rounded-lg overflow-hidden',
+                (reasonCfg.focus === 'terms' || reasonCfg.focus === 'both') ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-slate-200')}>
                 <button type="button" onClick={() => setShowTerms(s => !s)}
                   className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors">
                   <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
                     <FileText className="w-4 h-4 text-indigo-500" />
                     Payment Terms / Terms &amp; Conditions / Delivery
-                    {termsChanged && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">edited</span>}
+                    {(reasonCfg.focus === 'terms' || reasonCfg.focus === 'both') && (
+                      <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">edit here</span>
+                    )}
+                    {termsChanged && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">edited</span>}
                   </span>
                   <span className="text-xs text-indigo-600 font-medium">{showTerms ? 'Hide' : 'Edit terms'}</span>
                 </button>
