@@ -1177,8 +1177,12 @@ export default function StoreLedgerPage() {
               </div>
             ) : (
               <>
-                {/* Column header — clickable for sort */}
-                <div className="bg-slate-800 text-white px-4 py-2.5 flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider select-none">
+                {/* Scrollable area — both axes, sticky header inside */}
+                <div className="store-ledger-scroll" style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto', overflowX: 'auto' }}>
+                  <div style={{ minWidth: '920px' }}>
+
+                {/* Column header — sticky top, clickable for sort */}
+                <div className="bg-slate-800 text-white px-4 py-2.5 flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider select-none sticky top-0 z-10">
                   <span className="w-7 shrink-0 text-center">#</span>
                   <button onClick={() => toggleSort('material_name')} className={clsx('flex-1 min-w-0 text-left hover:text-slate-200 transition', sortField==='material_name'&&'text-blue-300')}>
                     Material / Category{sortIndicator('material_name')}
@@ -1201,7 +1205,7 @@ export default function StoreLedgerPage() {
                 </div>
 
                 {/* Rows */}
-                <div className="divide-y divide-slate-100" style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
+                <div className="divide-y divide-slate-100">
                   {groupByMajorHead ? (() => {
                     const groups = {};
                     filteredSummary.forEach(s => {
@@ -1372,6 +1376,8 @@ export default function StoreLedgerPage() {
                     </div>
                   )}
                 </div>
+                  </div>{/* end minWidth wrapper */}
+                </div>{/* end store-ledger-scroll */}
 
                 {/* Totals bar */}
                 {filteredSummary.length > 0 && (
