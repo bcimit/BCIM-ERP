@@ -3,8 +3,12 @@
 
 const { query } = require('../config/database');
 
-// Roles that bypass project-level scoping (see everything in the company)
-const GLOBAL_ROLES = ['super_admin', 'admin', 'managing_director', 'director', 'ceo', 'cfo', 'md'];
+// Roles that bypass project-level scoping (see everything in the company).
+// Accountant/finance roles need cross-project visibility for AP/payment management.
+const GLOBAL_ROLES = [
+  'super_admin', 'admin', 'managing_director', 'director', 'ceo', 'cfo', 'md',
+  'accountant', 'accounts_manager', 'finance_manager',
+];
 
 function isGlobalRole(role) {
   return GLOBAL_ROLES.includes(role);
