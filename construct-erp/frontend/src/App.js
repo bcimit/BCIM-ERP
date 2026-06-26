@@ -76,6 +76,7 @@ const BankAccountsPage        = lazy(() => import('./pages/accounts/BankAccounts
 const CustomersPage           = lazy(() => import('./pages/accounts/CustomersPage'));
 const InvoicesPage            = lazy(() => import('./pages/accounts/InvoicesPage'));
 const DebitNotesPage          = lazy(() => import('./pages/accounts/DebitNotesPage'));
+const QSCertificationsPage    = lazy(() => import('./pages/accounts/QSCertificationsPage'));
 const BankRulesPage           = lazy(() => import('./pages/accounts/BankRulesPage'));
 const ItemsPage               = lazy(() => import('./pages/accounts/ItemsPage'));
 const EstimatesPage           = lazy(() => import('./pages/accounts/EstimatesPage'));
@@ -609,6 +610,8 @@ export default function App() {
                 <Route path="accounts/purchases/payments-made" element={<RequireModule module="Finance"><PaymentsPage /></RequireModule>} />
                 <Route path="accounts/purchases/payment-run" element={<RequireModule module="Finance"><PaymentRunPage /></RequireModule>} />
                 <Route path="accounts/purchases/debit-notes" element={<RequireModule module="Finance"><DebitNotesPage /></RequireModule>} />
+                <Route path="accounts/purchases/qs-certifications" element={<RequireModule module="Finance"><QSCertificationsPage /></RequireModule>} />
+                <Route path="accounts/purchases/qs-certifications/:id" element={<RequireModule module="Finance"><VendorQSCertificationDetailPage /></RequireModule>} />
                 {/* Accountant */}
                 <Route path="accounts/accountant/chart-of-accounts" element={<RequireModule module="Finance"><ChartOfAccountsPage /></RequireModule>} />
                 <Route path="accounts/accountant/journal-entries" element={<RequireModule module="Finance"><JournalEntryPage /></RequireModule>} />

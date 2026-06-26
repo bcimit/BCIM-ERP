@@ -733,7 +733,9 @@ export default function VendorQSCertificationDetailPage() {
   const [searchParams] = useSearchParams();
   const qc = useQueryClient();
   // Work from both /qs and /tqs paths
-  const backPath = location.pathname.startsWith('/tqs') ? '/tqs/vendor-certifications' : '/qs/vendor-certifications';
+  const backPath = location.pathname.startsWith('/tqs') ? '/tqs/vendor-certifications'
+    : location.pathname.startsWith('/accounts') ? '/accounts/purchases/qs-certifications'
+    : '/qs/vendor-certifications';
   const [showCorrection, setShowCorrection] = useState(false);
   const [printMode, setPrintMode] = useState(null); // 'abstract' | 'payment'
   const autoPrintDone = useRef(false);

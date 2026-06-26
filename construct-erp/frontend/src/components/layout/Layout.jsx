@@ -140,6 +140,7 @@ const navGroups = [
     { to: '/accounts/purchases/expenses',               icon: Wallet,          label: 'Expenses' },
     { to: '/accounts/purchases/purchase-orders',        icon: ShoppingCart,    label: 'Purchase Orders' },
     { to: '/accounts/purchases/procurement-stores',     icon: Truck,           label: 'Procurement & Stores' },
+    { to: '/accounts/purchases/qs-certifications',      icon: BadgeCheck,      label: 'QS Certifications' },
     { to: '/accounts/purchases/bills',                  icon: FileText,        label: 'Bills' },
     { to: '/accounts/purchases/bills/booking',          icon: ClipboardList,   label: 'Bill Booking' },
     { to: '/accounts/purchases/recurring-bills',        icon: ScrollText,      label: 'Recurring Bills' },

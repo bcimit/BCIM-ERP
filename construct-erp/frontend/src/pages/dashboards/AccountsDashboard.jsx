@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   IndianRupee, Clock, CheckCircle2, AlertTriangle, ArrowRight,
   FileText, ChevronDown, ChevronRight, CreditCard, X,
-  Search, Filter, RefreshCw,
+  Search, Filter, RefreshCw, BadgeCheck,
 } from 'lucide-react';
 import { tqsBillsAPI, paymentAPI, vendorQSCertificationAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
@@ -499,10 +499,16 @@ export default function AccountsDashboard() {
               </p>
             </div>
           </div>
-          <button onClick={() => { qc.invalidateQueries({ queryKey: ['tqs-bills'] }); }}
-            className="h-8 w-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-indigo-600 hover:border-indigo-300 transition-all">
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link to="/accounts/purchases/qs-certifications"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:text-emerald-600 hover:border-emerald-300 transition-all">
+              <BadgeCheck className="w-3.5 h-3.5" /> QS Certifications
+            </Link>
+            <button onClick={() => { qc.invalidateQueries({ queryKey: ['tqs-bills'] }); }}
+              className="h-8 w-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-900 font-medium hover:text-indigo-600 hover:border-indigo-300 transition-all">
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Filter bar */}
