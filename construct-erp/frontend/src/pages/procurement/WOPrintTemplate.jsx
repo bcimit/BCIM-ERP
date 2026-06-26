@@ -63,18 +63,26 @@ const WOPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
   const isAmend = /-A\d+$/.test(data.wo_number || '');
 
   // ── Company header (left block) — live company settings, BCIM fallback ──────
-  const BCIM = {
+  // LANCO Hills (LH-10) work orders bill from BCIM's Hyderabad address instead
+  // of the default Bangalore office — keeps PO and WO addresses in sync.
+  const isLanco = data.project_code === 'LH-10';
+  const BCIM = isLanco ? {
+    name: 'BCIM ENGINEERING PRIVATE LIMITED',
+    address: 'TOWER VIEW APARTMENT, NO 403, 4th FLOOR,\nPLOT NO 26 & 27, SRI LAKSHMI NAGAR COLONY',
+    city: 'Hyderabad', state: 'Telangana, Rangareddy Dist', pincode: '500089',
+    gstin: '36AAHCB6485A1ZQ',
+  } : {
     name: 'BCIM ENGINEERING PRIVATE LIMITED',
     address: '#11, B Wing, Divyasree Chambers, O\'Shaughnessy Road',
     city: 'Bangalore', state: 'Karnataka', pincode: '560025',
     gstin: '29AAHCB6485A1ZL',
   };
   const coName  = (company.name && !company.name.toLowerCase().includes('pvt ltd') && company.name !== 'BCIM Engineering Pvt Ltd') ? company.name : BCIM.name;
-  const coAddr  = (company.address && !company.address.toLowerCase().includes('bcim office') && !company.address.toLowerCase().includes('jayanagar')) ? company.address : BCIM.address;
-  const coCity  = company.city    || BCIM.city;
-  const coState = company.state   || BCIM.state;
-  const coPin   = company.pincode || BCIM.pincode;
-  const coGstin = (company.gstin  && !['29AABCB1234C1Z5','29AAXCB2929P1Z1'].includes(company.gstin)) ? company.gstin : BCIM.gstin;
+  const coAddr  = (!isLanco && company.address && !company.address.toLowerCase().includes('bcim office') && !company.address.toLowerCase().includes('jayanagar')) ? company.address : BCIM.address;
+  const coCity  = isLanco ? BCIM.city : (company.city    || BCIM.city);
+  const coState = isLanco ? BCIM.state : (company.state   || BCIM.state);
+  const coPin   = isLanco ? BCIM.pincode : (company.pincode || BCIM.pincode);
+  const coGstin = isLanco ? BCIM.gstin : ((company.gstin  && !['29AABCB1234C1Z5','29AAXCB2929P1Z1'].includes(company.gstin)) ? company.gstin : BCIM.gstin);
   const coStatePin = [coState, coPin].filter(Boolean).join(' – ');
 
   const vendorFullAddr = data.vendor_address || '—';

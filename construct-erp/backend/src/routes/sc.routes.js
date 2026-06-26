@@ -400,7 +400,7 @@ router.get('/work-orders', async (req, res) => {
     const sync = await syncLegacyWorkOrdersToSC(req, { project_id, status });
     const { contractor_type: ctFilter } = req.query;
     let sql = `SELECT wo.*, sc.name AS sc_name, sc.sc_code, sc.contractor_type,
-      sc.trade_type, p.name AS project_name, u.name AS created_by_name,
+      sc.trade_type, p.name AS project_name, p.project_code, u.name AS created_by_name,
       (SELECT COUNT(*) FROM sc_bills b WHERE b.wo_id=wo.id AND b.status NOT IN ('draft','rejected')) AS bill_count
       FROM sc_work_orders wo
       JOIN sc_subcontractors sc ON sc.id=wo.sc_id
@@ -460,7 +460,7 @@ router.get('/all-work-orders', async (req, res) => {
              COALESCE(wo.contract_amount, wo.total_value, 0) AS contract_amount,
              wo.start_date, wo.end_date, wo.created_at,
              v.name AS vendor_name, NULL AS sc_code, v.vendor_type,
-             p.name AS project_name, p.id AS project_id,
+             p.name AS project_name, p.id AS project_id, p.project_code,
              'legacy' AS source,
              (SELECT COUNT(*) FROM subcontractor_bills b WHERE b.wo_id=wo.id) AS bill_count,
              0 AS total_billed, 0 AS total_paid
@@ -484,7 +484,7 @@ router.get('/legacy-work-orders/:id', async (req, res) => {
   try {
     const wo = await query(`
       SELECT wo.*, v.name AS vendor_name, v.vendor_type, v.gst_number AS vendor_gst, v.pan_number AS vendor_pan,
-             p.name AS project_name
+             p.name AS project_name, p.project_code
       FROM work_orders wo
       JOIN vendors v ON v.id=wo.vendor_id
       JOIN projects p ON p.id=wo.project_id
@@ -500,7 +500,7 @@ router.get('/legacy-work-orders/:id', async (req, res) => {
 
 router.get('/work-orders/:id', async (req, res) => {
   try {
-    const wo = await query(`SELECT wo.*, sc.name AS sc_name, sc.sc_code, sc.gst_number AS sc_gst, sc.pan_number AS sc_pan, sc.bank_name, sc.account_number, sc.ifsc_code, p.name AS project_name FROM sc_work_orders wo JOIN sc_subcontractors sc ON sc.id=wo.sc_id JOIN projects p ON p.id=wo.project_id WHERE wo.id=$1 AND wo.company_id=$2`, [req.params.id, CID(req)]);
+    const wo = await query(`SELECT wo.*, sc.name AS sc_name, sc.sc_code, sc.gst_number AS sc_gst, sc.pan_number AS sc_pan, sc.bank_name, sc.account_number, sc.ifsc_code, p.name AS project_name, p.project_code FROM sc_work_orders wo JOIN sc_subcontractors sc ON sc.id=wo.sc_id JOIN projects p ON p.id=wo.project_id WHERE wo.id=$1 AND wo.company_id=$2`, [req.params.id, CID(req)]);
     if (!wo.rows.length) return res.status(404).json({ error: 'Not found' });
     // Return live balance_qty computed from DB (not stored stale value)
     const items = await query(`
