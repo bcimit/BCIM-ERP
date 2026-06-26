@@ -139,9 +139,10 @@ export default function BudgetPage() {
   const [showForm, setShowForm]       = useState(false);
   const [form, setForm]               = useState({ cost_head: '', budgeted_amount: '', budget_pct: '', remarks: '' });
   const [editId, setEditId]           = useState(null);
-  const [drillHead, setDrillHead]     = useState(null);
-  const [drillSearch, setDrillSearch] = useState('');
-  const [drillType, setDrillType]     = useState('all');
+  const [drillHead, setDrillHead]           = useState(null);
+  const [drillSearch, setDrillSearch]       = useState('');
+  const [drillType, setDrillType]           = useState('all');
+  const [commitDrillHead, setCommitDrillHead] = useState(null);
   const [openMenuId, setOpenMenuId]   = useState(null);
   const qc = useQueryClient();
   const { user } = useAuthStore();
@@ -185,6 +186,13 @@ export default function BudgetPage() {
     queryKey: ['budget-commitment', projectId],
     queryFn: () => budgetAPI.commitment({ project_id: projectId }).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
     enabled: activeTab === 'commitment' && !!projectId,
+    staleTime: 0,
+  });
+
+  const { data: commitPosData = [], isFetching: commitPosLoading } = useQuery({
+    queryKey: ['budget-commitment-pos', projectId, commitDrillHead],
+    queryFn: () => budgetAPI.commitmentPos({ project_id: projectId, cost_head: commitDrillHead }).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    enabled: !!projectId && !!commitDrillHead,
     staleTime: 0,
   });
 
@@ -588,7 +596,16 @@ export default function BudgetPage() {
                             const pct       = budg > 0 ? (totalSpend / budg) * 100 : committed > 0 ? 999 : 0;
                             return (
                               <tr key={i} className={clsx('hover:bg-slate-50', pct > 100 && 'bg-red-50/30')}>
-                                <td className="px-5 py-3 font-medium text-slate-800">{row.cost_head}</td>
+                                <td className="px-5 py-3 font-medium text-slate-800">
+                                  <button
+                                    onClick={() => setCommitDrillHead(row.cost_head)}
+                                    className="text-left hover:text-indigo-700 hover:underline flex items-center gap-1 group"
+                                    title="Click to see individual POs"
+                                  >
+                                    {row.cost_head}
+                                    <ChevronRight size={12} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                                  </button>
+                                </td>
                                 <td className="px-5 py-3 text-right tabular-nums text-slate-600">{budg > 0 ? inr(budg) : '—'}</td>
                                 <td className="px-5 py-3 text-right tabular-nums font-medium text-violet-700">{inr(committed)}</td>
                                 <td className="px-5 py-3 text-right tabular-nums text-slate-600">{row.po_count}</td>
@@ -894,6 +911,70 @@ export default function BudgetPage() {
                       <td className="py-3 px-4 text-right font-semibold text-blue-700 tabular-nums">
                         {inr(filteredDrillData.reduce((s, r) => s + parseFloat(r.total_amount || 0), 0))}
                       </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Commitment PO Drill-down Modal ───────────────────────────── */}
+      {commitDrillHead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCommitDrillHead(null)}>
+          <div className="bg-white rounded-xl w-full max-w-3xl shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">POs — {commitDrillHead}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Active POs mapped to this cost head</p>
+              </div>
+              <button onClick={() => setCommitDrillHead(null)} className="text-slate-400 hover:text-slate-700 transition-colors"><X size={18} /></button>
+            </div>
+            <div className="overflow-auto flex-1">
+              {commitPosLoading ? (
+                <div className="py-12 text-center text-sm text-slate-400">Loading…</div>
+              ) : commitPosData.length === 0 ? (
+                <div className="py-12 text-center text-sm text-slate-400">No POs found</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      {['PO Number', 'Vendor', 'Date', 'Items (preview)', 'Amount', 'Status'].map((h, i) => (
+                        <th key={h} className={clsx('px-4 py-3 text-xs font-semibold text-slate-500', i >= 4 ? 'text-right' : 'text-left')}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {commitPosData.map(po => (
+                      <tr key={po.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono font-semibold text-indigo-700 whitespace-nowrap">{po.serial_no_formatted || po.po_number}</td>
+                        <td className="px-4 py-3 text-slate-700 max-w-[160px] truncate" title={po.vendor_name}>{po.vendor_name}</td>
+                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{po.po_date ? new Date(po.po_date).toLocaleDateString('en-IN') : '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs max-w-[200px]">
+                          <span className="truncate block" title={(po.items || []).join(', ')}>
+                            {(po.items || []).slice(0, 3).join(', ') || '—'}
+                            {(po.items || []).length > 3 && <span className="text-slate-400"> +{po.items.length - 3} more</span>}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-violet-700 tabular-nums whitespace-nowrap">{inr(po.grand_total)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={clsx('text-[11px] font-medium px-2 py-0.5 rounded',
+                            po.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                            po.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-600'
+                          )}>{po.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="sticky bottom-0 bg-slate-50 border-t border-slate-200">
+                    <tr>
+                      <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-slate-600">Total ({commitPosData.length} POs)</td>
+                      <td className="px-4 py-3 text-right font-bold text-violet-700 tabular-nums">
+                        {inr(commitPosData.reduce((s, r) => s + parseFloat(r.grand_total || 0), 0))}
+                      </td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>

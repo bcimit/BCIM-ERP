@@ -1075,8 +1075,9 @@ export const budgetAPI = {
   create:     (data)   => api.post('/budget', data),
   update:     (id, d)  => api.put(`/budget/${id}`, d),
   delete:     (id)     => api.delete(`/budget/${id}`),
-  commitment: (params) => api.get('/budget/commitment', { params }),
-  actuals:    (params) => api.get('/budget/actuals', { params }),
+  commitment:    (params) => api.get('/budget/commitment', { params }),
+  commitmentPos: (params) => api.get('/budget/commitment-pos', { params }),
+  actuals:       (params) => api.get('/budget/actuals', { params }),
 };
 export const qualityAPI = {
   // Checklists
