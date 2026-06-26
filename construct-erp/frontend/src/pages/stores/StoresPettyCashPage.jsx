@@ -157,6 +157,22 @@ function printStatement({ entries, advances, receipts, projectName }) {
   w.print();
 }
 
+// ── Authenticated file opener (token in sessionStorage, not cookie) ──────────
+async function openAttachment(url) {
+  if (!url) return;
+  try {
+    const token = sessionStorage.getItem('accessToken');
+    const resp = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!resp.ok) throw new Error('not ok');
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, '_blank');
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+  } catch {
+    alert('Could not open attachment — file may no longer exist on the server.');
+  }
+}
+
 // ── Entry Form (Local Purchase) ───────────────────────────────────────────────
 const EMPTY_ITEM  = { material_name: '', unit: "NO'S", quantity: '' };
 const EMPTY_ENTRY = { project_id: '', entry_date: dayjs().format('YYYY-MM-DD'), supplier: '', invoice_no: '', basic_amount: '', gst_pct: '0', gst_amount: '', amount: '', remarks: '', bill_file_url: '', bill_file_name: '', voucher_file_url: '', voucher_file_name: '' };
@@ -389,10 +405,10 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
               <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
                 <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <span className="text-sm text-green-700 font-medium flex-1 truncate">{form.voucher_file_name || 'Voucher attached'}</span>
-                <a href={form.voucher_file_url} target="_blank" rel="noreferrer"
+                <button type="button" onClick={() => openAttachment(form.voucher_file_url)}
                   className="flex items-center gap-1 text-xs text-green-700 font-semibold hover:text-green-900 flex-shrink-0">
                   <Eye className="w-3.5 h-3.5" /> View
-                </a>
+                </button>
                 <button type="button" onClick={() => { set('voucher_file_url', ''); set('voucher_file_name', ''); }}
                   className="text-red-400 hover:text-red-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
               </div>
@@ -412,10 +428,10 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
               <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
                 <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <span className="text-sm text-green-700 font-medium flex-1 truncate">{form.bill_file_name || 'Bill attached'}</span>
-                <a href={form.bill_file_url} target="_blank" rel="noreferrer"
+                <button type="button" onClick={() => openAttachment(form.bill_file_url)}
                   className="flex items-center gap-1 text-xs text-green-700 font-semibold hover:text-green-900 flex-shrink-0">
                   <Eye className="w-3.5 h-3.5" /> View
-                </a>
+                </button>
                 <button type="button" onClick={() => { set('bill_file_url', ''); set('bill_file_name', ''); }}
                   className="text-red-400 hover:text-red-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
               </div>
@@ -1296,18 +1312,18 @@ export default function StoresPettyCashPage() {
                             <td className="px-4 py-3"><Badge label={row.status} /></td>
                             <td className="px-4 py-3 text-center">
                               {row.voucher_file_url
-                                ? <a href={row.voucher_file_url} target="_blank" rel="noreferrer" title={row.voucher_file_name || 'View Voucher'}
-                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800" onClick={e => e.stopPropagation()}>
+                                ? <button onClick={() => openAttachment(row.voucher_file_url)} title={row.voucher_file_name || 'View Voucher'}
+                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800">
                                     <Paperclip className="w-3.5 h-3.5" />
-                                  </a>
+                                  </button>
                                 : <span className="text-slate-300 text-xs">—</span>}
                             </td>
                             <td className="px-4 py-3 text-center">
                               {row.bill_file_url
-                                ? <a href={row.bill_file_url} target="_blank" rel="noreferrer" title={row.bill_file_name || 'View Bill'}
-                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800" onClick={e => e.stopPropagation()}>
+                                ? <button onClick={() => openAttachment(row.bill_file_url)} title={row.bill_file_name || 'View Bill'}
+                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800">
                                     <Paperclip className="w-3.5 h-3.5" />
-                                  </a>
+                                  </button>
                                 : <span className="text-slate-300 text-xs">—</span>}
                             </td>
                             <td className={clsx('px-4 py-3 font-mono text-xs font-bold text-right whitespace-nowrap', negBal ? 'text-red-600' : lowBal ? 'text-amber-600' : 'text-green-700')}>
