@@ -372,11 +372,6 @@ function ApprovalCard({ item, onApprove, onReject, onView, onMDReview, mdMode, i
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-            <button onClick={() => onView(item)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-              title="View details">
-              <Eye style={{width:16,height:16}} />
-            </button>
             {isMDUser ? (
               /* MD user (dashboard panel or standalone /approvals): always Review & Authorise */
               <>
@@ -399,6 +394,10 @@ function ApprovalCard({ item, onApprove, onReject, onView, onMDReview, mdMode, i
                     <CheckCircle2 style={{width:13,height:13}} /> Check
                   </button>
                 )}
+                <button onClick={() => onView(item)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">
+                  <Eye style={{width:13,height:13}} /> Review
+                </button>
                 <button onClick={() => onApprove(item)}
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors">
                   <CheckCircle2 style={{width:13,height:13}} />
