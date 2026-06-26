@@ -95,6 +95,10 @@ const initTables = async () => {
   `);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS reporting_manager_id UUID REFERENCES users(id)`);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS work_location TEXT`);
+  // 'staff' = office/management employees, 'workman' = registered workmen/labour
+  // (Form A — Employee Register category) — both live in the same rich profile
+  // table so statutory fields (PAN/Aadhaar/UAN/ESI/bank) are never lost.
+  await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS employee_category TEXT DEFAULT 'staff'`);
   await query(`
     CREATE TABLE IF NOT EXISTS employee_timeline (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -141,7 +145,7 @@ const employeeSelect = `
          ep.pf_account_number, ep.esi_number, ep.bank_name, ep.bank_account_number,
          ep.bank_ifsc, ep.permanent_address, ep.current_address,
          ep.emergency_contact_name, ep.emergency_contact_phone,
-         ep.employment_type, ep.reporting_manager_id, mgr.name as reporting_manager_name,
+         ep.employment_type, ep.employee_category, ep.reporting_manager_id, mgr.name as reporting_manager_name,
          ep.work_location, ep.probation_end_date, ep.notice_period_days,
          ep.date_of_leaving, ep.leaving_reason, ep.employment_status, ep.profile_photo_url,
          dep.name as department_name, des.name as designation_name, des.grade
@@ -218,6 +222,10 @@ router.get('/', async (req, res) => {
       if (employment_type) {
         sql += ` AND ep.employment_type = $${idx}`;
         params.push(employment_type); idx++;
+      }
+      if (req.query.employee_category) {
+        sql += ` AND ep.employee_category = $${idx}`;
+        params.push(req.query.employee_category); idx++;
       }
     }
     sql += ' ORDER BY u.name';
@@ -414,9 +422,9 @@ router.post('/', async (req, res) => {
         gender, father_name, mother_name, marital_status, blood_group, nationality,
         pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
         bank_name, bank_account_number, bank_ifsc, permanent_address, current_address,
-        emergency_contact_name, emergency_contact_phone, employment_type,
+        emergency_contact_name, emergency_contact_phone, employment_type, employee_category,
         reporting_manager_id, work_location, probation_end_date, notice_period_days)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
       [userId, req.user.company_id, department_id || null, designation_id || null,
        date_of_joining || null, date_of_birth || null, gender || null,
        father_name || null, mother_name || null, marital_status || null,
@@ -425,7 +433,8 @@ router.post('/', async (req, res) => {
        esi_number || null, bank_name || null, bank_account_number || null,
        bank_ifsc || null, permanent_address || null, current_address || null,
        emergency_contact_name || null, emergency_contact_phone || null,
-       employment_type || 'permanent', reporting_manager_id || null, work_location || null,
+       employment_type || 'permanent', req.body.employee_category || 'staff',
+       reporting_manager_id || null, work_location || null,
        probation_end_date || null, notice_period_days || 30]
     );
 
@@ -470,7 +479,7 @@ router.put('/:id', async (req, res) => {
       father_name, mother_name, marital_status, blood_group, nationality,
       pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
       bank_name, bank_account_number, bank_ifsc, permanent_address, current_address,
-      emergency_contact_name, emergency_contact_phone, employment_type,
+      emergency_contact_name, emergency_contact_phone, employment_type, employee_category,
       probation_end_date, notice_period_days, reporting_manager_id, work_location,
     } = req.body;
 
@@ -497,9 +506,9 @@ router.put('/:id', async (req, res) => {
         gender, father_name, mother_name, marital_status, blood_group, nationality,
         pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
         bank_name, bank_account_number, bank_ifsc, permanent_address, current_address,
-        emergency_contact_name, emergency_contact_phone, employment_type,
+        emergency_contact_name, emergency_contact_phone, employment_type, employee_category,
         reporting_manager_id, work_location, probation_end_date, notice_period_days, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          department_id=$3, designation_id=$4, date_of_joining=$5, date_of_birth=$6,
          gender=$7, father_name=$8, mother_name=$9, marital_status=$10, blood_group=$11,
@@ -507,8 +516,8 @@ router.put('/:id', async (req, res) => {
          pf_account_number=$16, esi_number=$17, bank_name=$18, bank_account_number=$19,
          bank_ifsc=$20, permanent_address=$21, current_address=$22,
          emergency_contact_name=$23, emergency_contact_phone=$24, employment_type=$25,
-         reporting_manager_id=$26, work_location=$27,
-         probation_end_date=$28, notice_period_days=$29, updated_at=NOW()`,
+         employee_category=$26, reporting_manager_id=$27, work_location=$28,
+         probation_end_date=$29, notice_period_days=$30, updated_at=NOW()`,
       [req.params.id, req.user.company_id, department_id || null, designation_id || null,
        date_of_joining || null, date_of_birth || null, gender || null,
        father_name || null, mother_name || null, marital_status || null,
@@ -517,7 +526,8 @@ router.put('/:id', async (req, res) => {
        esi_number || null, bank_name || null, bank_account_number || null,
        bank_ifsc || null, permanent_address || null, current_address || null,
        emergency_contact_name || null, emergency_contact_phone || null,
-       employment_type || 'permanent', reporting_manager_id || null, work_location || null,
+       employment_type || 'permanent', employee_category || 'staff',
+       reporting_manager_id || null, work_location || null,
        probation_end_date || null, notice_period_days || 30]
     );
 

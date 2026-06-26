@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Users, Plus, Search, UserCheck, UserX, Briefcase, Building2,
   LayoutGrid, List, ChevronRight, X, SlidersHorizontal,
-  Phone, Mail, Calendar, ArrowUpRight, Link2,
+  Phone, Mail, Calendar, ArrowUpRight, Link2, HardHat,
 } from 'lucide-react';
 import { hrEmployeesAPI, hrMastersAPI } from '../../api/client';
 
@@ -32,6 +32,11 @@ const TYPE_CFG = {
   intern:     { label: 'Intern',    bg: 'bg-gray-100',  text: 'text-gray-600'   },
 };
 
+const CATEGORY_CFG = {
+  staff:   { label: 'BCIM Staff',    bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200'   },
+  workman: { label: 'BCIM Workers',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+};
+
 const fade = (d = 0) => ({
   initial: { opacity: 0, y: 14 },
   animate: { opacity: 1, y: 0 },
@@ -41,8 +46,9 @@ const fade = (d = 0) => ({
 // ── Employee Card ─────────────────────────────────────────────────────────────
 function EmpCard({ emp, onClick }) {
   const [g1, g2] = avatarGrad(emp.name);
-  const status = STATUS_CFG[emp.employment_status] || STATUS_CFG.active;
-  const type   = TYPE_CFG[emp.employment_type]     || TYPE_CFG.permanent;
+  const status   = STATUS_CFG[emp.employment_status] || STATUS_CFG.active;
+  const type     = TYPE_CFG[emp.employment_type]     || TYPE_CFG.permanent;
+  const category = CATEGORY_CFG[emp.employee_category] || CATEGORY_CFG.staff;
 
   return (
     <motion.div
@@ -92,9 +98,14 @@ function EmpCard({ emp, onClick }) {
             <Link2 className="w-2.5 h-2.5" /> No HR Profile
           </span>
         ) : (
-          <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${type.bg} ${type.text}`}>
-            {type.label}
-          </span>
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${category.bg} ${category.text} ${category.border}`}>
+              {category.label}
+            </span>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${type.bg} ${type.text}`}>
+              {type.label}
+            </span>
+          </div>
         )}
         <div className="flex items-center gap-1 text-xs text-gray-400">
           <Calendar className="w-3 h-3" />
@@ -115,19 +126,25 @@ function EmpCard({ emp, onClick }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function EmployeeListPage() {
   const navigate = useNavigate();
-  const [search,       setSearch]       = useState('');
-  const [deptFilter,   setDeptFilter]   = useState('');
-  const [statusFilter, setStatusFilter] = useState('active');
-  const [typeFilter,   setTypeFilter]   = useState('');
-  const [view,         setView]         = useState('card');
-  const [showFilters,  setShowFilters]  = useState(false);
+  const [search,          setSearch]          = useState('');
+  const [deptFilter,      setDeptFilter]      = useState('');
+  const [statusFilter,    setStatusFilter]    = useState('active');
+  const [typeFilter,      setTypeFilter]      = useState('');
+  const [categoryFilter,  setCategoryFilter]  = useState('');
+  const [view,            setView]            = useState('card');
+  const [showFilters,     setShowFilters]     = useState(false);
 
   const { data: empData, isLoading } = useQuery({
-    queryKey: ['hr-employees', search, deptFilter, statusFilter],
+    queryKey: ['hr-employees', search, deptFilter, statusFilter, categoryFilter],
     queryFn: () => hrEmployeesAPI.list(
       statusFilter === '__no_profile__'
         ? { no_profile: 'true' }
-        : { search: search || undefined, department_id: deptFilter || undefined, employment_status: statusFilter || undefined }
+        : {
+            search: search || undefined,
+            department_id: deptFilter || undefined,
+            employment_status: statusFilter || undefined,
+            employee_category: categoryFilter || undefined,
+          }
     ).then(r => r.data),
   });
 
@@ -148,12 +165,12 @@ export default function EmployeeListPage() {
   // KPIs from full list
   const kpis = useMemo(() => ({
     total:      allEmployees.length,
+    staff:      allEmployees.filter(e => !e.employee_category || e.employee_category === 'staff').length,
+    workers:    allEmployees.filter(e => e.employee_category === 'workman').length,
     permanent:  allEmployees.filter(e => e.employment_type === 'permanent').length,
-    probation:  allEmployees.filter(e => e.employment_type === 'probation').length,
-    contract:   allEmployees.filter(e => e.employment_type === 'contract').length,
   }), [allEmployees]);
 
-  const activeFilters = [deptFilter, typeFilter].filter(Boolean).length;
+  const activeFilters = [deptFilter, typeFilter, categoryFilter].filter(Boolean).length;
 
   return (
     <div className="p-6 space-y-5" style={{ background: '#F8F9FA', minHeight: '100vh' }}>
@@ -181,20 +198,56 @@ export default function EmployeeListPage() {
         </button>
       </motion.div>
 
+      {/* ── Category Tabs ──────────────────────────────────────────────────── */}
+      <motion.div {...fade(0.04)} className="flex gap-3">
+        {[
+          { value: '',        label: 'All Employees', icon: Users,    color: '#6366F1', bg: '#EEF2FF', count: kpis.total   },
+          { value: 'staff',   label: 'BCIM Staff',    icon: Briefcase,color: '#2563EB', bg: '#EFF6FF', count: kpis.staff   },
+          { value: 'workman', label: 'BCIM Workers',  icon: HardHat,  color: '#EA580C', bg: '#FFF7ED', count: kpis.workers },
+        ].map(tab => (
+          <motion.button
+            key={tab.value}
+            onClick={() => setCategoryFilter(prev => prev === tab.value ? (tab.value === '' ? '' : '') : tab.value)}
+            whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }}
+            className={`flex items-center gap-3 px-5 py-3 rounded-2xl border text-sm font-semibold transition-all shadow-sm ${
+              categoryFilter === tab.value
+                ? 'border-2 shadow-md'
+                : 'bg-white border-gray-100 text-gray-600 hover:border-gray-200'
+            }`}
+            style={categoryFilter === tab.value ? {
+              background: tab.bg, borderColor: tab.color, color: tab.color,
+            } : {}}
+          >
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: categoryFilter === tab.value ? 'rgba(255,255,255,0.6)' : tab.bg }}>
+              <tab.icon className="w-4 h-4" style={{ color: tab.color }} />
+            </div>
+            <div className="text-left">
+              <p className="leading-tight">{tab.label}</p>
+              <p className="text-lg font-black leading-tight">{tab.count}</p>
+            </div>
+          </motion.button>
+        ))}
+      </motion.div>
+
       {/* ── KPI Strip ──────────────────────────────────────────────────────── */}
       <motion.div {...fade(0.05)} className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Active',    value: kpis.total,     icon: UserCheck,  color: '#6366F1', bg: '#EEF2FF', filter: ''          },
-          { label: 'Permanent',       value: kpis.permanent, icon: Briefcase,  color: '#0EA5E9', bg: '#E0F2FE', filter: 'permanent'  },
-          { label: 'On Probation',    value: kpis.probation, icon: Users,      color: '#F59E0B', bg: '#FFFBEB', filter: 'probation'  },
-          { label: 'Contract / Intern', value: kpis.contract, icon: UserX,    color: '#EF4444', bg: '#FEF2F2', filter: 'contract'   },
+          { label: 'BCIM Staff',      value: kpis.staff,     icon: Briefcase,  color: '#2563EB', bg: '#EFF6FF', filter: 'staff', catFilter: true },
+          { label: 'BCIM Workers',    value: kpis.workers,   icon: HardHat,    color: '#EA580C', bg: '#FFF7ED', filter: 'workman', catFilter: true },
+          { label: 'Permanent',       value: kpis.permanent, icon: UserCheck,  color: '#10B981', bg: '#ECFDF5', filter: 'permanent' },
         ].map((c, i) => (
           <motion.button
             key={c.label}
-            onClick={() => setTypeFilter(prev => prev === c.filter ? '' : c.filter)}
+            onClick={() => c.catFilter ? setCategoryFilter(prev => prev === c.filter ? '' : c.filter) : setTypeFilter(prev => prev === c.filter ? '' : c.filter)}
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.97 }}
-            className={`bg-white rounded-2xl p-4 text-left shadow-sm border transition-all ${typeFilter === c.filter ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-200'}`}
+            className={`bg-white rounded-2xl p-4 text-left shadow-sm border transition-all ${
+              (c.catFilter ? categoryFilter === c.filter : typeFilter === c.filter)
+                ? 'border-indigo-300 ring-2 ring-indigo-100'
+                : 'border-gray-100 hover:border-gray-200'
+            }`}
           >
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-gray-500">{c.label}</p>

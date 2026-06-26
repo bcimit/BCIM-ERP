@@ -69,6 +69,7 @@ export default function EmployeeFormPage() {
 
   const [form, setForm] = useState({
     name:'', email:'', phone:'', role:'viewer', employee_code:'',
+    employee_category:'staff',
     department_id:'', designation_id:'', employment_type:'permanent',
     date_of_joining:'', probation_end_date:'', notice_period_days:30,
     reporting_manager_id:'', work_location:'',
@@ -99,7 +100,8 @@ export default function EmployeeFormPage() {
       const e = empData.data;
       setForm(prev=>({ ...prev,
         name:e.name||'', email:e.email||'', phone:e.phone||'', role:e.role||'viewer',
-        employee_code:e.employee_code||'', department_id:e.department_id||'', designation_id:e.designation_id||'',
+        employee_code:e.employee_code||'', employee_category:e.employee_category||'staff',
+        department_id:e.department_id||'', designation_id:e.designation_id||'',
         employment_type:e.employment_type||'permanent', reporting_manager_id:e.reporting_manager_id||'',
         work_location:e.work_location||'', date_of_joining:e.date_of_joining?.split('T')[0]||'',
         probation_end_date:e.probation_end_date?.split('T')[0]||'', notice_period_days:e.notice_period_days||30,
@@ -245,6 +247,38 @@ export default function EmployeeFormPage() {
           <motion.div {...fade(0.10)} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5"
             style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
             <h2 className="font-black text-gray-900">Job Details</h2>
+
+            {/* Employee Category — prominent toggle */}
+            <div>
+              <label className={lbl}>Employee Category <span className="text-red-500">*</span></label>
+              <div className="flex gap-3 mt-1">
+                {[
+                  { value:'staff',   label:'BCIM Staff',   desc:'Office / Management', color:'#2563EB', bg:'#EFF6FF', border:'#BFDBFE' },
+                  { value:'workman', label:'BCIM Workers',  desc:'Site / Labour',       color:'#EA580C', bg:'#FFF7ED', border:'#FED7AA' },
+                ].map(opt=>(
+                  <button key={opt.value} type="button"
+                    onClick={()=>set('employee_category', opt.value)}
+                    className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all"
+                    style={form.employee_category===opt.value
+                      ? { background:opt.bg, borderColor:opt.color, color:opt.color }
+                      : { background:'#F9FAFB', borderColor:'#E5E7EB', color:'#6B7280' }
+                    }>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: form.employee_category===opt.value ? 'rgba(255,255,255,0.7)' : '#E5E7EB' }}>
+                      {opt.value==='staff'
+                        ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+                        : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M2 18h20M12 2v4M4 6l2 4M20 6l-2 4M8 10h8l1 8H7l1-8z"/></svg>
+                      }
+                    </div>
+                    <div>
+                      <p className="text-sm font-black">{opt.label}</p>
+                      <p className="text-xs font-medium opacity-70">{opt.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <Field label="Department">
                 <SelectWithAdd
