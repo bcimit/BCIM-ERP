@@ -50,9 +50,10 @@ function categoryOf(text = '') {
 }
 
 const STATUS_STYLE = {
-  Pending:  { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'Pending'  },
-  Approved: { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Approved' },
-  Rejected: { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Rejected' },
+  Pending:     { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'Pending'      },
+  ph_approved: { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'PH Approved'  },
+  Approved:    { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Approved'     },
+  Rejected:    { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Rejected'     },
 };
 
 function Badge({ label, className = '' }) {
@@ -844,7 +845,7 @@ export default function StoresPettyCashPage() {
   const patchStatusMut = useMutation({
     mutationFn: ({ id, status, remarks, rejected_reason }) => storesPettyCashAPI.patchStatus(id, status, remarks, rejected_reason),
     onSuccess: (_, vars) => {
-      toast.success(vars.status === 'Approved' ? 'Entry approved ✓' : 'Entry rejected');
+      toast.success(vars.status === 'Approved' ? 'Entry approved ✓' : vars.status === 'ph_approved' ? 'Sent for final approval ✓' : 'Entry rejected');
       setApprovalModal(null);
       qc.invalidateQueries({ queryKey: ['spc-entries'] });
       qc.invalidateQueries({ queryKey: ['spc-summary'] });
@@ -1218,7 +1219,7 @@ export default function StoresPettyCashPage() {
                 </div>
                 <select className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                  {['All', 'Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}
+                  {['All', 'Pending', 'ph_approved', 'Approved', 'Rejected'].map(s => <option key={s} value={s}>{s === 'ph_approved' ? 'PH Approved' : s}</option>)}
                 </select>
                 <select className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   value={catFilter} onChange={e => setCatFilter(e.target.value)}>
@@ -1300,21 +1301,26 @@ export default function StoresPettyCashPage() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
-                                {row.status !== 'Approved' && (
+                                {row.status === 'Pending' && (
                                   <button onClick={() => setApprovalModal({ entry: row, mode: 'approve' })} title="Approve"
                                     className="text-[10px] font-bold text-green-700 bg-green-100 hover:bg-green-200 rounded px-1.5 py-0.5">✓ Approve</button>
                                 )}
-                                {row.status !== 'Rejected' && (
+                                {!['Approved', 'Rejected'].includes(row.status) && (
                                   <button onClick={() => setApprovalModal({ entry: row, mode: 'reject' })} title="Reject"
                                     className="text-[10px] font-bold text-red-700 bg-red-100 hover:bg-red-200 rounded px-1.5 py-0.5">✗ Reject</button>
                                 )}
-                                {row.status !== 'Approved' && (
+                                {!['Approved', 'ph_approved'].includes(row.status) && (
                                   <button onClick={() => { setEditEntry(row); setShowEntryForm(true); }}
                                     className="text-[10px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded px-1.5 py-0.5">Edit</button>
                                 )}
                                 <button onClick={() => { if (window.confirm('Delete this entry?')) deleteEntryMut.mutate(row.id); }}
                                   className="text-red-400 hover:text-red-600 ml-1"><Trash2 className="w-3 h-3" /></button>
                               </div>
+                              {row.status === 'ph_approved' && row.ph_approved_by_name && (
+                                <p className="text-[9px] text-blue-600 mt-1 whitespace-nowrap">
+                                  ✓ PH: {row.ph_approved_by_name} · {dayjs(row.ph_approved_at).format('DD MMM')}
+                                </p>
+                              )}
                               {row.status === 'Approved' && row.approved_by_name && (
                                 <p className="text-[9px] text-green-600 mt-1 whitespace-nowrap">
                                   ✓ {row.approved_by_name} · {dayjs(row.approved_at).format('DD MMM')}

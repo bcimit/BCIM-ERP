@@ -56,6 +56,8 @@ function categoryOf(text = '') {
   await safe(`ALTER TABLE stores_petty_cash_entries ADD COLUMN IF NOT EXISTS approved_at      TIMESTAMPTZ`);
   await safe(`ALTER TABLE stores_petty_cash_entries ADD COLUMN IF NOT EXISTS approval_remarks TEXT`);
   await safe(`ALTER TABLE stores_petty_cash_entries ADD COLUMN IF NOT EXISTS rejected_reason  TEXT`);
+  await safe(`ALTER TABLE stores_petty_cash_entries ADD COLUMN IF NOT EXISTS ph_approved_by   UUID REFERENCES users(id)`);
+  await safe(`ALTER TABLE stores_petty_cash_entries ADD COLUMN IF NOT EXISTS ph_approved_at   TIMESTAMPTZ`);
 
   await safe(`
     CREATE TABLE IF NOT EXISTS stores_petty_cash_items (
@@ -206,6 +208,7 @@ router.get('/entries', authenticate, async (req, res) => {
 
     const rows = await query(
       `SELECT e.*, p.name AS project_name, u.name AS created_by_name, a.name AS approved_by_name,
+              ph.name AS ph_approved_by_name,
               COALESCE(json_agg(json_build_object(
                 'id', i.id, 'material_name', i.material_name, 'unit', i.unit, 'quantity', i.quantity
               ) ORDER BY i.sort_order) FILTER (WHERE i.id IS NOT NULL), '[]') AS items
@@ -213,9 +216,10 @@ router.get('/entries', authenticate, async (req, res) => {
        LEFT JOIN projects p ON p.id = e.project_id
        LEFT JOIN users    u ON u.id = e.created_by
        LEFT JOIN users    a ON a.id = e.approved_by
+       LEFT JOIN users    ph ON ph.id = e.ph_approved_by
        LEFT JOIN stores_petty_cash_items i ON i.entry_id = e.id
        WHERE ${where}
-       GROUP BY e.id, p.name, u.name, a.name
+       GROUP BY e.id, p.name, u.name, a.name, ph.name
        ORDER BY e.entry_date ASC, e.sl_no ASC
        LIMIT $${++p} OFFSET $${++p}`,
       [...params, limit, offset]
@@ -352,20 +356,22 @@ router.put('/entries/:id', authenticate, async (req, res) => {
 router.patch('/entries/:id/status', authenticate, async (req, res) => {
   try {
     const { status, remarks, rejected_reason } = req.body;
-    if (!['Pending', 'Approved', 'Rejected'].includes(status)) {
-      return res.status(400).json({ error: 'status must be Pending, Approved, or Rejected' });
+    if (!['Pending', 'ph_approved', 'Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ error: 'status must be Pending, ph_approved, Approved, or Rejected' });
     }
-    const approvedBy  = status === 'Approved' ? req.user.id : null;
-    const approvedAt  = status === 'Approved' ? new Date().toISOString() : null;
+    const approvedBy  = status === 'Approved'    ? req.user.id : null;
+    const phApprovedBy = status === 'ph_approved' ? req.user.id : null;
     const r = await query(
       `UPDATE stores_petty_cash_entries
           SET status=$1, updated_at=NOW(),
-              approved_by   = CASE WHEN $1='Approved' THEN $4::uuid ELSE approved_by END,
-              approved_at   = CASE WHEN $1='Approved' THEN NOW()    ELSE approved_at END,
-              approval_remarks = CASE WHEN $1='Approved' THEN $5     ELSE approval_remarks END,
-              rejected_reason  = CASE WHEN $1='Rejected' THEN $6     ELSE rejected_reason  END
+              ph_approved_by   = CASE WHEN $1='ph_approved' THEN $4::uuid ELSE ph_approved_by END,
+              ph_approved_at   = CASE WHEN $1='ph_approved' THEN NOW()    ELSE ph_approved_at END,
+              approved_by      = CASE WHEN $1='Approved'    THEN $5::uuid ELSE approved_by    END,
+              approved_at      = CASE WHEN $1='Approved'    THEN NOW()    ELSE approved_at    END,
+              approval_remarks = CASE WHEN $1='Approved'    THEN $6       ELSE approval_remarks END,
+              rejected_reason  = CASE WHEN $1='Rejected'    THEN $7       ELSE rejected_reason  END
        WHERE id=$2 AND company_id=$3 RETURNING *`,
-      [status, req.params.id, req.user.company_id, approvedBy, remarks || null, rejected_reason || null]
+      [status, req.params.id, req.user.company_id, phApprovedBy, approvedBy, remarks || null, rejected_reason || null]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Entry not found' });
     const entry = r.rows[0];
