@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { procurementAdvanceAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, Edit2, CheckCircle2, RotateCcw, Save, X,
@@ -29,6 +30,22 @@ function StatusBadge({ status }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  );
+}
+
+const APPROVAL_CFG = {
+  pending:              { label: 'Awaiting Procurement', bg: 'bg-amber-100',   text: 'text-amber-700'   },
+  procurement_approved:{ label: 'Awaiting MD Approval',  bg: 'bg-indigo-100',  text: 'text-indigo-700'  },
+  approved:            { label: 'Approved',              bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  rejected:            { label: 'Rejected',              bg: 'bg-red-100',     text: 'text-red-600'     },
+};
+
+function ApprovalBadge({ status }) {
+  const cfg = APPROVAL_CFG[status || 'pending'] || APPROVAL_CFG.pending;
+  return (
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
       {cfg.label}
     </span>
   );
@@ -351,9 +368,30 @@ function EditPanel({ voucher, projects, onCancel, onSaved }) {
 export default function ProcurementAdvanceVoucherDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const canProcureApprove = ['super_admin', 'admin', 'procurement_manager', 'project_manager'].includes(user?.role);
+  const canMDApprove      = ['super_admin', 'admin', 'managing_director', 'md', 'ceo', 'director'].includes(user?.role);
   const [showEdit,    setShowEdit]    = useState(false);
   const [showIssue,   setShowIssue]   = useState(false);
   const [showRecover, setShowRecover] = useState(false);
+
+  const approvalMut = useMutation({
+    mutationFn: ({ action, reason }) =>
+      action === 'procurement' ? procurementAdvanceAPI.approveProcurement(id)
+      : action === 'md'        ? procurementAdvanceAPI.approveMD(id)
+      :                          procurementAdvanceAPI.reject(id, { reason }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['procurement-advance', id] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances'] });
+      toast.success(res?.data?.message || 'Updated');
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || 'Action failed'),
+  });
+  const doReject = () => {
+    const reason = window.prompt('Reason for rejecting this advance voucher:');
+    if (reason && reason.trim()) approvalMut.mutate({ action: 'reject', reason: reason.trim() });
+  };
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects-list'],
@@ -407,6 +445,7 @@ export default function ProcurementAdvanceVoucherDetailPage() {
               <h1 className="text-2xl font-medium text-slate-900">
                 {voucher.voucher_number || voucher.sl_number}
               </h1>
+              <ApprovalBadge status={voucher.approval_status} />
               <StatusBadge status={voucher.status} />
             </div>
             <p className="text-sm text-slate-900 font-medium mt-1 font-medium">{voucher.vendor_name}</p>
@@ -416,11 +455,35 @@ export default function ProcurementAdvanceVoucherDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {voucher.status === 'pending' && (
+            {/* ── Approval workflow: Procurement → Managing Director ── */}
+            {canProcureApprove && ['pending', 'rejected'].includes(voucher.approval_status || 'pending') && (
+              <button onClick={() => approvalMut.mutate({ action: 'procurement' })} disabled={approvalMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition-all">
+                <CheckCircle2 size={15} /> Approve (Procurement)
+              </button>
+            )}
+            {canMDApprove && voucher.approval_status === 'procurement_approved' && (
+              <button onClick={() => approvalMut.mutate({ action: 'md' })} disabled={approvalMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 disabled:opacity-50 transition-all">
+                <CheckCircle2 size={15} /> Approve (MD)
+              </button>
+            )}
+            {(canProcureApprove || canMDApprove) && !['approved', 'rejected'].includes(voucher.approval_status || 'pending') && (
+              <button onClick={doReject} disabled={approvalMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-all">
+                <X size={15} /> Reject
+              </button>
+            )}
+            {voucher.status === 'pending' && voucher.approval_status === 'approved' && (
               <button onClick={() => setShowIssue(true)}
                 className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 transition-all">
                 <CheckCircle2 size={15} /> Mark as Issued
               </button>
+            )}
+            {voucher.status === 'pending' && voucher.approval_status !== 'approved' && (
+              <span className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 text-slate-400 text-sm font-medium rounded-lg cursor-not-allowed" title="Requires Procurement + MD approval">
+                <Clock size={15} /> Awaiting Approval
+              </span>
             )}
             {(voucher.status === 'issued' || voucher.status === 'partial') && (
               <button onClick={() => setShowRecover(true)}

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query, withTransaction } = require('../config/database');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { postAutoJournal, postAutoJournalStandalone } = require('../services/journalAutoPost');
@@ -98,6 +98,15 @@ async function ensureTable() {
   await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS md_name TEXT`);
   await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS note TEXT`);
   await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS terms_conditions TEXT`);
+  // ── Approval workflow: Procurement → Managing Director ──────────────────────
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS approval_status VARCHAR(24) NOT NULL DEFAULT 'pending'`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS procurement_approved_by UUID`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS procurement_approved_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS md_approved_by UUID`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS md_approved_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS rejected_by UUID`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ`);
+  await query(`ALTER TABLE tqs_advance_vouchers ADD COLUMN IF NOT EXISTS rejection_reason TEXT`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS tqs_advance_recoveries (
@@ -305,9 +314,15 @@ router.get('/', async (req, res) => {
 
     const { rows } = await query(`
       SELECT av.*,
-             p.name AS project_name
+             p.name AS project_name,
+             pu.name AS procurement_approved_by_name,
+             mu.name AS md_approved_by_name,
+             ru.name AS rejected_by_name
       FROM tqs_advance_vouchers av
-      LEFT JOIN projects p ON p.id = av.project_id
+      LEFT JOIN projects p  ON p.id  = av.project_id
+      LEFT JOIN users    pu ON pu.id = av.procurement_approved_by
+      LEFT JOIN users    mu ON mu.id = av.md_approved_by
+      LEFT JOIN users    ru ON ru.id = av.rejected_by
       WHERE ${wheres.join(' AND ')}
       ORDER BY av.created_at DESC
     `, params);
@@ -488,6 +503,67 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// ── Approval workflow: Procurement → Managing Director ───────────────────────
+const PROCUREMENT_APPROVERS = ['super_admin', 'admin', 'procurement_manager', 'project_manager'];
+const MD_APPROVERS = ['super_admin', 'admin', 'managing_director', 'md', 'ceo', 'director'];
+
+// PATCH /tqs/advances/:id/approve-procurement — Stage 1 (Procurement team)
+router.patch('/:id/approve-procurement', authorize(...PROCUREMENT_APPROVERS), async (req, res) => {
+  try {
+    const { company_id, id: user_id } = req.user;
+    const { rows } = await query(
+      `UPDATE tqs_advance_vouchers
+          SET approval_status='procurement_approved',
+              procurement_approved_by=$1, procurement_approved_at=NOW(),
+              rejected_by=NULL, rejected_at=NULL, rejection_reason=NULL,
+              updated_at=NOW()
+        WHERE id=$2 AND company_id=$3 AND is_deleted=FALSE
+          AND approval_status IN ('pending','rejected')
+        RETURNING *`,
+      [user_id, req.params.id, company_id]
+    );
+    if (!rows.length) return res.status(409).json({ success: false, message: 'Voucher not found or not awaiting procurement approval.' });
+    res.json({ success: true, data: rows[0], message: 'Advance approved by Procurement' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// PATCH /tqs/advances/:id/approve-md — Stage 2 (Managing Director)
+router.patch('/:id/approve-md', authorize(...MD_APPROVERS), async (req, res) => {
+  try {
+    const { company_id, id: user_id } = req.user;
+    const { rows } = await query(
+      `UPDATE tqs_advance_vouchers
+          SET approval_status='approved',
+              md_approved_by=$1, md_approved_at=NOW(), updated_at=NOW()
+        WHERE id=$2 AND company_id=$3 AND is_deleted=FALSE
+          AND approval_status='procurement_approved'
+        RETURNING *`,
+      [user_id, req.params.id, company_id]
+    );
+    if (!rows.length) return res.status(409).json({ success: false, message: 'Voucher must be approved by Procurement first.' });
+    res.json({ success: true, data: rows[0], message: 'Advance approved by Managing Director' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// PATCH /tqs/advances/:id/reject — either approver can reject (reason required)
+router.patch('/:id/reject', authorize(...new Set([...PROCUREMENT_APPROVERS, ...MD_APPROVERS])), async (req, res) => {
+  try {
+    const { company_id, id: user_id } = req.user;
+    const reason = (req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ success: false, message: 'A rejection reason is required.' });
+    const { rows } = await query(
+      `UPDATE tqs_advance_vouchers
+          SET approval_status='rejected', rejected_by=$1, rejected_at=NOW(), rejection_reason=$2, updated_at=NOW()
+        WHERE id=$3 AND company_id=$4 AND is_deleted=FALSE
+          AND approval_status <> 'approved'
+        RETURNING *`,
+      [user_id, reason, req.params.id, company_id]
+    );
+    if (!rows.length) return res.status(409).json({ success: false, message: 'Voucher not found or already fully approved.' });
+    res.json({ success: true, data: rows[0], message: 'Advance rejected' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 // ── PATCH /tqs/advances/:id/issue — disburse the advance ─────────────────────
 router.patch('/:id/issue', async (req, res) => {
   try {
@@ -495,6 +571,16 @@ router.patch('/:id/issue', async (req, res) => {
     const { id } = req.params;
     const { paid_amount, pay_date } = req.body;
     const paidAmt = parseFloat(paid_amount || 0);
+
+    // Disbursement is gated on full approval (Procurement + Managing Director).
+    const chk = await query(
+      `SELECT approval_status FROM tqs_advance_vouchers WHERE id=$1 AND company_id=$2 AND is_deleted=FALSE`,
+      [id, company_id]
+    );
+    if (!chk.rows.length) return res.status(404).json({ success: false, message: 'Not found' });
+    if (chk.rows[0].approval_status !== 'approved') {
+      return res.status(403).json({ success: false, message: 'Advance must be approved by Procurement and the Managing Director before it can be disbursed.' });
+    }
 
     const { rows } = await query(`
       UPDATE tqs_advance_vouchers SET

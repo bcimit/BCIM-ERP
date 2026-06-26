@@ -29,6 +29,22 @@ const STATUS_CFG = {
   recovered: { label: 'Recovered',        bg: 'bg-slate-100',   text: 'text-slate-600',   dot: 'bg-slate-400'  },
 };
 
+const APPROVAL_CFG = {
+  pending:               { label: 'Awaiting Procurement', bg: 'bg-amber-50',   text: 'text-amber-700'   },
+  procurement_approved:  { label: 'Awaiting MD',          bg: 'bg-indigo-50',  text: 'text-indigo-700'  },
+  approved:              { label: 'Approved',             bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  rejected:              { label: 'Rejected',             bg: 'bg-red-50',     text: 'text-red-600'     },
+};
+
+function ApprovalBadge({ status }) {
+  const cfg = APPROVAL_CFG[status || 'pending'] || APPROVAL_CFG.pending;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border border-current/10 ${cfg.bg} ${cfg.text}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
 function StatusBadge({ status }) {
   const cfg = STATUS_CFG[status] || STATUS_CFG.pending;
   return (
@@ -643,7 +659,9 @@ export default function ProcurementAdvanceTrackerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
 
-  const { selectedProjectId } = useAuthStore();
+  const { selectedProjectId, user } = useAuthStore();
+  const canProcureApprove = ['super_admin', 'admin', 'procurement_manager', 'project_manager'].includes(user?.role);
+  const canMDApprove      = ['super_admin', 'admin', 'managing_director', 'md', 'ceo', 'director'].includes(user?.role);
   const projectId    = searchParams.get('project') || selectedProjectId || '';
   const statusFilter = searchParams.get('status')  || 'all';
   const search       = searchParams.get('q')       || '';
@@ -693,6 +711,25 @@ export default function ProcurementAdvanceTrackerPage() {
       toast.success('Voucher deleted');
     },
   });
+
+  const approvalMut = useMutation({
+    mutationFn: ({ id, action, reason }) =>
+      action === 'procurement' ? procurementAdvanceAPI.approveProcurement(id)
+      : action === 'md'        ? procurementAdvanceAPI.approveMD(id)
+      :                          procurementAdvanceAPI.reject(id, { reason }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['procurement-advances'] });
+      qc.invalidateQueries({ queryKey: ['procurement-advances-summary'] });
+      toast.success(res?.data?.message || 'Updated');
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || 'Action failed'),
+  });
+
+  const doApprove = (id, action) => approvalMut.mutate({ id, action });
+  const doReject = (id) => {
+    const reason = window.prompt('Reason for rejecting this advance voucher:');
+    if (reason && reason.trim()) approvalMut.mutate({ id, action: 'reject', reason: reason.trim() });
+  };
 
   const resyncMut = useMutation({
     mutationFn: () => procurementAdvanceAPI.resyncFromBills(),
@@ -894,7 +931,7 @@ export default function ProcurementAdvanceTrackerPage() {
               <table className="w-full text-sm whitespace-nowrap">
                 <thead style={{ background: `linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
                   <tr>
-                    {['#', 'WO / PO No.', 'Vendor Name', 'Voucher No.', 'Voucher Date', 'Order Value (₹)', 'Advance Value (₹)', 'QS Handover', 'Acct. Received', 'Status', 'Paid (₹)', 'Pay Date', 'Age (days)', ''].map(h => (
+                    {['#', 'WO / PO No.', 'Vendor Name', 'Voucher No.', 'Voucher Date', 'Order Value (₹)', 'Advance Value (₹)', 'QS Handover', 'Acct. Received', 'Approval', 'Status', 'Paid (₹)', 'Pay Date', 'Age (days)', ''].map(h => (
                       <th key={h} className="px-3 py-2.5 text-[11px] font-medium text-white uppercase tracking-[0.10em] text-left">{h}</th>
                     ))}
                   </tr>
@@ -920,6 +957,35 @@ export default function ProcurementAdvanceTrackerPage() {
                       <td className="px-3 py-2.5 font-medium text-gray-900">₹{inr(v.advance_value)}</td>
                       <td className="px-3 py-2.5 text-gray-500">{fmt(v.qs_handover_date)}</td>
                       <td className="px-3 py-2.5 text-gray-500">{fmt(v.accts_received_date)}</td>
+                      <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <ApprovalBadge status={v.approval_status} />
+                          {canProcureApprove && ['pending', 'rejected'].includes(v.approval_status || 'pending') && (
+                            <button onClick={() => doApprove(v.id, 'procurement')} disabled={approvalMut.isPending}
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+                              Approve
+                            </button>
+                          )}
+                          {canMDApprove && v.approval_status === 'procurement_approved' && (
+                            <button onClick={() => doApprove(v.id, 'md')} disabled={approvalMut.isPending}
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                              MD Approve
+                            </button>
+                          )}
+                          {(canProcureApprove || canMDApprove) && !['approved', 'rejected'].includes(v.approval_status || 'pending') && (
+                            <button onClick={() => doReject(v.id)} disabled={approvalMut.isPending}
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">
+                              Reject
+                            </button>
+                          )}
+                        </div>
+                        {v.approval_status === 'approved' && v.md_approved_by_name && (
+                          <p className="text-[9px] text-slate-400 mt-0.5">by {v.md_approved_by_name}</p>
+                        )}
+                        {v.approval_status === 'rejected' && v.rejection_reason && (
+                          <p className="text-[9px] text-red-400 mt-0.5 max-w-[160px] truncate" title={v.rejection_reason}>{v.rejection_reason}</p>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5"><StatusBadge status={v.status} /></td>
                       <td className="px-3 py-2.5 font-medium text-emerald-700">
                         {v.paid_amount > 0 ? `₹${inr(v.paid_amount)}` : '—'}
