@@ -674,6 +674,7 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
   const [createBill, setCreateBill] = useState(false);
   const emptyBillForm = () => ({
     inv_number: '', inv_date: '', tax_mode: 'intrastate', gst_pct: '18',
+    tax_inclusive: false,
     transport_charges: '', transport_gst_pct: '18', transport_desc: '',
     other_charges: '', other_charges_desc: '',
   });
@@ -888,12 +889,15 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
     const overrides = allGstOverrides[billIdx] || {};
     const defaultGst = parseFloat(b.gst_pct || '18');
     const mode = b.tax_mode || 'intrastate';
+    const inclusive = !!b.tax_inclusive;
     let basic = 0, cgst = 0, sgst = 0, igst = 0;
     items.filter(it => it.material_name?.trim()).forEach((it, i) => {
       const qty  = parseFloat(it.qty_inspected || it.qty_as_per_dc || 0);
       const rate = parseFloat(it.rate || 0);
-      const li_basic = qty * rate;
       const gstPct = parseFloat(overrides[String(i)] ?? defaultGst);
+      // If rate is tax-inclusive, back-calculate the basic (ex-GST) amount
+      const li_inclusive = qty * rate;
+      const li_basic = inclusive ? li_inclusive / (1 + gstPct / 100) : li_inclusive;
       basic += li_basic;
       if (mode === 'interstate') igst  += li_basic * gstPct / 100;
       else { cgst += li_basic * gstPct / 200; sgst += li_basic * gstPct / 200; }
@@ -1201,6 +1205,13 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
                         <option value="intrastate">Intrastate (CGST + SGST)</option>
                         <option value="interstate">Interstate (IGST)</option>
                       </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Rate Type</label>
+                      <label className="flex items-center gap-2 cursor-pointer h-9 px-2 border border-slate-200 rounded-md bg-white text-xs text-slate-700">
+                        <input type="checkbox" checked={!!b.tax_inclusive} onChange={e => setBillField(billIdx, 'tax_inclusive', e.target.checked)} className="accent-indigo-600" />
+                        Tax Inclusive
+                      </label>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-500">Transport Charges</label>
