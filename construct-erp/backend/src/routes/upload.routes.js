@@ -2,8 +2,10 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuid } = require('uuid');
 const { authenticate } = require('../middleware/auth');
+const { uploadAndShare, isConfigured: onedriveConfigured } = require('../services/onedrive.service');
 const router = express.Router();
 router.use(authenticate);
 
@@ -38,9 +40,31 @@ router.post('/', upload.array('files', 10), (req, res) => {
   res.json({ urls, count: urls.length, message: `${urls.length} file(s) uploaded` });
 });
 
-router.post('/single', upload.single('file'), (req, res) => {
+router.post('/single', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.json({ url: `/uploads/${req.file.filename}`, filename: req.file.filename });
+
+  const localUrl  = `/uploads/${req.file.filename}`;
+  const localPath = req.file.path;
+  const origName  = req.file.originalname;
+  const module    = req.body.module || 'Attachments';
+  const project   = req.body.project || '';
+
+  // Try OneDrive first — permanent sharing link, survives server restarts
+  if (onedriveConfigured()) {
+    try {
+      const od = await uploadAndShare(localPath, origName, module, project);
+      if (od?.share_url) {
+        // Remove the local copy — it's now on OneDrive
+        fs.unlink(localPath, () => {});
+        return res.json({ url: od.share_url, filename: origName, provider: 'onedrive' });
+      }
+    } catch (e) {
+      console.error('[upload] OneDrive failed, falling back to local:', e.message);
+    }
+  }
+
+  // Fallback: local disk (works in dev; ephemeral on Railway without a volume)
+  res.json({ url: localUrl, filename: req.file.filename, provider: 'local' });
 });
 
 module.exports = router;

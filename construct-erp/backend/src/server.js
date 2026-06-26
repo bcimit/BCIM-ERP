@@ -228,6 +228,9 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 // Requires a valid JWT so private documents cannot be hot-linked
 const { authenticate } = require('./middleware/auth');
 app.use('/uploads', authenticate, express.static(path.join(__dirname, '../uploads')));
+// If express.static didn't find the file it calls next() — catch it here so
+// the React catch-all doesn't return index.html with a 200 status
+app.use('/uploads', (req, res) => res.status(404).json({ error: 'File not found or has been deleted' }));
 
 // Rate limiting
 const limiter = rateLimit({

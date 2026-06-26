@@ -157,19 +157,29 @@ function printStatement({ entries, advances, receipts, projectName }) {
   w.print();
 }
 
-// ── Authenticated file opener (token in sessionStorage, not cookie) ──────────
+// ── File opener — OneDrive links open directly; legacy /uploads/ links use auth fetch ──
 async function openAttachment(url) {
   if (!url) return;
+  // OneDrive sharing links and other absolute HTTPS URLs open directly
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  // Legacy local /uploads/ path — needs Bearer token via fetch
   try {
     const token = sessionStorage.getItem('accessToken');
     const resp = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!resp.ok) throw new Error('not ok');
-    const blob = await resp.blob();
+    const ct = resp.headers.get('content-type') || '';
+    if (!resp.ok || ct.includes('text/html')) {
+      alert('File not found on the server.\n\nThis attachment was stored locally and may have been lost after a server restart. Please re-upload it.');
+      return;
+    }
+    const blob = new Blob([await resp.arrayBuffer()], { type: ct || 'application/octet-stream' });
     const blobUrl = URL.createObjectURL(blob);
     window.open(blobUrl, '_blank');
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
   } catch {
-    alert('Could not open attachment — file may no longer exist on the server.');
+    alert('Could not open attachment.');
   }
 }
 
