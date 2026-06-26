@@ -12,7 +12,8 @@ import {
   Calculator, HardHat, ShieldCheck, BarChart3,
   Layers, CheckCircle2, CircleDot, Flag,
 } from 'lucide-react';
-import { subcontractorAPI, vendorAPI, projectAPI, uploadAPI, planningP6API } from '../../api/client';
+import { subcontractorAPI, vendorAPI, projectAPI, uploadAPI, planningP6API, scAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
 
@@ -1883,24 +1884,18 @@ const TABS = [
 
 export default function SubcontractorHubPage({ defaultTab = 'dashboard' }) {
   const [activeTab, setActiveTab] = useState(defaultTab);
-  // Initialize filter from global session project (top-bar selector) so it stays in sync
-  const [projectFilter, setProjectFilter] = useState(
-    () => sessionStorage.getItem('selectedProjectId') || ''
-  );
+  const { selectedProjectId } = useAuthStore();
+  // Sync with global project selector — always reflect the top-bar project
+  const [projectFilter, setProjectFilter] = useState(selectedProjectId || '');
 
   useEffect(() => {
     setActiveTab(defaultTab);
   }, [defaultTab]);
 
-  // Keep local filter in sync when global project changes (browser storage event)
+  // When the global project changes (top-bar selector), update local filter
   useEffect(() => {
-    const onStorage = () => {
-      const globalProj = sessionStorage.getItem('selectedProjectId') || '';
-      setProjectFilter(prev => prev === '' ? globalProj : prev);
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+    setProjectFilter(selectedProjectId || '');
+  }, [selectedProjectId]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects-list'],
