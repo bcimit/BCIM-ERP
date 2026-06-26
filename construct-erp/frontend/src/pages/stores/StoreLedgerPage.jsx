@@ -1112,7 +1112,7 @@ export default function StoreLedgerPage() {
             </button>
           </div>
 
-          {/* ── Stock Report Table ─────────────────────────────── */}
+          {/* ── Inventory Register — card-row layout (no horizontal scroll) ── */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             {invLoading ? (
               <div className="flex items-center justify-center py-20 gap-3 text-slate-500">
@@ -1120,218 +1120,204 @@ export default function StoreLedgerPage() {
                 <span className="text-sm">Loading inventory…</span>
               </div>
             ) : (
-              <div className="store-ledger-scroll store-ledger-table-shell">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-800 text-white">
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide w-10">SL</th>
-                      <th className="px-3 py-3 text-left   text-[11px] font-semibold uppercase tracking-wide">MATERIAL</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide w-20">UNIT</th>
-                      <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide w-16">DC/IDC</th>
-                      <th className="px-3 py-3 text-right  text-[11px] font-semibold uppercase tracking-wide w-28">OPENING</th>
-                      <th className="px-3 py-3 text-right  text-[11px] font-semibold uppercase tracking-wide w-36">CLOSING</th>
-                      <th className="px-3 py-3 text-right  text-[11px] font-semibold uppercase tracking-wide w-28">RATE (₹)</th>
-                      {showValues && <>
-                        <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide bg-rose-700   whitespace-nowrap">ISSUED VAL</th>
-                        <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide bg-slate-700  whitespace-nowrap">OPENING VAL</th>
-                        <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide bg-indigo-700 whitespace-nowrap">CLOSING VAL</th>
-                        <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide bg-amber-700  whitespace-nowrap">GST 18%</th>
-                        <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide bg-emerald-700 whitespace-nowrap">GRAND TOTAL</th>
-                      </>}
-                      <th className="px-3 py-3 text-left   text-[11px] font-semibold uppercase tracking-wide">REMARKS</th>
-                      <th className="px-3 py-3 w-8" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {groupByMajorHead ? (() => {
-                      const groups = {};
-                      filteredSummary.forEach(s => {
-                        const head = s.major_head || '(No Major Head)';
-                        if (!groups[head]) groups[head] = {};
-                        const cat = s.category || '(Uncategorized)';
-                        if (!groups[head][cat]) groups[head][cat] = [];
-                        groups[head][cat].push(s);
-                      });
-                      let globalIdx = 0;
-                      const totalCols = showValues ? 14 : 9;
-                      return Object.entries(groups).map(([head, cats]) => {
-                        const headTotal = Object.values(cats).flat().reduce((sum, s) => {
-                          const r = parseFloat(s.unit_rate || 0);
-                          return sum + rq3(s.closing_stock) * r;
-                        }, 0);
-                        return (
-                          <React.Fragment key={head}>
-                            <tr className="bg-slate-700 text-white">
-                              <td colSpan={totalCols} className="px-4 py-2 text-[12px] font-bold uppercase tracking-widest">
-                                {head}
-                                <span className="ml-3 text-[10px] font-medium opacity-75">Closing Value: ₹{inr(headTotal)}</span>
-                              </td>
-                            </tr>
-                            {Object.entries(cats).map(([cat, catItems]) => (
-                              <React.Fragment key={cat}>
-                                <tr className="bg-slate-100">
-                                  <td colSpan={totalCols} className="px-5 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">{cat}</td>
-                                </tr>
-                                {catItems.map((s) => {
-                                  globalIdx++;
-                                  const rate       = parseFloat(s.unit_rate || 0);
-                                  const opening    = rq3(s.opening_stock);
-                                  const closing    = rq3(s.closing_stock);
-                                  const issued     = Math.max(0, opening - closing);
-                                  const closingVal = closing * rate;
-                                  const gst        = closingVal * GST_RATE;
-                                  const grandTotal = closingVal + gst;
-                                  const badge      = stockStatus(closing, s.min_stock, s.reorder_level);
-                                  const rowAccent  = closing <= 0 ? 'border-l-4 border-l-red-500' : (parseFloat(s.min_stock) > 0 && closing <= parseFloat(s.min_stock)) ? 'border-l-4 border-l-red-400' : (parseFloat(s.reorder_level) > 0 && closing <= parseFloat(s.reorder_level)) ? 'border-l-4 border-l-amber-400' : 'border-l-4 border-l-emerald-400';
-                                  return (
-                                    <tr key={s.id} className={clsx('hover:bg-slate-50 transition-colors', rowAccent)}>
-                                      <td className="px-3 py-2.5 text-center text-xs text-slate-500 font-mono">{globalIdx}</td>
-                                      <td className="px-3 py-2.5">
-                                        <div className="font-semibold text-slate-900 text-sm leading-snug">{s.material_name}</div>
-                                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                          {cat !== '(Uncategorized)' && <span className="text-[11px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{cat}</span>}
-                                          {s.project_name && <span className="text-[11px] text-slate-400 italic">{s.project_name}</span>}
-                                        </div>
-                                      </td>
-                                      <td className="px-3 py-2.5 text-center"><UnitSelectCell value={s.unit} onSave={v => updateMutation.mutate({ id: s.id, data: { unit: v } })} /></td>
-                                      <td className="px-3 py-2.5 text-center text-xs font-medium text-slate-600">{s.dc_idc || '—'}</td>
-                                      <td className="px-3 py-2.5 text-right font-mono text-sm font-medium text-slate-700">{qty(opening)}</td>
-                                      <td className="px-3 py-2.5 text-right">
-                                        <span className="font-mono text-sm font-bold text-slate-900">{qty(closing)}</span>
-                                        <span className={clsx('ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', badge.cls)}>{badge.label}</span>
-                                      </td>
-                                      <td className="px-3 py-2.5 text-right text-sm font-medium text-slate-700">{rate > 0 ? `₹${inr(rate)}` : '—'}</td>
-                                      {showValues && <>
-                                        <td className="px-3 py-2.5 text-right font-mono text-xs text-rose-700 bg-rose-50/40">{issued * rate > 0 ? `₹${inr(issued * rate)}` : '—'}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-700 bg-slate-50">{opening * rate > 0 ? `₹${inr(opening * rate)}` : '—'}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-xs text-indigo-700 bg-indigo-50/40">{closingVal > 0 ? `₹${inr(closingVal)}` : '—'}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-xs text-amber-700 bg-amber-50/40">{gst > 0 ? `₹${inr(gst)}` : '—'}</td>
-                                        <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-emerald-700 bg-emerald-50/40">{grandTotal > 0 ? `₹${inr(grandTotal)}` : '—'}</td>
-                                      </>}
-                                      <td className="px-3 py-2.5 text-xs text-slate-500">{s.remarks || '—'}</td>
-                                      <td className="px-3 py-2.5 text-center">
-                                        <button onClick={() => { setSelectedMaterial(s); setTab('ledger'); }} title="View ledger" className="text-slate-300 hover:text-indigo-600 transition"><ChevronRight size={14} /></button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </React.Fragment>
-                            ))}
-                          </React.Fragment>
-                        );
-                      });
-                    })() : pagedSummary.map((s, idx) => {
-                      const rate        = parseFloat(s.unit_rate || 0);
-                      const opening     = rq3(s.opening_stock);
-                      const closing     = rq3(s.closing_stock);
-                      const issued      = Math.max(0, opening - closing);
-                      const closingVal  = closing  * rate;
-                      const gst         = closingVal * GST_RATE;
-                      const grandTotal  = closingVal + gst;
-                      const badge       = stockStatus(closing, s.min_stock, s.reorder_level);
-                      const rowAccent   = closing <= 0 ? 'border-l-4 border-l-red-500' : (parseFloat(s.min_stock) > 0 && closing <= parseFloat(s.min_stock)) ? 'border-l-4 border-l-red-400' : (parseFloat(s.reorder_level) > 0 && closing <= parseFloat(s.reorder_level)) ? 'border-l-4 border-l-amber-400' : 'border-l-4 border-l-emerald-400';
+              <>
+                {/* Column header */}
+                <div className="bg-slate-800 text-white px-4 py-2.5 flex items-center gap-3 text-[11px] font-bold uppercase tracking-wider">
+                  <span className="w-7 shrink-0 text-center">#</span>
+                  <span className="flex-1 min-w-0">Material / Category</span>
+                  <span className="w-20 shrink-0 text-center">Unit</span>
+                  <span className="w-14 shrink-0 text-center">DC/IDC</span>
+                  <span className="w-24 shrink-0 text-right">Opening</span>
+                  <span className="w-40 shrink-0 text-right">Closing Stock</span>
+                  <span className="w-28 shrink-0 text-right">Rate (₹)</span>
+                  <span className="w-32 shrink-0 text-right">Grand Total</span>
+                  <span className="w-6 shrink-0" />
+                </div>
 
+                {/* Rows */}
+                <div className="divide-y divide-slate-100" style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
+                  {groupByMajorHead ? (() => {
+                    const groups = {};
+                    filteredSummary.forEach(s => {
+                      const head = s.major_head || '(No Major Head)';
+                      if (!groups[head]) groups[head] = {};
+                      const cat = s.category || '(Uncategorized)';
+                      if (!groups[head][cat]) groups[head][cat] = [];
+                      groups[head][cat].push(s);
+                    });
+                    let globalIdx = 0;
+                    return Object.entries(groups).map(([head, cats]) => {
+                      const headTotal = Object.values(cats).flat().reduce((sum, s) => {
+                        const r = parseFloat(s.unit_rate || 0);
+                        return sum + rq3(s.closing_stock) * r * (1 + GST_RATE);
+                      }, 0);
                       return (
-                        <tr key={s.id} className={clsx('hover:bg-slate-50 transition-colors', rowAccent)}>
-                          <td className="px-3 py-2.5 text-center text-xs text-slate-500 font-mono">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
-
-                          {/* Material — name + category + major head + project as sub-text */}
-                          <td className="px-3 py-2.5">
-                            <div className="font-semibold text-slate-900 text-sm leading-snug">{s.material_name}</div>
-                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                              <EditableCell value={s.category} placeholder="+ category" onSave={v => updateMutation.mutate({ id: s.id, data: { category: v } })} />
-                              {s.major_head && <span className="text-[11px] text-slate-400">· {s.major_head}</span>}
-                              {s.project_name && <span className="text-[11px] text-slate-400 italic">· {s.project_name}</span>}
-                            </div>
-                          </td>
-
-                          <td className="px-3 py-2.5 text-center">
-                            <UnitSelectCell value={s.unit} onSave={v => updateMutation.mutate({ id: s.id, data: { unit: v } })} />
-                          </td>
-
-                          <td className="px-3 py-2.5 text-center">
-                            <select
-                              value={s.dc_idc || ''}
-                              onChange={e => updateMutation.mutate({ id: s.id, data: { dc_idc: e.target.value } })}
-                              className="h-7 w-full rounded border border-slate-200 bg-slate-50 px-1 text-center text-xs font-bold uppercase text-slate-800 outline-none transition focus:border-slate-900 focus:bg-white"
-                            >
-                              <option value="">—</option>
-                              <option value="DC">DC</option>
-                              <option value="IDC">IDC</option>
-                            </select>
-                          </td>
-
-                          <td className="px-3 py-2.5 text-right font-mono text-sm font-medium text-slate-700">
-                            <EditableCell value={opening > 0 ? opening : ''} placeholder="0" numeric onSave={v => updateMutation.mutate({ id: s.id, data: { opening_stock: parseFloat(v) || 0 } })} />
-                          </td>
-
-                          <td className="px-3 py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <EditableCell value={closing > 0 ? closing : ''} placeholder="0" numeric onSave={v => updateMutation.mutate({ id: s.id, data: { closing_stock: parseFloat(v) || 0 } })} />
-                              <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border whitespace-nowrap', badge.cls)}>{badge.label}</span>
-                            </div>
-                          </td>
-
-                          <td className="px-3 py-2.5 text-right">
-                            <EditableCell value={rate > 0 ? rate.toFixed(2) : ''} placeholder="Set rate" prefix="₹" numeric onSave={v => updateMutation.mutate({ id: s.id, data: { unit_rate: parseFloat(v) } })} />
-                          </td>
-
-                          {showValues && <>
-                            <td className="px-3 py-2.5 text-right font-mono text-xs text-rose-700 bg-rose-50/40">{issued * rate > 0 ? `₹${inr(issued * rate)}` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-700 bg-slate-50">{opening * rate > 0 ? `₹${inr(opening * rate)}` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-xs text-indigo-700 bg-indigo-50/40">{closingVal > 0 ? `₹${inr(closingVal)}` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-xs text-amber-700 bg-amber-50/40">{gst > 0 ? `₹${inr(gst)}` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-xs font-bold text-emerald-700 bg-emerald-50/40">{grandTotal > 0 ? `₹${inr(grandTotal)}` : '—'}</td>
-                          </>}
-
-                          <td className="px-3 py-2.5 text-xs text-slate-600">
-                            <EditableCell value={s.remarks} placeholder="Add remark" onSave={v => updateMutation.mutate({ id: s.id, data: { remarks: v } })} />
-                          </td>
-
-                          <td className="px-3 py-2.5 text-center">
-                            <button onClick={() => { setSelectedMaterial(s); setTab('ledger'); }} title="View ledger" className="text-slate-300 hover:text-indigo-600 transition">
-                              <ChevronRight size={14} />
-                            </button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={head}>
+                          <div className="bg-slate-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-widest flex items-center justify-between">
+                            <span>{head}</span>
+                            <span className="text-[10px] font-medium opacity-75">Grand Total: ₹{inr(headTotal)}</span>
+                          </div>
+                          {Object.entries(cats).map(([cat, catItems]) => (
+                            <React.Fragment key={cat}>
+                              <div className="bg-slate-100 px-5 py-1.5 text-[11px] font-bold text-slate-600 uppercase tracking-wider">{cat}</div>
+                              {catItems.map((s) => {
+                                globalIdx++;
+                                const rate       = parseFloat(s.unit_rate || 0);
+                                const opening    = rq3(s.opening_stock);
+                                const closing    = rq3(s.closing_stock);
+                                const closingVal = closing * rate;
+                                const grandTotal = closingVal * (1 + GST_RATE);
+                                const badge      = stockStatus(closing, s.min_stock, s.reorder_level);
+                                const borderCls  = closing <= 0 ? 'border-l-red-500' : (parseFloat(s.min_stock) > 0 && closing <= parseFloat(s.min_stock)) ? 'border-l-red-400' : (parseFloat(s.reorder_level) > 0 && closing <= parseFloat(s.reorder_level)) ? 'border-l-amber-400' : 'border-l-emerald-400';
+                                return (
+                                  <div key={s.id} className={clsx('flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-l-4', borderCls)}>
+                                    <span className="w-7 shrink-0 text-center text-xs text-slate-400 font-mono">{globalIdx}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-semibold text-slate-900 text-sm truncate">{s.material_name}</div>
+                                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                        {cat !== '(Uncategorized)' && <span className="text-[11px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{cat}</span>}
+                                        {s.project_name && <span className="text-[11px] text-slate-400 italic">{s.project_name}</span>}
+                                      </div>
+                                    </div>
+                                    <div className="w-20 shrink-0 flex justify-center"><UnitSelectCell value={s.unit} onSave={v => updateMutation.mutate({ id: s.id, data: { unit: v } })} /></div>
+                                    <div className="w-14 shrink-0 text-center text-xs font-medium text-slate-600">{s.dc_idc || '—'}</div>
+                                    <div className="w-24 shrink-0 text-right font-mono text-sm text-slate-500">{qty(opening)}</div>
+                                    <div className="w-40 shrink-0 text-right">
+                                      <div className="text-xl font-black font-mono text-slate-900 leading-tight">{qty(closing)}</div>
+                                      <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', badge.cls)}>{badge.label}</span>
+                                    </div>
+                                    <div className="w-28 shrink-0 text-right text-sm font-medium text-slate-700">{rate > 0 ? `₹${inr(rate)}` : '—'}</div>
+                                    <div className="w-32 shrink-0 text-right">
+                                      <div className="text-sm font-bold font-mono text-emerald-700">{grandTotal > 0 ? `₹${inr(grandTotal)}` : '—'}</div>
+                                      {showValues && closingVal > 0 && <div className="text-[10px] text-indigo-500 mt-0.5">Closing ₹{inr(closingVal)}</div>}
+                                    </div>
+                                    <div className="w-6 shrink-0 flex justify-center">
+                                      <button onClick={() => { setSelectedMaterial(s); setTab('ledger'); }} title="View ledger" className="text-slate-300 hover:text-indigo-600 transition"><ChevronRight size={14} /></button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </React.Fragment>
+                          ))}
+                        </React.Fragment>
                       );
-                    })}
+                    });
+                  })() : pagedSummary.map((s, idx) => {
+                    const rate       = parseFloat(s.unit_rate || 0);
+                    const opening    = rq3(s.opening_stock);
+                    const closing    = rq3(s.closing_stock);
+                    const issued     = Math.max(0, opening - closing);
+                    const closingVal = closing * rate;
+                    const grandTotal = closingVal * (1 + GST_RATE);
+                    const badge      = stockStatus(closing, s.min_stock, s.reorder_level);
+                    const borderCls  = closing <= 0 ? 'border-l-red-500' : (parseFloat(s.min_stock) > 0 && closing <= parseFloat(s.min_stock)) ? 'border-l-red-400' : (parseFloat(s.reorder_level) > 0 && closing <= parseFloat(s.reorder_level)) ? 'border-l-amber-400' : 'border-l-emerald-400';
 
-                    {filteredSummary.length === 0 && (
-                      <tr>
-                        <td colSpan={showValues ? 14 : 9} className="py-16 text-center">
-                          <Package className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                          <p className="text-sm text-slate-500">
-                            {inventoryData.length === 0
-                              ? 'No inventory records yet. Materials appear here after IGN approval.'
-                              : 'No materials match your filter.'}
-                          </p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
+                    return (
+                      <div key={s.id} className={clsx('flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-l-4', borderCls)}>
 
-                  {/* ── Totals footer ─────────────────────────────── */}
-                  {filteredSummary.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-800 text-white text-xs font-semibold">
-                        <td colSpan={showValues ? 7 : 7} className="px-3 py-2.5 text-right uppercase tracking-wide">
-                          TOTALS · {filteredSummary.length} items
-                        </td>
-                        {showValues ? <>
-                          <td className="px-3 py-2.5 text-right font-mono bg-rose-900">₹{inr(totalIssuedValue)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono bg-slate-700">₹{inr(totalOpeningValue)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono bg-indigo-900">₹{inr(totalClosingValue)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono bg-amber-900">₹{inr(totalGST)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono bg-emerald-900">₹{inr(totalGrandTotal)}</td>
-                        </> : <td colSpan={3} className="px-3 py-2.5 text-right font-mono text-emerald-300">Grand Total ₹{inr(totalGrandTotal)}</td>}
-                        <td className="bg-slate-800" />
-                        <td className="bg-slate-800" />
-                      </tr>
-                    </tfoot>
+                        {/* SL */}
+                        <span className="w-7 shrink-0 text-center text-xs text-slate-400 font-mono">{(currentPage - 1) * PAGE_SIZE + idx + 1}</span>
+
+                        {/* Material name + editable category/head tags */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-slate-900 text-sm leading-snug truncate">{s.material_name}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <EditableCell value={s.category} placeholder="+ category" onSave={v => updateMutation.mutate({ id: s.id, data: { category: v } })} />
+                            {s.major_head && <span className="text-[11px] text-slate-400">· {s.major_head}</span>}
+                            {s.project_name && <span className="text-[11px] text-slate-400 italic">· {s.project_name}</span>}
+                          </div>
+                          {showValues && (
+                            <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-slate-500">
+                              <span className="text-rose-600">Issued ₹{issued * rate > 0 ? inr(issued * rate) : '—'}</span>
+                              <span className="text-slate-400">·</span>
+                              <span className="text-indigo-600">Closing ₹{closingVal > 0 ? inr(closingVal) : '—'}</span>
+                              <span className="text-slate-400">·</span>
+                              <span className="text-amber-600">GST ₹{closingVal > 0 ? inr(closingVal * GST_RATE) : '—'}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Unit */}
+                        <div className="w-20 shrink-0 flex justify-center">
+                          <UnitSelectCell value={s.unit} onSave={v => updateMutation.mutate({ id: s.id, data: { unit: v } })} />
+                        </div>
+
+                        {/* DC/IDC */}
+                        <div className="w-14 shrink-0">
+                          <select
+                            value={s.dc_idc || ''}
+                            onChange={e => updateMutation.mutate({ id: s.id, data: { dc_idc: e.target.value } })}
+                            className="h-7 w-full rounded border border-slate-200 bg-slate-50 px-1 text-center text-xs font-bold uppercase text-slate-800 outline-none transition focus:border-slate-900 focus:bg-white"
+                          >
+                            <option value="">—</option>
+                            <option value="DC">DC</option>
+                            <option value="IDC">IDC</option>
+                          </select>
+                        </div>
+
+                        {/* Opening */}
+                        <div className="w-24 shrink-0 text-right">
+                          <div className="text-[10px] text-slate-400 mb-0.5">Opening</div>
+                          <EditableCell value={opening > 0 ? opening : ''} placeholder="0" numeric onSave={v => updateMutation.mutate({ id: s.id, data: { opening_stock: parseFloat(v) || 0 } })} />
+                        </div>
+
+                        {/* Closing — BIG number, most important */}
+                        <div className="w-40 shrink-0 text-right">
+                          <div className="text-[10px] text-slate-400 mb-0.5">Closing Stock</div>
+                          <div className="flex items-baseline justify-end gap-1.5">
+                            <EditableCell value={closing > 0 ? closing : ''} placeholder="0" numeric onSave={v => updateMutation.mutate({ id: s.id, data: { closing_stock: parseFloat(v) || 0 } })} />
+                          </div>
+                          <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border mt-0.5 inline-block', badge.cls)}>{badge.label}</span>
+                        </div>
+
+                        {/* Rate */}
+                        <div className="w-28 shrink-0 text-right">
+                          <div className="text-[10px] text-slate-400 mb-0.5">Rate</div>
+                          <EditableCell value={rate > 0 ? rate.toFixed(2) : ''} placeholder="Set rate" prefix="₹" numeric onSave={v => updateMutation.mutate({ id: s.id, data: { unit_rate: parseFloat(v) } })} />
+                        </div>
+
+                        {/* Grand Total */}
+                        <div className="w-32 shrink-0 text-right">
+                          <div className="text-[10px] text-slate-400 mb-0.5">Grand Total</div>
+                          <div className="text-sm font-bold font-mono text-emerald-700">{grandTotal > 0 ? `₹${inr(grandTotal)}` : '—'}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            <EditableCell value={s.remarks} placeholder="Add remark" onSave={v => updateMutation.mutate({ id: s.id, data: { remarks: v } })} />
+                          </div>
+                        </div>
+
+                        {/* Ledger link */}
+                        <div className="w-6 shrink-0 flex justify-center">
+                          <button onClick={() => { setSelectedMaterial(s); setTab('ledger'); }} title="View ledger" className="text-slate-300 hover:text-indigo-600 transition">
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredSummary.length === 0 && (
+                    <div className="py-16 text-center">
+                      <Package className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                      <p className="text-sm text-slate-500">
+                        {inventoryData.length === 0
+                          ? 'No inventory records yet. Materials appear here after IGN approval.'
+                          : 'No materials match your filter.'}
+                      </p>
+                    </div>
                   )}
-                </table>
-              </div>
+                </div>
+
+                {/* Totals bar */}
+                {filteredSummary.length > 0 && (
+                  <div className="bg-slate-800 text-white px-4 py-2.5 flex items-center gap-3 text-xs font-semibold">
+                    <span className="flex-1">TOTALS — {filteredSummary.length} items</span>
+                    <span className="w-32 text-right font-mono text-indigo-300">Closing ₹{inr(totalClosingValue)}</span>
+                    <span className="w-32 text-right font-mono text-amber-300">GST ₹{inr(totalGST)}</span>
+                    <span className="w-32 text-right font-mono text-emerald-300">Grand ₹{inr(totalGrandTotal)}</span>
+                    <span className="w-6 shrink-0" />
+                  </div>
+                )}
+              </>
             )}
             {!invLoading && (
               <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50 text-xs text-slate-500 flex items-center justify-between flex-wrap gap-2">
@@ -1340,7 +1326,7 @@ export default function StoreLedgerPage() {
                   {filteredSummary.length !== inventoryData.length && ` (filtered from ${inventoryData.length})`}
                 </span>
                 <span className="flex items-center gap-1 text-slate-400">
-                  <Edit2 size={10} /> Click category or rate cell to edit inline
+                  <Edit2 size={10} /> Click category or rate to edit inline
                 </span>
               </div>
             )}
