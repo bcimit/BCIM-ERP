@@ -355,6 +355,20 @@ router.put('/:id', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// DELETE — remove a single draft payroll record
+// ═══════════════════════════════════════════════════════════
+router.delete('/:id', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `DELETE FROM hr_monthly_payroll WHERE id=$1 AND company_id=$2 AND status='draft' RETURNING id, status`,
+      [req.params.id, req.user.company_id]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Only draft payroll records can be deleted' });
+    res.json({ deleted: true, id: rows[0].id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
 // SUBMIT FOR REVIEW (hr_admin → pending_approval)
 // ═══════════════════════════════════════════════════════════
 router.patch('/:id/submit', async (req, res) => {

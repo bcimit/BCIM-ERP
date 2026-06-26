@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CreditCard, Play, Check, IndianRupee, Download, AlertCircle,
   CheckCircle, Clock, Banknote, TrendingDown, Users, X, ChevronDown,
-  FileText, ArrowRight,
+  FileText, ArrowRight, Trash2,
 } from 'lucide-react';
 import { hrPayrollAPI, hrEmployeesAPI } from '../../api/client';
 import toast from 'react-hot-toast';
@@ -224,6 +224,12 @@ export default function PayrollPage() {
   const rejectMut = useMutation({
     mutationFn: (id) => hrPayrollAPI.reject(id, { review_remarks: 'Rejected — please review' }),
     onSuccess: () => { toast.success('Payslip sent back to draft'); refetch(); },
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => hrPayrollAPI.remove(id),
+    onSuccess: () => { toast.success('Payroll record removed'); refetch(); },
     onError: e => toast.error(e.response?.data?.error || 'Error'),
   });
 
@@ -499,6 +505,14 @@ export default function PayrollPage() {
                         <button onClick={() => runMut.mutate(r.user_id)} disabled={runMut.isPending} title="Regenerate this employee's payslip"
                           className="w-6 h-6 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-colors disabled:opacity-40">
                           <Play className="w-3 h-3" />
+                        </button>
+                      )}
+                      {r.status === 'draft' && (
+                        <button
+                          onClick={() => { if (window.confirm(`Remove payroll for ${r.employee_name}?`)) deleteMut.mutate(r.id); }}
+                          title="Remove this draft payroll record"
+                          className="w-6 h-6 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors">
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       )}
                       <button onClick={() => navigate(`/hr-admin/payroll/${r.id}/payslip`)} title="View Payslip"

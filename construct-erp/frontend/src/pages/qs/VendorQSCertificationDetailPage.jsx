@@ -25,7 +25,7 @@ const netBg  = '#EAF1FB';
 
 const T = {
   page:     { fontFamily: "'Tinos','Times New Roman',Times,serif", fontSize: '11px', color: '#0A0A0A', fontWeight: '500' },
-  sheet:    { width: '100%', background: '#fff', padding: '6mm 8mm 10mm 8mm', boxSizing: 'border-box', pageBreakAfter: 'always' },
+  sheet:    { width: '100%', background: '#fff', padding: '4mm 3mm 6mm 3mm', boxSizing: 'border-box', pageBreakAfter: 'always' },
   masthead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `3px double ${navy}`, paddingBottom: '10px', marginBottom: '10px' },
   logoArea: { display: 'flex', alignItems: 'center', gap: '12px' },
   coName:   { fontSize: '15px', fontWeight: 'bold', color: navy, letterSpacing: '0.6px', lineHeight: 1.2 },
@@ -206,21 +206,21 @@ function AbstractSheet({ cert }) {
           Total ≈ 281mm (A4 landscape 297mm − 8mm margins each side − 8mm sheet padding each side) */}
       <table style={T.tbl}>
         <colgroup>
-          <col style={{width:'22px'}}/>  {/* Sl */}
-          <col style={{width:'32px'}}/>  {/* RA */}
-          <col style={{width:'18%'}}/>   {/* Description — proportional, takes remaining space */}
-          <col style={{width:'28px'}}/>  {/* Unit */}
-          <col style={{width:'36px'}}/>  {/* Order Qty */}
-          <col style={{width:'52px'}}/>  {/* Order Rate */}
-          <col style={{width:'54px'}}/>  {/* Order Amount */}
-          <col style={{width:'36px'}}/>  {/* Inv Prev Qty */}
-          <col style={{width:'36px'}}/>  {/* Inv Pres Qty */}
-          <col style={{width:'54px'}}/>  {/* Inv Amount */}
-          <col style={{width:'36px'}}/>  {/* QS Prev Qty */}
-          <col style={{width:'36px'}}/>  {/* QS Pres Qty */}
-          <col style={{width:'54px'}}/>  {/* QS Amount */}
-          <col style={{width:'36px'}}/>  {/* Bal Qty */}
-          <col style={{width:'54px'}}/>  {/* Bal Amount */}
+          <col style={{width:'20px'}}/>  {/* Sl */}
+          <col style={{width:'28px'}}/>  {/* RA */}
+          <col style={{width:'17%'}}/>   {/* Description — proportional */}
+          <col style={{width:'24px'}}/>  {/* Unit */}
+          <col style={{width:'34px'}}/>  {/* Order Qty */}
+          <col style={{width:'50px'}}/>  {/* Order Rate */}
+          <col style={{width:'56px'}}/>  {/* Order Amount */}
+          <col style={{width:'34px'}}/>  {/* Inv Prev Qty */}
+          <col style={{width:'34px'}}/>  {/* Inv Pres Qty */}
+          <col style={{width:'56px'}}/>  {/* Inv Amount */}
+          <col style={{width:'34px'}}/>  {/* QS Prev Qty */}
+          <col style={{width:'34px'}}/>  {/* QS Pres Qty */}
+          <col style={{width:'56px'}}/>  {/* QS Amount */}
+          <col style={{width:'34px'}}/>  {/* Bal Qty */}
+          <col style={{width:'60px'}}/>  {/* Bal Amount */}
         </colgroup>
         <thead>
           <tr>
@@ -275,7 +275,7 @@ function AbstractSheet({ cert }) {
               <td style={T.tdC}>—</td>
               <td style={{...T.td, fontStyle:'italic', color:'#111', fontWeight:'600'}}>GST / Tax</td>
               <td style={T.tdC}>—</td>
-              <td colSpan={11} style={{...T.tdC, color:'#444', fontSize:'10px', fontWeight:'500'}}>Applicable</td>
+              <td colSpan={10} style={{...T.tdC, color:'#444', fontSize:'10px', fontWeight:'500'}}>Applicable</td>
               <td style={{...T.tdR, fontWeight:'bold'}}>{raw(tax)}</td>
             </tr>
           )}
@@ -861,11 +861,11 @@ export default function VendorQSCertificationDetailPage() {
 
           ${printMode === 'abstract'
             ? `.print-payment { display: none !important; }
-               @page { size: A4 landscape; margin: 8mm 8mm 10mm 8mm; }`
+               @page { size: A4 landscape; margin: 6mm 5mm 8mm 5mm; }`
             : printMode === 'payment'
             ? `.print-abstract { display: none !important; }
-               @page { size: A4 portrait; margin: 10mm 10mm 12mm 10mm; }`
-            : `@page { size: A4 landscape; margin: 8mm 8mm 10mm 8mm; }`
+               @page { size: A4 portrait; margin: 8mm 8mm 10mm 8mm; }`
+            : `@page { size: A4 landscape; margin: 6mm 5mm 8mm 5mm; }`
           }
         }
       `}</style>

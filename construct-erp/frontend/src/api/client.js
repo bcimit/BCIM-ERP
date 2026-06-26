@@ -1822,6 +1822,7 @@ export const hrPayrollAPI = {
   approve:       (id, d)  => api.patch(`/hr-admin/payroll/${id}/approve`, d || {}),
   bulkApprove:   (data)   => api.post('/hr-admin/payroll/bulk-approve', data),
   reject:        (id, d)  => api.patch(`/hr-admin/payroll/${id}/reject`, d || {}),
+  remove:        (id)     => api.delete(`/hr-admin/payroll/${id}`),
   bulkPay:       (data)   => api.post('/hr-admin/payroll/bulk-pay', data),
   pfEcr:         (params) => api.get('/hr-admin/payroll/reports/pf-ecr', { params }),
   esiReturn:     (params) => api.get('/hr-admin/payroll/reports/esi-return', { params }),
