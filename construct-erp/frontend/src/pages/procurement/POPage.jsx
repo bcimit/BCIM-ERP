@@ -19,7 +19,7 @@ import MaterialCombobox from '../../components/shared/MaterialCombobox';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import VendorSelect from '../../components/shared/VendorSelect';
 import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
-import { getBillingAddress, getDeliveryAddress } from '../../constants/poAddresses';
+import { getBillingAddress, getDeliveryAddress, isLancoProject } from '../../constants/poAddresses';
 import { Z_INP, Z_CARD, Z_HEAD, Z_LABEL } from '../../constants/zohoStyles';
 import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
@@ -377,10 +377,10 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
     if (!proj) return;
     // Build billing address from live company settings, fall back to hardcoded default
     const BAD_ADDRESSES = ['jayanagar', 'bcim office', '29aaxcb2929p1z1'];
-    const isLancoProject = proj.project_code === 'LH-10';
+    const isLanco = isLancoProject(proj.project_code, proj.name);
     let billingAddr;
-    if (isLancoProject) {
-      billingAddr = getBillingAddress('LH-10');
+    if (isLanco) {
+      billingAddr = getBillingAddress(proj.project_code, proj.name);
     } else if (company?.name && !BAD_ADDRESSES.some(b => (company.address || '').toLowerCase().includes(b))) {
       const lines = [company.name];
       if (company.address) lines.push(company.address);
@@ -389,7 +389,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
       if (company.gstin) lines.push(`GSTIN: ${company.gstin}`);
       billingAddr = lines.join('\n');
     } else {
-      billingAddr = getBillingAddress(proj.project_code);
+      billingAddr = getBillingAddress(proj.project_code, proj.name);
     }
     setForm(p => ({
       ...p,

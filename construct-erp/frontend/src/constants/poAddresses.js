@@ -20,16 +20,24 @@ export const BCIM_BILLING_ADDRESS_DEFAULT = `BCIM ENGINEERING PRIVATE LIMITED
 Bangalore, Karnataka – 560025
 GSTIN: 29AAHCB6485A1ZL`;
 
+// Tolerant LANCO detection — project_code/name may appear as LH-10, LH10,
+// LANCO, or LANCHO depending on how the project was created. Normalises by
+// stripping spaces/hyphens and lower-casing before matching.
+export function isLancoProject(...parts) {
+  const s = parts.filter(Boolean).join(' ').toLowerCase().replace(/[\s-]/g, '');
+  return s.includes('lanco') || s.includes('lancho') || s.includes('lh10');
+}
+
 // Billing address (BCIM's own address, as the buyer) — varies per project/company entity.
-export function getBillingAddress(projectCode) {
-  return projectCode === 'LH-10' ? BCIM_BILLING_ADDRESS_LANCO : BCIM_BILLING_ADDRESS_DEFAULT;
+export function getBillingAddress(projectCode, projectName) {
+  return isLancoProject(projectCode, projectName) ? BCIM_BILLING_ADDRESS_LANCO : BCIM_BILLING_ADDRESS_DEFAULT;
 }
 
 // Delivery address (site address) — known fixed addresses for some projects,
 // otherwise built from the project's location/city/state.
 export function getDeliveryAddress(project) {
   if (!project) return '';
-  if (project.project_code === 'LH-10') return LANCO_DELIVERY_ADDRESS;
+  if (isLancoProject(project.project_code, project.name)) return LANCO_DELIVERY_ADDRESS;
   const lines = [project.name].filter(Boolean);
   if (project.location) lines.push(project.location);
   const cityState = [project.city, project.state].filter(Boolean).join(', ');

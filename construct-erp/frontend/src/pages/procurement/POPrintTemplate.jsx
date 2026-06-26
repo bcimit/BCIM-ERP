@@ -73,18 +73,28 @@ const POPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
   const originalPoRef = isAmendment ? poRefStr.replace(/-A\d+$/i, '') : '';
 
   // ── Company header (left block) — live company settings, BCIM fallback ──────
-  const BCIM = {
+  // LANCO Hills (LH-10) purchase orders bill from BCIM's Hyderabad address instead
+  // of the default Bangalore office — keeps PO and WO addresses in sync. Detection
+  // is tolerant of project_code/name variants (LH-10, LH10, LANCO, LANCHO).
+  const projStr = `${data.project_code || ''} ${data.project_name || ''}`.toLowerCase().replace(/[\s-]/g, '');
+  const isLanco = projStr.includes('lanco') || projStr.includes('lancho') || projStr.includes('lh10');
+  const BCIM = isLanco ? {
+    name: 'BCIM ENGINEERING PRIVATE LIMITED',
+    address: 'TOWER VIEW APARTMENT, NO 403, 4th FLOOR,\nPLOT NO 26 & 27, SRI LAKSHMI NAGAR COLONY',
+    city: 'Hyderabad', state: 'Telangana, Rangareddy Dist', pincode: '500089',
+    gstin: '36AAHCB6485A1ZQ',
+  } : {
     name: 'BCIM ENGINEERING PRIVATE LIMITED',
     address: '#11, B Wing, Divyasree Chambers, O\'Shaughnessy Road',
     city: 'Bangalore', state: 'Karnataka', pincode: '560025',
     gstin: '29AAHCB6485A1ZL',
   };
   const coName  = (company.name && !company.name.toLowerCase().includes('pvt ltd') && company.name !== 'BCIM Engineering Pvt Ltd') ? company.name : BCIM.name;
-  const coAddr  = (company.address && !company.address.toLowerCase().includes('bcim office') && !company.address.toLowerCase().includes('jayanagar')) ? company.address : BCIM.address;
-  const coCity  = company.city    || BCIM.city;
-  const coState = company.state   || BCIM.state;
-  const coPin   = company.pincode || BCIM.pincode;
-  const coGstin = (company.gstin  && !['29AABCB1234C1Z5','29AAXCB2929P1Z1'].includes(company.gstin)) ? company.gstin : BCIM.gstin;
+  const coAddr  = (!isLanco && company.address && !company.address.toLowerCase().includes('bcim office') && !company.address.toLowerCase().includes('jayanagar')) ? company.address : BCIM.address;
+  const coCity  = isLanco ? BCIM.city : (company.city    || BCIM.city);
+  const coState = isLanco ? BCIM.state : (company.state   || BCIM.state);
+  const coPin   = isLanco ? BCIM.pincode : (company.pincode || BCIM.pincode);
+  const coGstin = isLanco ? BCIM.gstin : ((company.gstin  && !['29AABCB1234C1Z5','29AAXCB2929P1Z1'].includes(company.gstin)) ? company.gstin : BCIM.gstin);
   const coStatePin = [coState, coPin].filter(Boolean).join(' – ');
 
   // ── Vendor full address ─────────────────────────────────────────────────────

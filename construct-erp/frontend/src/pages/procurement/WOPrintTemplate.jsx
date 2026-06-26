@@ -65,7 +65,8 @@ const WOPrintTemplate = React.forwardRef(({ data, company = {} }, ref) => {
   // ── Company header (left block) — live company settings, BCIM fallback ──────
   // LANCO Hills (LH-10) work orders bill from BCIM's Hyderabad address instead
   // of the default Bangalore office — keeps PO and WO addresses in sync.
-  const isLanco = data.project_code === 'LH-10';
+  const projStr = `${data.project_code || ''} ${data.project_name || ''}`.toLowerCase().replace(/[\s-]/g, '');
+  const isLanco = projStr.includes('lanco') || projStr.includes('lancho') || projStr.includes('lh10');
   const BCIM = isLanco ? {
     name: 'BCIM ENGINEERING PRIVATE LIMITED',
     address: 'TOWER VIEW APARTMENT, NO 403, 4th FLOOR,\nPLOT NO 26 & 27, SRI LAKSHMI NAGAR COLONY',
