@@ -492,6 +492,26 @@ router.use(loadProjectScope);
     console.error('[mrs] project workflow init failed:', e.message);
   }
 
+  // ── One-time: give DQS Tower its own MR numbering starting from 001 ────────────
+  // Previously DQS Tower shared a mrs_seq_group with Yelahanka, so its MR numbers
+  // continued from Yelahanka's counter. Clear the shared pool and reset start to 1
+  // so the next MR raised on any DQS Tower project gets -001.
+  try {
+    const dqsRes = await query(
+      `UPDATE projects
+          SET mrs_seq_group  = NULL,
+              mrs_start_seq  = 1
+        WHERE LOWER(name) LIKE '%dqs%'
+          AND (mrs_seq_group IS NOT NULL OR COALESCE(mrs_start_seq, 0) != 1)
+        RETURNING name`
+    );
+    if (dqsRes.rowCount > 0) {
+      console.log(`[mrs] DQS Tower MR numbering reset to independent sequence starting at 001 for: ${dqsRes.rows.map(r => r.name).join(', ')}`);
+    }
+  } catch (e) {
+    console.error('[mrs] DQS Tower numbering reset failed:', e.message);
+  }
+
   // ── One-time repair: LANCO LH10 runaway MR serials ───────────────────────────
   // The prefix "MR-LANCHO-HYD-LH10" ends in digits with no separator, so the
   // auto-numbering's trailing-digit read-back fused the prefix's "10" into the
