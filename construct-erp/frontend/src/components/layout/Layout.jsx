@@ -941,6 +941,9 @@ const MD_SHORTCUTS = [
   { label: 'Budget',            to: '/procurement/budget-control',      icon: PieChart      },
   { label: 'RA Bills',          to: '/qs/ra-bills',                     icon: Receipt       },
   { label: 'Chart of Accounts', to: '/accounts/accountant/chart-of-accounts', icon: BookOpen },
+  { label: 'Analytics',         to: '/dashboard',                             icon: LayoutDashboard },
+  { label: 'GRN / IGN',         to: '/stores/ign',                            icon: ClipboardCheck },
+  { label: 'DPR',               to: '/planning/dpr',                          icon: FileText },
 ];
 
 function MDQuickAccessBar() {
