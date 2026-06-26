@@ -250,6 +250,227 @@ router.get('/tds', async (req, res) => {
   }
 });
 
+// Helpers for financial-year statutory compliance endpoints (Apr–Mar) ─────────
+function fyBounds(fyQuery) {
+  const now = new Date();
+  const currentFyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const fyStart = parseInt(fyQuery) || currentFyStart;
+  return { fyStart, fromDate: `${fyStart}-04-01`, toDate: `${fyStart + 1}-03-31` };
+}
+const FY_MONTHS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+// FY month index (0=Apr) → { key 'YYYY-MM', calendar year, due date for monthly statutory deposit (7th next month) }
+function fyMonthKey(fyStart, idx) {
+  const cal = idx < 9 ? fyStart : fyStart + 1;
+  const mm  = String(idx < 9 ? idx + 4 : idx - 8).padStart(2, '0');
+  return { key: `${cal}-${mm}`, cal, label: `${FY_MONTHS[idx]} ${cal}` };
+}
+
+// ── TDS Compliance — month-wise TDS deducted (deposits) + quarterly 26Q/24Q ───
+// 26Q = non-salary deductions (contractors/vendors), 24Q = salary deductions.
+router.get('/tds/compliance', async (req, res) => {
+  try {
+    const { fyStart, fromDate, toDate } = fyBounds(req.query.fy);
+    const { project_id } = req.query;
+    const conds = ['p.company_id=$1', 'pay.payment_date BETWEEN $2 AND $3', 'pay.tds_deducted > 0'];
+    const params = [req.user.company_id, fromDate, toDate];
+    applyProjectScope(req, conds, params, 'p', project_id);
+
+    const { rows } = await query(`
+      SELECT to_char(pay.payment_date,'YYYY-MM') AS month,
+             CASE WHEN LOWER(COALESCE(pay.payment_type,'')) = 'salary' THEN '24Q' ELSE '26Q' END AS form,
+             SUM(pay.tds_deducted) AS tds,
+             COUNT(DISTINCT pay.entity_name) AS deductees,
+             COUNT(*) AS txns
+      FROM payments pay JOIN projects p ON pay.project_id = p.id
+      WHERE ${conds.join(' AND ')}
+      GROUP BY 1, 2`, params);
+
+    const byKey = {};
+    rows.forEach(r => { byKey[`${r.month}|${r.form}`] = r; });
+
+    // Monthly deposits (due 7th of next month; March due 30 Apr)
+    const deposits = FY_MONTHS.map((_, idx) => {
+      const { key, cal, label } = fyMonthKey(fyStart, idx);
+      const q26 = parseFloat(byKey[`${key}|26Q`]?.tds || 0);
+      const q24 = parseFloat(byKey[`${key}|24Q`]?.tds || 0);
+      const dueIdx = idx + 1;
+      const dueMonthInfo = dueIdx < 12 ? fyMonthKey(fyStart, dueIdx) : null;
+      const dueDate = idx === 11 ? `${fyStart + 1}-04-30`
+        : dueMonthInfo ? `${dueMonthInfo.cal}-${dueMonthInfo.key.slice(-2)}-07` : null;
+      return { month: label, month_key: key, amount_26q: q26, amount_24q: q24, total: +(q26 + q24).toFixed(2), due_date: dueDate, has_activity: !!(q26 || q24) };
+    });
+
+    // Quarterly returns (Q1 Apr-Jun … Q4 Jan-Mar)
+    const QUARTERS = [
+      { q: 'Q1', months: [0,1,2],  due: `${fyStart}-07-31` },
+      { q: 'Q2', months: [3,4,5],  due: `${fyStart}-10-31` },
+      { q: 'Q3', months: [6,7,8],  due: `${fyStart + 1}-01-31` },
+      { q: 'Q4', months: [9,10,11],due: `${fyStart + 1}-05-31` },
+    ];
+    const returns = [];
+    for (const form of ['26Q', '24Q']) {
+      for (const qd of QUARTERS) {
+        let amt = 0, ded = 0;
+        qd.months.forEach(idx => {
+          const { key } = fyMonthKey(fyStart, idx);
+          amt += parseFloat(byKey[`${key}|${form}`]?.tds || 0);
+          ded += parseInt(byKey[`${key}|${form}`]?.deductees || 0);
+        });
+        returns.push({ form, quarter: `${qd.q} FY${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`, amount: +amt.toFixed(2), deductees: ded, due_date: qd.due, has_activity: amt > 0 });
+      }
+    }
+
+    const totalTds = deposits.reduce((s, d) => s + d.total, 0);
+    res.json({
+      fy: `FY ${fyStart}-${String(fyStart + 1).slice(-2)}`,
+      deposits, returns,
+      summary: { total_tds: +totalTds.toFixed(2), total_26q: +deposits.reduce((s,d)=>s+d.amount_26q,0).toFixed(2), total_24q: +deposits.reduce((s,d)=>s+d.amount_24q,0).toFixed(2), months_with_activity: deposits.filter(d=>d.has_activity).length },
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// ── Labour Law Compliance — month-wise PF / ESI / PT from payroll runs ────────
+router.get('/labour/compliance', async (req, res) => {
+  try {
+    const { fyStart } = fyBounds(req.query.fy);
+    // Payroll is keyed by (month, year) ints, not a date — build the FY month set.
+    const monthYearPairs = FY_MONTHS.map((_, idx) => {
+      const cal = idx < 9 ? fyStart : fyStart + 1;
+      const m = idx < 9 ? idx + 4 : idx - 8;
+      return { idx, m, cal, key: `${cal}-${String(m).padStart(2,'0')}`, label: `${FY_MONTHS[idx]} ${cal}` };
+    });
+
+    const { rows } = await query(`
+      SELECT month, year,
+             COUNT(*) AS employees,
+             SUM(COALESCE(gross_earnings,0)) AS gross,
+             SUM(COALESCE(pf_employee,0))  AS pf_employee,
+             SUM(COALESCE(pf_employer,0))  AS pf_employer,
+             SUM(COALESCE(esi_employee,0)) AS esi_employee,
+             SUM(COALESCE(esi_employer,0)) AS esi_employer,
+             SUM(COALESCE(pt,0))           AS pt
+      FROM hr_monthly_payroll
+      WHERE company_id = $1 AND status <> 'draft'
+        AND ((year = $2 AND month >= 4) OR (year = $3 AND month <= 3))
+      GROUP BY month, year`,
+      [req.user.company_id, fyStart, fyStart + 1]);
+
+    const byMY = {};
+    rows.forEach(r => { byMY[`${r.year}-${String(r.month).padStart(2,'0')}`] = r; });
+
+    const months = monthYearPairs.map(({ key, label, idx }) => {
+      const r = byMY[key] || {};
+      const pf  = parseFloat(r.pf_employee || 0) + parseFloat(r.pf_employer || 0);
+      const esi = parseFloat(r.esi_employee || 0) + parseFloat(r.esi_employer || 0);
+      const pt  = parseFloat(r.pt || 0);
+      // PF/ESI challan due 15th of next month; PT due 20th of next month
+      const due = idx + 1 < 12 ? monthYearPairs[idx + 1] : { cal: fyStart + 1, m: 4 };
+      const dueBase = `${due.cal}-${String(due.m).padStart(2,'0')}`;
+      return {
+        month: label, month_key: key,
+        employees: parseInt(r.employees || 0),
+        gross: +parseFloat(r.gross || 0).toFixed(2),
+        pf: +pf.toFixed(2), esi: +esi.toFixed(2), pt: +pt.toFixed(2),
+        pf_due: `${dueBase}-15`, esi_due: `${dueBase}-15`, pt_due: `${dueBase}-20`,
+        has_activity: !!(pf || esi || pt || r.employees),
+      };
+    });
+
+    const sum = months.reduce((s, m) => ({ pf: s.pf + m.pf, esi: s.esi + m.esi, pt: s.pt + m.pt, gross: s.gross + m.gross }), { pf: 0, esi: 0, pt: 0, gross: 0 });
+    res.json({
+      fy: `FY ${fyStart}-${String(fyStart + 1).slice(-2)}`,
+      months,
+      summary: {
+        total_pf: +sum.pf.toFixed(2), total_esi: +sum.esi.toFixed(2), total_pt: +sum.pt.toFixed(2),
+        total_gross: +sum.gross.toFixed(2),
+        latest_employees: months.filter(m => m.employees).slice(-1)[0]?.employees || 0,
+        months_with_activity: months.filter(m => m.has_activity).length,
+      },
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// ── Compliance Calendar — statutory obligations with computed amounts + status
+// Generates the standard Indian statutory due-date calendar for the FY and
+// annotates each obligation with the amount due (from GST/TDS/PF/ESI/PT data)
+// where the ERP has it. "Filed" status isn't tracked in the ERP, so an item is
+// marked done only once its period has passed AND it carries a computed amount;
+// otherwise it's upcoming/overdue based on the due date.
+router.get('/compliance/calendar', async (req, res) => {
+  try {
+    const { fyStart, fromDate, toDate } = fyBounds(req.query.fy);
+    const { project_id } = req.query;
+    const cid = req.user.company_id;
+
+    // Monthly GST output (RA bills) and net for GSTR-3B amounts
+    const gstConds = ['p.company_id=$1', 'rb.bill_date BETWEEN $2 AND $3'];
+    const gstParams = [cid, fromDate, toDate];
+    applyProjectScope(req, gstConds, gstParams, 'p', project_id);
+    const gst = await query(`SELECT to_char(rb.bill_date,'YYYY-MM') AS month, SUM(rb.gst_amount) AS gst
+      FROM ra_bills rb JOIN projects p ON rb.project_id=p.id
+      WHERE ${gstConds.join(' AND ')} AND rb.status NOT IN ('cancelled','draft') GROUP BY 1`, gstParams);
+    const gstByMonth = Object.fromEntries(gst.rows.map(r => [r.month, parseFloat(r.gst || 0)]));
+
+    // Monthly TDS
+    const tdsConds = ['p.company_id=$1', 'pay.payment_date BETWEEN $2 AND $3', 'pay.tds_deducted>0'];
+    const tdsParams = [cid, fromDate, toDate];
+    applyProjectScope(req, tdsConds, tdsParams, 'p', project_id);
+    const tds = await query(`SELECT to_char(pay.payment_date,'YYYY-MM') AS month, SUM(pay.tds_deducted) AS tds
+      FROM payments pay JOIN projects p ON pay.project_id=p.id
+      WHERE ${tdsConds.join(' AND ')} GROUP BY 1`, tdsParams);
+    const tdsByMonth = Object.fromEntries(tds.rows.map(r => [r.month, parseFloat(r.tds || 0)]));
+
+    // Monthly PF/ESI from payroll
+    const pay = await query(`SELECT month, year, SUM(COALESCE(pf_employee,0)+COALESCE(pf_employer,0)) AS pf,
+      SUM(COALESCE(esi_employee,0)+COALESCE(esi_employer,0)) AS esi
+      FROM hr_monthly_payroll WHERE company_id=$1 AND status<>'draft'
+        AND ((year=$2 AND month>=4) OR (year=$3 AND month<=3)) GROUP BY month, year`, [cid, fyStart, fyStart + 1]);
+    const pfByMonth = {}, esiByMonth = {};
+    pay.rows.forEach(r => { const k = `${r.year}-${String(r.month).padStart(2,'0')}`; pfByMonth[k] = parseFloat(r.pf||0); esiByMonth[k] = parseFloat(r.esi||0); });
+
+    const today = new Date();
+    const items = [];
+    const push = (category, name, period, dueDate, amount) => {
+      const due = new Date(dueDate);
+      let status;
+      if (amount > 0 && due < today) status = 'filed';       // period closed & amount known
+      else if (due < today) status = 'overdue';
+      else if ((due - today) / 86400000 <= 15) status = 'due_soon';
+      else status = 'upcoming';
+      items.push({ category, name, period, due_date: dueDate, amount: +amount.toFixed(2), status });
+    };
+
+    FY_MONTHS.forEach((_, idx) => {
+      const { key, cal, label } = fyMonthKey(fyStart, idx);
+      const nxt = idx + 1 < 12 ? fyMonthKey(fyStart, idx + 1) : { cal: fyStart + 1, key: `${fyStart + 1}-04` };
+      const nb = nxt.key.slice(0, 7); // 'YYYY-MM' of next month
+      push('GST', `GSTR-1 (${label})`, label, `${nb}-11`, gstByMonth[key] || 0);
+      push('GST', `GSTR-3B (${label})`, label, `${nb}-20`, gstByMonth[key] || 0);
+      push('TDS', `TDS Deposit (${label})`, label, `${nb}-07`, tdsByMonth[key] || 0);
+      push('PF',  `PF ECR (${label})`, label, `${nb}-15`, pfByMonth[key] || 0);
+      push('ESI', `ESI Contribution (${label})`, label, `${nb}-15`, esiByMonth[key] || 0);
+    });
+    // Quarterly TDS returns
+    [['Q1',`${fyStart}-07-31`,[0,1,2]],['Q2',`${fyStart}-10-31`,[3,4,5]],['Q3',`${fyStart+1}-01-31`,[6,7,8]],['Q4',`${fyStart+1}-05-31`,[9,10,11]]]
+      .forEach(([q, due, mIdx]) => {
+        const amt = mIdx.reduce((s, idx) => s + (tdsByMonth[fyMonthKey(fyStart, idx).key] || 0), 0);
+        push('TDS', `Form 26Q/24Q ${q}`, q, due, amt);
+      });
+    // Annual: GSTR-9
+    push('GST', 'GSTR-9 Annual Return', `FY ${fyStart}-${String(fyStart+1).slice(-2)}`, `${fyStart + 1}-12-31`, 0);
+
+    items.sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+    const counts = items.reduce((c, i) => { c[i.status] = (c[i.status] || 0) + 1; return c; }, {});
+    res.json({ fy: `FY ${fyStart}-${String(fyStart + 1).slice(-2)}`, items, counts });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // ── Aged Receivables (certified RA Bills not yet paid) ────────────────────────
 router.get('/ar-aging', async (req, res) => {
   try {
