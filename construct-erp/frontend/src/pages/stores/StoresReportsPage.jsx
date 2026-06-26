@@ -23,35 +23,35 @@ const SECTIONS = [
       {
         id: '1.1', title: 'Stock Ledger',
         desc: 'Item-wise receipts, issues, and closing balances for any date range.',
-        icon: BookOpen, badge: 'Daily', link: '/stores/ledger',
+        icon: BookOpen, badge: 'Daily', link: '/stores/reports/view/stock-ledger',
       },
       {
         id: '1.2', title: 'Stock Statement',
         desc: 'Snapshot of all materials on hand — quantity, unit rate, and value.',
-        icon: Package, badge: 'Snapshot', link: null,
+        icon: Package, badge: 'Snapshot', link: '/stores/reports/view/stock-statement',
       },
       {
         id: '1.3', title: 'Minimum Stock Alert',
         desc: 'Items below re-order level across stores and project sites.',
-        icon: AlertTriangle, badge: 'Alert', link: null,
+        icon: AlertTriangle, badge: 'Alert', link: '/stores/reports/view/min-stock',
         badgeOverride: { bg: '#FEE2E2', text: '#B91C1C' },
       },
       {
         id: '1.4', title: 'Slow Moving & Non-Moving Stock',
         desc: 'Materials with no movement for a configurable number of days.',
-        icon: Clock, badge: 'Review', link: null,
+        icon: Clock, badge: 'Review', link: '/stores/reports/view/slow-moving',
         badgeOverride: { bg: '#FEF9C3', text: '#854D0E' },
       },
       {
         id: '1.5', title: 'Dead Stock Report',
         desc: 'Items with zero movement for more than 90 days — candidate for write-off.',
-        icon: Skull, badge: 'Review', link: null,
+        icon: Skull, badge: 'Review', link: '/stores/reports/view/dead-stock',
         badgeOverride: { bg: '#FEE2E2', text: '#991B1B' },
       },
       {
         id: '1.6', title: 'Item-wise Stock Summary',
         desc: 'Consolidated stock position per item across all stores and sites.',
-        icon: LayoutList, badge: 'Summary', link: null,
+        icon: LayoutList, badge: 'Summary', link: '/stores/reports/view/item-summary',
       },
     ],
   },
@@ -66,32 +66,32 @@ const SECTIONS = [
       {
         id: '2.1', title: 'Material Receipt Note (MRN) Register',
         desc: 'Chronological log of all inward material receipts with GRN references.',
-        icon: FileInput, badge: 'Register', link: '/stores/reports/dmr',
+        icon: FileInput, badge: 'Register', link: '/stores/reports/view/mrn-register',
       },
       {
         id: '2.2', title: 'Material Issue Slip (MIS) Register',
         desc: 'All material issues to site with requisition and cost-code mapping.',
-        icon: FileOutput, badge: 'Register', link: null,
+        icon: FileOutput, badge: 'Register', link: '/stores/reports/view/mis-register',
       },
       {
         id: '2.3', title: 'Inter-Store / Inter-Site Transfer',
         desc: 'Materials transferred between stores or project sites in a period.',
-        icon: ArrowLeftRight, badge: 'Transfer', link: null,
+        icon: ArrowLeftRight, badge: 'Transfer', link: '/stores/reports/view/inter-store-transfer',
       },
       {
         id: '2.4', title: 'Material Return Report',
         desc: 'Site-to-store material returns with quantity and condition details.',
-        icon: RotateCcw, badge: 'Return', link: null,
+        icon: RotateCcw, badge: 'Return', link: '/stores/reports/view/material-return',
       },
       {
         id: '2.5', title: 'Gate Pass Register',
         desc: 'Inward and outward gate passes — vehicles, materials, and timing.',
-        icon: DoorOpen, badge: 'Register', link: null,
+        icon: DoorOpen, badge: 'Register', link: '/stores/reports/view/gate-pass',
       },
       {
         id: '2.6', title: 'Rejection / Inspection Failure Report',
         desc: 'Materials rejected at QC inspection with reason and vendor details.',
-        icon: XCircle, badge: 'QC', link: null,
+        icon: XCircle, badge: 'QC', link: '/stores/reports/view/rejection',
         badgeOverride: { bg: '#FEE2E2', text: '#991B1B' },
       },
     ],
@@ -107,32 +107,32 @@ const SECTIONS = [
       {
         id: '3.1', title: 'Purchase Order Status Report',
         desc: 'Open, closed, and partially fulfilled POs with delivery tracking.',
-        icon: ShoppingCart, badge: 'Status', link: null,
+        icon: ShoppingCart, badge: 'Status', link: '/stores/reports/view/po-status',
       },
       {
         id: '3.2', title: 'GRN vs Invoice Reconciliation',
         desc: 'Match goods received notes against supplier invoices for payment.',
-        icon: GitCompare, badge: 'Reconcile', link: null,
+        icon: GitCompare, badge: 'Reconcile', link: '/stores/reports/view/grn-invoice-recon',
       },
       {
         id: '3.3', title: 'Pending Material Requisition Report',
         desc: 'MRS/indents awaiting procurement action, sorted by urgency.',
-        icon: ClipboardList, badge: 'Pending', link: null,
+        icon: ClipboardList, badge: 'Pending', link: '/stores/reports/view/pending-mrs',
       },
       {
         id: '3.4', title: 'Vendor-wise Purchase Analysis',
         desc: 'Total purchase value, item count, and lead-time per vendor.',
-        icon: Users, badge: 'Analysis', link: '/stores/reports/vendor-wise',
+        icon: Users, badge: 'Analysis', link: '/stores/reports/view/vendor-analysis',
       },
       {
         id: '3.5', title: 'Rate Comparison Statement',
         desc: 'Quoted vs negotiated vs actual rates across vendors for key items.',
-        icon: BarChart2, badge: 'Compare', link: null,
+        icon: BarChart2, badge: 'Compare', link: '/stores/reports/view/rate-comparison',
       },
       {
         id: '3.6', title: 'Pending Delivery Report (PO-wise)',
         desc: 'Overdue and upcoming deliveries against active purchase orders.',
-        icon: Truck, badge: 'Pending', link: null,
+        icon: Truck, badge: 'Pending', link: '/stores/reports/view/pending-delivery',
         badgeOverride: { bg: '#FEE2E2', text: '#B91C1C' },
       },
     ],
@@ -148,33 +148,33 @@ const SECTIONS = [
       {
         id: '4.1', title: 'Budgeted vs Actual Material Consumption',
         desc: 'Compare planned material quantities against what was actually issued.',
-        icon: Scale, badge: 'Budget', link: null,
+        icon: Scale, badge: 'Budget', link: '/stores/reports/view/budget-vs-actual',
       },
       {
         id: '4.2', title: 'Project-wise Material Cost Report',
         desc: 'Total material cost per project with category-wise breakdown.',
-        icon: Building2, badge: 'Project', link: null,
+        icon: Building2, badge: 'Project', link: '/stores/reports/view/project-material-cost',
       },
       {
         id: '4.3', title: 'Work Order-wise Material Issue Report',
         desc: 'Materials issued against each work order for sub-contractor billing.',
-        icon: Layers, badge: 'WO', link: null,
+        icon: Layers, badge: 'WO', link: '/stores/reports/view/wo-material-issue',
       },
       {
         id: '4.4', title: 'Wastage & Scrap Report',
         desc: 'Quantity and value of materials scrapped or written off by site.',
-        icon: Trash2, badge: 'Wastage', link: null,
+        icon: Trash2, badge: 'Wastage', link: '/stores/reports/view/wastage-scrap',
         badgeOverride: { bg: '#FEE2E2', text: '#991B1B' },
       },
       {
         id: '4.5', title: 'Material Reconciliation Report',
         desc: 'Opening stock + receipts − issues = closing stock reconciliation.',
-        icon: RefreshCcw, badge: 'Recon', link: null,
+        icon: RefreshCcw, badge: 'Recon', link: '/stores/reports/view/material-recon',
       },
       {
         id: '4.6', title: 'Cost Code-wise Material Expenditure',
         desc: 'Material spend mapped to BOQ cost codes for budget tracking.',
-        icon: Tag, badge: 'Cost Code', link: null,
+        icon: Tag, badge: 'Cost Code', link: '/stores/reports/view/cost-code',
       },
     ],
   },
@@ -189,34 +189,34 @@ const SECTIONS = [
       {
         id: '5.1', title: 'Inventory Valuation Report',
         desc: 'Stock value using FIFO or Weighted Average cost methods.',
-        icon: Calculator, badge: 'FIFO / WA', link: null,
+        icon: Calculator, badge: 'FIFO / WA', link: '/stores/reports/view/inventory-valuation',
       },
       {
         id: '5.2', title: 'Physical Verification vs Book Stock',
         desc: 'Variance between physical count and system-recorded quantities.',
-        icon: Search, badge: 'Physical', link: null,
+        icon: Search, badge: 'Physical', link: '/stores/reports/view/physical-vs-book',
       },
       {
         id: '5.3', title: 'Expiry & Shelf Life Tracking',
         desc: 'Items nearing or past expiry — chemicals, consumables, and coatings.',
-        icon: CalendarClock, badge: 'Expiry', link: null,
+        icon: CalendarClock, badge: 'Expiry', link: '/stores/reports/view/expiry-tracking',
         badgeOverride: { bg: '#FEF3C7', text: '#92400E' },
       },
       {
         id: '5.4', title: 'ABC Analysis Report',
         desc: 'Classify inventory into A / B / C categories by consumption value.',
-        icon: BarChart3, badge: 'ABC', link: null,
+        icon: BarChart3, badge: 'ABC', link: '/stores/reports/view/abc-analysis',
       },
       {
         id: '5.5', title: 'Stock Ageing Report',
         desc: 'Age buckets (0–30, 31–60, 61–90, 90+ days) for all stock items.',
-        icon: CalendarDays, badge: 'Ageing', link: null,
+        icon: CalendarDays, badge: 'Ageing', link: '/stores/reports/view/stock-ageing',
         badgeOverride: { bg: '#FEF3C7', text: '#92400E' },
       },
       {
         id: '5.6', title: 'Audit Trail Report',
         desc: 'Full log of stock adjustments, corrections, and who made them.',
-        icon: FileBarChart, badge: 'Audit', link: null,
+        icon: FileBarChart, badge: 'Audit', link: '/stores/reports/view/audit-trail',
       },
     ],
   },
@@ -231,32 +231,32 @@ const SECTIONS = [
       {
         id: '6.1', title: 'Daily Store Activity Report',
         desc: 'All receipts, issues, returns, and transfers for a selected date.',
-        icon: Activity, badge: 'Daily', link: '/stores/reports/dmr',
+        icon: Activity, badge: 'Daily', link: '/stores/reports/view/daily-activity',
       },
       {
         id: '6.2', title: 'Monthly Material Consumption Summary',
         desc: 'Month-over-month consumption trends by item and category.',
-        icon: TrendingUp, badge: 'Monthly', link: null,
+        icon: TrendingUp, badge: 'Monthly', link: '/stores/reports/view/monthly-consumption',
       },
       {
         id: '6.3', title: 'Project-wise Store Utilization Report',
         desc: 'Store throughput, utilization rate, and material flow per project.',
-        icon: Building2, badge: 'Project', link: null,
+        icon: Building2, badge: 'Project', link: '/stores/reports/view/project-utilization',
       },
       {
         id: '6.4', title: 'Category-wise Material Summary',
         desc: 'Stock and movement by material category — civil, MEP, safety, etc.',
-        icon: LayoutList, badge: 'Category', link: null,
+        icon: LayoutList, badge: 'Category', link: '/stores/reports/view/category-summary',
       },
       {
         id: '6.5', title: 'Store-wise Closing Stock Report',
         desc: 'Closing balances across all stores and sites as of any date.',
-        icon: Warehouse, badge: 'Snapshot', link: null,
+        icon: Warehouse, badge: 'Snapshot', link: '/stores/reports/view/closing-stock',
       },
       {
         id: '6.6', title: 'Top Consumed Items Report',
         desc: 'Highest-consumption materials by quantity and value in a period.',
-        icon: Star, badge: 'Top Items', link: null,
+        icon: Star, badge: 'Top Items', link: '/stores/reports/view/top-consumed',
       },
     ],
   },
@@ -275,8 +275,7 @@ function ReportCard({ report, sectionAccent, defaultBadge }) {
       borderRadius: 12,
       padding: '18px 18px 14px',
       position: 'relative',
-      cursor: active ? 'pointer' : 'default',
-      opacity: active ? 1 : 0.72,
+      cursor: 'pointer',
       transition: 'box-shadow 0.18s, transform 0.18s',
       display: 'flex',
       flexDirection: 'column',
@@ -285,7 +284,6 @@ function ReportCard({ report, sectionAccent, defaultBadge }) {
       boxSizing: 'border-box',
     }}
       onMouseEnter={e => {
-        if (!active) return;
         e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.10)';
         e.currentTarget.style.transform = 'translateY(-2px)';
       }}
@@ -298,15 +296,12 @@ function ReportCard({ report, sectionAccent, defaultBadge }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{
           width: 38, height: 38, borderRadius: 9,
-          background: active ? `${sectionAccent}18` : '#F1F5F9',
+          background: `${sectionAccent}18`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <Icon size={18} color={active ? sectionAccent : '#94A3B8'} />
+          <Icon size={18} color={sectionAccent} />
         </div>
-        {active
-          ? <ArrowUpRight size={15} color={sectionAccent} style={{ marginTop: 2 }} />
-          : <span style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.06em', marginTop: 4 }}>COMING SOON</span>
-        }
+        <ArrowUpRight size={15} color={sectionAccent} style={{ marginTop: 2 }} />
       </div>
 
       {/* title */}
@@ -370,7 +365,7 @@ function Section({ section }) {
             {section.label}
           </p>
           <p style={{ fontSize: '11px', color: '#94A3B8', marginTop: 1 }}>
-            {activeCount} of {section.reports.length} report{section.reports.length !== 1 ? 's' : ''} available
+            {section.reports.length} report{section.reports.length !== 1 ? 's' : ''} available
           </p>
         </div>
         <div style={{ flex: 1, height: 1, background: '#E2E8F0' }} />
@@ -397,7 +392,6 @@ function Section({ section }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function StoresReportsPage() {
-  const totalActive = SECTIONS.reduce((s, sec) => s + sec.reports.filter(r => r.link).length, 0);
   const totalReports = SECTIONS.reduce((s, sec) => s + sec.reports.length, 0);
 
   return (
@@ -428,9 +422,9 @@ export default function StoresReportsPage() {
           <div style={{ display: 'flex', gap: 24, marginTop: 18 }}>
             {[
               { label: 'Total Reports', value: totalReports, color: '#0F172A' },
-              { label: 'Available Now', value: totalActive, color: '#059669' },
-              { label: 'Coming Soon', value: totalReports - totalActive, color: '#64748B' },
-              { label: 'Categories', value: SECTIONS.length, color: '#7C3AED' },
+              { label: 'Available Now', value: totalReports, color: '#059669' },
+              { label: 'Sections', value: SECTIONS.length, color: '#7C3AED' },
+              { label: 'Export Support', value: 'CSV', color: '#0891B2' },
             ].map(s => (
               <div key={s.label} style={{
                 background: '#fff', border: '1px solid #E2E8F0',

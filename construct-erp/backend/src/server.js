@@ -45,6 +45,7 @@ const gatePassRoutes = require('./routes/gate-pass.routes');
 const procurementAlertsRoutes = require('./routes/procurement-alerts.routes');
 const creditNotesRoutes = require('./routes/credit-notes.routes');
 const storesPettyCashRoutes = require('./routes/stores-petty-cash.routes');
+const storesReportsRoutes  = require('./routes/stores-reports.routes');
 const debitNotesRoutes = require('./routes/debit-notes.routes');
 const chartOfAccountsRoutes = require('./routes/chart-of-accounts.routes');
 const journalEntriesRoutes = require('./routes/journal-entries.routes');
@@ -361,6 +362,7 @@ app.use(`${API}/budget`, budgetRoutes);
 app.use(`${API}/stores/mrs`, mrsRoutes);
 app.use(`${API}/stores/min`, minRoutes);
 app.use(`${API}/stores/mtr`, mtrRoutes);
+app.use(`${API}/stores-reports`, storesReportsRoutes);
 app.use(`${API}/engineer-logs`, engineerLogRoutes);
 
 // CRM

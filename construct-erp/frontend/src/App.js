@@ -216,6 +216,7 @@ const StoresPettyCashPage       = lazy(() => import('./pages/stores/StoresPettyC
 const StockVerificationPage     = lazy(() => import('./pages/stores/StockVerificationPage'));
 const StoresDashboard           = lazy(() => import('./pages/dashboards/StoresDashboard'));
 const StoresReportsPage         = lazy(() => import('./pages/stores/StoresReportsPage'));
+const StoresReportViewer        = lazy(() => import('./pages/stores/StoresReportViewer'));
 const VendorWiseReportsPage     = lazy(() => import('./pages/stores/VendorWiseReportsPage'));
 const DailyMaterialRegisterPage = lazy(() => import('./pages/stores/DailyMaterialRegisterPage'));
 // StockReportPage merged into StoreLedgerPage as "Monthly Movement" tab
@@ -881,6 +882,7 @@ export default function App() {
                 <Route path="stores/petty-cash" element={<RequireAnyModule modules={['Stores','Stores Petty Cash']}><StoresPettyCashPage /></RequireAnyModule>} />
                 <Route path="stores/stock-verification" element={<RequireModule module="Stores"><StockVerificationPage /></RequireModule>} />
                 <Route path="stores/reports" element={<RequireModule module="Stores"><StoresReportsPage /></RequireModule>} />
+                <Route path="stores/reports/view/:type" element={<RequireModule module="Stores"><StoresReportViewer /></RequireModule>} />
                 <Route path="stores/reports/vendor-wise" element={<RequireModule module="Stores"><VendorWiseReportsPage /></RequireModule>} />
                 <Route path="stores/reports/dmr" element={<RequireModule module="Stores"><DailyMaterialRegisterPage /></RequireModule>} />
 
