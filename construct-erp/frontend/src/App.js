@@ -86,6 +86,8 @@ const ProcurementStoresPage   = lazy(() => import('./pages/accounts/ProcurementS
 const RecurringBillsPage      = lazy(() => import('./pages/accounts/RecurringBillsPage'));
 const OpeningBalancesPage     = lazy(() => import('./pages/accounts/OpeningBalancesPage'));
 const EWayBillsPage           = lazy(() => import('./pages/accounts/EWayBillsPage'));
+const GSTR1Page               = lazy(() => import('./pages/accounts/GSTR1Page'));
+const GSTR3BPage              = lazy(() => import('./pages/accounts/GSTR3BPage'));
 const ComplianceCalendarPage  = lazy(() => import('./pages/accounts/compliance/ComplianceCalendarPage'));
 const GSTCompliancePage       = lazy(() => import('./pages/accounts/compliance/GSTCompliancePage'));
 const TDSCompliancePage       = lazy(() => import('./pages/accounts/compliance/TDSCompliancePage'));
@@ -655,8 +657,8 @@ export default function App() {
                 <Route path="accounts/reports/general-ledger" element={<RequireModule module="Finance"><AccountTransactionsPage /></RequireModule>} />
                 <Route path="accounts/reports/journal-report" element={<RequireModule module="Finance"><JournalEntryPage /></RequireModule>} />
                 {/* Taxes (new) */}
-                <Route path="accounts/taxes/gstr1" element={<RequireModule module="Finance"><GSTPage /></RequireModule>} />
-                <Route path="accounts/taxes/gstr3b" element={<RequireModule module="Finance"><GSTPage /></RequireModule>} />
+                <Route path="accounts/taxes/gstr1" element={<RequireModule module="Finance"><GSTR1Page /></RequireModule>} />
+                <Route path="accounts/taxes/gstr3b" element={<RequireModule module="Finance"><GSTR3BPage /></RequireModule>} />
                 <Route path="accounts/taxes/eway-bills" element={<RequireModule module="Finance"><EWayBillsPage /></RequireModule>} />
                 {/* Compliance */}
                 <Route path="accounts/compliance" element={<RequireModule module="Finance"><ComplianceCalendarPage /></RequireModule>} />

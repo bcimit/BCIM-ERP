@@ -210,6 +210,63 @@ router.get('/gst/compliance', async (req, res) => {
   }
 });
 
+// ── GSTR-1 — outward supplies (document-level): client RA bills with GST. ─────
+// Optional ?month=YYYY-MM filters to a single return period.
+router.get('/gst/gstr1', async (req, res) => {
+  try {
+    const now = new Date();
+    const currentFyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const fyStart = parseInt(req.query.fy) || currentFyStart;
+    const { project_id, month } = req.query;
+
+    const conds = ['p.company_id=$1', "rb.status NOT IN ('cancelled','draft')"];
+    const params = [req.user.company_id];
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      conds.push('to_char(rb.bill_date,\'YYYY-MM\') = $2');
+      params.push(month);
+    } else {
+      conds.push('rb.bill_date BETWEEN $2 AND $3');
+      params.push(`${fyStart}-04-01`, `${fyStart + 1}-03-31`);
+    }
+    applyProjectScope(req, conds, params, 'p', project_id);
+
+    const { rows } = await query(`
+      SELECT rb.bill_number, rb.bill_date, p.name AS project_name,
+             rb.gross_amount AS taxable, rb.gst_rate, rb.gst_amount,
+             rb.gross_with_gst AS total
+      FROM ra_bills rb JOIN projects p ON rb.project_id = p.id
+      WHERE ${conds.join(' AND ')}
+      ORDER BY rb.bill_date DESC, rb.bill_number DESC`, params);
+
+    const supplies = rows.map(r => {
+      const gst = parseFloat(r.gst_amount || 0);
+      return {
+        bill_number: r.bill_number,
+        bill_date: r.bill_date,
+        project_name: r.project_name,
+        taxable: +parseFloat(r.taxable || 0).toFixed(2),
+        gst_rate: parseFloat(r.gst_rate || 0),
+        cgst: +(gst / 2).toFixed(2),
+        sgst: +(gst / 2).toFixed(2),
+        igst: 0,
+        total_gst: +gst.toFixed(2),
+        total: +parseFloat(r.total || 0).toFixed(2),
+      };
+    });
+    const totals = supplies.reduce((s, r) => ({
+      taxable: s.taxable + r.taxable, gst: s.gst + r.total_gst, count: s.count + 1,
+    }), { taxable: 0, gst: 0, count: 0 });
+
+    res.json({
+      fy: `FY ${fyStart}-${String(fyStart + 1).slice(-2)}`,
+      supplies,
+      summary: { total_taxable: +totals.taxable.toFixed(2), total_gst: +totals.gst.toFixed(2), invoice_count: totals.count },
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // TDS Report (Form 26Q)
 router.get('/tds', async (req, res) => {
   try {
