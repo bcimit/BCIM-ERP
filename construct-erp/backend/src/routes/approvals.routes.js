@@ -104,6 +104,47 @@ router.get('/pending', async (req, res) => {
     const role = FULL_APPROVALS_EMAILS.includes(email) ? 'admin' : ROLE(req);
     const items = [];
 
+    // ── HR Admin: ONLY HR department approvals — no procurement/stores access ──
+    if (role === 'hr_admin') {
+      const hrItems = [];
+
+      // Leave requests pending approval
+      try {
+        const lr = await query(`
+          SELECT lr.id, lr.leave_type AS ref_no, lr.from_date AS doc_date,
+                 0 AS amount, lr.status, lr.created_at, lr.status AS current_stage,
+                 u.name AS party_name, '' AS project_name, u.name AS submitted_by,
+                 CONCAT(lr.leave_type, ' • ', lr.total_days, ' day(s)') AS extra_info,
+                 'Leave Request' AS doc_type, 'leave_request' AS entity_type,
+                 '/hr/leave' AS action_url
+          FROM hr_leave_requests lr
+          JOIN users u ON u.id = lr.user_id
+          WHERE lr.company_id = $1 AND lr.status = 'pending'
+          ORDER BY lr.created_at ASC`, [cid]);
+        hrItems.push(...lr.rows);
+      } catch (_) {}
+
+      // Expense claims pending approval
+      try {
+        const ec = await query(`
+          SELECT e.id, e.expense_type AS ref_no, e.expense_date AS doc_date,
+                 e.amount, e.status, e.created_at, e.status AS current_stage,
+                 u.name AS party_name, '' AS project_name, u.name AS submitted_by,
+                 CONCAT(e.expense_type, ' • ', e.description) AS extra_info,
+                 'Expense Claim' AS doc_type, 'expense_claim' AS entity_type,
+                 '/hr/expenses' AS action_url
+          FROM hr_expense_claims e
+          JOIN users u ON u.id = e.user_id
+          WHERE e.company_id = $1 AND e.status = 'pending'
+          ORDER BY e.created_at ASC`, [cid]);
+        hrItems.push(...ec.rows);
+      } catch (_) {}
+
+      hrItems.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      const summary = hrItems.reduce((acc, item) => { acc[item.doc_type] = (acc[item.doc_type] || 0) + 1; return acc; }, {});
+      return res.json({ data: hrItems, summary, total: hrItems.length });
+    }
+
     // ── 1. SC Bills ──────────────────────────────────────────────────────────
     const scBillStages = scBillStageForRole(role);
     if (scBillStages.length) {
