@@ -296,49 +296,37 @@ router.get('/commitment-pos', async (req, res) => {
     );
     if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
 
+    const COST_HEAD_EXPR = `COALESCE(po.cost_head,
+      CASE
+        WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'steel|tmt|rebar|reinforc|fe[0-9]|bar.bend|bar.cut') THEN 'Material — Reinforcement'
+        WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cement|opc|ppc|concrete|rmc|ready.?mix|m.?sand|aggregate|crush|coarse') THEN 'Material — Concrete & Aggregates'
+        WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'formwork|shuttering|plywood|prop|soldier|waler') THEN 'Material — Formworks'
+        WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'safety|ppe|helmet|glove|harness|vest|boot|goggle|barricad') THEN 'Safety — PPE & Protective Gear'
+        WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cable|wire|electrical|switch|panel|mcb|breaker|conduit|light|led|flood') THEN 'Electrical — Cables & Wiring'
+        WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'excavat|jcb|crane|tipper|dump|dozer|grader|roller|compactor|pump|poclain|transit') THEN 'P & M — Equipment (General)'
+        WHEN v.vendor_type = 'subcontractor'      THEN 'Subcontracting — Civil'
+        WHEN v.vendor_type = 'equipment_supplier' THEN 'P & M — Equipment (General)'
+        WHEN v.vendor_type = 'labour_contractor'  THEN 'Labour — Skilled'
+        WHEN v.vendor_type = 'service_provider'   THEN 'Overhead — Site Overhead'
+        ELSE 'Material — Other Materials'
+      END
+    )`;
+
     const result = await query(`
-      SELECT
-        po.id, po.po_number, po.serial_no_formatted,
-        po.status, po.po_date, po.grand_total, po.cost_head AS stored_cost_head,
-        v.name AS vendor_name, v.vendor_type,
-        ARRAY(
-          SELECT pi.material_name FROM po_items pi WHERE pi.po_id = po.id LIMIT 5
-        ) AS items,
-        COALESCE(po.cost_head,
-          CASE
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'steel|tmt|rebar|reinforc|fe[0-9]|bar.bend|bar.cut') THEN 'Material — Reinforcement'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cement|opc|ppc|concrete|rmc|ready.?mix|m.?sand|aggregate|crush|coarse') THEN 'Material — Concrete & Aggregates'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'formwork|shuttering|plywood|prop|soldier|waler') THEN 'Material — Formworks'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'safety|ppe|helmet|glove|harness|vest|boot|goggle|barricad') THEN 'Safety — PPE & Protective Gear'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cable|wire|electrical|switch|panel|mcb|breaker|conduit|light|led|flood') THEN 'Electrical — Cables & Wiring'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'excavat|jcb|crane|tipper|dump|dozer|grader|roller|compactor|pump|poclain|transit') THEN 'P & M — Equipment (General)'
-            WHEN v.vendor_type = 'subcontractor'      THEN 'Subcontracting — Civil'
-            WHEN v.vendor_type = 'equipment_supplier' THEN 'P & M — Equipment (General)'
-            WHEN v.vendor_type = 'labour_contractor'  THEN 'Labour — Skilled'
-            WHEN v.vendor_type = 'service_provider'   THEN 'Overhead — Site Overhead'
-            ELSE 'Material — Other Materials'
-          END
-        ) AS resolved_cost_head
-      FROM purchase_orders po
-      LEFT JOIN vendors v ON v.id = po.vendor_id
-      WHERE po.project_id = $1
-        AND po.status NOT IN ('cancelled','draft')
-      HAVING COALESCE(po.cost_head,
-          CASE
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'steel|tmt|rebar|reinforc|fe[0-9]|bar.bend|bar.cut') THEN 'Material — Reinforcement'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cement|opc|ppc|concrete|rmc|ready.?mix|m.?sand|aggregate|crush|coarse') THEN 'Material — Concrete & Aggregates'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'formwork|shuttering|plywood|prop|soldier|waler') THEN 'Material — Formworks'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'safety|ppe|helmet|glove|harness|vest|boot|goggle|barricad') THEN 'Safety — PPE & Protective Gear'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'cable|wire|electrical|switch|panel|mcb|breaker|conduit|light|led|flood') THEN 'Electrical — Cables & Wiring'
-            WHEN EXISTS (SELECT 1 FROM po_items pi WHERE pi.po_id = po.id AND LOWER(pi.material_name) ~ 'excavat|jcb|crane|tipper|dump|dozer|grader|roller|compactor|pump|poclain|transit') THEN 'P & M — Equipment (General)'
-            WHEN v.vendor_type = 'subcontractor'      THEN 'Subcontracting — Civil'
-            WHEN v.vendor_type = 'equipment_supplier' THEN 'P & M — Equipment (General)'
-            WHEN v.vendor_type = 'labour_contractor'  THEN 'Labour — Skilled'
-            WHEN v.vendor_type = 'service_provider'   THEN 'Overhead — Site Overhead'
-            ELSE 'Material — Other Materials'
-          END
-        ) = $2
-      ORDER BY po.po_date DESC
+      SELECT * FROM (
+        SELECT
+          po.id, po.po_number, po.serial_no_formatted,
+          po.status, po.po_date, po.grand_total, po.cost_head AS stored_cost_head,
+          v.name AS vendor_name, v.vendor_type,
+          ARRAY(SELECT pi.material_name FROM po_items pi WHERE pi.po_id = po.id LIMIT 5) AS items,
+          ${COST_HEAD_EXPR} AS resolved_cost_head
+        FROM purchase_orders po
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        WHERE po.project_id = $1
+          AND po.status NOT IN ('cancelled','draft')
+      ) sub
+      WHERE sub.resolved_cost_head = $2
+      ORDER BY sub.po_date DESC
     `, [project_id, cost_head]);
 
     res.json({ data: result.rows });
