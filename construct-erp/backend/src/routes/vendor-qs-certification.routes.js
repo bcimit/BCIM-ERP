@@ -246,6 +246,13 @@ async function buildSummaryFromBills(executor, billIds, companyId, excludeCertif
 // Used by the Accounts Dashboard PC section.
 router.get('/accounts-pending', async (req, res) => {
   try {
+    const { project_id } = req.query;
+    const params = [req.user.company_id];
+    let projClause = '';
+    if (project_id && String(project_id).trim()) {
+      params.push(project_id);
+      projClause = ` AND c.project_id = $${params.length}`;
+    }
     const { rows } = await query(
       `SELECT c.id, c.cert_number AS pc_number, c.ra_bill_number, c.vendor_name,
               c.project_id, c.status,
@@ -266,9 +273,9 @@ router.get('/accounts-pending', async (req, res) => {
        LEFT JOIN projects p ON p.id = c.project_id
        WHERE c.company_id = $1
          AND c.status IN ('accounts', 'certified')
-         AND c.net_payable > COALESCE(c.paid_amount, 0)
+         AND c.net_payable > COALESCE(c.paid_amount, 0)${projClause}
        ORDER BY c.sent_to_accounts_at DESC NULLS LAST, c.created_at DESC`,
-      [req.user.company_id]
+      params
     );
     res.json({ data: rows });
   } catch (err) { res.status(500).json({ error: err.message }); }

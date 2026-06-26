@@ -336,7 +336,7 @@ function PCRow({ pc, onPay }) {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function AccountsDashboard() {
-  const { user } = useAuthStore();
+  const { user, selectedProjectId } = useAuthStore();
   const qc = useQueryClient();
   const [payingPC,   setPayingPC]   = useState(null);
   const [search,     setSearch]     = useState('');
@@ -344,23 +344,23 @@ export default function AccountsDashboard() {
   const [showPaid,   setShowPaid]   = useState(false);
 
   const { data: bills = [], isLoading: loadB } = useQuery({
-    queryKey: ['tqs-bills', 'accts-dash'],
-    queryFn: () => tqsBillsAPI.list().then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    queryKey: ['tqs-bills', 'accts-dash', selectedProjectId],
+    queryFn: () => tqsBillsAPI.list({ project_id: selectedProjectId || undefined }).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
 
   const { data: tqsPCList = [], isLoading: loadPC, refetch: refetchPC } = useQuery({
-    queryKey: ['tqs-bills', 'accts-pc-pending'],
-    queryFn: () => tqsBillsAPI.pcPending().then(r => r.data?.data ?? []),
+    queryKey: ['tqs-bills', 'accts-pc-pending', selectedProjectId],
+    queryFn: () => tqsBillsAPI.pcPending({ project_id: selectedProjectId || undefined }).then(r => r.data?.data ?? []),
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
 
   const { data: vqsPCList = [], refetch: refetchVQS } = useQuery({
-    queryKey: ['vendor-qs-certs', 'accounts-pending'],
-    queryFn: () => vendorQSCertificationAPI.accountsPending().then(r => r.data?.data ?? []),
+    queryKey: ['vendor-qs-certs', 'accounts-pending', selectedProjectId],
+    queryFn: () => vendorQSCertificationAPI.accountsPending({ project_id: selectedProjectId || undefined }).then(r => r.data?.data ?? []),
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
@@ -369,15 +369,15 @@ export default function AccountsDashboard() {
   const pcList = useMemo(() => [...tqsPCList, ...vqsPCList], [tqsPCList, vqsPCList]);
 
   const { data: aging = [], isLoading: loadA } = useQuery({
-    queryKey: ['tqs-bills', 'accts-dash-aging'],
-    queryFn: () => tqsBillsAPI.getAPAging().then(r => r.data?.data ?? []),
+    queryKey: ['tqs-bills', 'accts-dash-aging', selectedProjectId],
+    queryFn: () => tqsBillsAPI.getAPAging({ project_id: selectedProjectId || undefined }).then(r => r.data?.data ?? []),
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
 
   const { data: payments = [], isLoading: loadPay } = useQuery({
-    queryKey: ['accts-dash-payments'],
-    queryFn: () => paymentAPI.list().then(r => {
+    queryKey: ['accts-dash-payments', selectedProjectId],
+    queryFn: () => paymentAPI.list({ project_id: selectedProjectId || undefined }).then(r => {
       const d = r.data; return Array.isArray(d) ? d : (d?.data ?? []);
     }),
     staleTime: 0,
