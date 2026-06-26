@@ -1,7 +1,7 @@
 // src/pages/stores/StoresPettyCashPage.jsx
 // Stores Petty Cash Tracker — site-level cash book mirroring the Excel register.
 // 6 tabs: Dashboard · HO Receipts · Local Purchase · Salary Advances · Analytics · Budgets
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -12,6 +12,7 @@ import {
   CheckCircle, Clock, TrendingUp, Printer, RefreshCw,
   Paperclip, Eye, Upload, Send, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { storesPettyCashAPI, projectAPI, uploadAPI } from '../../api/client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -756,7 +757,10 @@ function ApprovalModal({ entry, mode, onConfirm, onClose }) {
 // ════════════════════════════════════════════════════════════════════════════════
 export default function StoresPettyCashPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState('dashboard');
+  const location = useLocation();
+  const highlightId = location.state?.viewId || null;
+  const highlightRef = useRef(null);
+  const [tab, setTab] = useState(highlightId ? 'local' : 'dashboard');
   const [projectId, setProjectId] = useState('');
   const [filters, setFilters] = useState({ search: '', from: '', to: '' });
   const [showEntryForm,   setShowEntryForm]   = useState(false);
@@ -770,9 +774,15 @@ export default function StoresPettyCashPage() {
   const [showRepl,        setShowRepl]        = useState(false);
   const [editBudgets,     setEditBudgets]     = useState(false);
   const [localBudgets,    setLocalBudgets]    = useState(null);
-  const [statusFilter,    setStatusFilter]    = useState('All');
+  const [statusFilter,    setStatusFilter]    = useState(highlightId ? 'All' : 'All');
   const [catFilter,       setCatFilter]       = useState('All');
   const setFilter = (k, v) => setFilters(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (highlightId && highlightRef.current) {
+      setTimeout(() => highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+    }
+  }, [highlightId, highlightRef.current]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects-list'],
@@ -1266,7 +1276,11 @@ export default function StoresPettyCashPage() {
                         const lowBal = row.runBalance < 5000 && row.runBalance >= 0;
                         const negBal = row.runBalance < 0;
                         return (
-                          <tr key={row.id} className={clsx('hover:bg-slate-50 transition-colors', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}>
+                          <tr key={row.id}
+                            ref={row.id === highlightId ? highlightRef : null}
+                            className={clsx('hover:bg-slate-50 transition-colors',
+                              row.id === highlightId ? 'ring-2 ring-inset ring-indigo-400 bg-indigo-50' : i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                            )}>
                             <td className="px-4 py-3 font-mono text-xs font-semibold text-indigo-700">{row.sl_no}</td>
                             <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{dayjs(row.entry_date).format('DD MMM YY')}</td>
                             <td className="px-4 py-3 font-medium text-slate-800 max-w-[140px] truncate">{row.supplier}</td>
