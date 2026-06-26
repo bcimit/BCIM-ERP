@@ -16,6 +16,7 @@ import { FIELD_HL } from '../../constants/fieldStyles';
 import toast from 'react-hot-toast';
 import { PageHeader, Theme } from '../../theme';
 import { CONSTRUCTION_UNITS as UNITS } from '../../constants/units';
+import { Z_INP, Z_CARD, Z_HEAD } from '../../constants/zohoStyles';
 import GRSPrintTemplate from './GRSPrintTemplate';
 
 const STATUS_CONFIG = {
@@ -545,6 +546,34 @@ export default function GRSPage() {
 }
 
 /* ── GRS Create / Edit Form ───────────────────────────────────────────────── */
+const GRS_STEPS = ['Entry Details', 'Particulars'];
+function GRSWizardSteps({ step }) {
+  return (
+    <div className="flex items-center gap-1 px-6 border-b border-slate-200 bg-white flex-shrink-0 overflow-x-auto">
+      {GRS_STEPS.map((label, i) => {
+        const n = i + 1;
+        const done = n < step;
+        const active = n === step;
+        return (
+          <div key={label} className={clsx(
+            'flex items-center gap-2 py-2.5 pr-5 text-xs font-semibold whitespace-nowrap',
+            done ? 'text-emerald-600' : active ? 'text-blue-600' : 'text-slate-400'
+          )}>
+            <span className={clsx(
+              'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
+              done ? 'bg-emerald-500 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
+            )}>
+              {done ? <CheckCircle2 size={11} /> : n}
+            </span>
+            {label}
+            {n < GRS_STEPS.length && <ChevronRight size={13} className="text-slate-300 ml-2" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function GRSForm({ onClose, projects, qc, editGrs = null }) {
   const isEdit = Boolean(editGrs);
   const emptyItem = () => ({ particulars: '', unit: '', quantity: '', remarks: '' });
@@ -640,202 +669,215 @@ function GRSForm({ onClose, projects, qc, editGrs = null }) {
     createMutation.mutate({ ...form, items: validItems });
   };
 
-  const inp = `w-full h-10 rounded-lg px-3 text-sm font-medium outline-none transition-all border ${FIELD_HL}`;
+  const [step, setStep] = useState(1);
+  const validItemCount = items.filter(i => i.particulars?.trim()).length;
 
   return (
     <div className="fixed inset-0 z-[60] bg-white flex flex-col overflow-hidden">
 
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-teal-900/70 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition">
-              <X size={16} />
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-6 py-3.5 flex-shrink-0 bg-white border-b border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-400">
+            Stores <span className="text-slate-300">›</span> Goods Receipt by Security <span className="text-slate-300">›</span>{' '}
+            <b className="text-slate-700">{isEdit ? editGrs.grs_number || 'Edit GRS' : 'New GRS'}</b>
+          </div>
+          {!isEdit && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200 text-[11px] font-mono">Auto-generated</span>
+          )}
+        </div>
+        <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* ── Wizard step bar ── */}
+      <GRSWizardSteps step={step} />
+
+      {/* ── Body ── */}
+      <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
+        <div className="flex flex-col lg:flex-row gap-4">
+
+          {/* ── Main column ── */}
+          <div className="flex-1 min-w-0 space-y-4">
+
+            {/* ════ STEP 1 — Entry Details ════ */}
+            {step === 1 && (
+              <>
+                <div className={Z_CARD}>
+                  <h3 className={Z_HEAD}><Truck size={13} className="inline mr-1.5 text-teal-500" />Gate & Delivery Information</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 p-4">
+                    <div className="col-span-2 md:col-span-1 space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Project *</label>
+                      <select value={form.project_id} onChange={e => { setField('project_id', e.target.value); setField('po_id', ''); setField('po_number', ''); }} className={Z_INP}>
+                        <option value="">Select project…</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Vehicle No.</label>
+                      <input type="text" value={form.vehicle_no} onChange={e => setField('vehicle_no', e.target.value.toUpperCase())} placeholder="KA01AB1234" className={Z_INP} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Date & Time *</label>
+                      <input type="datetime-local" value={form.date_time} onChange={e => setField('date_time', e.target.value)} className={Z_INP} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Security In-charge</label>
+                      <input type="text" value={form.security_incharge} onChange={e => setField('security_incharge', e.target.value)} placeholder="Name of security person" className={Z_INP} />
+                    </div>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Remarks</label>
+                      <input type="text" value={form.remarks} onChange={e => setField('remarks', e.target.value)} placeholder="Any notes…" className={Z_INP} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={Z_CARD}>
+                  <h3 className={Z_HEAD}><FileText size={13} className="inline mr-1.5 text-indigo-500" />Link Purchase Order <span className="text-slate-400 font-normal text-[11px]">(optional)</span></h3>
+                  <div className="p-4 space-y-1.5">
+                    <select value={form.po_id} onChange={e => handlePoSelect(e.target.value)} disabled={!form.project_id} className={Z_INP}>
+                      <option value="">— No PO linked —</option>
+                      {poList.map(po => (
+                        <option key={po.id} value={po.id}>{po.serial_no_formatted || po.po_number} — {po.vendor_name}</option>
+                      ))}
+                    </select>
+                    {!form.project_id && <p className="text-xs text-slate-400">Select a project first to see its POs</p>}
+                    {form.po_id && <p className="text-xs text-emerald-600 font-medium">PO linked — items will be pre-filled on next step</p>}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ════ STEP 2 — Particulars ════ */}
+            {step === 2 && (
+              <div className={Z_CARD}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                  <h3 className="text-[13px] font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Package size={13} className="text-indigo-500" /> Particulars (Items Received)
+                  </h3>
+                  <button onClick={addRow} className="flex items-center gap-1.5 px-3 h-7 rounded-md text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition">
+                    <Plus size={12} /> Add Row
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[560px]">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        {['Sl.', 'Particulars *', 'Unit', 'Quantity', 'Remarks', ''].map(h => (
+                          <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {items.map((it, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="px-3 py-2 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="px-3 py-2">
+                            <input value={it.particulars} onChange={e => updateItem(idx, 'particulars', e.target.value)} placeholder="Material description"
+                              className="w-full h-8 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select value={it.unit} onChange={e => updateItem(idx, 'unit', e.target.value)}
+                              className="w-20 h-8 rounded-md border border-slate-300 bg-white px-1 text-xs outline-none focus:border-blue-500">
+                              <option value="">—</option>
+                              {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" value={it.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} placeholder="0"
+                              className="w-24 h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-right font-mono outline-none focus:border-blue-500" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input value={it.remarks} onChange={e => updateItem(idx, 'remarks', e.target.value)} placeholder="Notes…"
+                              className="w-full h-8 rounded-md border border-slate-300 bg-white px-2 text-xs outline-none focus:border-blue-500" />
+                          </td>
+                          <td className="px-3 py-2">
+                            <button onClick={() => removeRow(idx)} disabled={items.length === 1}
+                              className="w-7 h-7 rounded-md border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 transition">
+                              <X size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+          </div>{/* end main column */}
+
+          {/* ── Right summary panel ── */}
+          <div className="lg:w-64 xl:w-72 shrink-0 space-y-3">
+            <div className="bg-white border border-slate-200 rounded-md p-4 shadow-sm">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Entry Summary</p>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Project</span>
+                  <span className="font-medium text-slate-800 text-right max-w-[140px] truncate">
+                    {projects.find(p => p.id === form.project_id)?.name || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Vehicle</span>
+                  <span className="font-mono font-medium text-slate-800">{form.vehicle_no || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Security</span>
+                  <span className="font-medium text-slate-800 truncate max-w-[120px]">{form.security_incharge || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Linked PO</span>
+                  <span className="font-mono font-medium text-slate-800 truncate max-w-[120px]">
+                    {form.po_number || (form.po_id ? 'Linked' : '—')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-md p-4 shadow-sm">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Particulars</p>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums">{validItemCount}</div>
+              <p className="text-xs text-slate-400 mt-0.5">item{validItemCount !== 1 ? 's' : ''} ready to submit</p>
+            </div>
+
+            <div className="bg-teal-50 border border-teal-100 rounded-md p-3">
+              <p className="text-[11px] text-teal-700 font-medium">
+                <strong>For Office Use</strong> — After saving, the Engineer or Stores Officer can open this GRS and <em>Acknowledge</em> receipt.
+              </p>
+            </div>
+          </div>
+
+        </div>{/* end flex row */}
+      </div>{/* end body */}
+
+      {/* ── Footer ── */}
+      <div className="flex-shrink-0 border-t border-slate-200 bg-white px-6 py-3.5 flex items-center justify-between">
+        <div className="text-xs text-slate-400">
+          Step {step} of {GRS_STEPS.length} &mdash; <span className="font-medium text-slate-600">{GRS_STEPS[step - 1]}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="px-4 h-9 rounded-md border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+            Cancel
+          </button>
+          {step > 1 && (
+            <button onClick={() => setStep(s => s - 1)} className="px-4 h-9 rounded-md border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              ← Back
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center flex-shrink-0">
-                <ShieldCheck size={18} className="text-teal-300" />
-              </div>
-              <div>
-                <div className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mb-0.5">{isEdit ? `Edit ${editGrs.grs_number || ''}` : 'New Entry'}</div>
-                <h2 className="text-xl font-semibold text-white leading-tight">{isEdit ? 'Edit Goods Receipt by Security' : 'New Goods Receipt by Security'}</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Security gate entry for incoming material delivery</p>
-              </div>
-            </div>
-          </div>
+          )}
+          {step < GRS_STEPS.length ? (
+            <button onClick={() => setStep(s => s + 1)} className="px-5 h-9 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm">
+              Next →
+            </button>
+          ) : (
+            <button onClick={submit} disabled={createMutation.isPending}
+              className="px-5 h-9 rounded-md bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors shadow-sm disabled:opacity-50">
+              {createMutation.isPending ? 'Saving…' : (isEdit ? 'Update GRS →' : 'Create GRS →')}
+            </button>
+          )}
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
-        <div className="max-w-4xl mx-auto p-6 space-y-5">
-
-          {/* Header fields */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-100 flex items-center justify-center">
-                <Truck size={15} className="text-teal-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-800">Entry Details</h3>
-                <p className="text-[11px] text-slate-400">Delivery, vehicle & gate information</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="col-span-2 md:col-span-1 space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Project *</label>
-                <select value={form.project_id} onChange={e => { setField('project_id', e.target.value); setField('po_id', ''); setField('po_number', ''); }} className={inp}>
-                  <option value="">Select project…</option>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Vehicle No.</label>
-                <input type="text" value={form.vehicle_no}
-                  onChange={e => setField('vehicle_no', e.target.value.toUpperCase())}
-                  placeholder="e.g. KA01AB1234" className={inp} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Date & Time *</label>
-                <input type="datetime-local" value={form.date_time}
-                  onChange={e => setField('date_time', e.target.value)} className={inp} />
-              </div>
-
-              {/* PO Link */}
-              <div className="col-span-2 md:col-span-3 space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
-                  Link Purchase Order
-                  <span className="ml-1 text-slate-400 font-normal">(optional — select the PO this delivery is against)</span>
-                </label>
-                <select
-                  value={form.po_id}
-                  onChange={e => handlePoSelect(e.target.value)}
-                  disabled={!form.project_id}
-                  className={`${inp} ${!form.project_id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <option value="">— No PO linked —</option>
-                  {poList.map(po => (
-                    <option key={po.id} value={po.id}>
-                      {po.serial_no_formatted || po.po_number} — {po.vendor_name}
-                    </option>
-                  ))}
-                </select>
-                {!form.project_id && <p className="text-xs text-slate-400">Select a project first to see its POs</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Security In-charge</label>
-                <input type="text" value={form.security_incharge}
-                  onChange={e => setField('security_incharge', e.target.value)}
-                  placeholder="Name of security person" className={inp} />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Remarks</label>
-                <input type="text" value={form.remarks}
-                  onChange={e => setField('remarks', e.target.value)}
-                  placeholder="Any notes…" className={inp} />
-              </div>
-            </div>
-          </div>
-
-          {/* Items */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                  <Package size={15} className="text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Particulars (Items)</h3>
-                  <p className="text-[11px] text-slate-400">Materials received in this delivery</p>
-                </div>
-              </div>
-              <button onClick={addRow}
-                className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition">
-                <Plus size={12} /> Add Row
-              </button>
-            </div>
-
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 w-8">Sl.</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Particulars *</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 w-28">Unit</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 w-28">Quantity</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Remarks</th>
-                    <th className="px-3 py-2 w-8" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="px-3 py-2 text-xs text-slate-400 font-mono">{idx + 1}</td>
-                      <td className="px-3 py-2">
-                        <input value={it.particulars}
-                          onChange={e => updateItem(idx, 'particulars', e.target.value)}
-                          placeholder="Material description"
-                          className={`w-full h-8 rounded-lg px-3 text-xs outline-none transition-all border ${FIELD_HL}`} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <select value={it.unit} onChange={e => updateItem(idx, 'unit', e.target.value)}
-                          className={`w-full h-8 rounded-lg px-2 text-xs outline-none transition-all border ${FIELD_HL}`}>
-                          <option value="">—</option>
-                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <input type="number" value={it.quantity}
-                          onChange={e => updateItem(idx, 'quantity', e.target.value)}
-                          placeholder="0"
-                          className={`w-full h-8 rounded-lg px-3 text-xs text-right font-mono outline-none transition-all border ${FIELD_HL}`} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <input value={it.remarks}
-                          onChange={e => updateItem(idx, 'remarks', e.target.value)}
-                          placeholder="Notes…"
-                          className={`w-full h-8 rounded-lg px-3 text-xs outline-none transition-all border ${FIELD_HL}`} />
-                      </td>
-                      <td className="px-3 py-2">
-                        <button onClick={() => removeRow(idx)} disabled={items.length === 1}
-                          className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 transition">
-                          <X size={12} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Office use note */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-            <p className="text-xs text-slate-500 font-medium">
-              <strong className="text-slate-700">For Office Use Only</strong> — After saving, the Engineer or Stores Officer can open this GRS and click
-              <em> "Acknowledge — Received in Good Condition"</em> to confirm receipt.
-            </p>
-          </div>
-        </div>
-        </div>
-
-        {/* Footer */}
-        <div className="border-t bg-white flex-shrink-0 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">
-              {items.filter(i => i.particulars?.trim()).length} item(s) ready
-            </span>
-            <div className="flex items-center gap-2">
-              <button onClick={onClose}
-                className="px-5 h-9 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
-                Cancel
-              </button>
-              <button onClick={submit} disabled={createMutation.isPending}
-                className="px-6 h-9 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition disabled:opacity-50 shadow-sm">
-                {createMutation.isPending ? 'Saving…' : (isEdit ? 'Update GRS →' : 'Create GRS →')}
-              </button>
-            </div>
-          </div>
-        </div>
+      </div>
     </div>
   );
 }
