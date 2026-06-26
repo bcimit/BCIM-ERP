@@ -243,6 +243,15 @@ router.get('/commitment', async (req, res) => {
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id
       WHERE po.project_id = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM purchase_orders am
+          WHERE am.project_id = $1
+            AND am.status NOT IN ('cancelled','draft')
+            AND (
+              (po.serial_no_formatted IS NOT NULL AND am.serial_no_formatted LIKE po.serial_no_formatted || '-A%')
+              OR (po.po_number IS NOT NULL AND am.po_number LIKE po.po_number || '-A%')
+            )
+        )
       GROUP BY 1 ORDER BY 1
     `, [project_id]);
 
@@ -324,6 +333,15 @@ router.get('/commitment-pos', async (req, res) => {
         LEFT JOIN vendors v ON v.id = po.vendor_id
         WHERE po.project_id = $1
           AND po.status NOT IN ('cancelled','draft')
+          AND NOT EXISTS (
+            SELECT 1 FROM purchase_orders am
+            WHERE am.project_id = $1
+              AND am.status NOT IN ('cancelled','draft')
+              AND (
+                (po.serial_no_formatted IS NOT NULL AND am.serial_no_formatted LIKE po.serial_no_formatted || '-A%')
+                OR (po.po_number IS NOT NULL AND am.po_number LIKE po.po_number || '-A%')
+              )
+          )
       ) sub
       WHERE sub.resolved_cost_head = $2
       ORDER BY sub.po_date DESC
