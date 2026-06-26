@@ -41,6 +41,10 @@ const initTable = async () => {
       total_deductions NUMERIC(12,2) DEFAULT 0,
       net_pay NUMERIC(12,2) DEFAULT 0,
       status TEXT DEFAULT 'draft',
+      submitted_for_review_at TIMESTAMPTZ,
+      reviewed_by UUID REFERENCES users(id),
+      reviewed_at TIMESTAMPTZ,
+      review_remarks TEXT,
       payment_date DATE,
       payment_mode TEXT,
       payment_ref TEXT,
@@ -54,6 +58,16 @@ const initTable = async () => {
     CREATE INDEX IF NOT EXISTS idx_hr_payroll_company_month_year
     ON hr_monthly_payroll(company_id, month, year)
   `);
+  // Migration: add review columns if they don't exist yet
+  for (const col of [
+    'submitted_for_review_at TIMESTAMPTZ',
+    'reviewed_by UUID',
+    'reviewed_at TIMESTAMPTZ',
+    'review_remarks TEXT',
+  ]) {
+    const colName = col.split(' ')[0];
+    await query(`ALTER TABLE hr_monthly_payroll ADD COLUMN IF NOT EXISTS ${col}`).catch(() => {});
+  }
 };
 runSchemaInit('hr-payroll', initTable);
 
@@ -341,16 +355,79 @@ router.put('/:id', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// APPROVE single
+// SUBMIT FOR REVIEW (hr_admin → pending_approval)
 // ═══════════════════════════════════════════════════════════
-router.patch('/:id/approve', async (req, res) => {
+router.patch('/:id/submit', async (req, res) => {
   try {
     const { rows } = await query(
-      `UPDATE hr_monthly_payroll SET status='approved'
+      `UPDATE hr_monthly_payroll
+         SET status='pending_approval', submitted_for_review_at=NOW()
        WHERE id=$1 AND company_id=$2 AND status='draft' RETURNING *`,
       [req.params.id, req.user.company_id]
     );
-    if (!rows.length) return res.status(400).json({ error: 'Cannot approve — already approved or not found' });
+    if (!rows.length) return res.status(400).json({ error: 'Only draft payroll can be submitted for review' });
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// BULK SUBMIT FOR REVIEW (all drafts for month/year)
+router.post('/bulk-submit', async (req, res) => {
+  try {
+    const { month, year } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_monthly_payroll
+         SET status='pending_approval', submitted_for_review_at=NOW()
+       WHERE company_id=$1 AND month=$2 AND year=$3 AND status='draft'
+       RETURNING id`,
+      [req.user.company_id, parseInt(month), parseInt(year)]
+    );
+    res.json({ submitted: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
+// APPROVE single (manager only — pending_approval → approved)
+// ═══════════════════════════════════════════════════════════
+router.patch('/:id/approve', async (req, res) => {
+  try {
+    const { review_remarks } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_monthly_payroll
+         SET status='approved', reviewed_by=$1, reviewed_at=NOW(), review_remarks=$2
+       WHERE id=$3 AND company_id=$4 AND status='pending_approval' RETURNING *`,
+      [req.user.id, review_remarks || null, req.params.id, req.user.company_id]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Payroll must be in pending_approval status to approve' });
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// BULK APPROVE (all pending_approval for month/year)
+router.post('/bulk-approve', async (req, res) => {
+  try {
+    const { month, year, review_remarks } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_monthly_payroll
+         SET status='approved', reviewed_by=$1, reviewed_at=NOW(), review_remarks=$2
+       WHERE company_id=$3 AND month=$4 AND year=$5 AND status='pending_approval'
+       RETURNING id`,
+      [req.user.id, review_remarks || null, req.user.company_id, parseInt(month), parseInt(year)]
+    );
+    res.json({ approved: rows.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// REJECT — send back to draft with remarks
+router.patch('/:id/reject', async (req, res) => {
+  try {
+    const { review_remarks } = req.body;
+    const { rows } = await query(
+      `UPDATE hr_monthly_payroll
+         SET status='draft', reviewed_by=$1, reviewed_at=NOW(), review_remarks=$2
+       WHERE id=$3 AND company_id=$4 AND status='pending_approval' RETURNING *`,
+      [req.user.id, review_remarks || null, req.params.id, req.user.company_id]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Payroll must be pending_approval to reject' });
     res.json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

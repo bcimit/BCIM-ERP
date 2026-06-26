@@ -283,6 +283,44 @@ router.post('/month-baseline', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// DELETE /hr-admin/attendance/month-baseline — revert a bulk baseline run
+// Removes all source='baseline' records for month/year EXCEPT for employees
+// matching keep_name (partial case-insensitive name match).
+router.delete('/month-baseline', async (req, res) => {
+  try {
+    const { month, year, keep_name } = req.body;
+    const m = parseInt(month);
+    const y = parseInt(year);
+    if (!m || !y) return res.status(400).json({ error: 'month and year are required' });
+
+    let keepId = null;
+    if (keep_name) {
+      const { rows } = await query(
+        `SELECT id FROM users WHERE company_id=$1 AND LOWER(name) LIKE $2 AND is_active=TRUE LIMIT 1`,
+        [req.user.company_id, `%${keep_name.toLowerCase()}%`]
+      );
+      if (rows.length) keepId = rows[0].id;
+    }
+
+    const result = await query(
+      `DELETE FROM hr_attendance
+       WHERE company_id = $1
+         AND source = 'baseline'
+         AND EXTRACT(MONTH FROM attendance_date) = $2
+         AND EXTRACT(YEAR  FROM attendance_date) = $3
+         ${keepId ? 'AND user_id != $4' : ''}`,
+      keepId ? [req.user.company_id, m, y, keepId] : [req.user.company_id, m, y]
+    );
+
+    res.json({
+      deleted: result.rowCount,
+      kept_employee: keepId ? keep_name : null,
+      month: m,
+      year: y,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.put('/:id', async (req, res) => {
   try {
     const { status, in_time, out_time, late_minutes, remarks } = req.body;

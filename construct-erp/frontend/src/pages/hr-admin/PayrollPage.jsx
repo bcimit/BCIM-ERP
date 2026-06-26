@@ -24,9 +24,10 @@ const avatarGrad = (n) => AVATAR_GRADS[(n?.charCodeAt(0)||0) % AVATAR_GRADS.leng
 const initials = (n) => (n||'U').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
 
 const STATUS_CFG = {
-  draft:    { label: 'Draft',    bg: 'bg-gray-100',     text: 'text-gray-600',  dot: 'bg-gray-400',    ring: 'ring-gray-200'    },
-  approved: { label: 'Approved', bg: 'bg-blue-50',      text: 'text-blue-700',  dot: 'bg-blue-500',    ring: 'ring-blue-200'    },
-  paid:     { label: 'Paid',     bg: 'bg-emerald-50',   text: 'text-green-700', dot: 'bg-emerald-500', ring: 'ring-emerald-200' },
+  draft:            { label: 'Draft',      bg: 'bg-gray-100',     text: 'text-gray-600',   dot: 'bg-gray-400',    ring: 'ring-gray-200'    },
+  pending_approval: { label: 'Pending',    bg: 'bg-amber-50',     text: 'text-amber-700',  dot: 'bg-amber-400',   ring: 'ring-amber-200'   },
+  approved:         { label: 'Approved',   bg: 'bg-blue-50',      text: 'text-blue-700',   dot: 'bg-blue-500',    ring: 'ring-blue-200'    },
+  paid:             { label: 'Paid',       bg: 'bg-emerald-50',   text: 'text-green-700',  dot: 'bg-emerald-500', ring: 'ring-emerald-200' },
 };
 
 // ── Workflow stepper ──────────────────────────────────────────────────────────
@@ -40,11 +41,13 @@ const STEPS = [
 function getWorkflowStep(records) {
   if (records.length === 0) return 0;
   const allPaid     = records.every(r => r.status === 'paid');
-  const allApproved = records.every(r => r.status !== 'draft');
+  const allApproved = records.every(r => r.status === 'approved' || r.status === 'paid');
+  const hasPending  = records.some(r => r.status === 'pending_approval');
   const hasDraft    = records.some(r => r.status === 'draft');
   if (allPaid)       return 3;
   if (allApproved)   return 2;
-  if (!hasDraft)     return 2;
+  if (hasPending && !hasDraft) return 2;
+  if (hasPending)   return 1;
   return 1;
 }
 
@@ -206,9 +209,21 @@ export default function PayrollPage() {
     onError: e => toast.error(e.response?.data?.error || 'Failed to generate payroll'),
   });
 
+  const submitMut = useMutation({
+    mutationFn: (id) => hrPayrollAPI.submit(id),
+    onSuccess: () => { toast.success('Submitted for manager review'); refetch(); },
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
   const approveMut = useMutation({
     mutationFn: (id) => hrPayrollAPI.approve(id),
     onSuccess: () => { toast.success('Payslip approved'); refetch(); },
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: (id) => hrPayrollAPI.reject(id, { review_remarks: 'Rejected — please review' }),
+    onSuccess: () => { toast.success('Payslip sent back to draft'); refetch(); },
     onError: e => toast.error(e.response?.data?.error || 'Error'),
   });
 
@@ -219,26 +234,33 @@ export default function PayrollPage() {
   });
 
   const hasDraft    = records.some(r => r.status === 'draft');
+  const hasPending  = records.some(r => r.status === 'pending_approval');
   const hasApproved = records.some(r => r.status === 'approved');
   const workflowStep = getWorkflowStep(records);
 
+  const [submittingAll, setSubmittingAll] = useState(false);
+  const submitAll = async () => {
+    setSubmittingAll(true);
+    try {
+      const res = await hrPayrollAPI.bulkSubmit({ month, year });
+      toast.success(`${res.data?.submitted || 0} payslip(s) submitted for review`);
+      refetch();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Failed to submit');
+    } finally {
+      setSubmittingAll(false);
+    }
+  };
+
   const [approvingAll, setApprovingAll] = useState(false);
   const approveAll = async () => {
-    const drafts = records.filter(r => r.status === 'draft');
-    if (!drafts.length) return;
     setApprovingAll(true);
     try {
-      const results = await Promise.allSettled(drafts.map(r => hrPayrollAPI.approve(r.id)));
-      const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      const failed    = results.filter(r => r.status === 'rejected').length;
-      if (failed > 0) {
-        toast.error(`${failed} payslip${failed > 1 ? 's' : ''} failed to approve; ${succeeded} succeeded`);
-      } else {
-        toast.success(`${succeeded} payslip${succeeded > 1 ? 's' : ''} approved`);
-      }
+      const res = await hrPayrollAPI.bulkApprove({ month, year });
+      toast.success(`${res.data?.approved || 0} payslip(s) approved`);
       refetch();
-    } catch {
-      toast.error('Unexpected error while approving payslips');
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Failed to approve');
     } finally {
       setApprovingAll(false);
     }
@@ -310,9 +332,20 @@ export default function PayrollPage() {
             </div>
 
             {hasDraft && (
-              <button onClick={approveAll} disabled={approvingAll}
+              <button onClick={submitAll} disabled={submittingAll}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:shadow-md active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: '#FFF' }}
+              >
+                {submittingAll
+                  ? <><span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block"/> Submitting…</>
+                  : <><FileText className="w-4 h-4" /> Submit for Review</>}
+              </button>
+            )}
+
+            {hasPending && (
+              <button onClick={approveAll} disabled={approvingAll}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:shadow-md active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)', color: '#FFF' }}
               >
                 {approvingAll
                   ? <><span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin inline-block"/> Approving…</>
@@ -445,9 +478,21 @@ export default function PayrollPage() {
                         {st.label}
                       </span>
                       {r.status === 'draft' && (
+                        <button onClick={() => submitMut.mutate(r.id)} title="Submit for review"
+                          className="w-6 h-6 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center justify-center transition-colors">
+                          <FileText className="w-3 h-3" />
+                        </button>
+                      )}
+                      {r.status === 'pending_approval' && (
                         <button onClick={() => approveMut.mutate(r.id)} title="Approve"
                           className="w-6 h-6 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-colors">
                           <Check className="w-3 h-3" />
+                        </button>
+                      )}
+                      {r.status === 'pending_approval' && (
+                        <button onClick={() => rejectMut.mutate(r.id)} title="Reject — send back to draft"
+                          className="w-6 h-6 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors">
+                          <X className="w-3 h-3" />
                         </button>
                       )}
                       {r.status === 'draft' && (
