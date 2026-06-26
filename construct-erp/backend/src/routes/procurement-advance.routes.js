@@ -207,6 +207,11 @@ router.get('/lookup/wos', async (req, res) => {
     }
     const { rows } = await query(`
       SELECT wo.id, wo.wo_number, wo.subject, wo.total_value, wo.wo_date,
+             wo.total_value AS basic_value,
+             COALESCE(wo.total_value, 0) + COALESCE((
+               SELECT SUM(COALESCE(woi.quantity,0) * COALESCE(woi.rate,0) * COALESCE(woi.gst_rate,0) / 100.0)
+               FROM work_order_items woi WHERE woi.wo_id = wo.id
+             ), 0) AS total_with_tax,
              v.name AS vendor_name, v.id AS vendor_id
       FROM work_orders wo
       LEFT JOIN vendors v ON v.id = wo.vendor_id
@@ -236,6 +241,8 @@ router.get('/lookup/pos', async (req, res) => {
     const { rows } = await query(`
       SELECT po.id, COALESCE(po.po_number, po.serial_no_formatted) AS po_number,
              po.po_date, po.grand_total AS total_value,
+             COALESCE(po.sub_total, po.grand_total) AS basic_value,
+             COALESCE(po.grand_total, po.sub_total) AS total_with_tax,
              v.name AS vendor_name, v.id AS vendor_id
       FROM purchase_orders po
       LEFT JOIN vendors v ON v.id = po.vendor_id

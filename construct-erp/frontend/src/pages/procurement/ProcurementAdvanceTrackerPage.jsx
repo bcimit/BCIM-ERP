@@ -129,6 +129,7 @@ const EMPTY = {
   proforma_invoice_date: '', proforma_invoice_number: '',
   ra_bill_no: 'Advance',
   order_value: '', variation_value: '',
+  order_basic_value: '', order_tax_value: '', order_value_basis: 'basic', // basic | with_tax
   advance_value: '', advance_pct: '',
   gross_certified_till_date: '',
   mobilisation_advance_deduction: '',
@@ -185,20 +186,61 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to create'),
   });
 
-  const set = (k, v) => setForm(f => {
-    const nf = { ...f, [k]: v };
-    if (k === 'advance_value' || k === 'order_value') {
-      const adv = parseFloat(k === 'advance_value' ? v : nf.advance_value) || 0;
-      const ord = parseFloat(k === 'order_value' ? v : nf.order_value) || 0;
+  // Recompute advance/net figures after order_value, advance_value or advance_pct
+  // changes. `driver` is the field the user just edited so we know which way to
+  // calculate: editing % drives the amount, editing the amount drives the %.
+  const recalc = (nf, driver) => {
+    const ord = parseFloat(nf.order_value) || 0;
+    if (driver === 'advance_pct') {
+      const pct = parseFloat(nf.advance_pct) || 0;
+      nf.advance_value = ord > 0 && pct ? (ord * pct / 100).toFixed(2) : nf.advance_value;
+    } else if (driver === 'advance_value') {
+      const adv = parseFloat(nf.advance_value) || 0;
       nf.advance_pct = ord > 0 ? ((adv / ord) * 100).toFixed(2) : '';
-      if (!nf.gross_certified_till_date || k === 'advance_value') nf.gross_certified_till_date = adv ? String(adv) : '';
-      const prev = parseFloat(nf.previous_certificates || 0) || 0;
-      const mob = parseFloat(nf.mobilisation_advance_deduction || 0) || 0;
-      const ret = parseFloat(nf.retention_deduction || 0) || 0;
-      const oth = parseFloat(nf.other_deductions || 0) || 0;
-      if (!nf.current_net_payment_due || k === 'advance_value') nf.current_net_payment_due = Math.max(adv - prev - mob - ret - oth, 0).toFixed(2);
+    } else if (driver === 'order_value') {
+      // Order base changed (e.g. Basic ↔ Basic+Tax): keep the % and re-derive the
+      // amount when a % is set; otherwise recompute the % from the existing amount.
+      const pct = parseFloat(nf.advance_pct) || 0;
+      if (pct > 0) nf.advance_value = ord > 0 ? (ord * pct / 100).toFixed(2) : '';
+      else {
+        const adv = parseFloat(nf.advance_value) || 0;
+        nf.advance_pct = ord > 0 && adv ? ((adv / ord) * 100).toFixed(2) : nf.advance_pct;
+      }
+    }
+    const adv = parseFloat(nf.advance_value) || 0;
+    if (!nf.gross_certified_till_date || driver === 'advance_value' || driver === 'advance_pct') {
+      nf.gross_certified_till_date = adv ? String(adv) : '';
+    }
+    const prev = parseFloat(nf.previous_certificates || 0) || 0;
+    const mob = parseFloat(nf.mobilisation_advance_deduction || 0) || 0;
+    const ret = parseFloat(nf.retention_deduction || 0) || 0;
+    const oth = parseFloat(nf.other_deductions || 0) || 0;
+    if (!nf.current_net_payment_due || driver === 'advance_value' || driver === 'advance_pct') {
+      nf.current_net_payment_due = Math.max(adv - prev - mob - ret - oth, 0).toFixed(2);
     }
     return nf;
+  };
+
+  const set = (k, v) => setForm(f => {
+    const nf = { ...f, [k]: v };
+    if (k === 'advance_value' || k === 'order_value' || k === 'advance_pct') return recalc(nf, k);
+    return nf;
+  });
+
+  // Apply the Basic / Basic+Tax order values captured from a selected WO/PO and
+  // set order_value to the currently chosen basis.
+  const applyOrderValues = (basic, withTax) => setForm(f => {
+    const nf = { ...f, order_basic_value: basic || 0, order_tax_value: withTax || 0 };
+    const base = nf.order_value_basis === 'with_tax' ? (withTax || 0) : (basic || 0);
+    nf.order_value = base ? String(base) : '';
+    return recalc(nf, 'order_value');
+  });
+
+  // Switch the advance base between Basic and Basic+Tax.
+  const setBasis = (basis) => setForm(f => {
+    const base = basis === 'with_tax' ? (parseFloat(f.order_tax_value) || 0) : (parseFloat(f.order_basic_value) || 0);
+    const nf = { ...f, order_value_basis: basis, order_value: base ? String(base) : f.order_value };
+    return recalc(nf, 'order_value');
   });
 
   const handleSubmit = (e) => {
@@ -295,7 +337,7 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                         onMouseDown={() => {
                           set('wo_number', w.wo_number);
                           if (w.vendor_name) { set('vendor_name', w.vendor_name); set('vendor_id', w.vendor_id); }
-                          if (w.total_value) set('order_value', w.total_value);
+                          applyOrderValues(Number(w.basic_value ?? w.total_value ?? 0), Number(w.total_with_tax ?? w.total_value ?? 0));
                           if (w.wo_date) set('po_date', w.wo_date.slice(0, 10));
                           setWoSearch(''); setShowWOs(false);
                         }}>
@@ -327,7 +369,7 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                         onMouseDown={() => {
                           set('po_number', p.po_number);
                           if (p.vendor_name) { set('vendor_name', p.vendor_name); set('vendor_id', p.vendor_id); }
-                          if (p.total_value) set('order_value', p.total_value);
+                          applyOrderValues(Number(p.basic_value ?? p.total_value ?? 0), Number(p.total_with_tax ?? p.total_value ?? 0));
                           if (p.po_date) set('po_date', p.po_date.slice(0, 10));
                           setPoSearch(''); setShowPOs(false);
                         }}>
@@ -347,9 +389,24 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
                 <Lbl>PO / WO Date</Lbl>
                 <input type="date" className={F} value={form.po_date} onChange={e => set('po_date', e.target.value)} />
               </div>
-              <div>
+              <div className="lg:col-span-2 xl:col-span-2">
                 <Lbl>Purchase / Work Order Value (₹)</Lbl>
-                <input type="number" className={F} value={form.order_value} onChange={e => set('order_value', e.target.value)} placeholder="0" />
+                <div className="flex items-center gap-2">
+                  <input type="number" className={F} value={form.order_value} onChange={e => set('order_value', e.target.value)} placeholder="0" />
+                  {(parseFloat(form.order_basic_value) > 0 || parseFloat(form.order_tax_value) > 0) && (
+                    <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[12px] shrink-0">
+                      <button type="button" onClick={() => setBasis('basic')}
+                        className={`px-2.5 py-2 ${form.order_value_basis === 'basic' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>Basic</button>
+                      <button type="button" onClick={() => setBasis('with_tax')}
+                        className={`px-2.5 py-2 border-l border-slate-200 ${form.order_value_basis === 'with_tax' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>Basic + Tax</button>
+                    </div>
+                  )}
+                </div>
+                {(parseFloat(form.order_basic_value) > 0 || parseFloat(form.order_tax_value) > 0) && (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Basic: ₹{Number(form.order_basic_value || 0).toLocaleString('en-IN')} &nbsp;·&nbsp; Basic + Tax: ₹{Number(form.order_tax_value || 0).toLocaleString('en-IN')}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -372,7 +429,8 @@ function NewAdvanceModal({ onClose, projects, defaultProjectId }) {
               </div>
               <div>
                 <Lbl>Advance %</Lbl>
-                <input type="number" className={F} value={form.advance_pct} onChange={e => set('advance_pct', e.target.value)} placeholder="Auto-calculated" />
+                <input type="number" className={F} value={form.advance_pct} onChange={e => set('advance_pct', e.target.value)} placeholder="e.g. 10" />
+                <p className="text-[11px] text-slate-400 mt-1">Enter % to auto-fill the advance amount, or type the amount above.</p>
               </div>
               <div>
                 <Lbl>RA Bill No.</Lbl>
