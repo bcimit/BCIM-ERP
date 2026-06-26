@@ -432,33 +432,6 @@ router.get('/pending', async (req, res) => {
       } catch (_) { /* table may not exist */ }
     }
 
-    // ── 9b. Stores Petty Cash entries approved by project head — awaiting final approval ──
-    if (['md','managing_director','ceo','admin','super_admin'].includes(role)) {
-      try {
-        const r = await query(`
-          SELECT e.id,
-                 CONCAT('SL-', e.sl_no) AS ref_no,
-                 e.entry_date AS doc_date,
-                 e.amount,
-                 e.status,
-                 e.created_at,
-                 'ph_approved' AS current_stage,
-                 e.supplier AS party_name,
-                 COALESCE(p.name, 'Site') AS project_name,
-                 u.name AS submitted_by,
-                 CONCAT(e.supplier, ' • ', TO_CHAR(e.amount, 'FM₹99,99,99,999.00'), ' • PH Approved') AS extra_info,
-                 'Petty Cash' AS doc_type, 'petty_cash_entry' AS entity_type,
-                 '/stores/petty-cash' AS action_url
-          FROM stores_petty_cash_entries e
-          LEFT JOIN projects p ON p.id = e.project_id
-          LEFT JOIN users   u ON u.id = e.created_by
-          WHERE e.company_id = $1 AND e.status = 'ph_approved'
-          ORDER BY e.created_at ASC
-          LIMIT 100`, [cid]);
-        items.push(...r.rows);
-      } catch (_) { /* table may not exist */ }
-    }
-
     // ── Sort all by created_at (oldest first — most urgent) ───────────────────
     items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
@@ -700,26 +673,16 @@ router.post('/action', async (req, res) => {
         const pcEntry = entryRes.rows[0];
 
         if (action === 'approve') {
-          if (pcEntry.status === 'Pending') {
-            // Stage 1: project head approves → ph_approved (awaiting final sign-off)
-            await query(
-              `UPDATE stores_petty_cash_entries
-               SET status='ph_approved', ph_approved_by=$1, ph_approved_at=NOW(), updated_at=NOW()
-               WHERE id=$2 AND company_id=$3`,
-              [uid, entity_id, CID(req)]
-            );
-          } else if (pcEntry.status === 'ph_approved') {
-            // Stage 2: final approver (MD/admin) approves → Approved
-            await query(
-              `UPDATE stores_petty_cash_entries
-               SET status='Approved', approved_by=$1, approved_at=NOW(),
-                   approval_remarks=$2, updated_at=NOW()
-               WHERE id=$3 AND company_id=$4`,
-              [uid, comments || null, entity_id, CID(req)]
-            );
-          } else {
+          if (!['Pending', 'ph_approved'].includes(pcEntry.status)) {
             return res.status(400).json({ error: `Entry at status "${pcEntry.status}" cannot be approved` });
           }
+          await query(
+            `UPDATE stores_petty_cash_entries
+             SET status='Approved', approved_by=$1, approved_at=NOW(),
+                 approval_remarks=$2, updated_at=NOW()
+             WHERE id=$3 AND company_id=$4`,
+            [uid, comments || null, entity_id, CID(req)]
+          );
         } else {
           await query(
             `UPDATE stores_petty_cash_entries

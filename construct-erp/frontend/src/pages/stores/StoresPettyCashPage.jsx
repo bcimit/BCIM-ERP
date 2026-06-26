@@ -1079,7 +1079,7 @@ export default function StoresPettyCashPage() {
   const patchStatusMut = useMutation({
     mutationFn: ({ id, status, remarks, rejected_reason }) => storesPettyCashAPI.patchStatus(id, status, remarks, rejected_reason),
     onSuccess: (_, vars) => {
-      toast.success(vars.status === 'Approved' ? 'Entry approved ✓' : vars.status === 'ph_approved' ? 'Sent for final approval ✓' : 'Entry rejected');
+      toast.success(vars.status === 'Approved' ? 'Entry approved ✓' : 'Entry rejected');
       setApprovalModal(null);
       qc.invalidateQueries({ queryKey: ['spc-entries'] });
       qc.invalidateQueries({ queryKey: ['spc-summary'] });
@@ -1590,7 +1590,7 @@ export default function StoresPettyCashPage() {
                             {/* Actions */}
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
-                                {row.status === 'Pending' && (
+                                {['Pending', 'ph_approved'].includes(row.status) && (
                                   <button onClick={() => setApprovalModal({ entry: row, mode: 'approve' })}
                                     className="p-1 rounded-md bg-green-50 text-green-600 hover:bg-green-100" title="Approve">
                                     <ThumbsUp className="w-3.5 h-3.5" />
@@ -1602,7 +1602,7 @@ export default function StoresPettyCashPage() {
                                     <ThumbsDown className="w-3.5 h-3.5" />
                                   </button>
                                 )}
-                                {!['Approved', 'ph_approved'].includes(row.status) && (
+                                {row.status !== 'Approved' && (
                                   <button onClick={() => { setEditEntry(row); setShowEntryForm(true); }}
                                     className="p-1 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Edit">
                                     <Eye className="w-3.5 h-3.5" />
