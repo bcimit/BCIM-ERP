@@ -1009,7 +1009,7 @@ export default function StoresPettyCashPage() {
     let bal = totalReceived;
     return [...entries]
       .sort((a, b) => a.entry_date < b.entry_date ? -1 : a.entry_date > b.entry_date ? 1 : a.sl_no - b.sl_no)
-      .map(r => { if (r.status === 'Approved') bal -= Number(r.amount); return { ...r, runBalance: bal }; });
+      .map(r => { if (r.status !== 'Rejected') bal -= Number(r.amount); return { ...r, runBalance: bal }; });
   }, [entries, totalReceived]);
 
   // Filtered entries for Local Purchase tab
