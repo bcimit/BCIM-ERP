@@ -3,17 +3,12 @@
 import React, { useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { api, projectAPI } from '../../api/client';
+import { storesReportAPI, projectAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
 import {
   ChevronLeft, Download, RefreshCw, Filter, BarChart3,
   AlertCircle, Loader2, Warehouse,
 } from 'lucide-react';
-
-// ── API helper ────────────────────────────────────────────────────────────────
-const storesReportAPI = {
-  get: (type, params) => api.get(`/stores-reports/${type}`, { params }),
-};
 
 // ── Column formatters ─────────────────────────────────────────────────────────
 const fmt = {

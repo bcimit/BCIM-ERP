@@ -2110,4 +2110,8 @@ export const stockVerifAPI = {
   saveItems: (id, items) => api.put(`/stock-verifications/${id}/items`, { items }),
 };
 
+export const storesReportAPI = {
+  get: (type, params) => api.get(`/stores-reports/${type}`, { params }),
+};
+
 export default api;
