@@ -40,6 +40,7 @@ const TYPE_META = {
   'Submittal':        { icon: FileText,     bg: 'bg-purple-100',  text: 'text-purple-700',  border: 'border-purple-200',  dot: '#7C3AED' },
   'Purchase Order':   { icon: ShoppingCart, bg: 'bg-orange-100',  text: 'text-orange-700',  border: 'border-orange-200',  dot: '#EA580C' },
   'MRS':              { icon: Package,      bg: 'bg-cyan-100',    text: 'text-cyan-700',    border: 'border-cyan-200',    dot: '#0891B2' },
+  'Petty Cash':       { icon: Landmark,     bg: 'bg-amber-100',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#D97706' },
 };
 
 // Human-readable status labels for PO and procurement WO

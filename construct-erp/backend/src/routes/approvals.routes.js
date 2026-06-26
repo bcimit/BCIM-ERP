@@ -405,6 +405,33 @@ router.get('/pending', async (req, res) => {
       }
     } catch (_) { /* table may not exist in some environments */ }
 
+    // ── 9. Stores Petty Cash entries pending project head approval ───────────────
+    if (['project_head','project_manager','pm','admin','super_admin'].includes(role)) {
+      try {
+        const r = await query(`
+          SELECT e.id,
+                 CONCAT('SL-', e.sl_no) AS ref_no,
+                 e.entry_date AS doc_date,
+                 e.amount,
+                 e.status,
+                 e.created_at,
+                 'Pending' AS current_stage,
+                 e.supplier AS party_name,
+                 COALESCE(p.name, 'Site') AS project_name,
+                 u.name AS submitted_by,
+                 CONCAT(e.supplier, ' • ', TO_CHAR(e.amount, 'FM₹99,99,99,999.00')) AS extra_info,
+                 'Petty Cash' AS doc_type, 'petty_cash_entry' AS entity_type,
+                 '/stores/petty-cash' AS action_url
+          FROM stores_petty_cash_entries e
+          LEFT JOIN projects p ON p.id = e.project_id
+          LEFT JOIN users   u ON u.id = e.created_by
+          WHERE e.company_id = $1 AND e.status = 'Pending'
+          ORDER BY e.created_at ASC
+          LIMIT 100`, [cid]);
+        items.push(...r.rows);
+      } catch (_) { /* table may not exist */ }
+    }
+
     // ── Sort all by created_at (oldest first — most urgent) ───────────────────
     items.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
@@ -632,6 +659,32 @@ router.post('/action', async (req, res) => {
           await query(
             `UPDATE work_orders SET status = 'rejected', updated_at = NOW() WHERE id = $1`,
             [entity_id]
+          );
+        }
+        break;
+      }
+
+      case 'petty_cash_entry': {
+        const exists = await query(
+          `SELECT id FROM stores_petty_cash_entries WHERE id=$1 AND company_id=$2`,
+          [entity_id, CID(req)]
+        );
+        if (!exists.rows.length) return res.status(404).json({ error: 'Petty cash entry not found' });
+
+        if (action === 'approve') {
+          await query(
+            `UPDATE stores_petty_cash_entries
+             SET status='Approved', approved_by=$1, approved_at=NOW(),
+                 approval_remarks=$2, updated_at=NOW()
+             WHERE id=$3 AND company_id=$4`,
+            [uid, comments || null, entity_id, CID(req)]
+          );
+        } else {
+          await query(
+            `UPDATE stores_petty_cash_entries
+             SET status='Rejected', rejected_reason=$1, updated_at=NOW()
+             WHERE id=$2 AND company_id=$3`,
+            [comments || 'Rejected by project head', entity_id, CID(req)]
           );
         }
         break;
