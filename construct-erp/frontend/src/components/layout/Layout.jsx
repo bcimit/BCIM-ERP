@@ -930,6 +930,69 @@ function useRecentPages() {
   return recents;
 }
 
+// ── MD Quick-Access Bar ───────────────────────────────────────────────────────
+const MD_SHORTCUTS = [
+  { label: 'Projects',          to: '/projects',                        icon: Building2   },
+  { label: 'Material Requests', to: '/procurement/material-request',    icon: ClipboardList },
+  { label: 'Purchase Orders',   to: '/procurement/po',                  icon: ShoppingCart  },
+  { label: 'Work Orders',       to: '/procurement/work-orders',         icon: Hammer        },
+  { label: 'BOQ',               to: '/qs/boq',                          icon: Ruler         },
+  { label: 'Budget',            to: '/procurement/budget-control',      icon: PieChart      },
+  { label: 'RA Bills',          to: '/qs/ra-bills',                     icon: Receipt       },
+];
+
+function MDQuickAccessBar() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isActive = (to) => location.pathname === to || location.pathname.startsWith(to + '/');
+  return (
+    <div
+      className="print:hidden"
+      style={{
+        flexShrink: 0,
+        height: 36,
+        background: 'linear-gradient(90deg, #0f172a 0%, #1e3a8a 60%, #1d4ed8 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '0 14px',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
+      }}
+    >
+      <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap', marginRight: 6 }}>
+        Quick Access
+      </span>
+      {MD_SHORTCUTS.map(({ label, to, icon: Icon }) => {
+        const active = isActive(to);
+        return (
+          <button
+            key={to}
+            onClick={() => navigate(to)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '3px 10px',
+              borderRadius: 6,
+              border: active ? '1px solid rgba(255,255,255,0.45)' : '1px solid rgba(255,255,255,0.12)',
+              background: active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
+              color: active ? '#fff' : 'rgba(255,255,255,0.8)',
+              fontSize: 11, fontWeight: active ? 700 : 500,
+              cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+              transition: 'all 0.12s',
+            }}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#fff'; } }}
+            onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; } }}
+          >
+            <Icon size={11} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Mobile slide-in sidebar ──────────────────────────────────────────────────
 function MobileSidebar({ open, onClose, navGroups, user, matchesPath, recentPages = [] }) {
   const [expandedGroup, setExpandedGroup] = useState(null);
@@ -2128,6 +2191,9 @@ export default function Layout() {
       {/* ── HR secondary nav ── */}
       {pageGroup === 'HR & Admin' && <HREmployeeNav />}
 
+      {/* ── MD Quick-Access Bar ── */}
+      {isMDNavUser && <MDQuickAccessBar />}
+
       {/* ── Page content: sidebar + main ── */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {/* Desktop sidebar — hidden on mobile via CSS */}
@@ -2136,7 +2202,7 @@ export default function Layout() {
           matchesPath={matchesPath}
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed(c => !c)}
-          topOffset={pageGroup ? 80 : 52}
+          topOffset={(pageGroup ? 80 : 52) + (isMDNavUser ? 36 : 0)}
           recentPages={recentPages}
         />
         <main style={{ flex: 1, minWidth: 0, overflow: 'auto', position: 'relative' }} className="print:overflow-visible print:h-auto">
