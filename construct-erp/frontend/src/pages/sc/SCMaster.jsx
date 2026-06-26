@@ -1,8 +1,9 @@
 // src/pages/sc/SCMaster.jsx — Subcontractor Master Register
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { scAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, Edit2, Eye, X, RefreshCw, Users, Phone, Mail,
@@ -496,6 +497,7 @@ function ProfileDrawer({ scId, onClose, onEdit }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SCMaster() {
+  const { selectedProjectId } = useAuthStore();
   const [search,   setSearch]   = useState('');
   const [statusFilter, setStatus] = useState('');
   const [tradeFilter,  setTrade]  = useState('');
@@ -504,8 +506,9 @@ export default function SCMaster() {
   const [drawer, setDrawer]       = useState(null);  // sc_id | null
 
   const { data: list = [], isLoading, refetch } = useQuery({
-    queryKey: ['sc-list', statusFilter, tradeFilter, typeFilter],
+    queryKey: ['sc-list', selectedProjectId, statusFilter, tradeFilter, typeFilter],
     queryFn: () => scAPI.listSC({
+      project_id:      selectedProjectId || undefined,
       status:          statusFilter || undefined,
       trade_type:      tradeFilter  || undefined,
       contractor_type: typeFilter   || undefined,

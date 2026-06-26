@@ -1,7 +1,8 @@
 // src/pages/sc/SCLabour.jsx — Worker Registry + Daily Attendance + NMR (Muster Roll)
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, RefreshCw, HardHat, Users, CheckCircle, X,
@@ -578,8 +579,10 @@ function EsslSyncModal({ onClose }) {
 export default function SCLabour() {
   const [tab, setTab]           = useState('workers');
   const [search, setSearch]     = useState('');
-  const [projectFilter, setProject] = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projectFilter, setProject] = useState(selectedProjectId || '');
   const [scFilter, setScFilter] = useState('');
+  useEffect(() => { setProject(selectedProjectId || ''); }, [selectedProjectId]);
   const [attDate, setAttDate]   = useState(new Date().toISOString().slice(0,10));
   const [showWorkerForm, setShowWorkerForm] = useState(false);
   const [showAttForm,   setShowAttForm]   = useState(false);

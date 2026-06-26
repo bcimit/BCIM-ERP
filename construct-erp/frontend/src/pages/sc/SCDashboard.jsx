@@ -1,6 +1,7 @@
 // src/pages/sc/SCDashboard.jsx — Subcontractor Management Dashboard
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import useAuthStore from '../../store/authStore';
 import { Link } from 'react-router-dom';
 import {
   Users, Briefcase, Receipt, IndianRupee, AlertTriangle,
@@ -104,11 +105,12 @@ function DonutChart({ segments, size = 100, stroke = 22 }) {
 
 export default function SCDashboard() {
   const now = dayjs();
+  const { selectedProjectId } = useAuthStore();
 
   const { data: projects = [] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });
   const { data: dash, isLoading } = useQuery({
-    queryKey: ['sc-dashboard'],
-    queryFn: () => scAPI.dashboard().then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    queryKey: ['sc-dashboard', selectedProjectId],
+    queryFn: () => scAPI.dashboard({ project_id: selectedProjectId || undefined }).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
     staleTime: 0, gcTime: 0, refetchOnMount: 'always',
   });
   // NMR pending count

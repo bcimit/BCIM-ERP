@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import {
   RefreshCw, ShieldCheck, CheckCircle, X,
   MessageSquare, AlertCircle, ChevronRight,
@@ -262,7 +263,9 @@ const STATUS_FILTERS = [
 ];
 
 export default function SCBillApproval() {
-  const [projectFilter, setProject] = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projectFilter, setProject] = useState(selectedProjectId || '');
+  useEffect(() => { setProject(selectedProjectId || ''); }, [selectedProjectId]);
   const [statusFilter,  setStatus]  = useState('submitted');
 
   const { data: projects = [] } = useQuery({

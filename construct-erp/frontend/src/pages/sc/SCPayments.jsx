@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { RefreshCw, CreditCard, Plus, X, CheckCircle, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
@@ -123,7 +124,9 @@ function PaymentModal({ bill, onClose }) {
 }
 
 export default function SCPayments() {
-  const [projectFilter, setProject] = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projectFilter, setProject] = useState(selectedProjectId || '');
+  useEffect(() => { setProject(selectedProjectId || ''); }, [selectedProjectId]);
   const [payModal,   setPayModal]   = useState(null);
   const { data:projects=[] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });
   const { data:bills=[], isLoading, refetch } = useQuery({

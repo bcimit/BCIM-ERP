@@ -1,7 +1,8 @@
 // src/pages/sc/SCDeductions.jsx — Advances, Material Recovery & Retention Management
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, RefreshCw, X, IndianRupee, Shield, Package,
@@ -206,7 +207,9 @@ function RetentionReleaseForm({ wos, retSummary, onClose }) {
 export default function SCDeductions() {
   const qc = useQueryClient();
   const [activeTab, setTab]  = useState('advances');
-  const [projFilt,  setProj] = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projFilt,  setProj] = useState(selectedProjectId || '');
+  useEffect(() => { setProj(selectedProjectId || ''); }, [selectedProjectId]);
   const [modal,     setModal]= useState(null);
 
   const { data: projects=[] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });

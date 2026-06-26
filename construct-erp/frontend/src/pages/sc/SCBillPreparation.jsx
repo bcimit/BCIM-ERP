@@ -1,8 +1,9 @@
 // src/pages/sc/SCBillPreparation.jsx — Subcontractor Bill Preparation
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useReactToPrint } from 'react-to-print';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, RefreshCw, Receipt, Eye, X, ChevronRight,
@@ -1225,8 +1226,10 @@ function BillDetailDrawer({ billId, onClose }) {
 export default function SCBillPreparation() {
   const qc = useQueryClient();
   const [search,        setSearch]      = useState('');
-  const [projectFilter, setProject]     = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projectFilter, setProject]     = useState(selectedProjectId || '');
   const [statusFilter,  setStatus]      = useState('');
+  useEffect(() => { setProject(selectedProjectId || ''); }, [selectedProjectId]);
   const [showForm,      setShowForm]    = useState(false);
   const [drawerBillId,  setDrawerBill]  = useState(null);
 

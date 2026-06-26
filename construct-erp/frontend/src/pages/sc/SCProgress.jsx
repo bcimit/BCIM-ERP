@@ -1,7 +1,8 @@
 // src/pages/sc/SCProgress.jsx — Measurement Book (MB) Entry & Approval
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, RefreshCw, X, Eye, CheckCircle2,
@@ -288,7 +289,9 @@ function MBDrawer({ mbId, onClose }) {
 
 export default function SCProgress() {
   const [search,  setSearch]  = useState('');
-  const [projFilt,setProj]    = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projFilt,setProj]    = useState(selectedProjectId || '');
+  useEffect(() => { setProj(selectedProjectId || ''); }, [selectedProjectId]);
   const [statFilt,setStat]    = useState('');
   const [showForm,setShowForm]= useState(false);
   const [drawer,  setDrawer]  = useState(null);

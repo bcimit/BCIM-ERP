@@ -1,7 +1,8 @@
 // src/pages/sc/SCReports.jsx — Enterprise SC Reports
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { scAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, Theme } from '../../theme';
 import { BarChart3, RefreshCw, Download, Search } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -40,8 +41,10 @@ function exportCSV(rows, name) {
 
 export default function SCReports() {
   const [activeReport, setReport] = useState('summary');
-  const [projectFilter, setProject] = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [projectFilter, setProject] = useState(selectedProjectId || '');
   const [scFilter, setSC]           = useState('');
+  useEffect(() => { setProject(selectedProjectId || ''); }, [selectedProjectId]);
   const [woFilter, setWO]           = useState('');
   const [fromDate, setFrom]         = useState('');
   const [toDate,   setTo]           = useState('');

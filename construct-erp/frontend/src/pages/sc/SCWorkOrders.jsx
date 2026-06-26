@@ -1,7 +1,8 @@
 // src/pages/sc/SCWorkOrders.jsx — Unified Work Order Management (Legacy + New SC Module)
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scAPI, projectAPI, boqAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, Eye, Edit2, CheckCircle, X, RefreshCw,
@@ -667,7 +668,9 @@ function LegacyWODrawer({ woId, woRow, onClose }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function SCWorkOrders() {
   const [search,      setSearch]   = useState('');
-  const [projFilt,    setProj]     = useState(sessionStorage.getItem('selectedProjectId')||'');
+  const { selectedProjectId } = useAuthStore();
+  const [projFilt,    setProj]     = useState(selectedProjectId || '');
+  useEffect(() => { setProj(selectedProjectId || ''); }, [selectedProjectId]);
   const [sourceTab,   setSource]   = useState('all');   // all | sc_module | legacy
   const [statusFilt,  setStatus]   = useState('');
   const [typeFilt,    setType]     = useState('');
