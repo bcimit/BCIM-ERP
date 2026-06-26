@@ -1240,37 +1240,41 @@ export default function StoresPettyCashPage() {
 
         {/* ══ LOCAL PURCHASE ══ */}
         {tab === 'local' && (
-          <div>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">Local Purchase Log</h2>
-                <p className="text-sm text-slate-500 mt-0.5">{filteredEntries.length} entries · Total: <span className="font-semibold text-slate-700">{inr(filteredEntries.reduce((s, r) => s + Number(r.amount), 0))}</span></p>
+          <div className="space-y-4">
+            {/* ── Toolbar ── */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white"
+                  placeholder="Search supplier or material…" value={filters.search} onChange={e => setFilter('search', e.target.value)} />
               </div>
-              <div className="flex gap-2 flex-wrap items-center">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white w-48 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    placeholder="Search supplier / material…" value={filters.search} onChange={e => setFilter('search', e.target.value)} />
-                </div>
-                <select className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                  {['All', 'Pending', 'ph_approved', 'Approved', 'Rejected'].map(s => <option key={s} value={s}>{s === 'ph_approved' ? 'PH Approved' : s}</option>)}
-                </select>
-                <select className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-                  {['All', ...CATEGORIES].map(c => <option key={c}>{c}</option>)}
-                </select>
-                <input type="date" className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  value={filters.from} onChange={e => setFilter('from', e.target.value)} title="From date" />
-                <input type="date" className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  value={filters.to} onChange={e => setFilter('to', e.target.value)} title="To date" />
+              <select className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                {['All', 'Pending', 'ph_approved', 'Approved', 'Rejected'].map(s => <option key={s} value={s}>{s === 'ph_approved' ? 'PH Approved' : s}</option>)}
+              </select>
+              <select className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+                <option value="All">All Categories</option>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <span>From</span>
+                <input type="date" className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  value={filters.from} onChange={e => setFilter('from', e.target.value)} />
+                <span>To</span>
+                <input type="date" className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  value={filters.to} onChange={e => setFilter('to', e.target.value)} />
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-slate-400 whitespace-nowrap">{filteredEntries.length} entries · <span className="font-semibold text-slate-600">{inr(filteredEntries.filter(r=>r.status!=='Rejected').reduce((s,r)=>s+Number(r.amount),0))}</span></span>
                 <button onClick={() => { setEditEntry(null); setShowEntryForm(true); }}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
-                  <Plus className="w-4 h-4" /> New Entry
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 shadow-sm whitespace-nowrap">
+                  <Plus className="w-3.5 h-3.5" /> New Entry
                 </button>
               </div>
             </div>
 
+            {/* ── Table ── */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {loadingEntries ? (
                 <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /></div>
@@ -1286,101 +1290,121 @@ export default function StoresPettyCashPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        {['Sl No', 'Date', 'Supplier', 'Materials', 'Invoice', 'Amount (₹)', 'Category', 'Status', 'Voucher', 'Bill', 'Running Bal', 'Actions'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+                        {['#', 'Date', 'Supplier & Materials', 'Invoice', 'Amount', 'Category', 'Status', 'Docs', 'Balance', 'Actions'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-slate-100">
                       {filteredEntries.map((row, i) => {
                         const mat = row.items || [];
-                        const matSummary = mat.length ? (mat.length === 1 ? mat[0].material_name : `${mat[0].material_name} +${mat.length - 1}`) : '—';
+                        const matSummary = mat.length ? (mat.length === 1 ? mat[0].material_name : `${mat[0].material_name} +${mat.length - 1}`) : null;
                         const cat = categoryOf(mat[0]?.material_name || row.supplier || '');
                         const isDup = dupInvoices[row.invoice_no];
                         const lowBal = row.runBalance < 5000 && row.runBalance >= 0;
                         const negBal = row.runBalance < 0;
+                        const isHighlight = row.id === highlightId;
                         return (
                           <tr key={row.id}
-                            ref={row.id === highlightId ? highlightRef : null}
-                            className={clsx('hover:bg-slate-50 transition-colors',
-                              row.id === highlightId ? 'ring-2 ring-inset ring-indigo-400 bg-indigo-50' : i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                            ref={isHighlight ? highlightRef : null}
+                            className={clsx('transition-colors group',
+                              isHighlight ? 'bg-indigo-50 ring-2 ring-inset ring-indigo-400' :
+                              i % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/40 hover:bg-slate-50'
                             )}>
-                            <td className="px-4 py-3 font-mono text-xs font-semibold text-indigo-700">{row.sl_no}</td>
-                            <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{dayjs(row.entry_date).format('DD MMM YY')}</td>
-                            <td className="px-4 py-3 font-medium text-slate-800 max-w-[140px] truncate">{row.supplier}</td>
-                            <td className="px-4 py-3 text-slate-500 text-xs max-w-[200px] truncate" title={mat.map(i => i.material_name).join(', ')}>{matSummary}</td>
-                            <td className="px-4 py-3 text-slate-500 text-xs font-mono">
-                              {isDup && <span title="Duplicate invoice" className="mr-1 text-red-500">⚠</span>}
-                              {row.invoice_no || '—'}
+                            {/* # */}
+                            <td className="px-4 py-3 font-mono text-xs font-bold text-indigo-600 w-10">{row.sl_no}</td>
+                            {/* Date */}
+                            <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{dayjs(row.entry_date).format('DD MMM YY')}</td>
+                            {/* Supplier + Materials */}
+                            <td className="px-4 py-3 max-w-[220px]">
+                              <p className="font-semibold text-slate-800 truncate text-sm">{row.supplier}</p>
+                              {matSummary && <p className="text-xs text-slate-400 truncate mt-0.5" title={mat.map(m=>m.material_name).join(', ')}>{matSummary}</p>}
                             </td>
-                            <td className="px-4 py-3 font-mono font-semibold text-slate-800 text-right whitespace-nowrap">
-                              {row.status === 'Rejected' ? <span className="text-slate-400 line-through">{inr(row.amount)}</span> : inr(row.amount)}
+                            {/* Invoice */}
+                            <td className="px-4 py-3 text-xs font-mono text-slate-500">
+                              {isDup && <span title="Duplicate invoice" className="inline-block mr-1 text-red-500 font-bold">⚠</span>}
+                              {row.invoice_no || <span className="text-slate-300">—</span>}
                             </td>
+                            {/* Amount */}
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              {row.status === 'Rejected'
+                                ? <span className="font-mono text-xs text-slate-400 line-through">{inr(row.amount)}</span>
+                                : <span className="font-mono font-bold text-slate-800">{inr(row.amount)}</span>}
+                            </td>
+                            {/* Category */}
                             <td className="px-4 py-3"><CatBadge cat={cat} /></td>
-                            <td className="px-4 py-3"><Badge label={row.status} /></td>
-                            <td className="px-4 py-3 text-center">
-                              {row.voucher_file_url
-                                ? <button onClick={() => openAttachment(row.voucher_file_url)} title={row.voucher_file_name || 'View Voucher'}
-                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800">
-                                    <Paperclip className="w-3.5 h-3.5" />
-                                  </button>
-                                : <span className="text-slate-300 text-xs">—</span>}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {row.bill_file_url
-                                ? <button onClick={() => openAttachment(row.bill_file_url)} title={row.bill_file_name || 'View Bill'}
-                                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800">
-                                    <Paperclip className="w-3.5 h-3.5" />
-                                  </button>
-                                : <span className="text-slate-300 text-xs">—</span>}
-                            </td>
-                            <td className={clsx('px-4 py-3 font-mono text-xs font-bold text-right whitespace-nowrap', negBal ? 'text-red-600' : lowBal ? 'text-amber-600' : 'text-green-700')}>
-                              {inr(row.runBalance)}{lowBal && !negBal && ' ⚠'}
-                            </td>
+                            {/* Status */}
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-1">
+                              <Badge label={row.status} />
+                              {row.status === 'ph_approved' && row.ph_approved_by_name && (
+                                <p className="text-[10px] text-blue-500 mt-1 whitespace-nowrap">by {row.ph_approved_by_name}</p>
+                              )}
+                              {row.status === 'Approved' && row.approved_by_name && (
+                                <p className="text-[10px] text-green-600 mt-1 whitespace-nowrap">by {row.approved_by_name}</p>
+                              )}
+                              {row.status === 'Rejected' && row.rejected_reason && (
+                                <p className="text-[10px] text-red-500 mt-1 truncate max-w-[100px]" title={row.rejected_reason}>{row.rejected_reason}</p>
+                              )}
+                            </td>
+                            {/* Docs */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                {row.voucher_file_url
+                                  ? <button onClick={() => openAttachment(row.voucher_file_url)} title="View Voucher"
+                                      className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded px-1.5 py-0.5">
+                                      <Paperclip className="w-2.5 h-2.5" /> V
+                                    </button>
+                                  : <span className="text-slate-200 text-xs">—</span>}
+                                {row.bill_file_url
+                                  ? <button onClick={() => openAttachment(row.bill_file_url)} title="View Bill"
+                                      className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded px-1.5 py-0.5">
+                                      <Paperclip className="w-2.5 h-2.5" /> B
+                                    </button>
+                                  : null}
+                              </div>
+                            </td>
+                            {/* Balance */}
+                            <td className={clsx('px-4 py-3 font-mono text-xs font-bold text-right whitespace-nowrap', negBal ? 'text-red-600' : lowBal ? 'text-amber-600' : 'text-slate-500')}>
+                              {inr(row.runBalance)}{lowBal && !negBal && <span className="ml-1 text-amber-500">⚠</span>}
+                            </td>
+                            {/* Actions */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
                                 {row.status === 'Pending' && (
-                                  <button onClick={() => setApprovalModal({ entry: row, mode: 'approve' })} title="Approve"
-                                    className="text-[10px] font-bold text-green-700 bg-green-100 hover:bg-green-200 rounded px-1.5 py-0.5">✓ Approve</button>
+                                  <button onClick={() => setApprovalModal({ entry: row, mode: 'approve' })}
+                                    className="p-1 rounded-md bg-green-50 text-green-600 hover:bg-green-100" title="Approve">
+                                    <ThumbsUp className="w-3.5 h-3.5" />
+                                  </button>
                                 )}
                                 {!['Approved', 'Rejected'].includes(row.status) && (
-                                  <button onClick={() => setApprovalModal({ entry: row, mode: 'reject' })} title="Reject"
-                                    className="text-[10px] font-bold text-red-700 bg-red-100 hover:bg-red-200 rounded px-1.5 py-0.5">✗ Reject</button>
+                                  <button onClick={() => setApprovalModal({ entry: row, mode: 'reject' })}
+                                    className="p-1 rounded-md bg-red-50 text-red-500 hover:bg-red-100" title="Reject">
+                                    <ThumbsDown className="w-3.5 h-3.5" />
+                                  </button>
                                 )}
                                 {!['Approved', 'ph_approved'].includes(row.status) && (
                                   <button onClick={() => { setEditEntry(row); setShowEntryForm(true); }}
-                                    className="text-[10px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded px-1.5 py-0.5">Edit</button>
+                                    className="p-1 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100" title="Edit">
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
                                 )}
                                 <button onClick={() => { if (window.confirm('Delete this entry?')) deleteEntryMut.mutate(row.id); }}
-                                  className="text-red-400 hover:text-red-600 ml-1"><Trash2 className="w-3 h-3" /></button>
+                                  className="p-1 rounded-md text-slate-300 hover:bg-red-50 hover:text-red-500" title="Delete">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
-                              {row.status === 'ph_approved' && row.ph_approved_by_name && (
-                                <p className="text-[9px] text-blue-600 mt-1 whitespace-nowrap">
-                                  ✓ PH: {row.ph_approved_by_name} · {dayjs(row.ph_approved_at).format('DD MMM')}
-                                </p>
-                              )}
-                              {row.status === 'Approved' && row.approved_by_name && (
-                                <p className="text-[9px] text-green-600 mt-1 whitespace-nowrap">
-                                  ✓ {row.approved_by_name} · {dayjs(row.approved_at).format('DD MMM')}
-                                </p>
-                              )}
-                              {row.status === 'Rejected' && row.rejected_reason && (
-                                <p className="text-[9px] text-red-500 mt-1 max-w-[120px] truncate" title={row.rejected_reason}>
-                                  ✗ {row.rejected_reason}
-                                </p>
-                              )}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-slate-100 border-t-2 border-slate-200">
-                        <td colSpan={5} className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase">Total ({filteredEntries.length} entries)</td>
+                      <tr className="bg-slate-50 border-t-2 border-slate-200">
+                        <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">{filteredEntries.length} entries</td>
                         <td className="px-4 py-3 font-mono font-bold text-indigo-700 text-right">{inr(filteredEntries.filter(r => r.status !== 'Rejected').reduce((s, r) => s + Number(r.amount), 0))}</td>
-                        <td colSpan={4} />
-                        <td className={clsx('px-4 py-3 font-mono font-bold text-right', balanceColor)}>{inr(cashInHand)}</td>
+                        <td colSpan={3} />
+                        <td className={clsx('px-4 py-3 font-mono font-bold text-right text-sm', balanceColor)}>{inr(cashInHand)} in hand</td>
                         <td />
                       </tr>
                     </tfoot>
@@ -1388,7 +1412,6 @@ export default function StoresPettyCashPage() {
                 </div>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-2">Click ✓ / ✗ to approve or reject. Running balance is based on total HO receipts minus approved entries.</p>
           </div>
         )}
 
