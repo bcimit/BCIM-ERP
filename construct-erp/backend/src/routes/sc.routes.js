@@ -314,7 +314,7 @@ router.get('/dashboard', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════
 router.get('/subcontractors', async (req, res) => {
   try {
-    const { search, status, trade_type, contractor_type } = req.query;
+    const { search, status, trade_type, contractor_type, project_id } = req.query;
     let sql = `SELECT sc.*, u.name AS created_by_name,
       COALESCE(stats.wo_count,0) AS wo_count,
       COALESCE(stats.total_billed,0) AS total_billed,
@@ -332,6 +332,7 @@ router.get('/subcontractors', async (req, res) => {
       ) stats ON stats.sc_id=sc.id
       WHERE sc.company_id=$1`;
     const params=[CID(req)]; let i=2;
+    if (project_id)      { sql+=` AND sc.id IN (SELECT DISTINCT sc_id FROM sc_work_orders WHERE project_id=$${i++} AND company_id=$1)`; params.push(project_id); }
     if (status)          { sql+=` AND sc.status=$${i++}`; params.push(status); }
     if (trade_type)      { sql+=` AND sc.trade_type=$${i++}`; params.push(trade_type); }
     if (contractor_type) { sql+=` AND sc.contractor_type=$${i++}`; params.push(contractor_type); }
