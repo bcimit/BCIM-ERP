@@ -189,6 +189,51 @@ const EMPTY_ITEM  = { material_name: '', unit: "NO'S", quantity: '' };
 const EMPTY_ENTRY = { project_id: '', entry_date: dayjs().format('YYYY-MM-DD'), supplier: '', invoice_no: '', basic_amount: '', gst_pct: '0', gst_amount: '', amount: '', remarks: '', bill_file_url: '', bill_file_name: '', voucher_file_url: '', voucher_file_name: '' };
 const GST_RATES = [0, 5, 12, 18, 28];
 
+function SectionLabel({ icon: Icon, color, label }) {
+  return (
+    <div className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg mb-3', color)}>
+      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+      <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
+    </div>
+  );
+}
+
+function FileSlot({ label, fileUrl, fileName, uploading, onUpload, onView, onRemove, isUploading }) {
+  return (
+    <div>
+      <Lbl>{label}</Lbl>
+      {fileUrl ? (
+        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+            <Paperclip className="w-4 h-4 text-emerald-600" />
+          </div>
+          <span className="text-sm text-emerald-700 font-medium flex-1 truncate">{fileName || 'File attached'}</span>
+          <button type="button" onClick={onView}
+            className="flex items-center gap-1 text-xs text-emerald-700 font-semibold hover:text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-lg transition-colors">
+            <Eye className="w-3 h-3" /> View
+          </button>
+          <button type="button" onClick={onRemove}
+            className="w-7 h-7 rounded-lg hover:bg-red-100 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <label className={clsx('group flex items-center gap-3 px-4 py-3 border-2 border-dashed rounded-xl cursor-pointer transition-all',
+          isUploading ? 'opacity-50 pointer-events-none border-slate-200' : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50')}>
+          <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center flex-shrink-0 transition-colors">
+            <Upload className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-600">{isUploading ? 'Uploading…' : `Attach ${label}`}</p>
+            <p className="text-xs text-slate-400">PDF, image — max 10 MB</p>
+          </div>
+          <input type="file" accept="image/*,.pdf" className="hidden" onChange={onUpload} disabled={isUploading} />
+        </label>
+      )}
+    </div>
+  );
+}
+
 function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, existingInvoices, onClose }) {
   const qc = useQueryClient();
   const isEdit = !!initial?.id;
@@ -208,7 +253,7 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
       ? initial.items.map(it => ({ material_name: it.material_name, unit: it.unit, quantity: it.quantity }))
       : [{ ...EMPTY_ITEM }]
   );
-  const [uploading, setUploading] = useState(null); // 'bill' | 'voucher' | null
+  const [uploading, setUploading] = useState(null);
 
   const dupWarn = useMemo(() => {
     const inv = form.invoice_no?.trim();
@@ -224,7 +269,6 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
   const addItem     = () => setItems(p => [...p, { ...EMPTY_ITEM }]);
   const removeItem  = (idx) => setItems(p => p.filter((_, i) => i !== idx));
 
-  // Derive category from first material name for budget warning
   const detectedCat = categoryOf(items[0]?.material_name || form.supplier || '');
   const catCap   = budgets?.[detectedCat] ?? 0;
   const catSpent = catSpend?.[detectedCat] ?? 0;
@@ -279,111 +323,125 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4 overflow-auto">
+    <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-gradient-to-r from-indigo-50 to-white rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-              <ShoppingBag className="w-4 h-4 text-indigo-600" />
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm">
+              <ShoppingBag className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-slate-900">{isEdit ? `Edit Entry — Sl No ${initial.sl_no}` : 'New Local Purchase Entry'}</p>
+              <p className="font-bold text-slate-900 text-base">{isEdit ? `Edit Entry — Sl No ${initial.sl_no}` : 'New Local Purchase Entry'}</p>
               <p className="text-xs text-slate-500 mt-0.5">Record a local purchase paid from petty cash</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div><Lbl req>Date</Lbl><input type="date" className={F} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} required /></div>
-            <div><Lbl>Project</Lbl>
-              <select className={FS} value={form.project_id} onChange={e => set('project_id', e.target.value)}>
-                <option value="">— Not linked —</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+          {/* Section: Basic Info */}
+          <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+            <SectionLabel icon={BookOpen} color="bg-indigo-50 text-indigo-700" label="Purchase Details" />
+            <div className="grid grid-cols-2 gap-3">
+              <div><Lbl req>Date</Lbl><input type="date" className={F} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} required /></div>
+              <div><Lbl>Project</Lbl>
+                <select className={FS} value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+                  <option value="">— Not linked —</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div><Lbl req>Supplier Name</Lbl><input className={F} placeholder="e.g. Ponam Hardware" value={form.supplier} onChange={e => set('supplier', e.target.value)} required /></div>
+              <div>
+                <Lbl>Invoice No.</Lbl>
+                <input className={F} placeholder="e.g. 49045" value={form.invoice_no} onChange={e => set('invoice_no', e.target.value)} />
+                {dupWarn && (
+                  <div className="flex items-center gap-2 mt-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    Already in entry #{dupWarn.sl_no} — {dupWarn.supplier} · {dayjs(dupWarn.entry_date).format('DD MMM YY')}
+                  </div>
+                )}
+              </div>
             </div>
-            <div><Lbl req>Supplier</Lbl><input className={F} placeholder="e.g. Ponam Hardware" value={form.supplier} onChange={e => set('supplier', e.target.value)} required /></div>
-            <div>
-              <Lbl>Invoice No.</Lbl>
-              <input className={F} placeholder="49045" value={form.invoice_no} onChange={e => set('invoice_no', e.target.value)} />
-              {dupWarn && (
-                <div className="flex items-center gap-2 mt-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                  Already in entry #{dupWarn.sl_no} — {dupWarn.supplier} · {dayjs(dupWarn.entry_date).format('DD MMM YY')}
-                </div>
-              )}
+          </div>
+
+          {/* Section: Amount */}
+          <div className="px-6 py-4 border-b border-slate-100">
+            <SectionLabel icon={Wallet} color="bg-green-50 text-green-700" label="Amount & GST" />
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Lbl req>Basic Amount (₹)</Lbl>
+                <input type="number" step="0.01" className={F} placeholder="0.00"
+                  value={form.basic_amount}
+                  onChange={e => {
+                    const basic = parseFloat(e.target.value) || 0;
+                    const gstAmt = +(basic * (parseFloat(form.gst_pct) || 0) / 100).toFixed(2);
+                    const total  = +(basic + gstAmt).toFixed(2);
+                    setForm(f => ({ ...f, basic_amount: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
+                  }} />
+              </div>
+              <div>
+                <Lbl>GST %</Lbl>
+                <select className={FS}
+                  value={form.gst_pct}
+                  onChange={e => {
+                    const pct   = parseFloat(e.target.value) || 0;
+                    const basic = parseFloat(form.basic_amount) || 0;
+                    const gstAmt = +(basic * pct / 100).toFixed(2);
+                    const total  = +(basic + gstAmt).toFixed(2);
+                    setForm(f => ({ ...f, gst_pct: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
+                  }}>
+                  {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
+                </select>
+              </div>
+              <div>
+                <Lbl>GST Amount (₹)</Lbl>
+                <input type="number" step="0.01" className={clsx(F, 'bg-slate-50 text-slate-500')} placeholder="0.00" value={form.gst_amount} readOnly tabIndex={-1} />
+              </div>
             </div>
-            {/* GST breakdown */}
-            <div>
-              <Lbl req>Basic Amount (₹)</Lbl>
-              <input type="number" step="0.01" className={F} placeholder="0.00"
-                value={form.basic_amount}
-                onChange={e => {
-                  const basic = parseFloat(e.target.value) || 0;
-                  const gstAmt = +(basic * (parseFloat(form.gst_pct) || 0) / 100).toFixed(2);
-                  const total  = +(basic + gstAmt).toFixed(2);
-                  setForm(f => ({ ...f, basic_amount: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
-                }}
-              />
-            </div>
-            <div>
-              <Lbl>GST %</Lbl>
-              <select className={FS}
-                value={form.gst_pct}
-                onChange={e => {
-                  const pct   = parseFloat(e.target.value) || 0;
-                  const basic = parseFloat(form.basic_amount) || 0;
-                  const gstAmt = +(basic * pct / 100).toFixed(2);
-                  const total  = +(basic + gstAmt).toFixed(2);
-                  setForm(f => ({ ...f, gst_pct: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
-                }}>
-                {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
-              </select>
-            </div>
-            <div>
-              <Lbl>GST Amount (₹)</Lbl>
-              <input type="number" step="0.01" className={F + ' bg-slate-50'} placeholder="0.00"
-                value={form.gst_amount} readOnly tabIndex={-1} />
-            </div>
-            <div>
-              <Lbl req>Total Amount (₹)</Lbl>
-              <input type="number" step="0.01" className={F + ' font-semibold bg-slate-50'} placeholder="0.00"
-                value={form.amount} readOnly tabIndex={-1} />
-              {/* Budget warning */}
+            {/* Total — prominent */}
+            <div className={clsx('mt-3 rounded-xl px-4 py-3 flex items-center justify-between',
+              budgetOver ? 'bg-red-50 border border-red-200' : budgetWarning ? 'bg-amber-50 border border-amber-200' : 'bg-indigo-50 border border-indigo-200')}>
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
+                <p className={clsx('text-2xl font-bold mt-0.5', budgetOver ? 'text-red-700' : 'text-indigo-700')}>
+                  {form.amount ? inr(form.amount) : '₹ 0.00'}
+                </p>
+              </div>
               {budgetWarning && (
-                <div className={clsx('flex items-center gap-2 mt-1.5 text-xs font-medium px-3 py-1.5 rounded-lg',
-                  budgetOver ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200')}>
-                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                  {budgetOver
-                    ? `Over ${detectedCat} budget! Cap: ${inr(catCap)} · Running total: ${inr(newTotal)} (${inr(newTotal - catCap)} over)`
-                    : `Near ${detectedCat} budget limit: ${inr(newTotal)} of ${inr(catCap)} (${budgetPct.toFixed(0)}% used)`}
+                <div className="flex items-center gap-2 text-xs font-medium max-w-[200px] text-right">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                  <span className={budgetOver ? 'text-red-700' : 'text-amber-700'}>
+                    {budgetOver
+                      ? `${inr(newTotal - catCap)} over ${detectedCat} budget`
+                      : `${budgetPct.toFixed(0)}% of ${detectedCat} budget used`}
+                  </span>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-              <Package className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Materials Purchased</span>
-              <button type="button" onClick={addItem} className="ml-auto text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5" /> Add Line
+          {/* Section: Materials */}
+          <div className="px-6 py-4 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <SectionLabel icon={Package} color="bg-slate-100 text-slate-600" label="Materials Purchased" />
+              <button type="button" onClick={addItem} className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors -mt-3">
+                <Plus className="w-3 h-3" /> Add Line
               </button>
             </div>
-            <div className="overflow-x-auto">
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
+                  <tr className="bg-slate-50 border-b border-slate-100">
                     {['#', 'Material Description', 'Unit', 'Qty', ''].map(h => (
-                      <th key={h} className="px-3 py-2 text-left font-medium text-slate-400 uppercase tracking-wider">{h}</th>
+                      <th key={h} className="px-3 py-2 text-left font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="px-3 py-2 text-slate-400 w-8">{idx + 1}</td>
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 text-slate-400 w-7 font-mono">{idx + 1}</td>
                       <td className="px-2 py-1.5 min-w-[180px]">
                         <input className={F} placeholder="Material name" value={it.material_name} onChange={e => updateItem(idx, 'material_name', e.target.value)} />
                       </td>
@@ -393,9 +451,9 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
                       <td className="px-2 py-1.5 w-24">
                         <input type="number" step="any" className={F} placeholder="0" value={it.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} />
                       </td>
-                      <td className="px-2 py-1.5 w-8">
+                      <td className="px-2 py-1.5 w-8 text-center">
                         {items.length > 1 && (
-                          <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button type="button" onClick={() => removeItem(idx)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                         )}
                       </td>
                     </tr>
@@ -405,60 +463,32 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
             </div>
           </div>
 
-          <div><Lbl>Remarks</Lbl>
-            <textarea className={clsx(F, 'resize-none')} rows={2} placeholder="Any additional notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
-          </div>
-
-          {/* ── Voucher Upload ── */}
-          <div>
-            <Lbl>Attach Petty Cash Voucher</Lbl>
-            {form.voucher_file_url ? (
-              <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
-                <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-sm text-green-700 font-medium flex-1 truncate">{form.voucher_file_name || 'Voucher attached'}</span>
-                <button type="button" onClick={() => openAttachment(form.voucher_file_url)}
-                  className="flex items-center gap-1 text-xs text-green-700 font-semibold hover:text-green-900 flex-shrink-0">
-                  <Eye className="w-3.5 h-3.5" /> View
-                </button>
-                <button type="button" onClick={() => { set('voucher_file_url', ''); set('voucher_file_name', ''); }}
-                  className="text-red-400 hover:text-red-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            ) : (
-              <label className={clsx('flex items-center gap-3 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-indigo-300 hover:bg-indigo-50 transition-colors', uploading && 'opacity-50 pointer-events-none')}>
-                <Upload className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <span className="text-sm text-slate-500">{uploading === 'voucher' ? 'Uploading…' : 'Click to attach voucher photo or PDF (max 10 MB)'}</span>
-                <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange('voucher')} disabled={!!uploading} />
-              </label>
-            )}
-          </div>
-
-          {/* ── Bill Upload ── */}
-          <div>
-            <Lbl>Attach Bill</Lbl>
-            {form.bill_file_url ? (
-              <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
-                <Paperclip className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-sm text-green-700 font-medium flex-1 truncate">{form.bill_file_name || 'Bill attached'}</span>
-                <button type="button" onClick={() => openAttachment(form.bill_file_url)}
-                  className="flex items-center gap-1 text-xs text-green-700 font-semibold hover:text-green-900 flex-shrink-0">
-                  <Eye className="w-3.5 h-3.5" /> View
-                </button>
-                <button type="button" onClick={() => { set('bill_file_url', ''); set('bill_file_name', ''); }}
-                  className="text-red-400 hover:text-red-600 flex-shrink-0"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            ) : (
-              <label className={clsx('flex items-center gap-3 px-4 py-2.5 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-indigo-300 hover:bg-indigo-50 transition-colors', uploading && 'opacity-50 pointer-events-none')}>
-                <Upload className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <span className="text-sm text-slate-500">{uploading === 'bill' ? 'Uploading…' : 'Click to attach bill photo or PDF (max 10 MB)'}</span>
-                <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange('bill')} disabled={!!uploading} />
-              </label>
-            )}
+          {/* Section: Remarks + Attachments */}
+          <div className="px-6 py-4 space-y-4">
+            <SectionLabel icon={Paperclip} color="bg-purple-50 text-purple-700" label="Remarks & Attachments" />
+            <div><Lbl>Remarks</Lbl>
+              <textarea className={clsx(F, 'resize-none')} rows={2} placeholder="Any additional notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FileSlot label="Petty Cash Voucher" fileUrl={form.voucher_file_url} fileName={form.voucher_file_name}
+                isUploading={uploading === 'voucher'}
+                onUpload={handleFileChange('voucher')}
+                onView={() => openAttachment(form.voucher_file_url)}
+                onRemove={() => { set('voucher_file_url', ''); set('voucher_file_name', ''); }} />
+              <FileSlot label="Bill / Invoice" fileUrl={form.bill_file_url} fileName={form.bill_file_name}
+                isUploading={uploading === 'bill'}
+                onUpload={handleFileChange('bill')}
+                onView={() => openAttachment(form.bill_file_url)}
+                onRemove={() => { set('bill_file_url', ''); set('bill_file_name', ''); }} />
+            </div>
           </div>
         </form>
 
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleSubmit} disabled={saveMut.isPending || uploading} className="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-white transition-colors">Cancel</button>
+          <button onClick={handleSubmit} disabled={saveMut.isPending || !!uploading}
+            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-colors">
+            {saveMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
             {saveMut.isPending ? 'Saving…' : isEdit ? 'Update Entry' : 'Save Entry'}
           </button>
         </div>
@@ -503,21 +533,23 @@ function AdvanceForm({ initial, projects, defaultProjectId, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4 overflow-auto">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+    <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-gradient-to-r from-amber-50 to-white rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center">
-              <Users className="w-4 h-4 text-amber-600" />
+            <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shadow-sm">
+              <Users className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-slate-900">{isEdit ? 'Edit Advance' : 'New Salary Advance'}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Cash paid to contractor / employee</p>
+              <p className="font-bold text-slate-900 text-base">{isEdit ? 'Edit Salary Advance' : 'New Salary Advance'}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Cash paid to contractor or employee</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-3">
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div><Lbl req>Date</Lbl><input type="date" className={F} value={form.advance_date} onChange={e => set('advance_date', e.target.value)} required /></div>
             <div><Lbl>Project</Lbl>
@@ -527,15 +559,29 @@ function AdvanceForm({ initial, projects, defaultProjectId, onClose }) {
               </select>
             </div>
           </div>
-          <div><Lbl req>Contractor / Employee Name</Lbl><input className={F} placeholder="e.g. Mukesh 3250008" value={form.payee_name} onChange={e => set('payee_name', e.target.value)} required /></div>
-          <div><Lbl>Description</Lbl><input className={F} placeholder="SALARY ADVANCE" value={form.description} onChange={e => set('description', e.target.value)} /></div>
-          <div><Lbl req>Amount Paid (₹)</Lbl><input type="number" step="0.01" className={F} placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required /></div>
-          <div><Lbl>Remarks</Lbl><textarea className={clsx(F, 'resize-none')} rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
+          <div><Lbl req>Contractor / Employee Name</Lbl>
+            <input className={F} placeholder="e.g. Mukesh 3250008" value={form.payee_name} onChange={e => set('payee_name', e.target.value)} required />
+          </div>
+          <div><Lbl>Description</Lbl>
+            <input className={F} placeholder="SALARY ADVANCE" value={form.description} onChange={e => set('description', e.target.value)} />
+          </div>
+          {/* Amount — prominent */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <Lbl req>Amount Paid (₹)</Lbl>
+            <input type="number" step="0.01" className="w-full border border-amber-200 bg-white rounded-xl px-4 py-3 text-xl font-bold text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder:text-amber-200"
+              placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required />
+          </div>
+          <div><Lbl>Remarks</Lbl>
+            <textarea className={clsx(F, 'resize-none')} rows={2} placeholder="Notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          </div>
         </form>
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleSubmit} disabled={saveMut.isPending} className="px-6 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50">
-            {saveMut.isPending ? 'Saving…' : isEdit ? 'Update' : 'Save'}
+
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-white transition-colors">Cancel</button>
+          <button onClick={handleSubmit} disabled={saveMut.isPending}
+            className="flex items-center gap-2 px-6 py-2 bg-amber-500 text-white text-sm font-semibold rounded-xl hover:bg-amber-600 disabled:opacity-50 shadow-sm transition-colors">
+            {saveMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {saveMut.isPending ? 'Saving…' : isEdit ? 'Update Advance' : 'Record Advance'}
           </button>
         </div>
       </div>
@@ -545,6 +591,8 @@ function AdvanceForm({ initial, projects, defaultProjectId, onClose }) {
 
 // ── SC Advance Form ───────────────────────────────────────────────────────────
 const EMPTY_SC_ADV = { project_id: '', advance_date: dayjs().format('YYYY-MM-DD'), vendor_id: '', vendor_name: '', wo_number: '', amount: '', payment_mode: 'cash', reference_number: '', remarks: '' };
+
+const PAYMENT_MODE_ICON = { cash: '💵', upi: '📱', bank_transfer: '🏦', cheque: '📄' };
 
 function ScAdvanceForm({ projects, defaultProjectId, onClose }) {
   const qc = useQueryClient();
@@ -579,21 +627,23 @@ function ScAdvanceForm({ projects, defaultProjectId, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4 overflow-auto">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+    <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-gradient-to-r from-orange-50 to-white rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
-              <Send className="w-4 h-4 text-orange-600" />
+            <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center shadow-sm">
+              <Send className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-slate-900">New SC Advance</p>
-              <p className="text-xs text-slate-500 mt-0.5">Petty cash paid to a sub-contractor</p>
+              <p className="font-bold text-slate-900 text-base">New SC Advance</p>
+              <p className="text-xs text-slate-500 mt-0.5">Petty cash paid to sub-contractor</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-3">
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div><Lbl req>Date</Lbl><input type="date" className={F} value={form.advance_date} onChange={e => set('advance_date', e.target.value)} required /></div>
             <div><Lbl>Project</Lbl>
@@ -603,44 +653,71 @@ function ScAdvanceForm({ projects, defaultProjectId, onClose }) {
               </select>
             </div>
           </div>
-          <div>
+
+          {/* Sub-contractor search */}
+          <div className="relative">
             <Lbl req>Sub-Contractor Name</Lbl>
-            <input
-              className={F} placeholder="Type to search or enter name…"
+            <input className={F} placeholder="Type to search or enter name…"
               value={vendorSearch || form.vendor_name}
-              onChange={e => { setVendorSearch(e.target.value); set('vendor_id', ''); set('vendor_name', e.target.value); }}
-            />
+              onChange={e => { setVendorSearch(e.target.value); set('vendor_id', ''); set('vendor_name', e.target.value); }} />
             {vendors.length > 0 && vendorSearch && (
-              <div className="mt-1 border border-slate-200 rounded-xl bg-white shadow-sm max-h-40 overflow-y-auto z-10 relative">
+              <div className="absolute left-0 right-0 mt-1 border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-20">
                 {vendors.map(v => (
                   <button key={v.id} type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 text-slate-700 border-b border-slate-50 last:border-0"
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-orange-50 text-slate-700 border-b border-slate-50 last:border-0 flex items-center justify-between"
                     onClick={() => { set('vendor_id', v.id); set('vendor_name', v.name); setVendorSearch(''); }}>
-                    {v.name}{v.vendor_code ? ` (${v.vendor_code})` : ''}
+                    <span className="font-medium">{v.name}</span>
+                    {v.vendor_code && <span className="text-xs text-slate-400 font-mono">{v.vendor_code}</span>}
                   </button>
                 ))}
               </div>
             )}
           </div>
+
           <div><Lbl>Work Order No.</Lbl><input className={F} placeholder="e.g. WOLANLH10004" value={form.wo_number} onChange={e => set('wo_number', e.target.value)} /></div>
-          <div><Lbl req>Amount Paid (₹)</Lbl><input type="number" step="0.01" className={F} placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Lbl>Payment Mode</Lbl>
-              <select className={FS} value={form.payment_mode} onChange={e => set('payment_mode', e.target.value)}>
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cheque">Cheque</option>
-              </select>
-            </div>
-            <div><Lbl>Reference No.</Lbl><input className={F} placeholder="UPI ref / cheque no." value={form.reference_number} onChange={e => set('reference_number', e.target.value)} /></div>
+
+          {/* Amount — prominent */}
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+            <Lbl req>Amount Paid (₹)</Lbl>
+            <input type="number" step="0.01" className="w-full border border-orange-200 bg-white rounded-xl px-4 py-3 text-xl font-bold text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 placeholder:text-orange-200"
+              placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required />
           </div>
-          <div><Lbl>Remarks</Lbl><textarea className={clsx(F, 'resize-none')} rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
+
+          {/* Payment mode */}
+          <div>
+            <Lbl>Payment Mode</Lbl>
+            <div className="grid grid-cols-4 gap-2">
+              {['cash', 'upi', 'bank_transfer', 'cheque'].map(mode => (
+                <button key={mode} type="button"
+                  onClick={() => set('payment_mode', mode)}
+                  className={clsx('flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-semibold transition-colors',
+                    form.payment_mode === mode
+                      ? 'border-orange-400 bg-orange-50 text-orange-700'
+                      : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50')}>
+                  <span className="text-base">{PAYMENT_MODE_ICON[mode]}</span>
+                  <span className="capitalize">{mode.replace('_', ' ')}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {form.payment_mode !== 'cash' && (
+            <div><Lbl>Reference No. / UPI ID / Cheque No.</Lbl>
+              <input className={F} placeholder="Ref / ID / Cheque no." value={form.reference_number} onChange={e => set('reference_number', e.target.value)} />
+            </div>
+          )}
+
+          <div><Lbl>Remarks</Lbl>
+            <textarea className={clsx(F, 'resize-none')} rows={2} placeholder="Notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          </div>
         </form>
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleSubmit} disabled={saveMut.isPending} className="px-6 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50">
-            {saveMut.isPending ? 'Saving…' : 'Save SC Advance'}
+
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-white transition-colors">Cancel</button>
+          <button onClick={handleSubmit} disabled={saveMut.isPending}
+            className="flex items-center gap-2 px-6 py-2 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 disabled:opacity-50 shadow-sm transition-colors">
+            {saveMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {saveMut.isPending ? 'Saving…' : 'Record SC Advance'}
           </button>
         </div>
       </div>
@@ -684,21 +761,32 @@ function ReceiptForm({ initial, projects, defaultProjectId, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4 overflow-auto">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+    <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-gradient-to-r from-green-50 to-white rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center">
-              <Wallet className="w-4 h-4 text-green-600" />
+            <div className="w-10 h-10 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
+              <Wallet className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-slate-900">{isEdit ? 'Edit HO Receipt' : 'Record Cash from HO'}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Cash received from Head Office / management</p>
+              <p className="font-bold text-slate-900 text-base">{isEdit ? 'Edit HO Receipt' : 'Record Cash from HO'}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Cash received from Head Office</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-3">
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* Amount — top and most prominent */}
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <Lbl req>Amount Received (₹)</Lbl>
+            <input type="number" step="0.01"
+              className="w-full border border-green-200 bg-white rounded-xl px-4 py-3 text-2xl font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 placeholder:text-green-200"
+              placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required autoFocus />
+            <p className="text-xs text-green-600 mt-2 font-medium">This amount will be added to the petty cash balance</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div><Lbl req>Date Received</Lbl><input type="date" className={F} value={form.receipt_date} onChange={e => set('receipt_date', e.target.value)} required /></div>
             <div><Lbl>Project</Lbl>
@@ -708,15 +796,26 @@ function ReceiptForm({ initial, projects, defaultProjectId, onClose }) {
               </select>
             </div>
           </div>
-          <div><Lbl req>Amount Received (₹)</Lbl><input type="number" step="0.01" className={F} placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required /></div>
-          <div><Lbl>Received By</Lbl><input className={F} placeholder="Site Incharge" value={form.received_by} onChange={e => set('received_by', e.target.value)} /></div>
-          <div><Lbl>HO Voucher / Ref No</Lbl><input className={F} placeholder="HO-PC-MAR-01" value={form.voucher_no} onChange={e => set('voucher_no', e.target.value)} /></div>
-          <div><Lbl>Remarks</Lbl><textarea className={clsx(F, 'resize-none')} rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
+
+          <div><Lbl>Received By</Lbl>
+            <input className={F} placeholder="e.g. Site Incharge" value={form.received_by} onChange={e => set('received_by', e.target.value)} />
+          </div>
+
+          <div><Lbl>HO Voucher / Ref No.</Lbl>
+            <input className={F} placeholder="e.g. HO-PC-MAR-01" value={form.voucher_no} onChange={e => set('voucher_no', e.target.value)} />
+          </div>
+
+          <div><Lbl>Remarks</Lbl>
+            <textarea className={clsx(F, 'resize-none')} rows={2} placeholder="Notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          </div>
         </form>
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleSubmit} disabled={saveMut.isPending} className="px-6 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50">
-            {saveMut.isPending ? 'Saving…' : isEdit ? 'Update' : 'Save Receipt'}
+
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-white transition-colors">Cancel</button>
+          <button onClick={handleSubmit} disabled={saveMut.isPending}
+            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 shadow-sm transition-colors">
+            {saveMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {saveMut.isPending ? 'Saving…' : isEdit ? 'Update Receipt' : 'Record Receipt'}
           </button>
         </div>
       </div>
@@ -1168,30 +1267,42 @@ export default function StoresPettyCashPage() {
 
         {/* ══ HO RECEIPTS ══ */}
         {tab === 'receipts' && (
-          <div>
-            <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">Cash Received from HO</h2>
-                <p className="text-sm text-slate-500 mt-0.5">All amounts released by Head Office / management</p>
+          <div className="space-y-4">
+            {/* Summary banner */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-green-500">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Received</p>
+                <p className="text-2xl font-bold text-green-700 mt-1">{inr(totalReceived)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{summary.receipt_count || 0} transfers from HO</p>
               </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-red-400">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Spent</p>
+                <p className="text-2xl font-bold text-red-600 mt-1">{inr(totalSpent)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Purchases + Advances</p>
+              </div>
+              <div className={clsx('bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4', cashInHand < 0 ? 'border-l-red-500' : cashInHand < 5000 ? 'border-l-amber-400' : 'border-l-indigo-400')}>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cash in Hand</p>
+                <p className={clsx('text-2xl font-bold mt-1', balanceColor)}>{inr(Math.abs(cashInHand))}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{cashInHand < 0 ? 'OVERDRAWN' : 'Available balance'}</p>
+              </div>
+            </div>
+
+            {/* Toolbar */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm font-semibold text-slate-700">{receipts.length} receipt{receipts.length !== 1 ? 's' : ''} recorded</p>
               <button onClick={() => { setEditReceipt(null); setShowReceiptForm(true); }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700">
-                <Plus className="w-4 h-4" /> Record Receipt
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 shadow-sm">
+                <Plus className="w-3.5 h-3.5" /> Record Receipt
               </button>
             </div>
 
-            <div className="flex gap-3 mb-5 flex-wrap">
-              <KpiCard label="Total Received" value={inr(totalReceived)} sub={`${summary.receipt_count || 0} transfers`} accent="border-green-400" valueClass="text-green-700" />
-              <KpiCard label="Total Spent" value={inr(totalSpent)} accent="border-red-400" valueClass="text-red-700" />
-              <KpiCard label="Cash in Hand" value={inr(cashInHand)} accent={cashInHand < 0 ? 'border-red-500' : 'border-indigo-400'} valueClass={balanceColor} />
-            </div>
-
+            {/* Table */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {loadingReceipts ? (
                 <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" /></div>
               ) : receipts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-                  <Wallet className="w-10 h-10 opacity-20" />
+                  <Wallet className="w-12 h-12 opacity-20" />
                   <p className="text-sm font-medium">No receipts recorded yet</p>
                   <button onClick={() => { setEditReceipt(null); setShowReceiptForm(true); }} className="text-sm text-green-600 hover:underline flex items-center gap-1">
                     <Plus className="w-3.5 h-3.5" /> Record first receipt
@@ -1201,33 +1312,40 @@ export default function StoresPettyCashPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        {['#', 'Date', 'Amount (₹)', 'Received By', 'Voucher No', 'Remarks', ''].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+                        {['#', 'Date', 'Amount Received', 'Received By', 'Voucher / Ref', 'Remarks', ''].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-slate-100">
                       {receipts.map((row, i) => (
-                        <tr key={row.id} className="hover:bg-slate-50 transition-colors cursor-pointer"
+                        <tr key={row.id} className={clsx('transition-colors cursor-pointer group', i % 2 === 0 ? 'bg-white hover:bg-green-50/40' : 'bg-slate-50/40 hover:bg-green-50/40')}
                           onClick={() => { setEditReceipt(row); setShowReceiptForm(true); }}>
-                          <td className="px-4 py-3 text-slate-400 text-xs">{i + 1}</td>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{dayjs(row.receipt_date).format('DD MMM YYYY')}</td>
-                          <td className="px-4 py-3 font-mono font-bold text-green-700 text-right whitespace-nowrap">{inr(row.amount)}</td>
-                          <td className="px-4 py-3 text-slate-600">{row.received_by || '—'}</td>
-                          <td className="px-4 py-3 text-slate-500 text-xs font-mono">{row.voucher_no || '—'}</td>
-                          <td className="px-4 py-3 text-slate-400 text-xs">{row.remarks || '—'}</td>
+                          <td className="px-4 py-3 text-slate-400 text-xs font-mono w-10">{i + 1}</td>
+                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap text-sm">{dayjs(row.receipt_date).format('DD MMM YYYY')}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-6 rounded-full bg-green-400 flex-shrink-0" />
+                              <span className="font-mono font-bold text-green-700 text-base">{inr(row.amount)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 font-medium">{row.received_by || <span className="text-slate-300">—</span>}</td>
+                          <td className="px-4 py-3 text-slate-500 text-xs font-mono">{row.voucher_no || <span className="text-slate-300">—</span>}</td>
+                          <td className="px-4 py-3 text-slate-400 text-xs max-w-[180px] truncate">{row.remarks || '—'}</td>
                           <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                             <button onClick={() => { if (window.confirm('Delete this receipt?')) deleteReceiptMut.mutate(row.id); }}
-                              className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                              className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md opacity-0 group-hover:opacity-100 transition-all">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="bg-green-50 border-t-2 border-green-200">
-                        <td colSpan={2} className="px-4 py-3 text-right text-xs font-bold text-green-800 uppercase">Total Received</td>
-                        <td className="px-4 py-3 font-mono font-bold text-green-700 text-right">{inr(totalReceived)}</td>
+                        <td colSpan={2} className="px-4 py-3 text-right text-xs font-bold text-green-700 uppercase tracking-wider">Total Received ({receipts.length})</td>
+                        <td className="px-4 py-3 font-mono font-bold text-green-700 text-lg">{inr(totalReceived)}</td>
                         <td colSpan={4} />
                       </tr>
                     </tfoot>
@@ -1417,31 +1535,48 @@ export default function StoresPettyCashPage() {
 
         {/* ══ SALARY ADVANCES ══ */}
         {tab === 'advances' && (
-          <div>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">Salary Advances</h2>
-                <p className="text-sm text-slate-500 mt-0.5">{advances.length} entries · Total: <span className="font-semibold text-slate-700">{inr(totalAdv)}</span></p>
+          <div className="space-y-4">
+            {/* Summary KPIs */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-amber-400">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Advances</p>
+                <p className="text-2xl font-bold text-amber-700 mt-1">{inr(totalAdv)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{advances.length} payments</p>
               </div>
-              <div className="flex gap-2 items-center">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white w-48 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    placeholder="Search name / description…" value={filters.search} onChange={e => setFilter('search', e.target.value)} />
-                </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-slate-300">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg per Advance</p>
+                <p className="text-2xl font-bold text-slate-700 mt-1">{advances.length ? inr(totalAdv / advances.length) : '₹ 0'}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Average payment</p>
+              </div>
+              <div className={clsx('bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4', cashInHand < 0 ? 'border-l-red-500' : 'border-l-indigo-400')}>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cash in Hand</p>
+                <p className={clsx('text-2xl font-bold mt-1', balanceColor)}>{inr(cashInHand)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">After all deductions</p>
+              </div>
+            </div>
+
+            {/* Toolbar */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white"
+                  placeholder="Search contractor or employee…" value={filters.search} onChange={e => setFilter('search', e.target.value)} />
+              </div>
+              <div className="ml-auto">
                 <button onClick={() => { setEditAdv(null); setShowAdvForm(true); }}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700">
-                  <Plus className="w-4 h-4" /> New Advance
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 shadow-sm whitespace-nowrap">
+                  <Plus className="w-3.5 h-3.5" /> New Advance
                 </button>
               </div>
             </div>
 
+            {/* Table */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {loadingAdvances ? (
                 <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" /></div>
               ) : advances.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-                  <Users className="w-10 h-10 opacity-20" />
+                  <Users className="w-12 h-12 opacity-20" />
                   <p className="text-sm font-medium">No advances recorded yet</p>
                   <button onClick={() => { setEditAdv(null); setShowAdvForm(true); }} className="text-sm text-amber-600 hover:underline flex items-center gap-1">
                     <Plus className="w-3.5 h-3.5" /> Add first entry
@@ -1451,32 +1586,45 @@ export default function StoresPettyCashPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        {['Date', 'Contractor / Employee', 'Description', 'Remarks', 'Amount (₹)', ''].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+                        {['Date', 'Contractor / Employee', 'Description', 'Remarks', 'Amount', ''].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {advances.map((row, i) => (
-                        <tr key={row.id} className={clsx('hover:bg-slate-50 transition-colors cursor-pointer', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}
+                    <tbody className="divide-y divide-slate-100">
+                      {advances
+                        .filter(r => !filters.search || r.payee_name?.toLowerCase().includes(filters.search.toLowerCase()) || r.description?.toLowerCase().includes(filters.search.toLowerCase()))
+                        .map((row, i) => (
+                        <tr key={row.id} className={clsx('transition-colors cursor-pointer group', i % 2 === 0 ? 'bg-white hover:bg-amber-50/30' : 'bg-slate-50/40 hover:bg-amber-50/30')}
                           onClick={() => { setEditAdv(row); setShowAdvForm(true); }}>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{dayjs(row.advance_date).format('DD MMM YY')}</td>
-                          <td className="px-4 py-3 font-medium text-slate-800">{row.payee_name}</td>
-                          <td className="px-4 py-3 text-slate-500 text-xs">{row.description}</td>
-                          <td className="px-4 py-3 text-slate-400 text-xs">{row.remarks || '—'}</td>
-                          <td className="px-4 py-3 font-mono font-semibold text-amber-700 text-right whitespace-nowrap">{inr(row.amount)}</td>
+                          <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{dayjs(row.advance_date).format('DD MMM YY')}</td>
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-slate-800">{row.payee_name}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs bg-amber-50 text-amber-700 font-medium px-2 py-0.5 rounded-full">{row.description || 'Salary Advance'}</span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-400 text-xs max-w-[160px] truncate">{row.remarks || '—'}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-6 rounded-full bg-amber-400 flex-shrink-0" />
+                              <span className="font-mono font-bold text-amber-700 text-base">{inr(row.amount)}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                             <button onClick={() => { if (window.confirm('Delete this advance?')) deleteAdvMut.mutate(row.id); }}
-                              className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                              className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md opacity-0 group-hover:opacity-100 transition-all">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="bg-amber-50 border-t-2 border-amber-200">
-                        <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold text-amber-800 uppercase">Total ({advances.length} entries)</td>
-                        <td className="px-4 py-3 font-mono font-bold text-amber-700 text-right">{inr(totalAdv)}</td>
+                        <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold text-amber-700 uppercase tracking-wider">Total ({advances.length} entries)</td>
+                        <td className="px-4 py-3 font-mono font-bold text-amber-700 text-lg">{inr(totalAdv)}</td>
                         <td />
                       </tr>
                     </tfoot>
@@ -1488,32 +1636,48 @@ export default function StoresPettyCashPage() {
         )}
 
         {/* ══ SC ADVANCES ══ */}
-        {tab === 'sc-advances' && (
-          <div>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">SC Advances</h2>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  {scAdvances.length} entries · Total: <span className="font-semibold text-slate-700">{inr(scAdvances.reduce((s, r) => s + Number(r.amount), 0))}</span>
-                </p>
+        {tab === 'sc-advances' && (() => {
+          const scTotal = scAdvances.reduce((s, r) => s + Number(r.amount), 0);
+          return (
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-orange-400">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total SC Advances</p>
+                <p className="text-2xl font-bold text-orange-600 mt-1">{inr(scTotal)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{scAdvances.length} payments to sub-contractors</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-slate-300">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Unique Sub-Contractors</p>
+                <p className="text-2xl font-bold text-slate-700 mt-1">{new Set(scAdvances.map(r => r.vendor_name)).size}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Distinct vendors</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 border-l-4 border-l-indigo-300">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg per Payment</p>
+                <p className="text-2xl font-bold text-slate-700 mt-1">{scAdvances.length ? inr(scTotal / scAdvances.length) : '₹ 0'}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Average advance amount</p>
+              </div>
+            </div>
+
+            {/* Toolbar */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Recorded separately from salary advances — linked to sub-contractor billing</span>
               </div>
               <button onClick={() => setShowScAdvForm(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700">
-                <Plus className="w-4 h-4" /> New SC Advance
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 shadow-sm whitespace-nowrap ml-auto">
+                <Plus className="w-3.5 h-3.5" /> New SC Advance
               </button>
             </div>
 
-            <div className="flex items-start gap-2 mb-4 bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 text-xs text-orange-700">
-              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              <span>Petty cash advances paid directly to sub-contractors on site. These are recorded separately from salary advances and linked to sub-contractor billing.</span>
-            </div>
-
+            {/* Table */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               {loadingScAdv ? (
                 <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /></div>
               ) : scAdvances.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-                  <Send className="w-10 h-10 opacity-20" />
+                  <Send className="w-12 h-12 opacity-20" />
                   <p className="text-sm font-medium">No SC advances recorded yet</p>
                   <button onClick={() => setShowScAdvForm(true)} className="text-sm text-orange-600 hover:underline flex items-center gap-1">
                     <Plus className="w-3.5 h-3.5" /> Add first entry
@@ -1523,35 +1687,49 @@ export default function StoresPettyCashPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        {['Date', 'Sub-Contractor', 'WO No.', 'Project', 'Amount (₹)', 'Mode', 'Ref No.', 'Remarks', ''].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
+                      <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+                        {['Date', 'Sub-Contractor & WO', 'Project', 'Amount', 'Payment', 'Remarks', ''].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-slate-100">
                       {scAdvances.map((row, i) => (
-                        <tr key={row.id} className={clsx('hover:bg-slate-50 transition-colors', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{dayjs(row.advance_date).format('DD MMM YY')}</td>
-                          <td className="px-4 py-3 font-medium text-slate-800">{row.vendor_name}</td>
-                          <td className="px-4 py-3 text-slate-500 text-xs font-mono">{row.wo_number || '—'}</td>
+                        <tr key={row.id} className={clsx('transition-colors group', i % 2 === 0 ? 'bg-white hover:bg-orange-50/30' : 'bg-slate-50/40 hover:bg-orange-50/30')}>
+                          <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{dayjs(row.advance_date).format('DD MMM YY')}</td>
+                          {/* Merged: Sub-Contractor + WO */}
+                          <td className="px-4 py-3 max-w-[200px]">
+                            <p className="font-semibold text-slate-800 truncate">{row.vendor_name}</p>
+                            {row.wo_number && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{row.wo_number}</p>}
+                          </td>
                           <td className="px-4 py-3 text-slate-400 text-xs">{row.project_name || '—'}</td>
-                          <td className="px-4 py-3 font-mono font-semibold text-orange-700 text-right whitespace-nowrap">{inr(row.amount)}</td>
-                          <td className="px-4 py-3 text-slate-500 text-xs capitalize">{(row.payment_mode || 'cash').replace('_', ' ')}</td>
-                          <td className="px-4 py-3 text-slate-400 text-xs font-mono">{row.reference_number || '—'}</td>
-                          <td className="px-4 py-3 text-slate-400 text-xs">{row.remarks || '—'}</td>
+                          {/* Amount with accent */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-6 rounded-full bg-orange-400 flex-shrink-0" />
+                              <span className="font-mono font-bold text-orange-600 text-base">{inr(row.amount)}</span>
+                            </div>
+                          </td>
+                          {/* Merged: Mode + Ref */}
+                          <td className="px-4 py-3">
+                            <p className="text-xs font-semibold text-slate-600 capitalize">{PAYMENT_MODE_ICON[row.payment_mode] || '💵'} {(row.payment_mode || 'cash').replace('_', ' ')}</p>
+                            {row.reference_number && <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">{row.reference_number}</p>}
+                          </td>
+                          <td className="px-4 py-3 text-slate-400 text-xs max-w-[140px] truncate">{row.remarks || '—'}</td>
                           <td className="px-4 py-3">
                             <button onClick={() => { if (window.confirm('Delete this SC advance?')) deleteScAdvMut.mutate(row.id); }}
-                              className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                              className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md opacity-0 group-hover:opacity-100 transition-all">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="bg-orange-50 border-t-2 border-orange-200">
-                        <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold text-orange-800 uppercase">Total ({scAdvances.length} entries)</td>
-                        <td className="px-4 py-3 font-mono font-bold text-orange-700 text-right">{inr(scAdvances.reduce((s, r) => s + Number(r.amount), 0))}</td>
-                        <td colSpan={4} />
+                        <td colSpan={3} className="px-4 py-3 text-right text-xs font-bold text-orange-700 uppercase tracking-wider">Total ({scAdvances.length} entries)</td>
+                        <td className="px-4 py-3 font-mono font-bold text-orange-600 text-lg">{inr(scTotal)}</td>
+                        <td colSpan={3} />
                       </tr>
                     </tfoot>
                   </table>
@@ -1559,7 +1737,8 @@ export default function StoresPettyCashPage() {
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ══ ANALYTICS ══ */}
         {tab === 'analytics' && (
