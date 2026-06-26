@@ -239,11 +239,16 @@ router.get('/dashboard', async (req, res) => {
     let pClause = ''; const pp = [cid];
     if (project_id) { pClause = ` AND wo.project_id=$2`; pp.push(project_id); }
 
+    const subsParams = project_id ? [cid, project_id] : [cid];
+    const subsProjectClause = project_id
+      ? ` AND id IN (SELECT DISTINCT sc_id FROM sc_work_orders WHERE project_id=$2 AND company_id=$1)`
+      : '';
+
     const [subs, wos, bills, payments, retention] = await Promise.all([
       query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active,
              COUNT(*) FILTER (WHERE contractor_type='sub_contractor' AND status='active') AS active_sub,
              COUNT(*) FILTER (WHERE contractor_type='labour_contractor' AND status='active') AS active_labour
-             FROM sc_subcontractors WHERE company_id=$1`, [cid]),
+             FROM sc_subcontractors WHERE company_id=$1${subsProjectClause}`, subsParams),
       query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active, COALESCE(SUM(contract_amount),0) AS total_value, COALESCE(SUM(advance_paid),0) AS advance_paid FROM sc_work_orders wo WHERE company_id=$1${pClause}`, pp),
       query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE b.status IN ('submitted','under_review')) AS pending_approval, COALESCE(SUM(b.gross_amount),0) AS total_billed, COALESCE(SUM(b.net_payable),0) AS total_net FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id WHERE b.company_id=$1${pClause}`, pp),
       query(`SELECT COALESCE(SUM(p.amount),0) AS total_paid FROM sc_payments p JOIN sc_bills b ON b.id=p.bill_id JOIN sc_work_orders wo ON wo.id=b.wo_id WHERE p.company_id=$1${pClause}`, pp),
@@ -264,8 +269,8 @@ router.get('/dashboard', async (req, res) => {
       JOIN projects p ON p.id=wo.project_id
       LEFT JOIN sc_bills b ON b.wo_id=wo.id AND b.status NOT IN ('draft','rejected')
       LEFT JOIN LATERAL (SELECT COALESCE(SUM(amount),0) AS paid FROM sc_payments WHERE bill_id=b.id) pay ON TRUE
-      WHERE wo.company_id=$1
-      GROUP BY p.name ORDER BY contract_value DESC LIMIT 8`, [cid]);
+      WHERE wo.company_id=$1${pClause}
+      GROUP BY p.name ORDER BY contract_value DESC LIMIT 8`, pp);
 
     // Bill status breakdown
     const billStatus = await query(`
