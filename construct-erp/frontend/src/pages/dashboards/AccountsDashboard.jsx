@@ -6,7 +6,7 @@ import {
   FileText, ChevronDown, ChevronRight, CreditCard, X,
   Search, Filter, RefreshCw,
 } from 'lucide-react';
-import { tqsBillsAPI, paymentAPI } from '../../api/client';
+import { tqsBillsAPI, paymentAPI, vendorQSCertificationAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
 import { DashKPI, DashSection, DashTable, Badge, FlatKPI, inr } from './DashKPI';
 import dayjs from 'dayjs';
@@ -49,15 +49,28 @@ function PCPaymentModal({ pc, onClose, onSuccess }) {
     if (!enteredAmt)        { setError('Amount must be > 0'); return; }
     setSaving(true); setError('');
     try {
-      await tqsBillsAPI.pcPayment({
-        pc_number:        pc.pc_number,
-        paid_amount:      enteredAmt,
-        payment_date:     form.payment_date,
-        payment_mode:     form.payment_mode,
-        reference_number: form.reference_number || null,
-        bank_name:        form.bank_name        || null,
-        remarks:          form.remarks          || null,
-      });
+      if (pc.source === 'vendor_qs_cert') {
+        const { vendorQSCertificationAPI: vapi } = await import('../../api/client');
+        await vapi.recordPayment(pc.id, {
+          paid_amount:      enteredAmt,
+          payment_date:     form.payment_date,
+          payment_mode:     form.payment_mode,
+          reference_number: form.reference_number || null,
+          bank_name:        form.bank_name        || null,
+          remarks:          form.remarks          || null,
+        });
+        qc.invalidateQueries({ queryKey: ['vendor-qs-certs'] });
+      } else {
+        await tqsBillsAPI.pcPayment({
+          pc_number:        pc.pc_number,
+          paid_amount:      enteredAmt,
+          payment_date:     form.payment_date,
+          payment_mode:     form.payment_mode,
+          reference_number: form.reference_number || null,
+          bank_name:        form.bank_name        || null,
+          remarks:          form.remarks          || null,
+        });
+      }
       // Invalidate all related caches
       qc.invalidateQueries({ queryKey: ['tqs-bills'] });
       qc.invalidateQueries({ queryKey: ['tqs-pc-pending-finance'] });
@@ -318,13 +331,23 @@ export default function AccountsDashboard() {
     refetchOnWindowFocus: true,
   });
 
-  const { data: pcList = [], isLoading: loadPC, refetch: refetchPC } = useQuery({
+  const { data: tqsPCList = [], isLoading: loadPC, refetch: refetchPC } = useQuery({
     queryKey: ['tqs-bills', 'accts-pc-pending'],
     queryFn: () => tqsBillsAPI.pcPending().then(r => r.data?.data ?? []),
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
   });
+
+  const { data: vqsPCList = [], refetch: refetchVQS } = useQuery({
+    queryKey: ['vendor-qs-certs', 'accounts-pending'],
+    queryFn: () => vendorQSCertificationAPI.accountsPending().then(r => r.data?.data ?? []),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
+
+  const pcList = useMemo(() => [...tqsPCList, ...vqsPCList], [tqsPCList, vqsPCList]);
 
   const { data: aging = [], isLoading: loadA } = useQuery({
     queryKey: ['tqs-bills', 'accts-dash-aging'],

@@ -241,6 +241,36 @@ async function buildSummaryFromBills(executor, billIds, companyId, excludeCertif
   return { bills: billsRes.rows, items: Array.from(grouped.values()) };
 }
 
+// GET /vendor-qs-certifications/accounts-pending
+// Returns all vendor QS certs sent to accounts that still have a balance due.
+// Used by the Accounts Dashboard PC section.
+router.get('/accounts-pending', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT c.id, c.cert_number AS pc_number, c.ra_bill_number, c.vendor_name,
+              c.project_id, c.status,
+              p.name AS project_name,
+              c.net_payable AS total_certified,
+              COALESCE(c.paid_amount, 0) AS total_paid,
+              GREATEST(0, c.net_payable - COALESCE(c.paid_amount, 0)) AS balance_due,
+              c.tds_amount AS total_tds,
+              c.sent_to_accounts_at AS accounts_since,
+              c.order_number, c.order_type,
+              c.advance_recovered, c.retention_amount, c.other_deductions,
+              c.gross_amount, c.tax_amount,
+              'vendor_qs_cert' AS source
+       FROM vendor_qs_certifications c
+       LEFT JOIN projects p ON p.id = c.project_id
+       WHERE c.company_id = $1
+         AND c.status IN ('accounts', 'certified')
+         AND c.net_payable > COALESCE(c.paid_amount, 0)
+       ORDER BY c.sent_to_accounts_at DESC NULLS LAST, c.created_at DESC`,
+      [req.user.company_id]
+    );
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/', async (req, res) => {
   try {
     const { project_id, vendor_name, status } = req.query;
