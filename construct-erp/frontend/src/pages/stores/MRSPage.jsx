@@ -1417,7 +1417,11 @@ export default function MRSPage() {
                         <div className="text-xs font-bold font-mono text-indigo-700 group-hover:underline">
                           {mrs.serial_no_formatted || mrs.mrs_number}
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1">{dayjs(mrs.created_at).format('DD-MM-YYYY')}</div>
+                        <div className="text-[11px] text-slate-500 mt-1">
+                          {mrs.required_by
+                            ? <span><span className="text-slate-400">Req By:</span> {dayjs(mrs.required_by).format('DD-MM-YYYY')}</span>
+                            : dayjs(mrs.created_at).format('DD-MM-YYYY')}
+                        </div>
                       </td>
                       <td className="px-4 py-4 align-top min-w-[260px]">
                         <div className="text-sm font-semibold text-slate-950 truncate max-w-[280px]">{mrs.project_name || 'No project'}</div>
@@ -2072,7 +2076,7 @@ export default function MRSPage() {
                           <div key={m.id} className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-xs font-semibold text-slate-900 font-mono truncate">{m.serial_no_formatted || m.mrs_number}</p>
-                              <p className="text-[11px] text-slate-400 mt-0.5">{dayjs(m.created_at).format('DD-MM-YYYY')} · {m.item_count ?? '—'} items</p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{dayjs(m.required_by || m.created_at).format('DD-MM-YYYY')} · {m.item_count ?? '—'} items</p>
                             </div>
                             <StatusBadge status={m.status} />
                           </div>
