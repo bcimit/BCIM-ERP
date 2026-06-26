@@ -5,6 +5,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { postAutoJournal, postAutoJournalStandalone } = require('../services/journalAutoPost');
+const { notifyAdvanceCreated, notifyAdvanceProcurementApproved } = require('../services/notif.helper');
 
 router.use(authenticate);
 router.use(loadProjectScope);
@@ -390,6 +391,17 @@ router.post('/', async (req, res) => {
       remarks || null, note || null, terms_conditions || null, user_id,
     ]);
 
+    // Notify the Procurement team (email + in-app) that an advance awaits approval.
+    try {
+      const created = rows[0];
+      let projectName = null;
+      if (created.project_id) {
+        const pr = await query('SELECT name FROM projects WHERE id=$1', [created.project_id]);
+        projectName = pr.rows[0]?.name || null;
+      }
+      notifyAdvanceCreated(company_id, { ...created, project_name: projectName });
+    } catch (_) {}
+
     res.status(201).json({ success: true, data: rows[0] });
   } catch (err) {
     console.error('advance create error:', err);
@@ -523,6 +535,16 @@ router.patch('/:id/approve-procurement', authorize(...PROCUREMENT_APPROVERS), as
       [user_id, req.params.id, company_id]
     );
     if (!rows.length) return res.status(409).json({ success: false, message: 'Voucher not found or not awaiting procurement approval.' });
+    // Notify the Managing Director (email + in-app) for final approval.
+    try {
+      const av = rows[0];
+      let projectName = null;
+      if (av.project_id) {
+        const pr = await query('SELECT name FROM projects WHERE id=$1', [av.project_id]);
+        projectName = pr.rows[0]?.name || null;
+      }
+      notifyAdvanceProcurementApproved(company_id, { ...av, project_name: projectName }, req.user.name);
+    } catch (_) {}
     res.json({ success: true, data: rows[0], message: 'Advance approved by Procurement' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });

@@ -812,9 +812,46 @@ function notifyScPaymentRecorded(companyId, payment, actorName) {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PROCUREMENT ADVANCE VOUCHERS  (email + in-app)
+// ══════════════════════════════════════════════════════════════════════════════
+// On create → ask the Procurement team to approve.
+function notifyAdvanceCreated(companyId, av) {
+  createNotification({
+    company_id: companyId,
+    target_role: 'procurement_manager',
+    type: 'advance_voucher_created',
+    title: `Advance Voucher Awaiting Procurement Approval: ${av.voucher_number || av.sl_number || ''}`.trim(),
+    message: `A new advance voucher for ${av.vendor_name || 'a vendor'}${av.project_name ? ` (${av.project_name})` : ''} of ₹${Number(av.advance_value || 0).toLocaleString('en-IN')} needs your approval.`,
+    link: `/procurement/advances/${av.id}`,
+    severity: 'warning',
+    related_type: 'advance_voucher',
+    related_id: String(av.id),
+    sendEmail: true,
+  }).catch(() => {});
+}
+
+// On procurement approval → ask the Managing Director to give final approval.
+function notifyAdvanceProcurementApproved(companyId, av, actorName) {
+  createNotification({
+    company_id: companyId,
+    target_role: 'managing_director',
+    type: 'advance_voucher_md_pending',
+    title: `Advance Voucher Awaiting MD Approval: ${av.voucher_number || av.sl_number || ''}`.trim(),
+    message: `${actorName || 'Procurement'} approved the advance voucher for ${av.vendor_name || 'a vendor'}${av.project_name ? ` (${av.project_name})` : ''} of ₹${Number(av.advance_value || 0).toLocaleString('en-IN')}. Your approval is required to release it.`,
+    link: `/procurement/advances/${av.id}`,
+    severity: 'warning',
+    related_type: 'advance_voucher',
+    related_id: String(av.id),
+    sendEmail: true,
+  }).catch(() => {});
+}
+
 module.exports = {
   // MR
   notifyMrNextApprover,
+  // Procurement Advance Vouchers
+  notifyAdvanceCreated, notifyAdvanceProcurementApproved,
   // SC Bills
   notifyScBillSubmitted, notifyScBillApproved, notifyScBillFullyApproved, notifyScBillRejected,
   // SC Work Orders
