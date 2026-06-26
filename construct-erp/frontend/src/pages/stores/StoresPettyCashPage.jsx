@@ -514,6 +514,111 @@ function AdvanceForm({ initial, projects, defaultProjectId, onClose }) {
   );
 }
 
+// ── SC Advance Form ───────────────────────────────────────────────────────────
+const EMPTY_SC_ADV = { project_id: '', advance_date: dayjs().format('YYYY-MM-DD'), vendor_id: '', vendor_name: '', wo_number: '', amount: '', payment_mode: 'cash', reference_number: '', remarks: '' };
+
+function ScAdvanceForm({ projects, defaultProjectId, onClose }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ ...EMPTY_SC_ADV, project_id: defaultProjectId || '' });
+  const [vendorSearch, setVendorSearch] = useState('');
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const { data: vendorData } = useQuery({
+    queryKey: ['spc-sc-vendors', vendorSearch],
+    queryFn: () => storesPettyCashAPI.scVendorLookup({ search: vendorSearch || undefined }).then(r => r.data),
+    enabled: vendorSearch.length > 0,
+  });
+  const vendors = vendorData?.data || [];
+
+  const saveMut = useMutation({
+    mutationFn: (payload) => storesPettyCashAPI.createScAdvance(payload).then(r => r.data),
+    onSuccess: () => {
+      toast.success('SC Advance recorded');
+      qc.invalidateQueries({ queryKey: ['spc-sc-advances'] });
+      qc.invalidateQueries({ queryKey: ['spc-summary'] });
+      onClose();
+    },
+    onError: e => toast.error(e?.response?.data?.error || 'Save failed'),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.vendor_name.trim()) return toast.error('Sub-contractor name is required');
+    if (!form.advance_date)       return toast.error('Date is required');
+    if (!parseFloat(form.amount)) return toast.error('Amount is required');
+    saveMut.mutate({ ...form, amount: parseFloat(form.amount) || 0 });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4 overflow-auto">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center">
+              <Send className="w-4 h-4 text-orange-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900">New SC Advance</p>
+              <p className="text-xs text-slate-500 mt-0.5">Petty cash paid to a sub-contractor</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div><Lbl req>Date</Lbl><input type="date" className={F} value={form.advance_date} onChange={e => set('advance_date', e.target.value)} required /></div>
+            <div><Lbl>Project</Lbl>
+              <select className={FS} value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+                <option value="">— Not linked —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <Lbl req>Sub-Contractor Name</Lbl>
+            <input
+              className={F} placeholder="Type to search or enter name…"
+              value={vendorSearch || form.vendor_name}
+              onChange={e => { setVendorSearch(e.target.value); set('vendor_id', ''); set('vendor_name', e.target.value); }}
+            />
+            {vendors.length > 0 && vendorSearch && (
+              <div className="mt-1 border border-slate-200 rounded-xl bg-white shadow-sm max-h-40 overflow-y-auto z-10 relative">
+                {vendors.map(v => (
+                  <button key={v.id} type="button"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 text-slate-700 border-b border-slate-50 last:border-0"
+                    onClick={() => { set('vendor_id', v.id); set('vendor_name', v.name); setVendorSearch(''); }}>
+                    {v.name}{v.vendor_code ? ` (${v.vendor_code})` : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div><Lbl>Work Order No.</Lbl><input className={F} placeholder="e.g. WOLANLH10004" value={form.wo_number} onChange={e => set('wo_number', e.target.value)} /></div>
+          <div><Lbl req>Amount Paid (₹)</Lbl><input type="number" step="0.01" className={F} placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Lbl>Payment Mode</Lbl>
+              <select className={FS} value={form.payment_mode} onChange={e => set('payment_mode', e.target.value)}>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            </div>
+            <div><Lbl>Reference No.</Lbl><input className={F} placeholder="UPI ref / cheque no." value={form.reference_number} onChange={e => set('reference_number', e.target.value)} /></div>
+          </div>
+          <div><Lbl>Remarks</Lbl><textarea className={clsx(F, 'resize-none')} rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} /></div>
+        </form>
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
+          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={handleSubmit} disabled={saveMut.isPending} className="px-6 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50">
+            {saveMut.isPending ? 'Saving…' : 'Save SC Advance'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Receipt Form (HO Cash) ────────────────────────────────────────────────────
 const EMPTY_RECEIPT = { project_id: '', receipt_date: dayjs().format('YYYY-MM-DD'), amount: '', received_by: '', voucher_no: '', remarks: '' };
 
@@ -600,6 +705,7 @@ export default function StoresPettyCashPage() {
   const [editEntry,       setEditEntry]       = useState(null);
   const [showAdvForm,     setShowAdvForm]     = useState(false);
   const [editAdv,         setEditAdv]         = useState(null);
+  const [showScAdvForm,   setShowScAdvForm]   = useState(false);
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [editReceipt,     setEditReceipt]     = useState(null);
   const [showRepl,        setShowRepl]        = useState(false);
@@ -644,12 +750,17 @@ export default function StoresPettyCashPage() {
     queryKey: ['spc-budgets', projectId],
     queryFn: () => storesPettyCashAPI.getBudgets({ project_id: projectId || undefined }).then(r => r.data),
   });
+  const { data: scAdvancesResp, isLoading: loadingScAdv } = useQuery({
+    queryKey: ['spc-sc-advances', projectId],
+    queryFn: () => storesPettyCashAPI.listScAdvances({ project_id: projectId || undefined }).then(r => r.data),
+  });
 
-  const entries  = entriesResp?.data  ?? [];
-  const advances = advancesResp?.data ?? [];
-  const receipts = receiptsResp?.data ?? [];
-  const summary  = summaryResp?.data  ?? {};
-  const budgets  = useMemo(() => ({ ...DEFAULT_BUDGETS, ...(budgetsResp?.data ?? {}) }), [budgetsResp]);
+  const entries    = entriesResp?.data    ?? [];
+  const advances   = advancesResp?.data   ?? [];
+  const receipts   = receiptsResp?.data   ?? [];
+  const scAdvances = scAdvancesResp?.data ?? [];
+  const summary    = summaryResp?.data    ?? {};
+  const budgets    = useMemo(() => ({ ...DEFAULT_BUDGETS, ...(budgetsResp?.data ?? {}) }), [budgetsResp]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const deleteEntryMut = useMutation({
@@ -660,6 +771,11 @@ export default function StoresPettyCashPage() {
   const deleteAdvMut = useMutation({
     mutationFn: (id) => storesPettyCashAPI.deleteAdvance(id),
     onSuccess: () => { toast.success('Advance deleted'); qc.invalidateQueries({ queryKey: ['spc-advances'] }); qc.invalidateQueries({ queryKey: ['spc-summary'] }); },
+    onError: e => toast.error(e?.response?.data?.error || 'Delete failed'),
+  });
+  const deleteScAdvMut = useMutation({
+    mutationFn: (id) => storesPettyCashAPI.deleteScAdvance(id),
+    onSuccess: () => { toast.success('SC Advance deleted'); qc.invalidateQueries({ queryKey: ['spc-sc-advances'] }); qc.invalidateQueries({ queryKey: ['spc-summary'] }); },
     onError: e => toast.error(e?.response?.data?.error || 'Delete failed'),
   });
   const deleteReceiptMut = useMutation({
@@ -745,12 +861,13 @@ export default function StoresPettyCashPage() {
 
   // ── Tab helpers ────────────────────────────────────────────────────────────
   const TABS = [
-    { id: 'dashboard',   label: 'Dashboard',       Icon: BarChart2   },
-    { id: 'receipts',    label: 'HO Receipts',      Icon: Wallet      },
-    { id: 'local',       label: 'Local Purchase',   Icon: ShoppingBag },
-    { id: 'advances',    label: 'Salary Advances',  Icon: Users       },
-    { id: 'analytics',   label: 'Analytics',        Icon: TrendingUp  },
-    { id: 'budgets',     label: 'Budgets',          Icon: BookOpen    },
+    { id: 'dashboard',    label: 'Dashboard',       Icon: BarChart2   },
+    { id: 'receipts',     label: 'HO Receipts',     Icon: Wallet      },
+    { id: 'local',        label: 'Local Purchase',  Icon: ShoppingBag },
+    { id: 'advances',     label: 'Salary Advances', Icon: Users       },
+    { id: 'sc-advances',  label: 'SC Advances',     Icon: Send        },
+    { id: 'analytics',    label: 'Analytics',       Icon: TrendingUp  },
+    { id: 'budgets',      label: 'Budgets',         Icon: BookOpen    },
   ];
 
   const balanceColor = cashInHand < 0 ? 'text-red-600' : cashInHand < 5000 ? 'text-amber-600' : 'text-green-700';
@@ -1227,6 +1344,80 @@ export default function StoresPettyCashPage() {
           </div>
         )}
 
+        {/* ══ SC ADVANCES ══ */}
+        {tab === 'sc-advances' && (
+          <div>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">SC Advances</h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {scAdvances.length} entries · Total: <span className="font-semibold text-slate-700">{inr(scAdvances.reduce((s, r) => s + Number(r.amount), 0))}</span>
+                </p>
+              </div>
+              <button onClick={() => setShowScAdvForm(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700">
+                <Plus className="w-4 h-4" /> New SC Advance
+              </button>
+            </div>
+
+            <div className="flex items-start gap-2 mb-4 bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 text-xs text-orange-700">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>Petty cash advances paid directly to sub-contractors on site. These are recorded separately from salary advances and linked to sub-contractor billing.</span>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              {loadingScAdv ? (
+                <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" /></div>
+              ) : scAdvances.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
+                  <Send className="w-10 h-10 opacity-20" />
+                  <p className="text-sm font-medium">No SC advances recorded yet</p>
+                  <button onClick={() => setShowScAdvForm(true)} className="text-sm text-orange-600 hover:underline flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" /> Add first entry
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        {['Date', 'Sub-Contractor', 'WO No.', 'Project', 'Amount (₹)', 'Mode', 'Ref No.', 'Remarks', ''].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {scAdvances.map((row, i) => (
+                        <tr key={row.id} className={clsx('hover:bg-slate-50 transition-colors', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}>
+                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{dayjs(row.advance_date).format('DD MMM YY')}</td>
+                          <td className="px-4 py-3 font-medium text-slate-800">{row.vendor_name}</td>
+                          <td className="px-4 py-3 text-slate-500 text-xs font-mono">{row.wo_number || '—'}</td>
+                          <td className="px-4 py-3 text-slate-400 text-xs">{row.project_name || '—'}</td>
+                          <td className="px-4 py-3 font-mono font-semibold text-orange-700 text-right whitespace-nowrap">{inr(row.amount)}</td>
+                          <td className="px-4 py-3 text-slate-500 text-xs capitalize">{(row.payment_mode || 'cash').replace('_', ' ')}</td>
+                          <td className="px-4 py-3 text-slate-400 text-xs font-mono">{row.reference_number || '—'}</td>
+                          <td className="px-4 py-3 text-slate-400 text-xs">{row.remarks || '—'}</td>
+                          <td className="px-4 py-3">
+                            <button onClick={() => { if (window.confirm('Delete this SC advance?')) deleteScAdvMut.mutate(row.id); }}
+                              className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-orange-50 border-t-2 border-orange-200">
+                        <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold text-orange-800 uppercase">Total ({scAdvances.length} entries)</td>
+                        <td className="px-4 py-3 font-mono font-bold text-orange-700 text-right">{inr(scAdvances.reduce((s, r) => s + Number(r.amount), 0))}</td>
+                        <td colSpan={4} />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ══ ANALYTICS ══ */}
         {tab === 'analytics' && (
           <div className="space-y-5">
@@ -1403,6 +1594,13 @@ export default function StoresPettyCashPage() {
           projects={projects}
           defaultProjectId={projectId}
           onClose={() => { setShowReceiptForm(false); setEditReceipt(null); }}
+        />
+      )}
+      {showScAdvForm && (
+        <ScAdvanceForm
+          projects={projects}
+          defaultProjectId={projectId}
+          onClose={() => setShowScAdvForm(false)}
         />
       )}
 

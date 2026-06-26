@@ -380,6 +380,10 @@ export const pettyCashAPI = {
   categoryWise: (params) => api.get('/petty-cash/reports/category-wise', { params }),
   pendingSettlement:() => api.get('/petty-cash/reports/pending-settlement'),
   auditTrail:   (params) => api.get('/petty-cash/reports/audit-trail', { params }),
+  // SC Advances
+  scAdvances:       (params) => api.get('/petty-cash/sc-advances', { params }),
+  createScAdvance:  (data)   => api.post('/petty-cash/sc-advances', data),
+  scVendorLookup:   (params) => api.get('/petty-cash/sc-advances/lookup/vendors', { params }),
   // Legacy
   summary:      (params) => api.get('/petty-cash/summary', { params }),
 };
@@ -616,6 +620,11 @@ export const storesPettyCashAPI = {
   // Budgets
   getBudgets:    (params)      => api.get('/stores-petty-cash/budgets', { params }),
   updateBudgets: (data)        => api.put('/stores-petty-cash/budgets', data),
+  // SC Advances
+  listScAdvances:  (params) => api.get('/stores-petty-cash/sc-advances', { params }),
+  createScAdvance: (data)   => api.post('/stores-petty-cash/sc-advances', data),
+  deleteScAdvance: (id)     => api.delete(`/stores-petty-cash/sc-advances/${id}`),
+  scVendorLookup:  (params) => api.get('/stores-petty-cash/sc-advances/lookup/vendors', { params }),
   // Summary
   summary:       (params)      => api.get('/stores-petty-cash/summary', { params }),
 };

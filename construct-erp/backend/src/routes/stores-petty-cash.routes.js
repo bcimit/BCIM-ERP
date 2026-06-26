@@ -110,6 +110,24 @@ function categoryOf(text = '') {
     )
   `);
 
+  await safe(`
+    CREATE TABLE IF NOT EXISTS stores_pc_sc_advances (
+      id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      company_id       UUID NOT NULL,
+      project_id       UUID,
+      advance_date     DATE NOT NULL,
+      vendor_id        UUID,
+      vendor_name      TEXT NOT NULL,
+      wo_number        TEXT,
+      amount           NUMERIC(14,2) NOT NULL,
+      payment_mode     TEXT DEFAULT 'cash',
+      reference_number TEXT,
+      remarks          TEXT,
+      status           TEXT DEFAULT 'issued',
+      created_by       UUID,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
   await safe(`CREATE INDEX IF NOT EXISTS idx_spce_project ON stores_petty_cash_entries(project_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_spce_date    ON stores_petty_cash_entries(entry_date)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_spci_entry   ON stores_petty_cash_items(entry_id)`);
@@ -642,6 +660,70 @@ router.get('/summary', authenticate, async (req, res) => {
         pending_count:         parseInt(pendRes.rows[0].count),
       },
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SC (SUB-CONTRACTOR) ADVANCES
+═══════════════════════════════════════════════════════════════════════════ */
+
+// Vendor lookup for SC advance form
+router.get('/sc-advances/lookup/vendors', authenticate, async (req, res) => {
+  try {
+    const { search } = req.query;
+    const params = [req.user.company_id];
+    let sql = `SELECT id, name, vendor_code FROM vendors WHERE company_id = $1 AND is_active = true`;
+    if (search) { sql += ` AND name ILIKE $2`; params.push(`%${search}%`); }
+    sql += ` ORDER BY name LIMIT 30`;
+    const r = await query(sql, params);
+    res.json({ data: r.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// List SC advances
+router.get('/sc-advances', authenticate, async (req, res) => {
+  try {
+    const { project_id, from, to } = req.query;
+    const conditions = ['a.company_id = $1'];
+    const params = [req.user.company_id];
+    let p = 1;
+    if (project_id) { conditions.push(`a.project_id = $${++p}`); params.push(project_id); }
+    if (from)       { conditions.push(`a.advance_date >= $${++p}`); params.push(from); }
+    if (to)         { conditions.push(`a.advance_date <= $${++p}`); params.push(to); }
+    const r = await query(
+      `SELECT a.*, pr.name AS project_name, u.name AS created_by_name
+       FROM stores_pc_sc_advances a
+       LEFT JOIN projects pr ON pr.id = a.project_id
+       LEFT JOIN users    u  ON u.id  = a.created_by
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY a.advance_date DESC, a.created_at DESC`,
+      params
+    );
+    res.json({ data: r.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Create SC advance
+router.post('/sc-advances', authenticate, async (req, res) => {
+  try {
+    const { project_id, advance_date, vendor_id, vendor_name, wo_number, amount, payment_mode, reference_number, remarks } = req.body;
+    if (!vendor_name || !advance_date || !amount) return res.status(400).json({ error: 'vendor_name, advance_date and amount are required' });
+    const r = await query(
+      `INSERT INTO stores_pc_sc_advances
+         (company_id, project_id, advance_date, vendor_id, vendor_name, wo_number, amount, payment_mode, reference_number, remarks, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'issued',$11)
+       RETURNING *`,
+      [req.user.company_id, project_id || null, advance_date, vendor_id || null, vendor_name, wo_number || null, parseFloat(amount), payment_mode || 'cash', reference_number || null, remarks || null, req.user.id]
+    );
+    res.status(201).json({ data: r.rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete SC advance
+router.delete('/sc-advances/:id', authenticate, async (req, res) => {
+  try {
+    await query(`DELETE FROM stores_pc_sc_advances WHERE id = $1 AND company_id = $2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
