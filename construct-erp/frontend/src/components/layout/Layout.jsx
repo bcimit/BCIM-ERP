@@ -937,6 +937,7 @@ const MD_SHORTCUTS = [
   { label: 'Purchase Orders',   to: '/procurement/po',                  icon: ShoppingCart  },
   { label: 'Work Orders',       to: '/procurement/work-orders',         icon: Hammer        },
   { label: 'BOQ',               to: '/qs/boq',                          icon: Ruler         },
+  { label: 'BOQ Breakdown',     to: '/qs/boq-budget-breakdown',         icon: BarChart3     },
   { label: 'Budget',            to: '/procurement/budget-control',      icon: PieChart      },
   { label: 'RA Bills',          to: '/qs/ra-bills',                     icon: Receipt       },
 ];
