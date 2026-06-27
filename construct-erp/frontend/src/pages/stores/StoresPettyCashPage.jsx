@@ -446,7 +446,9 @@ function printStatement({ entries, advances, scAdvances, receipts, projectName, 
 
 // ── PDF export helper (jsPDF + autoTable) ────────────────────────────────────
 function exportPdf({ entries, advances, scAdvances, receipts, projectName, period, returnBase64 = false }) {
-  const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // jsPDF's built-in fonts have no ₹ glyph — use Rs. to avoid garbled output
+  const fmt      = (v) => 'Rs.' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cleanInv = (v) => { const s = (v || '').trim(); return (s && s !== '0' && s !== '–' && s !== '-') ? s : '–'; };
   const sc = scAdvances || [];
 
   const totalRec   = receipts.reduce((s, r) => s + Number(r.amount), 0);
@@ -508,7 +510,7 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
     return y + 4;
   };
 
-  const addTable = (y, head, body, foot) => {
+  const addTable = (y, head, body, foot, columnStyles = {}) => {
     autoTable(doc, {
       startY: y,
       margin: { left: MARGIN, right: MARGIN },
@@ -520,9 +522,8 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
       footStyles: { fillColor: LGREY, textColor: BLACK, fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       tableWidth: COL_W,
-      didDrawPage: (data) => {
-        addSignatureFooter();
-      },
+      columnStyles,
+      didDrawPage: () => { addSignatureFooter(); },
     });
     return doc.lastAutoTable.finalY + 6;
   };
@@ -546,44 +547,48 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
   // ── Page 1 ──
   let y = addPageHeader();
 
-  // A. Cash Received
+  // A. Cash Received  (Sl | Date | Voucher | Received By | Amount)
   y = addSectionTitle(y, 'A. Cash Received from HO');
   y = addTable(y,
-    [['Sl', 'Date', 'Voucher No', 'Received By', 'Amount (₹)']],
+    [['Sl', 'Date', 'Voucher No', 'Received By', 'Amount (Rs.)']],
     receipts.length
       ? receipts.map((r, i) => [i+1, dayjs(r.receipt_date).format('DD-MM-YYYY'), r.voucher_no||'–', r.received_by||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
       : [[{ content: 'No receipts recorded', colSpan: 5, styles: { halign: 'center', fontStyle: 'italic' } }]],
-    [[{ content: 'TOTAL RECEIVED', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalRec), styles: { halign: 'right' } }]]
+    [[{ content: 'TOTAL RECEIVED', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalRec), styles: { halign: 'right' } }]],
+    { 0: { cellWidth: 8 }, 1: { cellWidth: 24 }, 2: { cellWidth: 32 }, 4: { cellWidth: 30, halign: 'right' } }
   );
 
-  // B. Local Purchases
+  // B. Local Purchases  (Sl | Date | Voucher | Supplier | Materials | Invoice | Amount)
   y = addSectionTitle(y, 'B. Local Purchases (Approved)');
   y = addTable(y,
-    [['Sl', 'Date', 'Voucher No', 'Supplier', 'Materials', 'Invoice No', 'Amount (₹)']],
+    [['Sl', 'Date', 'Voucher No', 'Supplier', 'Materials', 'Inv No', 'Amount (Rs.)']],
     entries.length
-      ? entries.map((r, i) => [i+1, dayjs(r.entry_date).format('DD-MM-YYYY'), r.pc_voucher_no||'–', r.supplier||'–', (r.items||[]).map(it=>it.material_name).filter(Boolean).join(', ')||'–', r.invoice_no||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
+      ? entries.map((r, i) => [i+1, dayjs(r.entry_date).format('DD-MM-YYYY'), r.pc_voucher_no||'–', r.supplier||'–', (r.items||[]).map(it=>it.material_name).filter(Boolean).join(', ')||'–', cleanInv(r.invoice_no), { content: fmt(r.amount), styles: { halign: 'right' } }])
       : [[{ content: 'No approved local purchases', colSpan: 7, styles: { halign: 'center', fontStyle: 'italic' } }]],
-    [[{ content: 'TOTAL LOCAL PURCHASE', colSpan: 6, styles: { halign: 'right' } }, { content: fmt(totalLP), styles: { halign: 'right' } }]]
+    [[{ content: 'TOTAL LOCAL PURCHASE', colSpan: 6, styles: { halign: 'right' } }, { content: fmt(totalLP), styles: { halign: 'right' } }]],
+    { 0: { cellWidth: 8 }, 1: { cellWidth: 24 }, 2: { cellWidth: 34 }, 3: { cellWidth: 34 }, 5: { cellWidth: 16 }, 6: { cellWidth: 30, halign: 'right' } }
   );
 
-  // C. Salary Advances
+  // C. Salary Advances  (Sl | Date | Name | Description | Amount)
   y = addSectionTitle(y, 'C. Salary Advances');
   y = addTable(y,
-    [['Sl', 'Date', 'Employee Name', 'Description', 'Amount (₹)']],
+    [['Sl', 'Date', 'Employee Name', 'Description', 'Amount (Rs.)']],
     advances.length
       ? advances.map((r, i) => [i+1, dayjs(r.advance_date).format('DD-MM-YYYY'), r.payee_name||'–', r.description||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
       : [[{ content: 'No salary advances recorded', colSpan: 5, styles: { halign: 'center', fontStyle: 'italic' } }]],
-    [[{ content: 'TOTAL SALARY ADVANCES', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalAdv), styles: { halign: 'right' } }]]
+    [[{ content: 'TOTAL SALARY ADVANCES', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalAdv), styles: { halign: 'right' } }]],
+    { 0: { cellWidth: 8 }, 1: { cellWidth: 24 }, 2: { cellWidth: 42 }, 4: { cellWidth: 30, halign: 'right' } }
   );
 
-  // D. SC Advances
+  // D. SC Advances  (Sl | Date | Sub-Contractor | WO No | Amount)
   y = addSectionTitle(y, 'D. Sub-Contractor Advances');
   y = addTable(y,
-    [['Sl', 'Date', 'Sub-Contractor', 'WO No', 'Amount (₹)']],
+    [['Sl', 'Date', 'Sub-Contractor', 'WO No', 'Amount (Rs.)']],
     sc.length
       ? sc.map((r, i) => [i+1, dayjs(r.advance_date).format('DD-MM-YYYY'), r.vendor_name||'–', r.wo_number||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
       : [[{ content: 'No SC advances recorded', colSpan: 5, styles: { halign: 'center', fontStyle: 'italic' } }]],
-    [[{ content: 'TOTAL SC ADVANCES', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalScAdv), styles: { halign: 'right' } }]]
+    [[{ content: 'TOTAL SC ADVANCES', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalScAdv), styles: { halign: 'right' } }]],
+    { 0: { cellWidth: 8 }, 1: { cellWidth: 24 }, 2: { cellWidth: 52 }, 4: { cellWidth: 30, halign: 'right' } }
   );
 
   // E. Summary
@@ -604,7 +609,7 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
     styles: { fontSize: 8, cellPadding: 2, textColor: BLACK, lineColor: [180,180,180], lineWidth: 0.2 },
     headStyles: { fillColor: NAVY, textColor: [255,255,255] },
     footStyles: { fillColor: LGREY, textColor: BLACK },
-    columnStyles: { 1: { halign: 'right' } },
+    columnStyles: { 1: { halign: 'right', cellWidth: 38 } },
     tableWidth: COL_W / 2,
   });
 
