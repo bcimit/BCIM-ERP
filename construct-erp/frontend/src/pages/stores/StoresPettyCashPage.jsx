@@ -428,17 +428,38 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
               </div>
               <div>
                 <Lbl>GST %</Lbl>
-                <select className={FS}
+                <input
+                  type="number" min="0" max="100" step="0.01"
+                  className={F}
+                  placeholder="e.g. 18"
                   value={form.gst_pct}
                   onChange={e => {
-                    const pct   = parseFloat(e.target.value) || 0;
-                    const basic = parseFloat(form.basic_amount) || 0;
+                    const pct    = parseFloat(e.target.value) || 0;
+                    const basic  = parseFloat(form.basic_amount) || 0;
                     const gstAmt = +(basic * pct / 100).toFixed(2);
                     const total  = +(basic + gstAmt).toFixed(2);
                     setForm(f => ({ ...f, gst_pct: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
-                  }}>
-                  {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
-                </select>
+                  }}
+                />
+                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                  {GST_RATES.filter(r => r > 0).map(r => (
+                    <button key={r} type="button"
+                      onClick={() => {
+                        const basic  = parseFloat(form.basic_amount) || 0;
+                        const gstAmt = +(basic * r / 100).toFixed(2);
+                        const total  = +(basic + gstAmt).toFixed(2);
+                        setForm(f => ({ ...f, gst_pct: String(r), gst_amount: gstAmt || '', amount: total || '' }));
+                      }}
+                      className={clsx(
+                        'px-2 py-0.5 rounded-md text-xs font-semibold border transition-colors',
+                        String(form.gst_pct) === String(r)
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                      )}>
+                      {r}%
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <Lbl>GST Amount (₹)</Lbl>
