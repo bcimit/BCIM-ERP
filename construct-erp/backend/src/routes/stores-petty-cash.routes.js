@@ -69,6 +69,10 @@ function categoryOf(text = '') {
       sort_order    INTEGER DEFAULT 0
     )
   `);
+  await safe(`ALTER TABLE stores_petty_cash_items ADD COLUMN IF NOT EXISTS rate         NUMERIC(14,4) DEFAULT 0`);
+  await safe(`ALTER TABLE stores_petty_cash_items ADD COLUMN IF NOT EXISTS gst_pct     NUMERIC(5,2)  DEFAULT 0`);
+  await safe(`ALTER TABLE stores_petty_cash_items ADD COLUMN IF NOT EXISTS gst_amount  NUMERIC(14,2) DEFAULT 0`);
+  await safe(`ALTER TABLE stores_petty_cash_items ADD COLUMN IF NOT EXISTS total_amount NUMERIC(14,2) DEFAULT 0`);
 
   await safe(`
     CREATE TABLE IF NOT EXISTS stores_petty_cash_advances (
@@ -213,7 +217,8 @@ router.get('/entries', authenticate, async (req, res) => {
       `SELECT e.*, p.name AS project_name, u.name AS created_by_name, a.name AS approved_by_name,
               ph.name AS ph_approved_by_name,
               COALESCE(json_agg(json_build_object(
-                'id', i.id, 'material_name', i.material_name, 'unit', i.unit, 'quantity', i.quantity
+                'id', i.id, 'material_name', i.material_name, 'unit', i.unit, 'quantity', i.quantity,
+                'rate', i.rate, 'gst_pct', i.gst_pct, 'gst_amount', i.gst_amount, 'total_amount', i.total_amount
               ) ORDER BY i.sort_order) FILTER (WHERE i.id IS NOT NULL), '[]') AS items
        FROM stores_petty_cash_entries e
        LEFT JOIN projects p ON p.id = e.project_id
@@ -286,10 +291,16 @@ router.post('/entries', authenticate, async (req, res) => {
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         if (!it.material_name?.trim()) continue;
+        const qty  = n(it.quantity);
+        const rate = n(it.rate);
+        const pct  = n(it.gst_pct);
+        const basic = qty * rate;
+        const gstAmt = +(basic * pct / 100).toFixed(2);
+        const tot    = +(basic + gstAmt).toFixed(2);
         await client.query(
-          `INSERT INTO stores_petty_cash_items (entry_id, material_name, unit, quantity, sort_order)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [entryId, it.material_name.trim(), it.unit || "NO'S", n(it.quantity), i + 1]
+          `INSERT INTO stores_petty_cash_items (entry_id, material_name, unit, quantity, rate, gst_pct, gst_amount, total_amount, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [entryId, it.material_name.trim(), it.unit || "NO'S", qty, rate, pct, gstAmt, tot, i + 1]
         );
       }
       return r.rows[0];
@@ -359,10 +370,16 @@ router.put('/entries/:id', authenticate, async (req, res) => {
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         if (!it.material_name?.trim()) continue;
+        const qty  = n(it.quantity);
+        const rate = n(it.rate);
+        const pct  = n(it.gst_pct);
+        const basic = qty * rate;
+        const gstAmt = +(basic * pct / 100).toFixed(2);
+        const tot    = +(basic + gstAmt).toFixed(2);
         await client.query(
-          `INSERT INTO stores_petty_cash_items (entry_id, material_name, unit, quantity, sort_order)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [req.params.id, it.material_name.trim(), it.unit || "NO'S", n(it.quantity), i + 1]
+          `INSERT INTO stores_petty_cash_items (entry_id, material_name, unit, quantity, rate, gst_pct, gst_amount, total_amount, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [req.params.id, it.material_name.trim(), it.unit || "NO'S", qty, rate, pct, gstAmt, tot, i + 1]
         );
       }
     });
