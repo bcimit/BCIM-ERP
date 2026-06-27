@@ -369,25 +369,30 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[96vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-gradient-to-r from-indigo-50 to-white rounded-t-2xl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm">
-              <ShoppingBag className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="font-bold text-slate-900 text-base">{isEdit ? `Edit Entry — Sl No ${initial.sl_no}` : 'New Local Purchase Entry'}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Record a local purchase paid from petty cash</p>
-            </div>
+    <div className="fixed inset-0 z-[70] bg-slate-100 flex flex-col">
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm">
+            <ShoppingBag className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"><X className="w-4 h-4" /></button>
+          <div>
+            <p className="font-bold text-slate-900">{isEdit ? `Edit Entry — Sl No ${initial.sl_no}` : 'New Local Purchase Entry'}</p>
+            <p className="text-xs text-slate-500">Record a local purchase paid from petty cash</p>
+          </div>
         </div>
+        <button onClick={onClose} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-500 hover:bg-slate-50 transition-colors">
+          <X className="w-4 h-4" /> Close
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-          {/* Section: Basic Info */}
-          <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+      {/* ── Two-column body ── */}
+      <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex gap-0">
+
+        {/* LEFT column — Purchase details + Amount */}
+        <div className="w-[420px] flex-shrink-0 bg-white border-r border-slate-200 overflow-y-auto flex flex-col">
+          {/* Purchase Details */}
+          <div className="px-6 pt-6 pb-5 border-b border-slate-100">
             <SectionLabel icon={BookOpen} color="bg-indigo-50 text-indigo-700" label="Purchase Details" />
             <div className="grid grid-cols-2 gap-3">
               <div><Lbl req>Date</Lbl><input type="date" className={F} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} required /></div>
@@ -397,8 +402,8 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
-              <div><Lbl req>Supplier Name</Lbl><input className={F} placeholder="e.g. Ponam Hardware" value={form.supplier} onChange={e => set('supplier', e.target.value)} required /></div>
-              <div>
+              <div className="col-span-2"><Lbl req>Supplier Name</Lbl><input className={F} placeholder="e.g. Ponam Hardware" value={form.supplier} onChange={e => set('supplier', e.target.value)} required /></div>
+              <div className="col-span-2">
                 <Lbl>Invoice No.</Lbl>
                 <input className={F} placeholder="e.g. 49045" value={form.invoice_no} onChange={e => set('invoice_no', e.target.value)} />
                 {dupWarn && (
@@ -411,8 +416,8 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
             </div>
           </div>
 
-          {/* Section: Amount */}
-          <div className="px-6 py-4 border-b border-slate-100">
+          {/* Amount & GST */}
+          <div className="px-6 py-5 border-b border-slate-100">
             <SectionLabel icon={Wallet} color="bg-green-50 text-green-700" label="Amount & GST" />
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -420,7 +425,7 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
                 <input type="number" step="0.01" className={F} placeholder="0.00"
                   value={form.basic_amount}
                   onChange={e => {
-                    const basic = parseFloat(e.target.value) || 0;
+                    const basic  = parseFloat(e.target.value) || 0;
                     const gstAmt = +(basic * (parseFloat(form.gst_pct) || 0) / 100).toFixed(2);
                     const total  = +(basic + gstAmt).toFixed(2);
                     setForm(f => ({ ...f, basic_amount: e.target.value, gst_amount: gstAmt || '', amount: total || '' }));
@@ -466,17 +471,17 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
                 <input type="number" step="0.01" className={clsx(F, 'bg-slate-50 text-slate-500')} placeholder="0.00" value={form.gst_amount} readOnly tabIndex={-1} />
               </div>
             </div>
-            {/* Total — prominent */}
-            <div className={clsx('mt-3 rounded-xl px-4 py-3 flex items-center justify-between',
+            {/* Total strip */}
+            <div className={clsx('mt-4 rounded-xl px-5 py-4 flex items-center justify-between',
               budgetOver ? 'bg-red-50 border border-red-200' : budgetWarning ? 'bg-amber-50 border border-amber-200' : 'bg-indigo-50 border border-indigo-200')}>
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
-                <p className={clsx('text-2xl font-bold mt-0.5', budgetOver ? 'text-red-700' : 'text-indigo-700')}>
+                <p className={clsx('text-3xl font-bold mt-0.5', budgetOver ? 'text-red-700' : 'text-indigo-700')}>
                   {form.amount ? inr(form.amount) : '₹ 0.00'}
                 </p>
               </div>
               {budgetWarning && (
-                <div className="flex items-center gap-2 text-xs font-medium max-w-[200px] text-right">
+                <div className="flex items-center gap-2 text-xs font-medium max-w-[180px] text-right">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
                   <span className={budgetOver ? 'text-red-700' : 'text-amber-700'}>
                     {budgetOver
@@ -488,39 +493,50 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
             </div>
           </div>
 
-          {/* Section: Materials */}
-          <div className="px-6 py-4 border-b border-slate-100">
+          {/* Remarks */}
+          <div className="px-6 py-5">
+            <SectionLabel icon={Paperclip} color="bg-purple-50 text-purple-700" label="Remarks" />
+            <div><Lbl>Remarks</Lbl>
+              <textarea className={clsx(F, 'resize-none')} rows={3} placeholder="Any additional notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT column — Materials + Attachments */}
+        <div className="flex-1 overflow-y-auto flex flex-col bg-slate-50">
+          {/* Materials table */}
+          <div className="flex-1 px-6 pt-6 pb-4">
             <div className="flex items-center justify-between mb-3">
-              <SectionLabel icon={Package} color="bg-slate-100 text-slate-600" label="Materials Purchased" />
-              <button type="button" onClick={addItem} className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors -mt-3">
+              <SectionLabel icon={Package} color="bg-slate-200 text-slate-700" label="Materials Purchased" />
+              <button type="button" onClick={addItem} className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg transition-colors -mt-3">
                 <Plus className="w-3 h-3" /> Add Line
               </button>
             </div>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-xs">
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
+                  <tr className="bg-slate-50 border-b border-slate-200">
                     {['#', 'Material Description', 'Unit', 'Qty', ''].map(h => (
-                      <th key={h} className="px-3 py-2 text-left font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {items.map((it, idx) => (
                     <tr key={idx} className="hover:bg-slate-50">
-                      <td className="px-3 py-2 text-slate-400 w-7 font-mono">{idx + 1}</td>
-                      <td className="px-2 py-1.5 min-w-[180px]">
+                      <td className="px-4 py-2 text-slate-400 w-8 font-mono text-xs">{idx + 1}</td>
+                      <td className="px-2 py-2">
                         <input className={F} placeholder="Material name" value={it.material_name} onChange={e => updateItem(idx, 'material_name', e.target.value)} />
                       </td>
-                      <td className="px-2 py-1.5 w-24">
+                      <td className="px-2 py-2 w-28">
                         <input className={F} placeholder="NO'S" value={it.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} />
                       </td>
-                      <td className="px-2 py-1.5 w-24">
+                      <td className="px-2 py-2 w-28">
                         <input type="number" step="any" className={F} placeholder="0" value={it.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} />
                       </td>
-                      <td className="px-2 py-1.5 w-8 text-center">
+                      <td className="px-2 py-2 w-9 text-center">
                         {items.length > 1 && (
-                          <button type="button" onClick={() => removeItem(idx)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button type="button" onClick={() => removeItem(idx)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
                         )}
                       </td>
                     </tr>
@@ -530,13 +546,10 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
             </div>
           </div>
 
-          {/* Section: Remarks + Attachments */}
-          <div className="px-6 py-4 space-y-4">
-            <SectionLabel icon={Paperclip} color="bg-purple-50 text-purple-700" label="Remarks & Attachments" />
-            <div><Lbl>Remarks</Lbl>
-              <textarea className={clsx(F, 'resize-none')} rows={2} placeholder="Any additional notes…" value={form.remarks} onChange={e => set('remarks', e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          {/* Attachments */}
+          <div className="px-6 pb-6">
+            <SectionLabel icon={Paperclip} color="bg-purple-50 text-purple-700" label="Attachments" />
+            <div className="grid grid-cols-2 gap-4">
               <FileSlot label="Petty Cash Voucher" fileUrl={form.voucher_file_url} fileName={form.voucher_file_name}
                 isUploading={uploading === 'voucher'}
                 onUpload={handleFileChange('voucher')}
@@ -549,16 +562,17 @@ function EntryForm({ initial, projects, defaultProjectId, budgets, catSpend, exi
                 onRemove={() => { set('bill_file_url', ''); set('bill_file_name', ''); }} />
             </div>
           </div>
-        </form>
-
-        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-white transition-colors">Cancel</button>
-          <button onClick={handleSubmit} disabled={saveMut.isPending || !!uploading}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-colors">
-            {saveMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-            {saveMut.isPending ? 'Saving…' : isEdit ? 'Update Entry' : 'Save Entry'}
-          </button>
         </div>
+      </form>
+
+      {/* ── Footer ── */}
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 bg-white border-t border-slate-200">
+        <button type="button" onClick={onClose} className="px-5 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+        <button onClick={handleSubmit} disabled={saveMut.isPending || !!uploading}
+          className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-colors">
+          {saveMut.isPending ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          {saveMut.isPending ? 'Saving…' : isEdit ? 'Update Entry' : 'Save Entry'}
+        </button>
       </div>
     </div>
   );
