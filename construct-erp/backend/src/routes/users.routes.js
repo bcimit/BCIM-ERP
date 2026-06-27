@@ -237,26 +237,26 @@ runSchemaInit('users_role_schema', ensureRoleSchema);
 })();
 
 // ── One-time user profile patches ────────────────────────────────────────────
-// Idempotent updates for existing users: password reset, department, module access.
+// Idempotent updates for existing users: department and module access only.
+// NOTE: Never include passwordHash here — it runs on every server start and
+// would overwrite any password the user has set via the admin panel.
 (async () => {
   const patches = [
     {
-      email:        'lokpratap@bcim.in',
-      passwordHash: '$2a$10$DL5Tqc6SSIMqZ2MxwP11IuGdw/1egE230s36dO7Mv3muRk9ZkJqcy',
-      department:   'Accounts',
-      modules:      ['Stores Petty Cash'],
+      email:      'lokpratap@bcim.in',
+      department: 'Accounts',
+      modules:    ['Stores Petty Cash'],
     },
   ];
   for (const p of patches) {
     try {
       const r = await query(
         `UPDATE users
-            SET password_hash       = $1,
-                department          = $2,
-                accessible_modules  = $3::text[]
-          WHERE LOWER(email) = $4
+            SET department         = $1,
+                accessible_modules = $2::text[]
+          WHERE LOWER(email) = $3
           RETURNING id, name, email`,
-        [p.passwordHash, p.department, p.modules, p.email.toLowerCase()]
+        [p.department, p.modules, p.email.toLowerCase()]
       );
       if (r.rowCount > 0) console.log(`[users] Patched user: ${p.email}`);
       else console.warn(`[users] Patch: user not found — ${p.email}`);
