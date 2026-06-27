@@ -1915,10 +1915,16 @@ export default function StoresPettyCashPage() {
     });
   }, [entriesWithBal, statusFilter, catFilter]);
 
-  // Duplicate invoice detection
+  // Duplicate invoice detection — skip blank/placeholder values ('0', '-', '–')
   const dupInvoices = useMemo(() => {
     const map = {};
-    entries.forEach(e => { if (e.invoice_no && e.invoice_no !== '–') { map[e.invoice_no] = map[e.invoice_no] || []; map[e.invoice_no].push(e.id); } });
+    entries.forEach(e => {
+      const inv = (e.invoice_no || '').trim();
+      if (inv && inv !== '–' && inv !== '-' && inv !== '0') {
+        map[inv] = map[inv] || [];
+        map[inv].push(e.id);
+      }
+    });
     return Object.fromEntries(Object.entries(map).filter(([, ids]) => ids.length > 1));
   }, [entries]);
 
@@ -1937,8 +1943,8 @@ export default function StoresPettyCashPage() {
   const existingInvoices = useMemo(() => {
     const map = {};
     entries.forEach(e => {
-      if (e.invoice_no && e.invoice_no !== '–') {
-        const inv = e.invoice_no.trim();
+      const inv = (e.invoice_no || '').trim();
+      if (inv && inv !== '–' && inv !== '-' && inv !== '0') {
         if (!map[inv]) map[inv] = { id: e.id, sl_no: e.sl_no, supplier: e.supplier, entry_date: e.entry_date, amount: e.amount };
       }
     });
