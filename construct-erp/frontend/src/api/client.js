@@ -1912,6 +1912,13 @@ export const hrComplianceAPI = {
   wageRegister:        (p) => api.get('/hr-admin/compliance/wage-register',        { params: p }),
   incomeTaxRegister:   (p) => api.get('/hr-admin/compliance/income-tax-register',  { params: p }),
   departments:         ()  => api.get('/hr-admin/compliance/departments'),
+  labourLicenses:      ()         => api.get('/hr-admin/compliance/labour-licenses'),
+  createLicence:       (d)        => api.post('/hr-admin/compliance/labour-licenses', d),
+  updateLicence:       (id, d)    => api.put(`/hr-admin/compliance/labour-licenses/${id}`, d),
+  deleteLicence:       (id)       => api.delete(`/hr-admin/compliance/labour-licenses/${id}`),
+  documentExpiry:      (p)        => api.get('/hr-admin/compliance/document-expiry', { params: p }),
+  updateDocExpiry:     (id, d)    => api.put(`/hr-admin/compliance/document-expiry/${id}`, d),
+  complianceCalendar:  (p)        => api.get('/hr-admin/compliance/compliance-calendar', { params: p }),
 };
 
 export const mailAPI = {

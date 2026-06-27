@@ -1,12 +1,14 @@
 // HR Compliance Reports — PF, ESI, PT, Muster Roll, Wage Register, Employment Register, Income Tax
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShieldCheck, Download, RefreshCw, ChevronDown, Users,
-  FileText, Calendar, Building2, IndianRupee, Fingerprint, BookOpen, Calculator
+  FileText, Calendar, CalendarDays, Building2, IndianRupee, Fingerprint,
+  BookOpen, Calculator, AlertTriangle, Plus, Edit2, Trash2, X, Clock, BadgeCheck
 } from 'lucide-react';
 import { hrComplianceAPI } from '../../api/client';
+import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 
 const fade = (d = 0) => ({ initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3, delay: d } });
@@ -24,6 +26,9 @@ const TABS = [
   { key: 'muster',     label: 'Muster Roll',           icon: Calendar,       color: 'rose'   },
   { key: 'employment', label: 'Employment Register',   icon: Users,          color: 'teal'   },
   { key: 'it',         label: 'Income Tax',            icon: FileText,       color: 'orange' },
+  { key: 'licenses',   label: 'Labour Licences',        icon: BadgeCheck,     color: 'indigo' },
+  { key: 'docexpiry',  label: 'Doc Expiry',             icon: AlertTriangle,  color: 'red'    },
+  { key: 'calendar',   label: 'Compliance Calendar',    icon: CalendarDays,   color: 'sky'    },
 ];
 
 const COLOR = {
@@ -34,6 +39,9 @@ const COLOR = {
   rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',     active: 'bg-rose-600'    },
   teal:    { bg: 'bg-teal-50',    text: 'text-teal-700',    border: 'border-teal-200',    active: 'bg-teal-600'    },
   orange:  { bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200',  active: 'bg-orange-600'  },
+  indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200',  active: 'bg-indigo-600'  },
+  red:     { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200',     active: 'bg-red-600'     },
+  sky:     { bg: 'bg-sky-50',     text: 'text-sky-700',     border: 'border-sky-200',     active: 'bg-sky-600'     },
 };
 
 // ── Shared Controls ────────────────────────────────────────────────────────────
@@ -664,6 +672,447 @@ function IncomeTaxRegister() {
   );
 }
 
+// ── Labour Licences ───────────────────────────────────────────────────────────
+const LICENSE_TYPES = [
+  { value: 'contract_labour', label: 'Contract Labour Act Registration' },
+  { value: 'shop_act',        label: 'Shop & Establishment Act' },
+  { value: 'factory_act',     label: 'Factory Act Licence' },
+  { value: 'pf_code',         label: 'PF Registration / Code Number' },
+  { value: 'esi_code',        label: 'ESI Registration / Code Number' },
+  { value: 'pt_reg',          label: 'Professional Tax Registration' },
+  { value: 'labour_welfare',  label: 'Labour Welfare Fund' },
+  { value: 'building_plan',   label: 'Building Plan Approval' },
+  { value: 'environmental',   label: 'Environmental Clearance' },
+  { value: 'other',           label: 'Other' },
+];
+const LICENSE_STATUS_OPTS = ['active','expired','renewed','cancelled'];
+const EMPTY_LICENSE = { license_type:'contract_labour', license_name:'', license_number:'', issuing_authority:'', issue_date:'', expiry_date:'', alert_days:30, renewal_cost:'', status:'active', notes:'' };
+
+function LabourLicenses() {
+  const qc = useQueryClient();
+  const [modal, setModal]   = useState(null); // null | { mode:'add'|'edit', data? }
+  const [form,  setForm]    = useState(EMPTY_LICENSE);
+  const [delId, setDelId]   = useState(null);
+
+  const { data: res, isLoading, refetch } = useQuery({
+    queryKey: ['compliance-licenses'],
+    queryFn:  () => hrComplianceAPI.labourLicenses().then(r => r.data),
+  });
+  const rows     = res?.data || [];
+  const expired  = rows.filter(r => r.is_expired).length;
+  const expiring = rows.filter(r => r.expiring_soon && !r.is_expired).length;
+  const active   = rows.filter(r => !r.is_expired).length;
+
+  const saveMut = useMutation({
+    mutationFn: (d) => modal?.data?.id ? hrComplianceAPI.updateLicence(modal.data.id, d) : hrComplianceAPI.createLicence(d),
+    onSuccess:  () => { qc.invalidateQueries(['compliance-licenses']); setModal(null); toast.success('Saved'); },
+    onError:    (e) => toast.error(e.response?.data?.error || 'Save failed'),
+  });
+  const delMut = useMutation({
+    mutationFn: (id) => hrComplianceAPI.deleteLicence(id),
+    onSuccess:  () => { qc.invalidateQueries(['compliance-licenses']); setDelId(null); toast.success('Deleted'); },
+    onError:    (e) => toast.error(e.response?.data?.error || 'Delete failed'),
+  });
+
+  const openAdd  = () => { setForm(EMPTY_LICENSE); setModal({ mode:'add' }); };
+  const openEdit = (r) => { setForm({ ...r, issue_date: r.issue_date?.slice(0,10)||'', expiry_date: r.expiry_date?.slice(0,10)||'' }); setModal({ mode:'edit', data:r }); };
+
+  const statusBadge = (r) => {
+    if (r.is_expired)    return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700">Expired {Math.abs(r.days_remaining)}d ago</span>;
+    if (r.expiring_soon) return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700">Expires in {r.days_remaining}d</span>;
+    if (r.days_remaining !== null) return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">Valid ({r.days_remaining}d left)</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 capitalize">{r.status}</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex gap-3 flex-wrap">
+          {expired  > 0 && <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold"><AlertTriangle size={13}/> {expired} Expired</div>}
+          {expiring > 0 && <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold"><Clock size={13}/> {expiring} Expiring Soon</div>}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={refetch} className="p-2 rounded-xl hover:bg-gray-100"><RefreshCw size={15} className="text-gray-500"/></button>
+          <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">
+            <Plus size={14}/> Add Licence
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Total Licences" value={rows.length}/>
+        <StatCard label="Active / Valid" value={active}/>
+        <StatCard label="Expiring Soon"  value={expiring} sub="Within alert period"/>
+        <StatCard label="Expired"        value={expired}  sub="Needs renewal"/>
+      </div>
+
+      {isLoading ? <LoadingTable/> : (
+        <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-indigo-700 text-white">
+                {['#','Type','Licence Name','Number','Issuing Authority','Issue Date','Expiry Date','Status','Alert','Actions'].map(h => (
+                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((r, i) => (
+                <tr key={r.id} className={`hover:bg-indigo-50/40 ${r.is_expired ? 'bg-red-50/20' : r.expiring_soon ? 'bg-amber-50/20' : ''}`}>
+                  <td className="px-3 py-2 text-gray-400">{i+1}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{LICENSE_TYPES.find(t => t.value === r.license_type)?.label || r.license_type}</td>
+                  <td className="px-3 py-2 font-semibold text-gray-900">{r.license_name || '—'}</td>
+                  <td className="px-3 py-2 font-mono text-indigo-700">{r.license_number || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">{r.issuing_authority || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">{r.issue_date ? new Date(r.issue_date).toLocaleDateString('en-IN') : '—'}</td>
+                  <td className="px-3 py-2 font-semibold">{r.expiry_date ? new Date(r.expiry_date).toLocaleDateString('en-IN') : '—'}</td>
+                  <td className="px-3 py-2">{statusBadge(r)}</td>
+                  <td className="px-3 py-2 text-gray-500">{r.alert_days}d</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-indigo-100 text-indigo-600"><Edit2 size={12}/></button>
+                      <button onClick={() => setDelId(r.id)} className="p-1.5 rounded-lg hover:bg-red-100 text-red-500"><Trash2 size={12}/></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!rows.length && <tr><td colSpan={10} className="px-3 py-10 text-center text-gray-400">No licences added yet. Click "Add Licence" to start tracking.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add / Edit Modal */}
+      {modal && (
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-black text-gray-900">{modal.mode === 'add' ? 'Add Licence' : 'Edit Licence'}</h3>
+              <button onClick={() => setModal(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={16}/></button>
+            </div>
+            <div className="px-6 py-5 grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Licence Type *</label>
+                <select value={form.license_type} onChange={e => setForm(f => ({...f, license_type:e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                  {LICENSE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Licence Name</label>
+                <input value={form.license_name} onChange={e => setForm(f => ({...f, license_name:e.target.value}))} placeholder="e.g. Contract Labour Principal Employer"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Licence / Registration Number</label>
+                <input value={form.license_number} onChange={e => setForm(f => ({...f, license_number:e.target.value}))} placeholder="Registration No."
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Issuing Authority</label>
+                <input value={form.issuing_authority} onChange={e => setForm(f => ({...f, issuing_authority:e.target.value}))} placeholder="e.g. EPFO, ESIC, Labour Dept, Commercial Tax Dept"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Issue Date</label>
+                <input type="date" value={form.issue_date} onChange={e => setForm(f => ({...f, issue_date:e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Expiry Date</label>
+                <input type="date" value={form.expiry_date} onChange={e => setForm(f => ({...f, expiry_date:e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Alert Before Expiry (days)</label>
+                <input type="number" value={form.alert_days} onChange={e => setForm(f => ({...f, alert_days:parseInt(e.target.value)||30}))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Renewal Cost (₹)</label>
+                <input type="number" value={form.renewal_cost} onChange={e => setForm(f => ({...f, renewal_cost:e.target.value}))} placeholder="0"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+                <select value={form.status} onChange={e => setForm(f => ({...f, status:e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                  {LICENSE_STATUS_OPTS.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+                <textarea value={form.notes||''} onChange={e => setForm(f => ({...f, notes:e.target.value}))} rows={2}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none"/>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end px-6 pb-5">
+              <button onClick={() => setModal(null)} className="px-4 py-2 text-sm font-semibold rounded-xl text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={() => saveMut.mutate(form)} disabled={saveMut.isPending}
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60">
+                {saveMut.isPending ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {delId && (
+        <div className="fixed inset-0 z-[90] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+            <h3 className="font-black text-gray-900 mb-2">Delete Licence?</h3>
+            <p className="text-sm text-gray-500 mb-5">This cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setDelId(null)} className="px-4 py-2 text-sm font-semibold rounded-xl text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={() => delMut.mutate(delId)} disabled={delMut.isPending}
+                className="px-4 py-2 text-sm font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-60">
+                {delMut.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Document Expiry Tracker ────────────────────────────────────────────────────
+function DocumentExpiry() {
+  const qc = useQueryClient();
+  const [filter,    setFilter]    = useState('all');
+  const [editModal, setEditModal] = useState(null);
+  const [editForm,  setEditForm]  = useState({});
+
+  const { data: res, isLoading, refetch } = useQuery({
+    queryKey: ['compliance-docexpiry', filter],
+    queryFn:  () => hrComplianceAPI.documentExpiry({ filter }).then(r => r.data),
+  });
+  const rows    = res?.data  || [];
+  const total   = res?.total || rows.length;
+  const expired  = rows.filter(r => r.is_expired).length;
+  const expiring = rows.filter(r => r.expiring_soon && !r.is_expired).length;
+  const noExpiry = rows.filter(r => !r.expiry_date).length;
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, ...d }) => hrComplianceAPI.updateDocExpiry(id, d),
+    onSuccess:  () => { qc.invalidateQueries(['compliance-docexpiry']); setEditModal(null); toast.success('Updated'); },
+    onError:    (e) => toast.error(e.response?.data?.error || 'Update failed'),
+  });
+
+  const openEdit = (r) => {
+    setEditForm({ expiry_date: r.expiry_date?.slice(0,10)||'', issued_date: r.issued_date?.slice(0,10)||'', document_number: r.document_number||'', alert_days: r.alert_days||30 });
+    setEditModal(r);
+  };
+
+  const daysBadge = (r) => {
+    if (!r.expiry_date) return <span className="text-gray-400 text-[10px] italic">No expiry set</span>;
+    if (r.is_expired)    return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700">Expired {Math.abs(r.days_remaining)}d ago</span>;
+    if (r.expiring_soon) return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700">Expires in {r.days_remaining}d</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">{r.days_remaining}d left</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex gap-2">
+          {[['all',`All (${total})`],['expiring',`Expiring (${expiring})`],['expired',`Expired (${expired})`]].map(([f,lbl]) => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${filter === f ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <button onClick={refetch} className="p-2 rounded-xl hover:bg-gray-100"><RefreshCw size={15} className="text-gray-500"/></button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Total Documents" value={total}/>
+        <StatCard label="Expired"         value={expired}  sub="Needs renewal"/>
+        <StatCard label="Expiring Soon"   value={expiring} sub="Within alert days"/>
+        <StatCard label="No Expiry Set"   value={filter === 'all' ? noExpiry : 0} sub="Click edit to add"/>
+      </div>
+
+      {filter === 'all' && noExpiry > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700 flex items-start gap-2">
+          <AlertTriangle size={14} className="flex-shrink-0 mt-0.5"/>
+          <span><strong>{noExpiry} document(s)</strong> have no expiry date. Click the edit icon on each row to add expiry dates for tracking.</span>
+        </div>
+      )}
+
+      {isLoading ? <LoadingTable/> : (
+        <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-red-700 text-white">
+                {['#','Employee','Code','Dept','Doc Type','Doc Name','Doc Number','Issue Date','Expiry Date','Status','Edit'].map(h => (
+                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((r, i) => (
+                <tr key={r.id} className={`hover:bg-red-50/30 ${r.is_expired ? 'bg-red-50/10' : r.expiring_soon ? 'bg-amber-50/10' : ''}`}>
+                  <td className="px-3 py-2 text-gray-400">{i+1}</td>
+                  <td className="px-3 py-2 font-semibold text-gray-900 whitespace-nowrap">{r.employee_name}</td>
+                  <td className="px-3 py-2 font-mono text-gray-600">{r.employee_code}</td>
+                  <td className="px-3 py-2 text-gray-500">{r.department}</td>
+                  <td className="px-3 py-2 text-gray-600 capitalize">{(r.doc_type||'').replace(/_/g,' ')}</td>
+                  <td className="px-3 py-2 text-gray-600">{r.doc_name || '—'}</td>
+                  <td className="px-3 py-2 font-mono text-gray-500">{r.document_number || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">{r.issued_date ? new Date(r.issued_date).toLocaleDateString('en-IN') : '—'}</td>
+                  <td className="px-3 py-2 font-semibold">{r.expiry_date ? new Date(r.expiry_date).toLocaleDateString('en-IN') : '—'}</td>
+                  <td className="px-3 py-2">{daysBadge(r)}</td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-red-100 text-red-600"><Edit2 size={12}/></button>
+                  </td>
+                </tr>
+              ))}
+              {!rows.length && (
+                <tr><td colSpan={11} className="px-3 py-10 text-center text-gray-400">
+                  {filter === 'all' ? 'No documents found' : `No ${filter} documents`}
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Edit Expiry Modal */}
+      {editModal && (
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-black text-gray-900">Update Document Expiry</h3>
+              <button onClick={() => setEditModal(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={16}/></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-50 rounded-xl px-4 py-3">
+                <p className="font-semibold text-gray-800 text-sm">{editModal.employee_name}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{editModal.doc_name} — {(editModal.doc_type||'').replace(/_/g,' ')}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Document Number</label>
+                  <input value={editForm.document_number} onChange={e => setEditForm(f => ({...f, document_number:e.target.value}))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Alert Before (days)</label>
+                  <input type="number" value={editForm.alert_days} onChange={e => setEditForm(f => ({...f, alert_days:parseInt(e.target.value)||30}))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Issue Date</label>
+                  <input type="date" value={editForm.issued_date} onChange={e => setEditForm(f => ({...f, issued_date:e.target.value}))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Expiry Date</label>
+                  <input type="date" value={editForm.expiry_date} onChange={e => setEditForm(f => ({...f, expiry_date:e.target.value}))}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20"/>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end px-6 pb-5">
+              <button onClick={() => setEditModal(null)} className="px-4 py-2 text-sm font-semibold rounded-xl text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={() => updateMut.mutate({ id: editModal.id, ...editForm })} disabled={updateMut.isPending}
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-60">
+                {updateMut.isPending ? 'Saving…' : 'Update'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Compliance Calendar ────────────────────────────────────────────────────────
+function ComplianceCalendar() {
+  const [month, setMonth] = useState(CURRENT_MONTH);
+  const [year,  setYear]  = useState(CURRENT_YEAR);
+
+  const { data: res, isLoading, refetch } = useQuery({
+    queryKey: ['compliance-calendar', month, year],
+    queryFn:  () => hrComplianceAPI.complianceCalendar({ month, year }).then(r => r.data),
+  });
+  const tasks    = res?.data || [];
+  const overdue  = tasks.filter(t => t.overdue).length;
+  const dueSoon  = tasks.filter(t => t.due_soon && !t.overdue).length;
+  const upcoming = tasks.filter(t => !t.overdue && !t.due_soon).length;
+
+  const catColor = (cat) =>
+    cat === 'PF'    ? { bg:'bg-blue-50',    text:'text-blue-700',    border:'border-blue-200'    } :
+    cat === 'ESI'   ? { bg:'bg-emerald-50', text:'text-emerald-700', border:'border-emerald-200' } :
+    cat === 'PT'    ? { bg:'bg-violet-50',  text:'text-violet-700',  border:'border-violet-200'  } :
+    cat === 'TDS'   ? { bg:'bg-orange-50',  text:'text-orange-700',  border:'border-orange-200'  } :
+                      { bg:'bg-amber-50',   text:'text-amber-700',   border:'border-amber-200'   };
+
+  const catBadge = (t) =>
+    t.overdue  ? 'bg-red-700 text-white' :
+    t.due_soon ? 'bg-amber-600 text-white' :
+    t.category === 'PF'  ? 'bg-blue-700 text-white' :
+    t.category === 'ESI' ? 'bg-emerald-700 text-white' :
+    t.category === 'PT'  ? 'bg-violet-700 text-white' :
+    t.category === 'TDS' ? 'bg-orange-700 text-white' : 'bg-amber-700 text-white';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <MonthYearPicker month={month} year={year} onChange={(m,y) => { setMonth(m); setYear(y); }}/>
+        <button onClick={refetch} className="p-2 rounded-xl hover:bg-gray-100"><RefreshCw size={15} className="text-gray-500"/></button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Total Tasks"  value={tasks.length} sub={res?.month_name}/>
+        <StatCard label="Overdue"      value={overdue}  sub="Past due date"/>
+        <StatCard label="Due Soon"     value={dueSoon}  sub="Within 3 days"/>
+        <StatCard label="Upcoming"     value={upcoming} sub="On schedule"/>
+      </div>
+
+      <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-xs text-sky-700">
+        Statutory due dates for <strong>{res?.month_name || MONTHS[month-1]} {year}</strong>.
+        Dates based on standard Indian labour law requirements — verify with your CA for state-specific variations.
+      </div>
+
+      {isLoading ? <LoadingTable/> : (
+        <div className="space-y-3">
+          {tasks.map(t => {
+            const c = catColor(t.category);
+            const rowBg    = t.overdue ? 'bg-red-50 border-red-200' : t.due_soon ? 'bg-amber-50 border-amber-200' : `${c.bg} ${c.border}`;
+            const textCls  = t.overdue ? 'text-red-700' : t.due_soon ? 'text-amber-700' : c.text;
+            return (
+              <div key={t.id} className={`flex items-start gap-4 p-4 rounded-2xl border ${rowBg}`}>
+                <div className={`min-w-[52px] text-center rounded-xl py-2 ${t.overdue ? 'bg-red-100' : t.due_soon ? 'bg-amber-100' : c.bg} border ${t.overdue ? 'border-red-200' : t.due_soon ? 'border-amber-200' : c.border}`}>
+                  <p className={`text-xl font-black leading-none ${textCls}`}>{t.due_day}</p>
+                  <p className={`text-[10px] font-semibold opacity-70 ${textCls}`}>{MONTHS[month-1].slice(0,3)}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${catBadge(t)}`}>{t.category}</span>
+                    <p className={`text-sm font-bold ${textCls}`}>{t.task}</p>
+                  </div>
+                  <p className="text-xs text-gray-500">{t.description}</p>
+                </div>
+                <div className="text-right whitespace-nowrap flex-shrink-0">
+                  {t.overdue
+                    ? <span className="text-xs font-bold text-red-600">{Math.abs(t.days_remaining)}d overdue</span>
+                    : t.days_remaining === 0
+                    ? <span className="text-xs font-black text-amber-600">DUE TODAY</span>
+                    : <span className={`text-xs font-semibold ${t.due_soon ? 'text-amber-600 font-bold' : 'text-gray-500'}`}>in {t.days_remaining}d</span>
+                  }
+                </div>
+              </div>
+            );
+          })}
+          {!tasks.length && <div className="text-center py-10 text-gray-400 text-sm">No compliance tasks for this month</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function HRCompliancePage({ embedded = false }) {
   const [activeTab, setActiveTab] = useState('pf');
@@ -693,7 +1142,7 @@ export default function HRCompliancePage({ embedded = false }) {
               <span className="text-white/60 text-sm font-semibold">HR & Admin</span>
             </div>
             <h1 className="text-2xl font-black text-white">Compliance Reports</h1>
-            <p className="text-white/55 text-sm mt-1">PF · ESI · Professional Tax · Wage Register · Muster Roll · Income Tax</p>
+            <p className="text-white/55 text-sm mt-1">PF · ESI · Prof. Tax · Muster Roll · Wage Register · Labour Licences · Doc Expiry · Compliance Calendar</p>
           </div>
         </motion.div>
       )}
@@ -726,6 +1175,9 @@ export default function HRCompliancePage({ embedded = false }) {
         {activeTab === 'muster'     && <MusterRoll depts={depts}/>}
         {activeTab === 'employment' && <EmploymentRegister/>}
         {activeTab === 'it'         && <IncomeTaxRegister/>}
+        {activeTab === 'licenses'   && <LabourLicenses/>}
+        {activeTab === 'docexpiry'  && <DocumentExpiry/>}
+        {activeTab === 'calendar'   && <ComplianceCalendar/>}
       </motion.div>
     </div>
   );

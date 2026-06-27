@@ -482,6 +482,176 @@ router.get('/income-tax-register', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ─── init new compliance tables ────────────────────────────────────────────── */
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+(async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS hr_labour_licenses (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id        UUID NOT NULL,
+        license_type      TEXT NOT NULL,
+        license_name      TEXT,
+        license_number    TEXT,
+        issuing_authority TEXT,
+        issue_date        DATE,
+        expiry_date       DATE,
+        alert_days        INT DEFAULT 30,
+        renewal_cost      NUMERIC(12,2),
+        status            TEXT DEFAULT 'active',
+        notes             TEXT,
+        file_url          TEXT,
+        created_by        UUID REFERENCES users(id),
+        created_at        TIMESTAMPTZ DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await query(`ALTER TABLE employee_documents ADD COLUMN IF NOT EXISTS expiry_date DATE`);
+    await query(`ALTER TABLE employee_documents ADD COLUMN IF NOT EXISTS alert_days INT DEFAULT 30`);
+    await query(`ALTER TABLE employee_documents ADD COLUMN IF NOT EXISTS issued_date DATE`);
+    await query(`ALTER TABLE employee_documents ADD COLUMN IF NOT EXISTS document_number TEXT`);
+  } catch (e) { console.error('[hr-compliance] table init:', e.message); }
+})();
+
+/* ═══════════════════════════════════════════════════════
+   Labour Licenses CRUD
+   GET    /compliance/labour-licenses
+   POST   /compliance/labour-licenses
+   PUT    /compliance/labour-licenses/:id
+   DELETE /compliance/labour-licenses/:id
+══════════════════════════════════════════════════════ */
+router.get('/labour-licenses', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT * FROM hr_labour_licenses WHERE company_id = $1 ORDER BY expiry_date NULLS LAST, license_type`,
+      [req.user.company_id]
+    );
+    const today = new Date(); today.setHours(0,0,0,0);
+    const data = rows.map(r => {
+      const exp = r.expiry_date ? new Date(r.expiry_date) : null;
+      const daysLeft = exp ? Math.ceil((exp - today) / 86400000) : null;
+      return { ...r, days_remaining: daysLeft, is_expired: daysLeft !== null && daysLeft < 0, expiring_soon: daysLeft !== null && daysLeft >= 0 && daysLeft <= (r.alert_days || 30) };
+    });
+    res.json({ data, count: data.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/labour-licenses', async (req, res) => {
+  const { license_type, license_name, license_number, issuing_authority, issue_date, expiry_date, alert_days, renewal_cost, status, notes, file_url } = req.body;
+  try {
+    const { rows } = await query(
+      `INSERT INTO hr_labour_licenses (company_id, license_type, license_name, license_number, issuing_authority, issue_date, expiry_date, alert_days, renewal_cost, status, notes, file_url, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.user.company_id, license_type, license_name, license_number, issuing_authority, issue_date||null, expiry_date||null, alert_days||30, renewal_cost||null, status||'active', notes, file_url, req.user.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/labour-licenses/:id', async (req, res) => {
+  const { license_type, license_name, license_number, issuing_authority, issue_date, expiry_date, alert_days, renewal_cost, status, notes, file_url } = req.body;
+  try {
+    const { rows } = await query(
+      `UPDATE hr_labour_licenses SET license_type=$1, license_name=$2, license_number=$3, issuing_authority=$4,
+         issue_date=$5, expiry_date=$6, alert_days=$7, renewal_cost=$8, status=$9, notes=$10, file_url=$11, updated_at=NOW()
+       WHERE id=$12 AND company_id=$13 RETURNING *`,
+      [license_type, license_name, license_number, issuing_authority, issue_date||null, expiry_date||null, alert_days||30, renewal_cost||null, status, notes, file_url, req.params.id, req.user.company_id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/labour-licenses/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_labour_licenses WHERE id=$1 AND company_id=$2`, [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ═══════════════════════════════════════════════════════
+   GET  /compliance/document-expiry?filter=all|expiring|expired
+   PUT  /compliance/document-expiry/:id
+   Employee document expiry tracking
+══════════════════════════════════════════════════════ */
+router.get('/document-expiry', async (req, res) => {
+  const { filter = 'all' } = req.query;
+  try {
+    const { rows } = await query(
+      `SELECT ed.id, ed.doc_type, ed.doc_name, ed.document_number, ed.issued_date,
+              ed.expiry_date, ed.alert_days, ed.file_url, ed.uploaded_at,
+              u.name AS employee_name, u.employee_code,
+              COALESCE(dep.name,'Unassigned') AS department
+       FROM employee_documents ed
+       JOIN users u ON u.id = ed.user_id
+       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+       WHERE u.company_id = $1 AND u.is_active = TRUE
+       ORDER BY ed.expiry_date NULLS LAST, u.name`,
+      [req.user.company_id]
+    );
+    const today = new Date(); today.setHours(0,0,0,0);
+    const all = rows.map(r => {
+      const exp = r.expiry_date ? new Date(r.expiry_date) : null;
+      const daysLeft = exp ? Math.ceil((exp - today) / 86400000) : null;
+      return { ...r, days_remaining: daysLeft, is_expired: daysLeft !== null && daysLeft < 0, expiring_soon: daysLeft !== null && daysLeft >= 0 && daysLeft <= (r.alert_days || 30) };
+    });
+    const data = filter === 'expiring' ? all.filter(r => r.expiring_soon && !r.is_expired)
+               : filter === 'expired'  ? all.filter(r => r.is_expired)
+               : all;
+    res.json({ data, count: data.length, total: all.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/document-expiry/:id', async (req, res) => {
+  const { expiry_date, alert_days, document_number, issued_date } = req.body;
+  try {
+    const { rows } = await query(
+      `UPDATE employee_documents SET expiry_date=$1, alert_days=$2, document_number=$3, issued_date=$4 WHERE id=$5 RETURNING *`,
+      [expiry_date||null, alert_days||30, document_number, issued_date||null, req.params.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ═══════════════════════════════════════════════════════
+   GET /compliance/compliance-calendar?month=&year=
+   Statutory compliance due dates for selected month
+══════════════════════════════════════════════════════ */
+router.get('/compliance-calendar', async (req, res) => {
+  const { month = new Date().getMonth() + 1, year = new Date().getFullYear() } = req.query;
+  const m = parseInt(month); const y = parseInt(year);
+  const prevM = m === 1 ? 12 : m - 1;
+  const prevMonthName = MONTH_NAMES[prevM - 1];
+
+  const tasks = [
+    { id:1, category:'TDS',   task:`TDS Challan — ${prevMonthName} salary`,      due_day: 7,  description:'Deposit TDS on salary via TRACES / NSDL challan (Form 281)' },
+    { id:2, category:'WAGES', task:`Wage Payment — ${MONTH_NAMES[m-1]}`,         due_day: 7,  description:'Monthly salary disbursement (on or before 7th for ≤1,000 employees, else 10th)' },
+    { id:3, category:'PF',    task:`EPF Challan — ${prevMonthName} contribution`, due_day:15,  description:'Employee + Employer PF (EPF+EPS+Admin charges) via EPFO Unified Portal' },
+    { id:4, category:'PT',    task:`Prof. Tax — ${prevMonthName} (Karnataka)`,   due_day:20,  description:'Monthly Professional Tax payment to Commercial Taxes Department' },
+    { id:5, category:'ESI',   task:`ESI Challan — ${prevMonthName} contribution`, due_day:21, description:'Employee (0.75%) + Employer (3.25%) ESI via ESIC Self-Service Portal' },
+  ];
+  if (m === 4) {
+    tasks.push({ id:6, category:'PF',  task:'PF Annual Return (Form 3A / 6A)',  due_day:30, description:'Annual PF returns for the previous FY on EPFO portal' });
+    tasks.push({ id:7, category:'PT',  task:'PT Annual Return — Karnataka',      due_day:30, description:'Annual PT statement and payment to Commercial Taxes Dept' });
+  }
+  if (m === 7)  tasks.push({ id:8,  category:'TDS', task:'TDS Q1 Return (Form 24Q)',  due_day:31, description:'Quarterly TDS return for April–June' });
+  if (m === 10) tasks.push({ id:9,  category:'TDS', task:'TDS Q2 Return (Form 24Q)',  due_day:31, description:'Quarterly TDS return for July–September' });
+  if (m === 11) tasks.push({ id:10, category:'ESI', task:'ESI Annual Accident Return (Form 1-B)', due_day:11, description:'Annual return of accidents under ESI Act' });
+  if (m === 1)  tasks.push({ id:11, category:'TDS', task:'TDS Q3 Return (Form 24Q)',  due_day:15, description:'Quarterly TDS return for October–December' });
+
+  tasks.sort((a, b) => a.due_day - b.due_day);
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const enriched = tasks.map(t => {
+    const due = new Date(y, m - 1, t.due_day);
+    const diff = Math.ceil((due - today) / 86400000);
+    return { ...t, due_date: due.toISOString().split('T')[0], days_remaining: diff, overdue: diff < 0, due_soon: diff >= 0 && diff <= 3 };
+  });
+  res.json({ data: enriched, month: m, year: y, month_name: MONTH_NAMES[m - 1] });
+});
+
 /* ═══════════════════════════════════════════════════════
    GET /compliance/departments  (for filter dropdowns)
 ══════════════════════════════════════════════════════ */

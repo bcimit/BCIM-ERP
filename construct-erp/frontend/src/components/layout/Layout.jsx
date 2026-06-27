@@ -229,6 +229,7 @@ const navGroups = [
     { to: '/hr-admin/reports',           icon: FileBarChart,    label: 'HR Reports' },
     { to: '/ess',                        icon: UserCheck,       label: 'ESS Portal' },
     { to: '/hr-admin/documents',         icon: FolderSearch,    label: 'Documents' },
+    { to: '/hr-admin/compliance',        icon: ShieldCheck,     label: 'Compliance' },
   ]},
   { label: 'Bill Tracker', items: [
     { to: '/tqs',                       icon: LayoutDashboard, label: 'Bill Tracker Dashboard' },
