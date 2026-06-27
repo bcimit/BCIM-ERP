@@ -1025,6 +1025,91 @@ function ApprovalModal({ entry, mode, onConfirm, onClose }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+// ── Attach-Only Modal ────────────────────────────────────────────────────────
+// Lets users upload / replace bill & voucher files on ANY entry (including
+// Approved ones) without touching any other field.
+function AttachOnlyModal({ entry, onClose, onSaved }) {
+  const [voucherUrl,  setVoucherUrl]  = useState(entry.voucher_file_url  || '');
+  const [voucherName, setVoucherName] = useState(entry.voucher_file_name || '');
+  const [billUrl,     setBillUrl]     = useState(entry.bill_file_url     || '');
+  const [billName,    setBillName]    = useState(entry.bill_file_name    || '');
+  const [uploading,   setUploading]   = useState({ voucher: false, bill: false });
+  const [saving,      setSaving]      = useState(false);
+
+  const handleUpload = (kind) => async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(u => ({ ...u, [kind]: true }));
+    try {
+      const token = localStorage.getItem('erp-token') || sessionStorage.getItem('erp-token') || '';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      if (kind === 'voucher') { setVoucherUrl(data.url); setVoucherName(file.name); }
+      else                   { setBillUrl(data.url);     setBillName(file.name); }
+      toast.success(`${kind === 'voucher' ? 'Voucher' : 'Bill'} uploaded`);
+    } catch (err) { toast.error(err.message || 'Upload failed'); }
+    finally { setUploading(u => ({ ...u, [kind]: false })); }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await storesPettyCashAPI.updateEntry(entry.id, {
+        ...entry,
+        voucher_file_url: voucherUrl  || null,
+        voucher_file_name: voucherName || null,
+        bill_file_url:    billUrl     || null,
+        bill_file_name:   billName    || null,
+      });
+      toast.success('Attachments saved');
+      onSaved();
+    } catch (err) { toast.error(err?.response?.data?.error || 'Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Upload Attachments</p>
+            <p className="text-xs text-slate-400 mt-0.5">{entry.invoice_no || entry.supplier || 'Voucher'} · {entry.entry_date}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <FileSlot
+            label="Petty Cash Voucher"
+            fileUrl={voucherUrl} fileName={voucherName}
+            isUploading={uploading.voucher}
+            onUpload={handleUpload('voucher')}
+            onView={() => openAttachment(voucherUrl)}
+            onRemove={() => { setVoucherUrl(''); setVoucherName(''); }}
+          />
+          <FileSlot
+            label="Bill / Invoice"
+            fileUrl={billUrl} fileName={billName}
+            isUploading={uploading.bill}
+            onUpload={handleUpload('bill')}
+            onView={() => openAttachment(billUrl)}
+            onRemove={() => { setBillUrl(''); setBillName(''); }}
+          />
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100">
+          <button onClick={onClose} className="px-4 py-1.5 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Attachments'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StoresPettyCashPage() {
   const qc = useQueryClient();
   const { user } = useAuthStore();
@@ -1045,6 +1130,7 @@ export default function StoresPettyCashPage() {
   const [editReceipt,     setEditReceipt]     = useState(null);
   const [showRepl,        setShowRepl]        = useState(false);
   const [editBudgets,     setEditBudgets]     = useState(false);
+  const [attachModal,     setAttachModal]     = useState(null); // { entry } — upload-only modal for any status
   const [localBudgets,    setLocalBudgets]    = useState(null);
   const [statusFilter,    setStatusFilter]    = useState(highlightId ? 'All' : 'All');
   const [catFilter,       setCatFilter]       = useState('All');
@@ -1692,6 +1778,10 @@ export default function StoresPettyCashPage() {
                                     <Eye className="w-3.5 h-3.5" />
                                   </button>
                                 )}
+                                <button onClick={() => setAttachModal({ entry: row })}
+                                  className="p-1 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100" title="Upload / replace attachments">
+                                  <Paperclip className="w-3.5 h-3.5" />
+                                </button>
                                 <button onClick={() => { if (window.confirm('Delete this entry?')) deleteEntryMut.mutate(row.id); }}
                                   className="p-1 rounded-md text-slate-300 hover:bg-red-50 hover:text-red-500" title="Delete">
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -2108,6 +2198,13 @@ export default function StoresPettyCashPage() {
           projects={projects}
           defaultProjectId={projectId}
           onClose={() => setShowScAdvForm(false)}
+        />
+      )}
+      {attachModal && (
+        <AttachOnlyModal
+          entry={attachModal.entry}
+          onClose={() => setAttachModal(null)}
+          onSaved={() => { setAttachModal(null); qc.invalidateQueries({ queryKey: ['spc-entries'] }); }}
         />
       )}
       {approvalModal && (
