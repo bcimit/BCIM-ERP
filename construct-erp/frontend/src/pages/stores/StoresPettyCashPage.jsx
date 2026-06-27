@@ -158,46 +158,275 @@ function BarChart({ data }) {
 }
 
 // ── Print helper ─────────────────────────────────────────────────────────────
-function printStatement({ entries, advances, receipts, projectName }) {
-  const approved = entries.filter(e => e.status === 'Approved');
-  const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
-  const totalRec  = receipts.reduce((s, r) => s + Number(r.amount), 0);
-  const totalLP   = approved.reduce((s, r) => s + Number(r.amount), 0);
-  const totalAdv  = advances.reduce((s, r) => s + Number(r.amount), 0);
-  const balance   = totalRec - totalLP - totalAdv;
+function printStatement({ entries, advances, scAdvances, receipts, projectName }) {
+  const fmt  = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sc   = scAdvances || [];
+  const totalRec   = receipts.reduce((s, r) => s + Number(r.amount), 0);
+  const totalLP    = entries.reduce((s, r) => s + Number(r.amount), 0);
+  const totalAdv   = advances.reduce((s, r) => s + Number(r.amount), 0);
+  const totalScAdv = sc.reduce((s, r) => s + Number(r.amount), 0);
+  const balance    = totalRec - totalLP - totalAdv - totalScAdv;
 
-  const recRows  = receipts.map(r => `<tr><td>${dayjs(r.receipt_date).format('DD-MM-YYYY')}</td><td>${r.voucher_no || '–'}</td><td>${r.received_by || '–'}</td><td style="text-align:right">${fmt(r.amount)}</td></tr>`).join('');
-  const lpRows   = approved.map(r => `<tr><td>${dayjs(r.entry_date).format('DD-MM-YYYY')}</td><td>${r.supplier}</td><td>${(r.items || []).map(i => i.material_name).join(', ') || '–'}</td><td>${r.invoice_no || '–'}</td><td style="text-align:right">${fmt(r.amount)}</td></tr>`).join('');
-  const advRows  = advances.map(r => `<tr><td>${dayjs(r.advance_date).format('DD-MM-YYYY')}</td><td>${r.payee_name}</td><td>${r.description || '–'}</td><td style="text-align:right">${fmt(r.amount)}</td></tr>`).join('');
+  const TD = 'border:1px solid #000;padding:3px 5px;vertical-align:top;';
+  const TH = 'border:1px solid #000;padding:4px 5px;font-weight:700;background:#f0f0f0;text-align:center;';
 
-  const html = `<html><head><title>Petty Cash Statement</title>
-  <style>body{font-family:Arial,sans-serif;font-size:12px;color:#1C2533;margin:32px}
-  h1{font-size:18px;color:#1F3864;border-bottom:2px solid #1F3864;padding-bottom:8px}
-  h2{font-size:13px;color:#2E75B6;margin:20px 0 6px}
-  table{width:100%;border-collapse:collapse;margin-bottom:16px}
-  th{background:#1F3864;color:#fff;padding:7px 10px;text-align:left;font-size:11px}
-  td{padding:6px 10px;border-bottom:1px solid #EEF0F3}
-  .total{font-weight:700;text-align:right}
-  .sig{margin-top:48px;display:flex;gap:80px}
-  .sig div{border-top:1px solid #333;padding-top:6px;font-size:11px;color:#4B5563;width:180px}
-  </style></head><body>
-  <h1>Stores Petty Cash Statement${projectName ? ' — ' + projectName : ''}</h1>
-  <h2>A. Cash Received from HO</h2>
-  <table><tr><th>Date</th><th>Voucher No</th><th>Received By</th><th>Amount</th></tr>
-  ${recRows}<tr><td colspan="3" class="total">TOTAL RECEIVED</td><td class="total">${fmt(totalRec)}</td></tr></table>
-  <h2>B. Local Purchases</h2>
-  <table><tr><th>Date</th><th>Supplier</th><th>Materials</th><th>Invoice</th><th>Amount</th></tr>
-  ${lpRows}<tr><td colspan="4" class="total">TOTAL LOCAL PURCHASE</td><td class="total">${fmt(totalLP)}</td></tr></table>
-  <h2>C. Salary Advances</h2>
-  <table><tr><th>Date</th><th>Name</th><th>Description</th><th>Amount</th></tr>
-  ${advRows}<tr><td colspan="3" class="total">TOTAL ADVANCES</td><td class="total">${fmt(totalAdv)}</td></tr></table>
-  <h2>D. Summary</h2>
-  <table><tr><th>Item</th><th>Amount</th></tr>
-  <tr><td>Total Received from HO</td><td>${fmt(totalRec)}</td></tr>
-  <tr><td>Total Spent (Purchases + Advances)</td><td>${fmt(totalLP + totalAdv)}</td></tr>
-  <tr><td><b>Cash in Hand (Closing Balance)</b></td><td><b>${fmt(balance)}</b></td></tr></table>
-  <div class="sig"><div>Site Incharge</div><div>Project Manager</div><div>Accounts</div></div>
-  </body></html>`;
+  const recRows = receipts.length
+    ? receipts.map((r, i) => `<tr>
+        <td style="${TD}text-align:center;">${i + 1}</td>
+        <td style="${TD}">${dayjs(r.receipt_date).format('DD-MM-YYYY')}</td>
+        <td style="${TD}">${r.voucher_no || '–'}</td>
+        <td style="${TD}">${r.received_by || '–'}</td>
+        <td style="${TD}text-align:right;font-weight:600;">${fmt(r.amount)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" style="${TD}text-align:center;color:#666;font-style:italic;padding:8px;">No receipts recorded</td></tr>`;
+
+  const lpRows = entries.length
+    ? entries.map((r, i) => `<tr>
+        <td style="${TD}text-align:center;">${i + 1}</td>
+        <td style="${TD}">${dayjs(r.entry_date).format('DD-MM-YYYY')}</td>
+        <td style="${TD}">${r.supplier || '–'}</td>
+        <td style="${TD}">${(r.items || []).map(it => it.material_name).filter(Boolean).join(', ') || '–'}</td>
+        <td style="${TD}">${r.invoice_no || '–'}</td>
+        <td style="${TD}text-align:right;font-weight:600;">${fmt(r.amount)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="6" style="${TD}text-align:center;color:#666;font-style:italic;padding:8px;">No approved local purchases</td></tr>`;
+
+  const advRows = advances.length
+    ? advances.map((r, i) => `<tr>
+        <td style="${TD}text-align:center;">${i + 1}</td>
+        <td style="${TD}">${dayjs(r.advance_date).format('DD-MM-YYYY')}</td>
+        <td style="${TD}">${r.payee_name || '–'}</td>
+        <td style="${TD}">${r.description || '–'}</td>
+        <td style="${TD}text-align:right;font-weight:600;">${fmt(r.amount)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" style="${TD}text-align:center;color:#666;font-style:italic;padding:8px;">No salary advances recorded</td></tr>`;
+
+  const scRows = sc.length
+    ? sc.map((r, i) => `<tr>
+        <td style="${TD}text-align:center;">${i + 1}</td>
+        <td style="${TD}">${dayjs(r.advance_date).format('DD-MM-YYYY')}</td>
+        <td style="${TD}">${r.vendor_name || '–'}</td>
+        <td style="${TD}">${r.wo_number || '–'}</td>
+        <td style="${TD}text-align:right;font-weight:600;">${fmt(r.amount)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5" style="${TD}text-align:center;color:#666;font-style:italic;padding:8px;">No SC advances recorded</td></tr>`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Petty Cash Statement${projectName ? ' — ' + projectName : ''}</title>
+  <style>
+    @media print {
+      @page { margin: 14mm 12mm 36mm 12mm; size: A4; }
+      .pc-doc-head    { display: table-header-group; }
+      .pc-foot-spacer { display: table-footer-group; }
+      .pc-sig-footer  { position: fixed; bottom: 0; left: 0; right: 0; padding: 0 12mm 6mm; background: #fff; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    body  { font-family: 'Times New Roman', Times, serif; font-size: 11px; color: #000; margin: 0; padding: 14mm 12mm 0; }
+    h2    { font-size: 12px; font-weight: 700; text-decoration: underline; margin: 14px 0 5px; }
+    table { border-collapse: collapse; }
+  </style>
+</head>
+<body>
+
+<table style="width:100%;border-collapse:collapse;">
+  <!-- doc code repeats on every page -->
+  <thead class="pc-doc-head">
+    <tr><td style="border:none;padding:0 0 4px;">
+      <div style="text-align:right;font-weight:700;font-size:11px;">BCIM-STO-PC-01</div>
+    </td></tr>
+  </thead>
+  <!-- spacer reserves footer band on every page -->
+  <tfoot class="pc-foot-spacer">
+    <tr><td style="border:none;padding:0;height:34mm;"></td></tr>
+  </tfoot>
+  <tbody>
+    <tr><td style="border:none;padding:0;">
+
+      <!-- TITLE + LOGO -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <img src="/bcim-logo.png" alt="BCIM" style="height:40px;object-fit:contain;">
+        <div style="flex:1;text-align:center;">
+          <h1 style="font-size:17px;font-weight:700;letter-spacing:0.5px;margin:0;">PETTY CASH STATEMENT</h1>
+          ${projectName ? `<div style="font-size:12px;margin-top:2px;">${projectName}</div>` : ''}
+        </div>
+        <div style="width:40px;"></div>
+      </div>
+
+      <!-- COMPANY + META -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+        <tr>
+          <td style="width:58%;vertical-align:top;padding:0;border:none;">
+            <div style="font-weight:700;">BCIM ENGINEERING PRIVATE LIMITED</div>
+            <div style="line-height:1.4;">#11, B Wing, Divyasree Chambers, O'Shaughnessy Road</div>
+            <div>Bangalore, Karnataka &ndash; 560025</div>
+            <div style="font-weight:700;margin-top:2px;">GSTIN : 29AAHCB6485A1ZL</div>
+          </td>
+          <td style="vertical-align:top;padding:0;border:none;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="font-weight:700;padding:1px 8px 1px 0;white-space:nowrap;vertical-align:top;border:none;">Project:</td>
+                <td style="padding:1px 0;font-weight:700;border:none;">${projectName || '&mdash;'}</td>
+              </tr>
+              <tr>
+                <td style="font-weight:700;padding:1px 8px 1px 0;white-space:nowrap;vertical-align:top;border:none;">Date:</td>
+                <td style="padding:1px 0;border:none;">${dayjs().format('DD-MM-YYYY')}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      <div style="border-top:1.5px solid #000;margin-bottom:10px;"></div>
+
+      <!-- A. CASH RECEIVED -->
+      <h2>A. Cash Received from HO</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <thead>
+          <tr>
+            <th style="${TH}width:34px;">Sl No</th>
+            <th style="${TH}width:88px;">Date</th>
+            <th style="${TH}width:100px;">Voucher No</th>
+            <th style="${TH}text-align:left;">Received By</th>
+            <th style="${TH}width:120px;text-align:right;">Amount (&#8377;)</th>
+          </tr>
+        </thead>
+        <tbody>${recRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="${TD}text-align:right;font-weight:700;background:#f0f0f0;">TOTAL RECEIVED</td>
+            <td style="${TD}text-align:right;font-weight:700;font-size:12px;background:#f0f0f0;">${fmt(totalRec)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- B. LOCAL PURCHASES -->
+      <h2>B. Local Purchases (Approved)</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <thead>
+          <tr>
+            <th style="${TH}width:34px;">Sl No</th>
+            <th style="${TH}width:88px;">Date</th>
+            <th style="${TH}width:140px;">Supplier</th>
+            <th style="${TH}text-align:left;">Materials</th>
+            <th style="${TH}width:90px;">Invoice No</th>
+            <th style="${TH}width:120px;text-align:right;">Amount (&#8377;)</th>
+          </tr>
+        </thead>
+        <tbody>${lpRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="5" style="${TD}text-align:right;font-weight:700;background:#f0f0f0;">TOTAL LOCAL PURCHASE</td>
+            <td style="${TD}text-align:right;font-weight:700;font-size:12px;background:#f0f0f0;">${fmt(totalLP)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- C. SALARY ADVANCES -->
+      <h2>C. Salary Advances</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <thead>
+          <tr>
+            <th style="${TH}width:34px;">Sl No</th>
+            <th style="${TH}width:88px;">Date</th>
+            <th style="${TH}width:160px;">Name</th>
+            <th style="${TH}text-align:left;">Description</th>
+            <th style="${TH}width:120px;text-align:right;">Amount (&#8377;)</th>
+          </tr>
+        </thead>
+        <tbody>${advRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="${TD}text-align:right;font-weight:700;background:#f0f0f0;">TOTAL SALARY ADVANCES</td>
+            <td style="${TD}text-align:right;font-weight:700;font-size:12px;background:#f0f0f0;">${fmt(totalAdv)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- D. SC ADVANCES -->
+      <h2>D. Sub-Contractor Advances</h2>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <thead>
+          <tr>
+            <th style="${TH}width:34px;">Sl No</th>
+            <th style="${TH}width:88px;">Date</th>
+            <th style="${TH}width:200px;">Sub-Contractor</th>
+            <th style="${TH}text-align:left;">WO No</th>
+            <th style="${TH}width:120px;text-align:right;">Amount (&#8377;)</th>
+          </tr>
+        </thead>
+        <tbody>${scRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="${TD}text-align:right;font-weight:700;background:#f0f0f0;">TOTAL SC ADVANCES</td>
+            <td style="${TD}text-align:right;font-weight:700;font-size:12px;background:#f0f0f0;">${fmt(totalScAdv)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- E. SUMMARY -->
+      <h2>E. Summary</h2>
+      <table style="width:50%;border-collapse:collapse;margin-bottom:14px;">
+        <tr>
+          <td style="${TD}font-weight:700;">Total Cash Received from HO</td>
+          <td style="${TD}text-align:right;">${fmt(totalRec)}</td>
+        </tr>
+        <tr>
+          <td style="${TD}">Less: Local Purchases</td>
+          <td style="${TD}text-align:right;">(${fmt(totalLP)})</td>
+        </tr>
+        <tr>
+          <td style="${TD}">Less: Salary Advances</td>
+          <td style="${TD}text-align:right;">(${fmt(totalAdv)})</td>
+        </tr>
+        <tr>
+          <td style="${TD}">Less: SC Advances</td>
+          <td style="${TD}text-align:right;">(${fmt(totalScAdv)})</td>
+        </tr>
+        <tr style="background:#f0f0f0;">
+          <td style="border:1.5px solid #000;padding:5px 6px;font-weight:700;font-size:13px;">Cash in Hand (Closing Balance)</td>
+          <td style="border:1.5px solid #000;padding:5px 6px;text-align:right;font-weight:700;font-size:13px;${balance < 0 ? 'color:#cc0000;' : ''}">
+            ${balance < 0 ? '(' + fmt(Math.abs(balance)) + ') OVERDRAWN' : fmt(balance)}
+          </td>
+        </tr>
+      </table>
+
+    </td></tr>
+  </tbody>
+</table>
+
+<!-- Signature footer — fixed to bottom of every printed page -->
+<div class="pc-sig-footer">
+  <table style="width:100%;border-collapse:collapse;">
+    <tr>
+      <td style="width:25%;text-align:center;vertical-align:bottom;padding:2px 6px;">
+        <div style="height:32px;"></div>
+        <div style="font-weight:700;font-size:10px;border-top:1px solid #000;padding-top:2px;margin-top:2px;">Site Incharge</div>
+      </td>
+      <td style="width:25%;text-align:center;vertical-align:bottom;padding:2px 6px;">
+        <div style="height:32px;"></div>
+        <div style="font-weight:700;font-size:10px;border-top:1px solid #000;padding-top:2px;margin-top:2px;">Project Manager</div>
+      </td>
+      <td style="width:25%;text-align:center;vertical-align:bottom;padding:2px 6px;">
+        <div style="height:32px;"></div>
+        <div style="font-weight:700;font-size:10px;border-top:1px solid #000;padding-top:2px;margin-top:2px;">Accounts</div>
+      </td>
+      <td style="width:25%;text-align:center;vertical-align:bottom;padding:2px 6px;">
+        <div style="height:32px;"></div>
+        <div style="font-weight:700;font-size:10px;border-top:1px solid #000;padding-top:2px;margin-top:2px;">Managing Director</div>
+      </td>
+    </tr>
+  </table>
+  <div style="text-align:center;margin-top:4px;line-height:1.4;">
+    <div style="font-weight:700;font-size:10px;">BCIM ENGINEERING PRIVATE LIMITED</div>
+    <div style="font-size:9px;">&ldquo;B&rdquo; Wing, DivyaSree Chambers, No. 11, O&rsquo;Shaugnessy Road, Bangalore-560 025.</div>
+  </div>
+</div>
+
+</body>
+</html>`;
+
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
@@ -1434,7 +1663,7 @@ export default function StoresPettyCashPage() {
               {cashInHand < 0 ? <AlertTriangle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
               {inr(Math.abs(cashInHand))} {cashInHand < 0 ? 'OVERDRAWN' : 'in Hand'}
             </div>
-            <button onClick={() => printStatement({ entries: approvedEntries, advances, receipts, projectName: selectedProject?.name })}
+            <button onClick={() => printStatement({ entries: approvedEntries, advances, scAdvances, receipts, projectName: selectedProject?.name })}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
               style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff' }}>
               <Printer className="w-3.5 h-3.5" /> Print
