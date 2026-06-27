@@ -88,6 +88,9 @@ function categoryOf(text = '') {
   `);
 
   await safe(`ALTER TABLE stores_petty_cash_advances ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Approved'`);
+  await safe(`ALTER TABLE stores_petty_cash_entries  ADD COLUMN IF NOT EXISTS je_reference TEXT`);
+  await safe(`ALTER TABLE stores_petty_cash_advances ADD COLUMN IF NOT EXISTS je_reference TEXT`);
+  await safe(`ALTER TABLE stores_petty_cash_receipts ADD COLUMN IF NOT EXISTS je_reference TEXT`);
 
   await safe(`
     CREATE TABLE IF NOT EXISTS stores_petty_cash_receipts (
@@ -408,16 +411,26 @@ router.patch('/entries/:id/status', authenticate, async (req, res) => {
       if (gst > 0) lines.push({ code: '1300', debit: gst, description: `Input GST / ITC — ${ref}` });
       lines.push({ code: '1000', credit: total, description: `Petty cash paid — ${entry.supplier} (${ref})` });
 
-      postAutoJournalStandalone({
-        companyId: req.user.company_id,
-        userId:    req.user.id,
-        entryDate: entry.entry_date,
-        projectId: entry.project_id || null,
-        reference: ref,
-        narration: `Stores petty cash — ${entry.supplier}`,
-        source:    'auto_stores_petty_cash',
-        lines,
-      }).catch(() => {});
+      try {
+        const jeId = await postAutoJournalStandalone({
+          companyId: req.user.company_id,
+          userId:    req.user.id,
+          entryDate: entry.entry_date,
+          projectId: entry.project_id || null,
+          reference: ref,
+          narration: `Stores petty cash — ${entry.supplier}`,
+          source:    'auto_stores_petty_cash',
+          lines,
+        });
+        if (jeId) {
+          const jeRow = await query(`SELECT entry_no FROM journal_entries WHERE id=$1`, [jeId]);
+          const jeRef = jeRow.rows[0]?.entry_no;
+          if (jeRef) {
+            await query(`UPDATE stores_petty_cash_entries SET je_reference=$1 WHERE id=$2`, [jeRef, entry.id]);
+            entry.je_reference = jeRef;
+          }
+        }
+      } catch (_) {}
     }
 
     res.json({ data: entry });
@@ -480,7 +493,32 @@ router.post('/advances', authenticate, async (req, res) => {
       [req.user.company_id, project_id || null, advance_date, payee_name.trim(),
        description || 'SALARY ADVANCE', n(amount), remarks || null, req.user.id]
     );
-    res.status(201).json({ data: r.rows[0] });
+    const adv = r.rows[0];
+    // Auto-post JV: Dr Advance to Vendors/Staff (1150), Cr Cash in Hand (1000)
+    try {
+      const jeId = await postAutoJournalStandalone({
+        companyId: req.user.company_id,
+        userId:    req.user.id,
+        entryDate: advance_date,
+        projectId: project_id || null,
+        reference: `ADV-${adv.id.slice(0, 8).toUpperCase()}`,
+        narration: `Petty cash advance — ${payee_name} (${description || 'SALARY ADVANCE'})`,
+        source:    'auto_stores_petty_cash',
+        lines: [
+          { code: '1150', debit:  n(amount), description: `Advance to ${payee_name} — ${description || 'SALARY ADVANCE'}` },
+          { code: '1000', credit: n(amount), description: `Cash paid — advance to ${payee_name}` },
+        ],
+      });
+      if (jeId) {
+        const jeRow = await query(`SELECT entry_no FROM journal_entries WHERE id=$1`, [jeId]);
+        const jeRef = jeRow.rows[0]?.entry_no;
+        if (jeRef) {
+          await query(`UPDATE stores_petty_cash_advances SET je_reference=$1 WHERE id=$2`, [jeRef, adv.id]);
+          adv.je_reference = jeRef;
+        }
+      }
+    } catch (_) {}
+    res.status(201).json({ data: adv });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -552,7 +590,32 @@ router.post('/receipts', authenticate, async (req, res) => {
       [req.user.company_id, project_id || null, receipt_date, n(amount),
        received_by || null, voucher_no || null, remarks || null, req.user.id]
     );
-    res.status(201).json({ data: r.rows[0] });
+    const rec = r.rows[0];
+    // Auto-post JV: Dr Cash in Hand (1000), Cr Bank Accounts (1010) — replenishment from bank
+    try {
+      const jeId = await postAutoJournalStandalone({
+        companyId: req.user.company_id,
+        userId:    req.user.id,
+        entryDate: receipt_date,
+        projectId: project_id || null,
+        reference: voucher_no || `RCP-${rec.id.slice(0, 8).toUpperCase()}`,
+        narration: `Petty cash receipt — ${received_by || 'HO'}${voucher_no ? ' (' + voucher_no + ')' : ''}`,
+        source:    'auto_stores_petty_cash',
+        lines: [
+          { code: '1000', debit:  n(amount), description: `Cash received — ${received_by || 'HO'}${voucher_no ? ' (' + voucher_no + ')' : ''}` },
+          { code: '1010', credit: n(amount), description: `Bank transfer to petty cash${voucher_no ? ' — ' + voucher_no : ''}` },
+        ],
+      });
+      if (jeId) {
+        const jeRow = await query(`SELECT entry_no FROM journal_entries WHERE id=$1`, [jeId]);
+        const jeRef = jeRow.rows[0]?.entry_no;
+        if (jeRef) {
+          await query(`UPDATE stores_petty_cash_receipts SET je_reference=$1 WHERE id=$2`, [jeRef, rec.id]);
+          rec.je_reference = jeRef;
+        }
+      }
+    } catch (_) {}
+    res.status(201).json({ data: rec });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

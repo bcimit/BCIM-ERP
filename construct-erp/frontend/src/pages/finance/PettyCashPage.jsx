@@ -1296,9 +1296,15 @@ function StoresPCTab({ projectId }) {
                   <td className="px-3 py-2 text-right font-bold text-green-700">{fmt(e.total_amount ?? e.amount)}</td>
                   <td className="px-3 py-2 text-gray-500">{e.approved_by_name || '—'}</td>
                   <td className="px-3 py-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
-                      <CheckCircle size={9} /> Auto-JV
-                    </span>
+                    {e.je_reference ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                        <CheckCircle size={9} /> {e.je_reference}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                        <AlertCircle size={9} /> No JV
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
