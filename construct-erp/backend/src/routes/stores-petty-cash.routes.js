@@ -297,6 +297,22 @@ router.post('/entries', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Must be defined BEFORE /:id routes so Express does not treat 'clear-attachments' as a UUID param.
+router.patch('/entries/clear-attachments', authenticate, async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let sql = `UPDATE stores_petty_cash_entries
+                  SET bill_file_url=NULL, bill_file_name=NULL,
+                      voucher_file_url=NULL, voucher_file_name=NULL,
+                      updated_at=NOW()
+                WHERE company_id=$1`;
+    const params = [req.user.company_id];
+    if (project_id) { sql += ` AND project_id=$2`; params.push(project_id); }
+    const r = await query(sql, params);
+    res.json({ success: true, rows_updated: r.rowCount });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.put('/entries/:id', authenticate, async (req, res) => {
   try {
     const existing = await getEntry(req.params.id, req.user.company_id);
@@ -416,23 +432,6 @@ router.delete('/entries/:id', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PATCH /entries/clear-attachments — admin/super_admin only
-// Bulk-removes all bill and voucher attachment URLs from every entry for this company.
-// Used when old locally-stored attachments are lost after a server restart.
-router.patch('/entries/clear-attachments', authenticate, async (req, res) => {
-  try {
-    const { project_id } = req.query;
-    let sql = `UPDATE stores_petty_cash_entries
-                  SET bill_file_url=NULL, bill_file_name=NULL,
-                      voucher_file_url=NULL, voucher_file_name=NULL,
-                      updated_at=NOW()
-                WHERE company_id=$1`;
-    const params = [req.user.company_id];
-    if (project_id) { sql += ` AND project_id=$2`; params.push(project_id); }
-    const r = await query(sql, params);
-    res.json({ success: true, rows_updated: r.rowCount });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OTHER PETTY CASH (salary advances / contractor payments)
