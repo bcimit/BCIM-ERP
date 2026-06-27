@@ -412,6 +412,7 @@ router.patch('/entries/:id/status', authenticate, async (req, res) => {
         companyId: req.user.company_id,
         userId:    req.user.id,
         entryDate: entry.entry_date,
+        projectId: entry.project_id || null,
         reference: ref,
         narration: `Stores petty cash — ${entry.supplier}`,
         source:    'auto_stores_petty_cash',
