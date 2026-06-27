@@ -3086,7 +3086,7 @@ export default function StoresPettyCashPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-slate-900">Email Petty Cash Report</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Sends to it@bcim.in</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Sends to it@bcim.in &amp; stephen@bcim.in</p>
                 </div>
               </div>
               <button onClick={() => setWeeklyModal(null)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700">
@@ -3138,7 +3138,7 @@ export default function StoresPettyCashPage() {
                   try {
                     const r = await storesPettyCashAPI.emailWeeklyReport({ from, to });
                     toast.dismiss(tid);
-                    toast.success(`Report sent to it@bcim.in (${dayjs(from).format('DD-MM-YYYY')} – ${dayjs(to).format('DD-MM-YYYY')})`);
+                    toast.success(`Report sent to it@bcim.in & stephen@bcim.in (${dayjs(from).format('DD-MM-YYYY')} – ${dayjs(to).format('DD-MM-YYYY')})`);
                   } catch (e) {
                     toast.dismiss(tid);
                     toast.error(e?.response?.data?.error || 'Failed to send report');
