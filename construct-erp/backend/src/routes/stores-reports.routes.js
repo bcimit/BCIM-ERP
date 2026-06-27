@@ -4,9 +4,9 @@ const express = require('express');
 const router  = express.Router();
 const { query } = require('../config/database');
 const { authenticate } = require('../middleware/auth');
-const { appendProjectScope } = require('../middleware/projectScope');
+const { loadProjectScope } = require('../middleware/projectScope');
 
-router.use(authenticate);
+router.use(authenticate, loadProjectScope);
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function scopeWhere(req, alias) {
@@ -245,18 +245,20 @@ router.get('/:type', async (req, res) => {
           g.grn_number,
           g.grn_date,
           p.name          AS project_name,
-          COALESCE(v.name, g.supplier_name) AS vendor_name,
-          g.po_number,
-          g.invoice_number,
+          v.name          AS vendor_name,
+          COALESCE(po.serial_no_formatted, po.po_number) AS po_number,
+          NULL            AS invoice_number,
           g.quality_status AS status,
-          COALESCE(items.items_summary, g.material_name) AS materials,
-          COALESCE(items.total_qty, g.quantity_received, 0) AS total_qty,
-          g.vehicle_number,
-          g.received_by_name,
+          items.items_summary AS materials,
+          COALESCE(items.total_qty, g.total_quantity, 0) AS total_qty,
+          g.gate_pass_no  AS vehicle_number,
+          u.name          AS received_by_name,
           g.remarks
         FROM grn g
         JOIN projects p ON p.id = g.project_id
         LEFT JOIN vendors v ON v.id = g.vendor_id
+        LEFT JOIN purchase_orders po ON po.id = g.po_id
+        LEFT JOIN users u ON u.id = g.received_by
         LEFT JOIN LATERAL (
           SELECT STRING_AGG(gi.material_name, ', ' ORDER BY gi.sort_order) AS items_summary,
                  SUM(gi.quantity_received) AS total_qty
@@ -366,7 +368,7 @@ router.get('/:type', async (req, res) => {
       const { scopeClause, allParams } = buildScope(req, base, 'gp');
       let sql = `
         SELECT
-          gp.gate_pass_number,
+          gp.gp_number AS gate_pass_number,
           gp.date_time::date AS pass_date,
           gp.pass_type,
           p.name   AS project_name,
@@ -400,23 +402,23 @@ router.get('/:type', async (req, res) => {
           g.grn_number,
           g.grn_date,
           p.name   AS project_name,
-          COALESCE(v.name, g.supplier_name) AS vendor_name,
-          g.po_number,
-          COALESCE(items.items_summary, g.material_name) AS materials,
-          COALESCE(items.total_qty, g.quantity_received, 0) AS rejected_qty,
-          g.rejection_reason,
-          g.remarks,
+          v.name   AS vendor_name,
+          COALESCE(po.serial_no_formatted, po.po_number) AS po_number,
+          items.items_summary AS materials,
+          COALESCE(items.total_qty, g.total_quantity, 0) AS rejected_qty,
+          g.remarks AS rejection_reason,
           g.quality_status
         FROM grn g
         JOIN projects p ON p.id = g.project_id
         LEFT JOIN vendors v ON v.id = g.vendor_id
+        LEFT JOIN purchase_orders po ON po.id = g.po_id
         LEFT JOIN LATERAL (
           SELECT STRING_AGG(gi.material_name, ', ') AS items_summary,
                  SUM(gi.quantity_received) AS total_qty
           FROM grn_items gi WHERE gi.grn_id = g.id
         ) items ON true
         WHERE p.company_id = $1
-          AND g.quality_status IN ('rejected','partial_rejection','failed')
+          AND g.quality_status IN ('rejected','partial')
           AND g.grn_date BETWEEN $2 AND $3
           ${project_id ? ` AND g.project_id = '${project_id.replace(/'/g,"''")}' ` : ''}
           ${scopeClause}
@@ -437,21 +439,13 @@ router.get('/:type', async (req, res) => {
           po.status,
           po.grand_total,
           po.delivery_date,
-          COALESCE(grn_sum.received_value,0) AS received_value,
-          ROUND(po.grand_total - COALESCE(grn_sum.received_value,0), 2) AS pending_value,
-          po.payment_terms,
-          po.cost_head
+          CASE WHEN po.status = 'fully_received' THEN po.grand_total ELSE 0 END AS received_value,
+          CASE WHEN po.status = 'fully_received' THEN 0 ELSE po.grand_total END AS pending_value,
+          po.terms_conditions AS payment_terms,
+          po.po_req_no AS cost_head
         FROM purchase_orders po
         JOIN projects p ON p.id = po.project_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN (
-          SELECT g.po_id,
-                 SUM(COALESCE(gi.quantity_received,0) * COALESCE(gi.unit_rate,0)) AS received_value
-          FROM grn g
-          LEFT JOIN grn_items gi ON gi.grn_id = g.id
-          WHERE g.quality_status NOT IN ('rejected')
-          GROUP BY g.po_id
-        ) grn_sum ON grn_sum.po_id = po.id
         WHERE p.company_id = $1
           AND po.status NOT IN ('draft')
           AND po.po_date BETWEEN $2 AND $3
@@ -470,22 +464,22 @@ router.get('/:type', async (req, res) => {
           g.grn_number,
           g.grn_date,
           p.name   AS project_name,
-          COALESCE(v.name, g.supplier_name) AS vendor_name,
-          g.po_number,
-          g.invoice_number,
-          g.invoice_date,
+          v.name   AS vendor_name,
+          b.inv_number   AS invoice_number,
+          b.inv_date     AS invoice_date,
           COALESCE(items.total_qty,0)  AS received_qty,
           b.total_amount               AS invoice_amount,
-          CASE WHEN b.id IS NULL THEN 'Unmatched' ELSE 'Matched' END AS recon_status,
+          CASE WHEN b.inv_number IS NULL THEN 'No Bill Linked' ELSE 'Matched' END AS recon_status,
           b.workflow_status            AS bill_status
         FROM grn g
         JOIN projects p ON p.id = g.project_id
         LEFT JOIN vendors v ON v.id = g.vendor_id
+        LEFT JOIN purchase_orders po ON po.id = g.po_id
         LEFT JOIN LATERAL (
           SELECT SUM(gi.quantity_received) AS total_qty
           FROM grn_items gi WHERE gi.grn_id = g.id
         ) items ON true
-        LEFT JOIN tqs_bills b ON LOWER(TRIM(b.inv_number)) = LOWER(TRIM(g.invoice_number))
+        LEFT JOIN tqs_bills b ON LOWER(TRIM(b.po_number)) = LOWER(TRIM(COALESCE(po.serial_no_formatted, po.po_number)))
                               AND b.project_id = g.project_id
         WHERE p.company_id = $1
           AND g.grn_date BETWEEN $2 AND $3
@@ -595,22 +589,16 @@ router.get('/:type', async (req, res) => {
           p.name   AS project_name,
           v.name   AS vendor_name,
           po.grand_total,
-          COALESCE(grn_sum.received_value,0) AS received_value,
-          ROUND(po.grand_total - COALESCE(grn_sum.received_value,0),2) AS balance_value,
+          0 AS received_value,
+          po.grand_total AS balance_value,
           NOW()::date - po.delivery_date::date AS overdue_days,
           po.status
         FROM purchase_orders po
         JOIN projects p ON p.id = po.project_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
-        LEFT JOIN (
-          SELECT g.po_id, SUM(COALESCE(gi.quantity_received,0)*COALESCE(gi.unit_rate,0)) AS received_value
-          FROM grn g LEFT JOIN grn_items gi ON gi.grn_id = g.id
-          WHERE g.quality_status NOT IN ('rejected') GROUP BY g.po_id
-        ) grn_sum ON grn_sum.po_id = po.id
         WHERE p.company_id = $1
-          AND po.status NOT IN ('draft','cancelled','closed')
+          AND po.status NOT IN ('draft','cancelled','fully_received')
           AND (po.delivery_date IS NOT NULL)
-          AND po.grand_total > COALESCE(grn_sum.received_value, 0)
           ${project_id ? ` AND po.project_id = '${project_id.replace(/'/g,"''")}' ` : ''}
           ${scopeClause}
         ORDER BY po.delivery_date ASC`;
@@ -819,29 +807,30 @@ router.get('/:type', async (req, res) => {
     // ── 5.2 Physical vs Book Stock ────────────────────────────────────────────
     else if (type === 'physical-vs-book') {
       const base = [cid, fd, td + ' 23:59:59'];
-      const { scopeClause, allParams } = buildScope(req, base, 'sv');
+      const { scopeClause, allParams } = buildScope(req, base, 'i');
       let sql = `
         SELECT
           sv.verification_date,
           p.name         AS project_name,
-          sv.material_name,
-          sv.unit,
-          sv.book_quantity,
-          sv.physical_quantity,
-          ROUND(sv.physical_quantity - sv.book_quantity, 3) AS variance,
-          CASE WHEN sv.physical_quantity > sv.book_quantity THEN 'Surplus'
-               WHEN sv.physical_quantity < sv.book_quantity THEN 'Shortage'
+          i.material_name,
+          i.unit,
+          svi.book_stock     AS book_quantity,
+          svi.physical_stock AS physical_quantity,
+          ROUND(svi.physical_stock - svi.book_stock, 3) AS variance,
+          CASE WHEN svi.physical_stock > svi.book_stock THEN 'Surplus'
+               WHEN svi.physical_stock < svi.book_stock THEN 'Shortage'
                ELSE 'Matched' END AS variance_type,
-          sv.remarks,
-          u.name         AS verified_by
-        FROM stock_verifications sv
-        JOIN projects p ON p.id = sv.project_id
-        LEFT JOIN users u ON u.id = sv.verified_by
+          svi.reason     AS remarks,
+          sv.verified_by
+        FROM stock_verification_items svi
+        JOIN stock_verifications sv ON sv.id = svi.verification_id
+        JOIN inventory i ON i.id = svi.inventory_id
+        JOIN projects  p ON p.id = i.project_id
         WHERE p.company_id = $1
           AND sv.verification_date BETWEEN $2 AND $3
-          ${project_id ? ` AND sv.project_id = '${project_id.replace(/'/g,"''")}' ` : ''}
+          ${project_id ? ` AND i.project_id = '${project_id.replace(/'/g,"''")}' ` : ''}
           ${scopeClause}
-        ORDER BY ABS(sv.physical_quantity - sv.book_quantity) DESC`;
+        ORDER BY ABS(svi.physical_stock - svi.book_stock) DESC`;
       rows = (await query(sql, allParams)).rows;
     }
 
@@ -857,7 +846,7 @@ router.get('/:type', async (req, res) => {
           i.unit,
           ib.batch_number,
           ib.current_quantity AS qty,
-          ib.received_date,
+          ib.created_at AS received_date,
           ib.expiry_date,
           ib.expiry_date::date - NOW()::date AS days_to_expiry,
           CASE
@@ -925,12 +914,12 @@ router.get('/:type', async (req, res) => {
           ib.current_quantity AS qty,
           COALESCE(i.unit_rate,0) AS unit_rate,
           ROUND(ib.current_quantity * COALESCE(i.unit_rate,0),2) AS value,
-          ib.received_date,
-          NOW()::date - ib.received_date::date AS age_days,
+          ib.created_at AS received_date,
+          NOW()::date - ib.created_at::date AS age_days,
           CASE
-            WHEN NOW()::date - ib.received_date::date <= 30  THEN '0–30 days'
-            WHEN NOW()::date - ib.received_date::date <= 60  THEN '31–60 days'
-            WHEN NOW()::date - ib.received_date::date <= 90  THEN '61–90 days'
+            WHEN NOW()::date - ib.created_at::date <= 30  THEN '0–30 days'
+            WHEN NOW()::date - ib.created_at::date <= 60  THEN '31–60 days'
+            WHEN NOW()::date - ib.created_at::date <= 90  THEN '61–90 days'
             ELSE '90+ days'
           END AS age_bucket
         FROM inventory_batches ib
@@ -938,7 +927,6 @@ router.get('/:type', async (req, res) => {
         JOIN projects  p ON p.id = i.project_id
         WHERE p.company_id = $1
           AND ib.current_quantity > 0
-          AND ib.status = 'active'
           ${project_id ? ` AND i.project_id = '${project_id.replace(/'/g,"''")}' ` : ''}
           ${category   ? ` AND LOWER(i.category) = LOWER('${category.replace(/'/g,"''")}')` : ''}
           ${scopeClause}
