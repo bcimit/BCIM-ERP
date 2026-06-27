@@ -17,15 +17,25 @@ const inr = (v) =>
   '₹' + parseFloat(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const COST_HEADS = [
-  { group: 'Material', items: ['Material — Formworks','Material — Reinforcement','Material — Concrete & Aggregates','Material — Other Materials'] },
-  { group: 'Plant & Machinery (P & M)', items: ['P & M — Equipment (General)','P & M — Formwork Equipment','P & M — Reinforcement Equipment (Bar Bending / Cutting)','P & M — Survey Equipment','P & M — Lab Equipment (QAQC)'] },
-  { group: 'Safety', items: ['Safety — PPE & Protective Gear','Safety — Signages & Barricading','Safety — Fire Fighting & First Aid'] },
-  { group: 'Electrical', items: ['Electrical — Cables & Wiring','Electrical — Lighting (LED / Flood)','Electrical — Distribution & Switchgear'] },
-  { group: 'Consumables', items: ['Consumables — Hand Tools','Consumables — Maintenance Tools','Consumables — Formwork Tools'] },
-  { group: 'Infra (Camp & Office)', items: ['Infra — Labour Camp Construction','Infra — Camp Facilities & Maintenance','Infra — Site Office & Furniture','Infra — Utilities (Water & Power)','Infra — Security & Transport'] },
-  { group: 'Labour', items: ['Labour — Skilled','Labour — Unskilled','Labour — Supervisory'] },
-  { group: 'Subcontracting', items: ['Subcontracting — Civil','Subcontracting — MEP','Subcontracting — Structural','Subcontracting — Finishing'] },
-  { group: 'Overhead & Provisional', items: ['Overhead — Site Overhead','Overhead — Head Office','Contingency','Provisional Sum'] },
+  { group: 'Cement', items: ['Cement — OPC 53 Grade','Cement — OPC 43 Grade','Cement — PPC','Cement — White Cement','Cement — Other'] },
+  { group: 'Aggregates & Sand', items: ['Aggregates — 20mm Jelly','Aggregates — 10mm Jelly','Aggregates — 6mm Grit','Aggregates — M-Sand','Aggregates — River Sand','Aggregates — Quarry Dust'] },
+  { group: 'Steel & Reinforcement', items: ['Steel — TMT Bars (Fe500)','Steel — TMT Bars (Fe550)','Steel — MS Plates & Sections','Steel — Binding Wire','Steel — Other'] },
+  { group: 'Bricks & Blocks', items: ['Bricks — Clay Bricks','Bricks — AAC Blocks','Bricks — Fly Ash Bricks','Bricks — CLC Blocks','Bricks — Solid Blocks'] },
+  { group: 'Material', items: ['Material — Formworks','Material — Reinforcement','Material — Concrete & Aggregates','Material — Waterproofing','Material — Admixtures','Material — Other Materials'] },
+  { group: 'Plant & Machinery (P & M)', items: ['P & M — Equipment (General)','P & M — Formwork Equipment','P & M — Reinforcement Equipment (Bar Bending / Cutting)','P & M — Concrete Equipment (Mixers / Pumps)','P & M — Lifting Equipment (Cranes / Hoists)','P & M — Survey Equipment','P & M — Lab Equipment (QAQC)'] },
+  { group: 'Electrical', items: ['Electrical — Cables & Wiring','Electrical — Lighting (LED / Flood)','Electrical — Distribution & Switchgear','Electrical — DB Boards & Panels','Electrical — Generators & DG Sets','Electrical — Earthing & Lightning Protection'] },
+  { group: 'Plumbing & Sanitary', items: ['Plumbing — PVC / CPVC Pipes','Plumbing — GI Pipes & Fittings','Plumbing — Sanitary Fixtures','Plumbing — Water Storage Tanks','Plumbing — Pumps & Motors'] },
+  { group: 'Consumables', items: ['Consumables — Hand Tools','Consumables — Power Tool Accessories','Consumables — Welding Consumables','Consumables — Maintenance Tools','Consumables — Fasteners (Bolts / Nuts / Anchors)','Consumables — Formwork Tools'] },
+  { group: 'Safety', items: ['Safety — PPE & Protective Gear','Safety — Signages & Barricading','Safety — Fire Fighting & First Aid','Safety — Safety Nets & Fall Protection','Safety — Environmental Controls'] },
+  { group: 'Timber & Formwork', items: ['Timber — Shuttering Plywood','Timber — Battens & Props','Timber — Block Board','Timber — MS Centering Plates'] },
+  { group: 'Finishing Works', items: ['Finishing — Plastering','Finishing — Painting & Primers','Finishing — Tiling & Flooring','Finishing — Waterproofing','Finishing — False Ceiling & Partition','Finishing — Doors & Windows','Finishing — Glazing & Aluminium Works'] },
+  { group: 'Infra (Camp & Office)', items: ['Infra — Labour Camp Construction','Infra — Camp Facilities & Maintenance','Infra — Site Office & Furniture','Infra — Utilities (Water & Power)','Infra — Security & Transport','Infra — Housekeeping'] },
+  { group: 'Labour', items: ['Labour — Skilled','Labour — Unskilled','Labour — Supervisory','Labour — Overtime','Labour — Contract Labour'] },
+  { group: 'Subcontracting', items: ['Subcontracting — Civil','Subcontracting — MEP','Subcontracting — Structural','Subcontracting — Finishing','Subcontracting — Piling & Foundation','Subcontracting — External Development'] },
+  { group: 'Survey & QA/QC', items: ['Survey — Setting Out & Levelling','Survey — Instruments & Calibration','QA/QC — Material Testing','QA/QC — Lab Charges','QA/QC — Third-Party Inspection','QA/QC — Cube Testing'] },
+  { group: 'Transportation & Logistics', items: ['Logistics — Material Freight','Logistics — Machinery Shifting','Logistics — Site Internal Transport','Logistics — Loading & Unloading','Logistics — Fuel & Vehicle Running'] },
+  { group: 'Statutory & Legal', items: ['Statutory — Permits & Approvals','Statutory — Insurance (CAR / WC)','Statutory — Statutory Fees & Cess','Statutory — Legal & Professional','Statutory — Labour Welfare & PF/ESI'] },
+  { group: 'Overhead & Provisional', items: ['Overhead — Site Overhead','Overhead — Head Office','Overhead — Communication & IT','Contingency','Provisional Sum'] },
 ];
 
 /* ── Thin progress bar ─────────────────────────────────────────── */

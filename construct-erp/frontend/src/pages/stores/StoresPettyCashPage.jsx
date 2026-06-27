@@ -24,30 +24,75 @@ const F  = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ou
 const FS = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white';
 
 const DEFAULT_BUDGETS = {
+  // Original heads
   Fuel: 3000, Safety: 12000, Stationery: 5000, Pantry: 3000,
-  Transport: 5000, Utilities: 5000, Materials: 15000,
+  Transport: 5000, Utilities: 5000,
+  // Construction materials
+  Cement: 20000, Aggregates: 15000, Steel: 25000, Bricks: 10000, Sand: 8000,
+  // Site items
+  Consumables: 10000, Electrical: 8000, Plumbing: 5000, Timber: 8000, Paint: 5000,
+  // People & movement
+  Labour: 20000, Conveyance: 5000, Transport_Charges: 5000,
+  // Site running
+  Repairs: 8000, Medical: 3000, Housekeeping: 3000,
+  // General
+  Materials: 15000, Miscellaneous: 5000,
 };
 
 const CATEGORIES = Object.keys(DEFAULT_BUDGETS);
 
 const CATEGORY_STYLE = {
-  Fuel:       { bg: 'bg-amber-100',  text: 'text-amber-800',  bar: '#F59E0B' },
-  Safety:     { bg: 'bg-red-100',    text: 'text-red-800',    bar: '#EF4444' },
-  Stationery: { bg: 'bg-blue-100',   text: 'text-blue-800',   bar: '#3B82F6' },
-  Pantry:     { bg: 'bg-green-100',  text: 'text-green-800',  bar: '#22C55E' },
-  Transport:  { bg: 'bg-orange-100', text: 'text-orange-800', bar: '#F97316' },
-  Utilities:  { bg: 'bg-purple-100', text: 'text-purple-800', bar: '#A855F7' },
-  Materials:  { bg: 'bg-slate-100',  text: 'text-slate-700',  bar: '#64748B' },
+  Fuel:              { bg: 'bg-amber-100',   text: 'text-amber-800',   bar: '#F59E0B' },
+  Safety:            { bg: 'bg-red-100',     text: 'text-red-800',     bar: '#EF4444' },
+  Stationery:        { bg: 'bg-blue-100',    text: 'text-blue-800',    bar: '#3B82F6' },
+  Pantry:            { bg: 'bg-green-100',   text: 'text-green-800',   bar: '#22C55E' },
+  Transport:         { bg: 'bg-orange-100',  text: 'text-orange-800',  bar: '#F97316' },
+  Transport_Charges: { bg: 'bg-orange-100',  text: 'text-orange-800',  bar: '#F97316' },
+  Utilities:         { bg: 'bg-purple-100',  text: 'text-purple-800',  bar: '#A855F7' },
+  Materials:         { bg: 'bg-slate-100',   text: 'text-slate-700',   bar: '#64748B' },
+  Labour:            { bg: 'bg-teal-100',    text: 'text-teal-800',    bar: '#14B8A6' },
+  Conveyance:        { bg: 'bg-cyan-100',    text: 'text-cyan-800',    bar: '#06B6D4' },
+  Repairs:           { bg: 'bg-indigo-100',  text: 'text-indigo-800',  bar: '#6366F1' },
+  Medical:           { bg: 'bg-rose-100',    text: 'text-rose-800',    bar: '#F43F5E' },
+  Miscellaneous:     { bg: 'bg-gray-100',    text: 'text-gray-700',    bar: '#9CA3AF' },
+  Cement:            { bg: 'bg-stone-100',   text: 'text-stone-800',   bar: '#78716C' },
+  Aggregates:        { bg: 'bg-yellow-100',  text: 'text-yellow-800',  bar: '#EAB308' },
+  Steel:             { bg: 'bg-zinc-100',    text: 'text-zinc-800',    bar: '#71717A' },
+  Bricks:            { bg: 'bg-red-100',     text: 'text-red-900',     bar: '#B91C1C' },
+  Sand:              { bg: 'bg-yellow-50',   text: 'text-yellow-900',  bar: '#CA8A04' },
+  Consumables:       { bg: 'bg-lime-100',    text: 'text-lime-800',    bar: '#84CC16' },
+  Electrical:        { bg: 'bg-sky-100',     text: 'text-sky-800',     bar: '#0EA5E9' },
+  Plumbing:          { bg: 'bg-blue-50',     text: 'text-blue-900',    bar: '#1D4ED8' },
+  Timber:            { bg: 'bg-orange-50',   text: 'text-orange-900',  bar: '#C2410C' },
+  Paint:             { bg: 'bg-pink-100',    text: 'text-pink-800',    bar: '#EC4899' },
+  Housekeeping:      { bg: 'bg-emerald-100', text: 'text-emerald-800', bar: '#10B981' },
 };
 
 function categoryOf(text = '') {
   const d = (text || '').toLowerCase();
-  if (/petrol|fuel|diesel/.test(d))                                           return 'Fuel';
-  if (/safety|glove|shoe|medical|flag|helmet|badge|banner|ppe/.test(d))      return 'Safety';
+  if (/petrol|fuel|diesel/.test(d))                                                        return 'Fuel';
+  if (/medical|medicine|first.?aid|hospital|clinic|bandage|ointment/.test(d))             return 'Medical';
+  if (/safety|glove|shoe|flag|helmet|badge|banner|ppe/.test(d))                           return 'Safety';
+  if (/cement|opc|ppc|53 grade|43 grade/.test(d))                                         return 'Cement';
+  if (/aggregate|jelly|gravel|grit|m.?sand|quarry/.test(d))                               return 'Aggregates';
+  if (/sand|fine aggr/.test(d))                                                            return 'Sand';
+  if (/steel|tmt|rebar|rod|bar bending|ms plate|angle/.test(d))                           return 'Steel';
+  if (/brick|block|aac|fly.?ash/.test(d))                                                  return 'Bricks';
+  if (/electrical|cable|wire|switch|mcb|conduit|fitting|bulb|led|lamp/.test(d))           return 'Electrical';
+  if (/plumb|pipe|fitting|pvc|cpvc|upvc|valve|tap|sanitary/.test(d))                      return 'Plumbing';
+  if (/timber|wood|plywood|shuttering|plank|batten/.test(d))                              return 'Timber';
+  if (/paint|primer|putty|distemper|enamel|varnish|thinner/.test(d))                      return 'Paint';
+  if (/consumable|tool|drill|bit|blade|abrasive|sandpaper|nails|screw/.test(d))           return 'Consumables';
   if (/stationery|stationary|file|paper|pen|whitener|stamp|calc|stapler|a4|xerox|print/.test(d)) return 'Stationery';
-  if (/pantry|sweet|food|sugar|tea|poha|zeera|mixture|coconut|biscuit|snack/.test(d)) return 'Pantry';
-  if (/transport|bus|ticket|charges|auto|cab|uber|ola/.test(d))              return 'Transport';
-  if (/electric|bill|power|utility|mobile|recharge|internet/.test(d))        return 'Utilities';
+  if (/pantry|sweet|food|sugar|tea|poha|zeera|mixture|coconut|biscuit|snack/.test(d))    return 'Pantry';
+  if (/housekeep|cleaning|broom|phenyl|soap|dustbin|mop/.test(d))                         return 'Housekeeping';
+  if (/labour|labor|wage|mason|helper|coolie|mazdoor|hamali/.test(d))                     return 'Labour';
+  if (/loading|unloading/.test(d))                                                         return 'Labour';
+  if (/conveyance|travel|parking|toll/.test(d))                                            return 'Conveyance';
+  if (/transport|freight|lorry|truck|vehicle|bus|ticket|auto|cab|uber|ola/.test(d))       return 'Transport_Charges';
+  if (/repair|maintenance|servic|spare|puncture/.test(d))                                 return 'Repairs';
+  if (/electric|power|utility|mobile|recharge|internet/.test(d))                          return 'Utilities';
+  if (/misc|sundry|other/.test(d))                                                        return 'Miscellaneous';
   return 'Materials';
 }
 
