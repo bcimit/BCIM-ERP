@@ -11,8 +11,10 @@ import {
   ShoppingBag, Users, BarChart2, BookOpen, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Printer, RefreshCw,
   Paperclip, Eye, Upload, Send, ThumbsUp, ThumbsDown,
-  Rows3, CalendarRange, Hash, Mail,
+  Rows3, CalendarRange, Hash, Mail, FileDown,
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useLocation } from 'react-router-dom';
 import { PageHeader, Theme } from '../../theme';
 import { storesPettyCashAPI, projectAPI, uploadAPI, subcontractorAPI } from '../../api/client';
@@ -438,6 +440,176 @@ function printStatement({ entries, advances, scAdvances, receipts, projectName, 
   w.document.write(html);
   w.document.close();
   w.print();
+}
+
+// ── PDF export helper (jsPDF + autoTable) ────────────────────────────────────
+function exportPdf({ entries, advances, scAdvances, receipts, projectName, period }) {
+  const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sc = scAdvances || [];
+
+  const totalRec   = receipts.reduce((s, r) => s + Number(r.amount), 0);
+  const totalLP    = entries.reduce((s, r) => s + Number(r.amount), 0);
+  const totalAdv   = advances.reduce((s, r) => s + Number(r.amount), 0);
+  const totalScAdv = sc.reduce((s, r) => s + Number(r.amount), 0);
+  const balance    = totalRec - totalLP - totalAdv - totalScAdv;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const PAGE_W = 210;
+  const MARGIN = 12;
+  const COL_W  = PAGE_W - MARGIN * 2;
+
+  const NAVY  = [15, 42, 82];
+  const LGREY = [240, 240, 240];
+  const BLACK = [0, 0, 0];
+
+  const addPageHeader = () => {
+    // Top doc-code line
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...NAVY);
+    doc.text('BCIM-STO-PC-01', PAGE_W - MARGIN, 10, { align: 'right' });
+
+    // Title
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...BLACK);
+    doc.text('PETTY CASH STATEMENT', PAGE_W / 2, 18, { align: 'center' });
+    if (projectName) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text(projectName, PAGE_W / 2, 24, { align: 'center' });
+    }
+
+    // Company block
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...BLACK);
+    doc.text('BCIM ENGINEERING PRIVATE LIMITED', MARGIN, 32);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    doc.text('#11, B Wing, Divyasree Chambers, O\'Shaughnessy Road, Bangalore - 560025', MARGIN, 37);
+    doc.text('GSTIN : 29AAHCB6485A1ZL', MARGIN, 41);
+
+    // Right meta
+    const rx = PAGE_W - MARGIN;
+    doc.setFontSize(8);
+    doc.text(`Date : ${dayjs().format('DD-MM-YYYY')}`, rx, 32, { align: 'right' });
+    if (projectName) doc.text(`Project : ${projectName}`, rx, 37, { align: 'right' });
+    if (period)      doc.text(`Period  : ${period}`,      rx, 41, { align: 'right' });
+
+    // Divider
+    doc.setDrawColor(...NAVY); doc.setLineWidth(0.5);
+    doc.line(MARGIN, 44, PAGE_W - MARGIN, 44);
+
+    return 48; // y after header
+  };
+
+  const addSectionTitle = (y, label) => {
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...NAVY);
+    doc.text(label, MARGIN, y);
+    return y + 4;
+  };
+
+  const addTable = (y, head, body, foot) => {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: MARGIN, right: MARGIN },
+      head,
+      body,
+      foot,
+      styles: { fontSize: 8, cellPadding: 1.8, textColor: BLACK, lineColor: [180,180,180], lineWidth: 0.2 },
+      headStyles: { fillColor: NAVY, textColor: [255,255,255], fontStyle: 'bold', fontSize: 8 },
+      footStyles: { fillColor: LGREY, textColor: BLACK, fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      tableWidth: COL_W,
+      didDrawPage: (data) => {
+        addSignatureFooter();
+      },
+    });
+    return doc.lastAutoTable.finalY + 6;
+  };
+
+  const addSignatureFooter = () => {
+    const pageH = doc.internal.pageSize.getHeight();
+    const y = pageH - 22;
+    const labels = ['Site Incharge', 'Project Manager', 'Accounts', 'Managing Director'];
+    const colW = COL_W / 4;
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...BLACK);
+    labels.forEach((lbl, i) => {
+      const cx = MARGIN + colW * i + colW / 2;
+      doc.setDrawColor(...BLACK); doc.setLineWidth(0.3);
+      doc.line(cx - colW / 2 + 4, y, cx + colW / 2 - 4, y);
+      doc.text(lbl, cx, y + 4, { align: 'center' });
+    });
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.text('BCIM ENGINEERING PRIVATE LIMITED   |   "B" Wing, DivyaSree Chambers, No. 11, O\'Shaugnessy Road, Bangalore-560 025', PAGE_W / 2, pageH - 7, { align: 'center' });
+  };
+
+  // ── Page 1 ──
+  let y = addPageHeader();
+
+  // A. Cash Received
+  y = addSectionTitle(y, 'A. Cash Received from HO');
+  y = addTable(y,
+    [['Sl', 'Date', 'Voucher No', 'Received By', 'Amount (₹)']],
+    receipts.length
+      ? receipts.map((r, i) => [i+1, dayjs(r.receipt_date).format('DD-MM-YYYY'), r.voucher_no||'–', r.received_by||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
+      : [[{ content: 'No receipts recorded', colSpan: 5, styles: { halign: 'center', fontStyle: 'italic' } }]],
+    [[{ content: 'TOTAL RECEIVED', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalRec), styles: { halign: 'right' } }]]
+  );
+
+  // B. Local Purchases
+  y = addSectionTitle(y, 'B. Local Purchases (Approved)');
+  y = addTable(y,
+    [['Sl', 'Date', 'Voucher No', 'Supplier', 'Materials', 'Invoice No', 'Amount (₹)']],
+    entries.length
+      ? entries.map((r, i) => [i+1, dayjs(r.entry_date).format('DD-MM-YYYY'), r.pc_voucher_no||'–', r.supplier||'–', (r.items||[]).map(it=>it.material_name).filter(Boolean).join(', ')||'–', r.invoice_no||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
+      : [[{ content: 'No approved local purchases', colSpan: 7, styles: { halign: 'center', fontStyle: 'italic' } }]],
+    [[{ content: 'TOTAL LOCAL PURCHASE', colSpan: 6, styles: { halign: 'right' } }, { content: fmt(totalLP), styles: { halign: 'right' } }]]
+  );
+
+  // C. Salary Advances
+  y = addSectionTitle(y, 'C. Salary Advances');
+  y = addTable(y,
+    [['Sl', 'Date', 'Employee Name', 'Description', 'Amount (₹)']],
+    advances.length
+      ? advances.map((r, i) => [i+1, dayjs(r.advance_date).format('DD-MM-YYYY'), r.payee_name||'–', r.description||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
+      : [[{ content: 'No salary advances recorded', colSpan: 5, styles: { halign: 'center', fontStyle: 'italic' } }]],
+    [[{ content: 'TOTAL SALARY ADVANCES', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalAdv), styles: { halign: 'right' } }]]
+  );
+
+  // D. SC Advances
+  y = addSectionTitle(y, 'D. Sub-Contractor Advances');
+  y = addTable(y,
+    [['Sl', 'Date', 'Sub-Contractor', 'WO No', 'Amount (₹)']],
+    sc.length
+      ? sc.map((r, i) => [i+1, dayjs(r.advance_date).format('DD-MM-YYYY'), r.vendor_name||'–', r.wo_number||'–', { content: fmt(r.amount), styles: { halign: 'right' } }])
+      : [[{ content: 'No SC advances recorded', colSpan: 5, styles: { halign: 'center', fontStyle: 'italic' } }]],
+    [[{ content: 'TOTAL SC ADVANCES', colSpan: 4, styles: { halign: 'right' } }, { content: fmt(totalScAdv), styles: { halign: 'right' } }]]
+  );
+
+  // E. Summary
+  y = addSectionTitle(y, 'E. Summary');
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN + COL_W / 2 },
+    body: [
+      ['Total Cash Received from HO', fmt(totalRec)],
+      ['Less: Local Purchases',       `(${fmt(totalLP)})`],
+      ['Less: Salary Advances',       `(${fmt(totalAdv)})`],
+      ['Less: Sub Contractor Advances', `(${fmt(totalScAdv)})`],
+    ],
+    foot: [[
+      { content: 'Cash in Hand (Closing Balance)', styles: { fontStyle: 'bold', fontSize: 9 } },
+      { content: balance < 0 ? `(${fmt(Math.abs(balance))}) OVERDRAWN` : fmt(balance), styles: { halign: 'right', fontStyle: 'bold', fontSize: 9, textColor: balance < 0 ? [180, 0, 0] : BLACK } },
+    ]],
+    styles: { fontSize: 8, cellPadding: 2, textColor: BLACK, lineColor: [180,180,180], lineWidth: 0.2 },
+    headStyles: { fillColor: NAVY, textColor: [255,255,255] },
+    footStyles: { fillColor: LGREY, textColor: BLACK },
+    columnStyles: { 1: { halign: 'right' } },
+    tableWidth: COL_W / 2,
+  });
+
+  addSignatureFooter();
+
+  const fileName = `PettyCash_${projectName ? projectName.replace(/\s+/g, '_') + '_' : ''}${period ? period.replace(/[^a-zA-Z0-9]/g, '_') : dayjs().format('YYYY-MM-DD')}.pdf`;
+  doc.save(fileName);
 }
 
 // ── File opener — OneDrive links open directly; legacy /uploads/ links use auth fetch ──
@@ -2789,8 +2961,30 @@ export default function StoresPettyCashPage() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-2 px-6 pb-5 justify-end">
+            <div className="flex gap-2 px-6 pb-5 justify-end flex-wrap">
               <button onClick={() => setPrintModal(null)} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={() => {
+                  const f = printModal.from;
+                  const t = printModal.to;
+                  const filterByDate = (arr, dateKey) =>
+                    (f || t) ? arr.filter(r => (!f || r[dateKey] >= f) && (!t || r[dateKey] <= t)) : arr;
+                  const period = (f || t)
+                    ? `${f ? dayjs(f).format('DD-MM-YYYY') : '—'} to ${t ? dayjs(t).format('DD-MM-YYYY') : '—'}`
+                    : null;
+                  exportPdf({
+                    entries:    filterByDate(approvedEntries, 'entry_date'),
+                    advances:   filterByDate(advances,        'advance_date'),
+                    scAdvances: filterByDate(scAdvances,      'advance_date'),
+                    receipts:   filterByDate(receipts,        'receipt_date'),
+                    projectName: selectedProject?.name,
+                    period,
+                  });
+                  setPrintModal(null);
+                }}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg flex items-center gap-2">
+                <FileDown className="w-4 h-4" /> Export PDF
+              </button>
               <button
                 onClick={() => {
                   const f = printModal.from;
