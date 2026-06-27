@@ -787,17 +787,23 @@ router.get('/summary', authenticate, async (req, res) => {
     if (from) { rCond.push(`receipt_date >= $${rP.length + 1}`); rP.push(from); }
     if (to)   { rCond.push(`receipt_date <= $${rP.length + 1}`); rP.push(to); }
 
-    const [localRes, advRes, recRes, pendRes] = await Promise.all([
+    const sCond = [...cond]; const sP = [...base];
+    if (from) { sCond.push(`advance_date >= $${sP.length + 1}`); sP.push(from); }
+    if (to)   { sCond.push(`advance_date <= $${sP.length + 1}`); sP.push(to); }
+
+    const [localRes, advRes, recRes, pendRes, scRes] = await Promise.all([
       query(`SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count FROM stores_petty_cash_entries WHERE ${eCond.join(' AND ')} AND status='Approved'`, eP),
       query(`SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count FROM stores_petty_cash_advances WHERE ${aCond.join(' AND ')}`, aP),
       query(`SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count FROM stores_petty_cash_receipts WHERE ${rCond.join(' AND ')}`, rP),
       query(`SELECT COUNT(*) AS count FROM stores_petty_cash_entries WHERE ${eCond.join(' AND ')} AND status='Pending'`, eP),
+      query(`SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS count FROM stores_pc_sc_advances WHERE ${sCond.join(' AND ')}`, sP),
     ]);
 
     const localTotal   = parseFloat(localRes.rows[0].total);
     const advTotal     = parseFloat(advRes.rows[0].total);
     const recTotal     = parseFloat(recRes.rows[0].total);
-    const grandSpent   = localTotal + advTotal;
+    const scTotal      = parseFloat(scRes.rows[0].total);
+    const grandSpent   = localTotal + advTotal + scTotal;
     const cashInHand   = recTotal - grandSpent;
 
     res.json({
@@ -806,6 +812,8 @@ router.get('/summary', authenticate, async (req, res) => {
         local_purchase_count:  parseInt(localRes.rows[0].count),
         advance_total:         advTotal,
         advance_count:         parseInt(advRes.rows[0].count),
+        sc_advance_total:      scTotal,
+        sc_advance_count:      parseInt(scRes.rows[0].count),
         receipt_total:         recTotal,
         receipt_count:         parseInt(recRes.rows[0].count),
         grand_spent:           grandSpent,

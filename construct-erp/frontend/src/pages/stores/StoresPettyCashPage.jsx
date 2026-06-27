@@ -1889,10 +1889,11 @@ export default function StoresPettyCashPage() {
   const approvedEntries = useMemo(() => entries.filter(e => e.status === 'Approved'), [entries]);
   const pendingCount    = useMemo(() => entries.filter(e => e.status === 'Pending').length, [entries]);
 
-  const totalReceived = summary.receipt_total  ?? 0;
+  const totalReceived = summary.receipt_total       ?? 0;
   const totalLP       = summary.local_purchase_total ?? 0;
-  const totalAdv      = summary.advance_total  ?? 0;
-  const totalSpent    = totalLP + totalAdv;
+  const totalAdv      = summary.advance_total        ?? 0;
+  const totalSC       = summary.sc_advance_total     ?? 0;
+  const totalSpent    = totalLP + totalAdv + totalSC;
   const cashInHand    = totalReceived - totalSpent;
 
   // Running balance on filtered entries (chronological)
@@ -2158,7 +2159,7 @@ export default function StoresPettyCashPage() {
             {/* KPI cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <KpiCard label="Total Received from HO" value={inr(totalReceived)} sub={`${summary.receipt_count || 0} transfers`} accent="border-green-400" valueClass="text-green-700" />
-              <KpiCard label="Total Spent (Approved)" value={inr(totalSpent)} sub={`Purchases ${inr(totalLP)} · Advances ${inr(totalAdv)}`} accent="border-red-400" valueClass="text-red-700" />
+              <KpiCard label="Total Spent (Approved)" value={inr(totalSpent)} sub={`LP ${inr(totalLP)} · Adv ${inr(totalAdv)} · SC ${inr(totalSC)}`} accent="border-red-400" valueClass="text-red-700" />
               <KpiCard label="Cash in Hand" value={inr(Math.abs(cashInHand))} sub={cashInHand < 0 ? 'OVERDRAWN' : cashInHand < 5000 ? 'Low — request top-up' : 'Sufficient'} accent={cashInHand < 0 ? 'border-red-500' : cashInHand < 5000 ? 'border-amber-400' : 'border-green-400'} valueClass={balanceColor} />
               <KpiCard label="Pending Approval" value={pendingCount} sub="entries awaiting review" accent="border-amber-400" valueClass="text-amber-700" />
             </div>
@@ -2177,6 +2178,7 @@ export default function StoresPettyCashPage() {
                       ['Total Received from HO', inr(totalReceived), 'text-green-700 font-bold'],
                       ['Total Local Purchases (Approved)', inr(totalLP), 'text-red-600'],
                       ['Total Salary Advances', inr(totalAdv), 'text-red-600'],
+                      ['Total SC Advances', inr(totalSC), 'text-red-600'],
                       ['Total Spent', inr(totalSpent), 'text-red-700 font-bold'],
                     ].map(([l, v, vc]) => (
                       <div key={l} className="flex justify-between py-1.5 border-b border-slate-50">
