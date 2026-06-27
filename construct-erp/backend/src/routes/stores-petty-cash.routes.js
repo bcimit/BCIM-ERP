@@ -153,10 +153,40 @@ function categoryOf(text = '') {
     ON stores_pc_budgets (company_id, COALESCE(project_id::text, 'global'), category)
   `);
 
+  await safe(`ALTER TABLE stores_petty_cash_entries ADD COLUMN IF NOT EXISTS pc_voucher_no TEXT`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_spce_voucher ON stores_petty_cash_entries(pc_voucher_no)`);
+
   console.log('[StoresPettyCash] Schema OK');
 })();
 
 const n = (v) => parseFloat(v) || 0;
+
+// Financial year string: April start. Jan-Mar 2026 → "2526"; Apr-Dec 2025 → "2526"
+function currentFY() {
+  const now = new Date();
+  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return String(startYear).slice(2) + String(startYear + 1).slice(2);
+}
+
+async function nextPcVoucherNo(client, companyId, projectCode) {
+  const fy   = currentFY();
+  const proj = projectCode
+    ? projectCode.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 8)
+    : 'SITE';
+  const prefix = `PC/${fy}/${proj}/`;
+  const r = await client.query(
+    `SELECT COALESCE(MAX(
+       CASE WHEN pc_voucher_no ~ $2 THEN
+         CAST(SPLIT_PART(pc_voucher_no, '/', 4) AS INTEGER)
+       ELSE 0 END
+     ), 0) AS last
+     FROM stores_petty_cash_entries
+     WHERE company_id = $1`,
+    [companyId, `^PC/${fy}/${proj}/\\d+$`]
+  );
+  const seq = parseInt(r.rows[0].last) + 1;
+  return `${prefix}${String(seq).padStart(3, '0')}`;
+}
 
 function projectFilter(req, conditions, params, entryAlias = '') {
   const { project_id } = req.query;
@@ -273,19 +303,27 @@ router.post('/entries', authenticate, async (req, res) => {
       }
     }
 
+    // Resolve project_code for voucher number prefix
+    let projectCode = null;
+    if (project_id) {
+      const proj = await query(`SELECT project_code FROM projects WHERE id = $1`, [project_id]);
+      if (proj.rows.length) projectCode = proj.rows[0].project_code;
+    }
+
     const result = await withTransaction(async (client) => {
-      const sl_no = await nextSlNo(client, req.user.company_id, project_id);
+      const sl_no        = await nextSlNo(client, req.user.company_id, project_id);
+      const pc_voucher_no = await nextPcVoucherNo(client, req.user.company_id, projectCode);
       const r = await client.query(
         `INSERT INTO stores_petty_cash_entries
           (company_id, project_id, sl_no, entry_date, supplier, invoice_no, amount, remarks, status,
-           bill_file_url, bill_file_name, voucher_file_url, voucher_file_name, basic_amount, gst_pct, gst_amount, total_amount, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+           bill_file_url, bill_file_name, voucher_file_url, voucher_file_name, basic_amount, gst_pct, gst_amount, total_amount, created_by, pc_voucher_no)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
         [req.user.company_id, project_id || null, sl_no, entry_date, supplier.trim(),
          invoice_no || null, n(amount), remarks || null, status,
          bill_file_url || null, bill_file_name || null,
          voucher_file_url || null, voucher_file_name || null,
          basic_amount != null ? n(basic_amount) : null, n(gst_pct), n(gst_amount),
-         total_amount != null ? n(total_amount) : null, req.user.id]
+         total_amount != null ? n(total_amount) : null, req.user.id, pc_voucher_no]
       );
       const entryId = r.rows[0].id;
       for (let i = 0; i < items.length; i++) {

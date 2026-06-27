@@ -1,6 +1,6 @@
 // src/pages/stores/StoresPettyCashPage.jsx
 // Stores Petty Cash Tracker — site-level cash book mirroring the Excel register.
-// 6 tabs: Dashboard · HO Receipts · Local Purchase · Salary Advances · Analytics · Budgets
+// 7 tabs: Dashboard · HO Receipts · Local Purchase · Salary Advances · SC Advances · Ledger · Analytics · Budgets
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
@@ -11,6 +11,7 @@ import {
   ShoppingBag, Users, BarChart2, BookOpen, AlertTriangle,
   CheckCircle, Clock, TrendingUp, Printer, RefreshCw,
   Paperclip, Eye, Upload, Send, ThumbsUp, ThumbsDown,
+  Rows3, CalendarRange, Hash,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { PageHeader, Theme } from '../../theme';
@@ -158,7 +159,7 @@ function BarChart({ data }) {
 }
 
 // ── Print helper ─────────────────────────────────────────────────────────────
-function printStatement({ entries, advances, scAdvances, receipts, projectName }) {
+function printStatement({ entries, advances, scAdvances, receipts, projectName, period }) {
   const fmt  = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sc   = scAdvances || [];
   const totalRec   = receipts.reduce((s, r) => s + Number(r.amount), 0);
@@ -184,12 +185,13 @@ function printStatement({ entries, advances, scAdvances, receipts, projectName }
     ? entries.map((r, i) => `<tr>
         <td style="${TD}text-align:center;">${i + 1}</td>
         <td style="${TD}">${dayjs(r.entry_date).format('DD-MM-YYYY')}</td>
+        <td style="${TD}font-family:monospace;font-size:10px;">${r.pc_voucher_no || '–'}</td>
         <td style="${TD}">${r.supplier || '–'}</td>
         <td style="${TD}">${(r.items || []).map(it => it.material_name).filter(Boolean).join(', ') || '–'}</td>
         <td style="${TD}">${r.invoice_no || '–'}</td>
         <td style="${TD}text-align:right;font-weight:600;">${fmt(r.amount)}</td>
       </tr>`).join('')
-    : `<tr><td colspan="6" style="${TD}text-align:center;color:#666;font-style:italic;padding:8px;">No approved local purchases</td></tr>`;
+    : `<tr><td colspan="7" style="${TD}text-align:center;color:#666;font-style:italic;padding:8px;">No approved local purchases</td></tr>`;
 
   const advRows = advances.length
     ? advances.map((r, i) => `<tr>
@@ -274,6 +276,10 @@ function printStatement({ entries, advances, scAdvances, receipts, projectName }
                 <td style="font-weight:700;padding:1px 8px 1px 0;white-space:nowrap;vertical-align:top;border:none;">Date:</td>
                 <td style="padding:1px 0;border:none;">${dayjs().format('DD-MM-YYYY')}</td>
               </tr>
+              ${period ? `<tr>
+                <td style="font-weight:700;padding:1px 8px 1px 0;white-space:nowrap;vertical-align:top;border:none;">Period:</td>
+                <td style="padding:1px 0;border:none;">${period}</td>
+              </tr>` : ''}
             </table>
           </td>
         </tr>
@@ -308,16 +314,17 @@ function printStatement({ entries, advances, scAdvances, receipts, projectName }
           <tr>
             <th style="${TH}width:34px;">Sl No</th>
             <th style="${TH}width:88px;">Date</th>
-            <th style="${TH}width:140px;">Supplier</th>
+            <th style="${TH}width:110px;">Voucher No</th>
+            <th style="${TH}width:130px;">Supplier</th>
             <th style="${TH}text-align:left;">Materials</th>
-            <th style="${TH}width:90px;">Invoice No</th>
-            <th style="${TH}width:120px;text-align:right;">Amount (&#8377;)</th>
+            <th style="${TH}width:80px;">Invoice No</th>
+            <th style="${TH}width:110px;text-align:right;">Amount (&#8377;)</th>
           </tr>
         </thead>
         <tbody>${lpRows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="5" style="${TD}text-align:right;font-weight:700;background:#f0f0f0;">TOTAL LOCAL PURCHASE</td>
+            <td colspan="6" style="${TD}text-align:right;font-weight:700;background:#f0f0f0;">TOTAL LOCAL PURCHASE</td>
             <td style="${TD}text-align:right;font-weight:700;font-size:12px;background:#f0f0f0;">${fmt(totalLP)}</td>
           </tr>
         </tfoot>
@@ -1454,6 +1461,7 @@ export default function StoresPettyCashPage() {
   const [localBudgets,    setLocalBudgets]    = useState(null);
   const [statusFilter,    setStatusFilter]    = useState(highlightId ? 'All' : 'All');
   const [catFilter,       setCatFilter]       = useState('All');
+  const [printModal,      setPrintModal]      = useState(null); // null | { from: '', to: '' }
   const setFilter = (k, v) => setFilters(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -1627,6 +1635,39 @@ export default function StoresPettyCashPage() {
     return Object.entries(map).sort((a, b) => b[1].total - a[1].total).slice(0, 7);
   }, [entries]);
 
+  // Running cash ledger — all transaction types merged in date order
+  const ledgerRows = useMemo(() => {
+    const rows = [
+      ...receipts.map(r => ({
+        date: r.receipt_date, type: 'receipt', label: 'HO Receipt',
+        desc: [r.received_by, r.voucher_no].filter(Boolean).join(' · '),
+        credit: Number(r.amount), debit: 0, id: r.id,
+        color: 'green',
+      })),
+      ...approvedEntries.map(e => ({
+        date: e.entry_date, type: 'purchase', label: 'Local Purchase',
+        desc: [e.supplier, e.invoice_no].filter(Boolean).join(' · '),
+        voucherNo: e.pc_voucher_no,
+        credit: 0, debit: Number(e.amount), id: e.id,
+        color: 'blue',
+      })),
+      ...advances.map(a => ({
+        date: a.advance_date, type: 'advance', label: 'Salary Advance',
+        desc: [a.payee_name, a.description].filter(Boolean).join(' · '),
+        credit: 0, debit: Number(a.amount), id: a.id,
+        color: 'amber',
+      })),
+      ...scAdvances.map(s => ({
+        date: s.advance_date, type: 'sc-advance', label: 'SC Advance',
+        desc: [s.vendor_name, s.wo_number].filter(Boolean).join(' · '),
+        credit: 0, debit: Number(s.amount), id: s.id,
+        color: 'orange',
+      })),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    let bal = 0;
+    return rows.map(r => { bal += r.credit - r.debit; return { ...r, balance: bal }; });
+  }, [receipts, approvedEntries, advances, scAdvances]);
+
   // ── Tab helpers ────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'dashboard',    label: 'Dashboard',       Icon: BarChart2   },
@@ -1634,6 +1675,7 @@ export default function StoresPettyCashPage() {
     { id: 'local',        label: 'Local Purchase',  Icon: ShoppingBag },
     { id: 'advances',     label: 'Salary Advances', Icon: Users       },
     { id: 'sc-advances',  label: 'SC Advances',     Icon: Send        },
+    { id: 'ledger',       label: 'Ledger',          Icon: Rows3       },
     { id: 'analytics',    label: 'Analytics',       Icon: TrendingUp  },
     { id: 'budgets',      label: 'Budgets',         Icon: BookOpen    },
   ];
@@ -1663,7 +1705,7 @@ export default function StoresPettyCashPage() {
               {cashInHand < 0 ? <AlertTriangle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
               {inr(Math.abs(cashInHand))} {cashInHand < 0 ? 'OVERDRAWN' : 'in Hand'}
             </div>
-            <button onClick={() => printStatement({ entries: approvedEntries, advances, scAdvances, receipts, projectName: selectedProject?.name })}
+            <button onClick={() => setPrintModal({ from: '', to: '' })}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
               style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff' }}>
               <Printer className="w-3.5 h-3.5" /> Print
@@ -2000,7 +2042,7 @@ export default function StoresPettyCashPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-                        {['#', 'Date', 'Supplier & Materials', 'Invoice', 'Amount', 'Category', 'Status', 'Docs', 'Balance', 'Actions'].map(h => (
+                        {['#', 'Date', 'Voucher No', 'Supplier & Materials', 'Invoice', 'Amount', 'Category', 'Status', 'Docs', 'Balance', 'Actions'].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -2025,6 +2067,14 @@ export default function StoresPettyCashPage() {
                             <td className="px-4 py-3 font-mono text-xs font-bold text-indigo-600 w-10">{row.sl_no}</td>
                             {/* Date */}
                             <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{dayjs(row.entry_date).format('DD-MM-YYYY')}</td>
+                            {/* Voucher No */}
+                            <td className="px-4 py-3">
+                              {row.pc_voucher_no
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                                    <Hash className="w-2.5 h-2.5" />{row.pc_voucher_no}
+                                  </span>
+                                : <span className="text-slate-300 text-xs">—</span>}
+                            </td>
                             {/* Supplier + Materials */}
                             <td className="px-4 py-3 max-w-[220px]">
                               <p className="font-semibold text-slate-800 truncate text-sm">{row.supplier}</p>
@@ -2335,6 +2385,132 @@ export default function StoresPettyCashPage() {
           );
         })()}
 
+        {/* ══ LEDGER ══ */}
+        {tab === 'ledger' && (() => {
+          const TYPE_STYLE = {
+            receipt:    { bg: 'bg-green-50',  text: 'text-green-700',  badge: 'bg-green-100 text-green-700',  dot: 'bg-green-500'  },
+            purchase:   { bg: 'bg-blue-50',   text: 'text-blue-700',   badge: 'bg-blue-100 text-blue-700',    dot: 'bg-blue-500'   },
+            advance:    { bg: 'bg-amber-50',  text: 'text-amber-700',  badge: 'bg-amber-100 text-amber-700',  dot: 'bg-amber-500'  },
+            'sc-advance':{ bg: 'bg-orange-50', text: 'text-orange-700', badge: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' },
+          };
+          const [ledgerFrom, setLedgerFrom] = useState('');
+          const [ledgerTo,   setLedgerTo]   = useState('');
+          const filtered = ledgerRows.filter(r =>
+            (!ledgerFrom || r.date >= ledgerFrom) && (!ledgerTo || r.date <= ledgerTo)
+          );
+          // Re-compute running balance for the filtered slice
+          let runBal = 0;
+          const filteredWithBal = filtered.map(r => { runBal += r.credit - r.debit; return { ...r, runBal }; });
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Cash Ledger</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">All transactions in chronological order with running balance</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <CalendarRange className="w-3.5 h-3.5 text-slate-400" />
+                    <input type="date" value={ledgerFrom} onChange={e => setLedgerFrom(e.target.value)}
+                      className="text-xs border-none outline-none text-slate-700 bg-transparent" />
+                    <span className="text-slate-400 text-xs">→</span>
+                    <input type="date" value={ledgerTo} onChange={e => setLedgerTo(e.target.value)}
+                      className="text-xs border-none outline-none text-slate-700 bg-transparent" />
+                  </div>
+                  {(ledgerFrom || ledgerTo) && (
+                    <button onClick={() => { setLedgerFrom(''); setLedgerTo(''); }}
+                      className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Balance strip */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Received', val: filteredWithBal.reduce((s,r) => s + r.credit, 0), color: 'border-green-400', tc: 'text-green-700' },
+                  { label: 'Total Spent',    val: filteredWithBal.reduce((s,r) => s + r.debit,  0), color: 'border-red-400',   tc: 'text-red-700'   },
+                  { label: 'Closing Balance', val: filteredWithBal.length ? filteredWithBal[filteredWithBal.length - 1].runBal : 0, color: 'border-indigo-400', tc: 'text-indigo-700' },
+                  { label: 'Transactions', val: filteredWithBal.length, color: 'border-slate-300', tc: 'text-slate-700', isCnt: true },
+                ].map(({ label, val, color, tc, isCnt }) => (
+                  <div key={label} className={clsx('bg-white rounded-xl border border-slate-200 p-4 border-l-4', color)}>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">{label}</p>
+                    <p className={clsx('text-xl font-bold', tc)}>{isCnt ? val : inr(val)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-800 text-slate-100">
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider w-[100px]">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider w-[120px]">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider w-[110px]">Voucher No</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Description</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider w-[120px] text-green-300">Credit (₹)</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider w-[120px] text-red-300">Debit (₹)</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider w-[130px]">Balance (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredWithBal.length === 0 ? (
+                        <tr><td colSpan={7} className="px-4 py-16 text-center text-slate-400 text-sm">No transactions in selected period</td></tr>
+                      ) : filteredWithBal.map((row, i) => {
+                        const s = TYPE_STYLE[row.type] || TYPE_STYLE.purchase;
+                        return (
+                          <tr key={row.id + i} className={clsx('transition-colors hover:bg-slate-50', i % 2 === 0 ? 'bg-white' : 'bg-slate-50/40')}>
+                            <td className="px-4 py-3 text-slate-500 text-xs font-mono whitespace-nowrap">{dayjs(row.date).format('DD-MM-YYYY')}</td>
+                            <td className="px-4 py-3">
+                              <span className={clsx('inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full', s.badge)}>
+                                <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', s.dot)} />
+                                {row.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs font-mono text-slate-500">{row.voucherNo || '—'}</td>
+                            <td className="px-4 py-3 text-slate-700 text-xs max-w-[260px] truncate" title={row.desc}>{row.desc || '—'}</td>
+                            <td className="px-4 py-3 text-right font-mono font-semibold text-green-700 text-sm">
+                              {row.credit > 0 ? inr(row.credit) : ''}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono font-semibold text-red-600 text-sm">
+                              {row.debit > 0 ? inr(row.debit) : ''}
+                            </td>
+                            <td className={clsx('px-4 py-3 text-right font-mono font-bold text-sm', row.runBal < 0 ? 'text-red-600' : 'text-slate-800')}>
+                              {inr(Math.abs(row.runBal))}{row.runBal < 0 ? ' Dr' : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {filteredWithBal.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-300">
+                          <td colSpan={4} className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">
+                            Totals ({filteredWithBal.length} entries)
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-green-700">
+                            {inr(filteredWithBal.reduce((s, r) => s + r.credit, 0))}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-red-600">
+                            {inr(filteredWithBal.reduce((s, r) => s + r.debit, 0))}
+                          </td>
+                          <td className={clsx('px-4 py-3 text-right font-mono font-bold',
+                            filteredWithBal[filteredWithBal.length - 1].runBal < 0 ? 'text-red-600' : 'text-indigo-700')}>
+                            {inr(Math.abs(filteredWithBal[filteredWithBal.length - 1].runBal))}
+                            {filteredWithBal[filteredWithBal.length - 1].runBal < 0 ? ' Dr' : ''}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ══ ANALYTICS ══ */}
         {tab === 'analytics' && (
           <div className="space-y-5">
@@ -2542,6 +2718,86 @@ export default function StoresPettyCashPage() {
             });
           }}
         />
+      )}
+
+      {/* ── Print Date-Range Modal ── */}
+      {printModal && (
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center">
+                  <Printer className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900">Print Statement</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Leave blank to print all entries</p>
+                </div>
+              </div>
+              <button onClick={() => setPrintModal(null)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                  <CalendarRange className="w-3.5 h-3.5" /> Statement Period
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">From</label>
+                    <input type="date" value={printModal.from}
+                      onChange={e => setPrintModal(m => ({ ...m, from: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">To</label>
+                    <input type="date" value={printModal.to}
+                      onChange={e => setPrintModal(m => ({ ...m, to: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" />
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { label: 'This Month', from: dayjs().startOf('month').format('YYYY-MM-DD'), to: dayjs().endOf('month').format('YYYY-MM-DD') },
+                    { label: 'Last Month', from: dayjs().subtract(1,'month').startOf('month').format('YYYY-MM-DD'), to: dayjs().subtract(1,'month').endOf('month').format('YYYY-MM-DD') },
+                    { label: 'This Week',  from: dayjs().startOf('week').format('YYYY-MM-DD'),  to: dayjs().endOf('week').format('YYYY-MM-DD')  },
+                  ].map(({ label, from, to }) => (
+                    <button key={label} onClick={() => setPrintModal({ from, to })}
+                      className="text-xs px-2.5 py-1 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium">
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 px-6 pb-5 justify-end">
+              <button onClick={() => setPrintModal(null)} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button
+                onClick={() => {
+                  const f = printModal.from;
+                  const t = printModal.to;
+                  const filterByDate = (arr, dateKey) =>
+                    (f || t) ? arr.filter(r => (!f || r[dateKey] >= f) && (!t || r[dateKey] <= t)) : arr;
+                  const period = (f || t)
+                    ? `${f ? dayjs(f).format('DD-MM-YYYY') : '—'} to ${t ? dayjs(t).format('DD-MM-YYYY') : '—'}`
+                    : null;
+                  printStatement({
+                    entries:    filterByDate(approvedEntries, 'entry_date'),
+                    advances:   filterByDate(advances,        'advance_date'),
+                    scAdvances: filterByDate(scAdvances,      'advance_date'),
+                    receipts:   filterByDate(receipts,        'receipt_date'),
+                    projectName: selectedProject?.name,
+                    period,
+                  });
+                  setPrintModal(null);
+                }}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg flex items-center gap-2">
+                <Printer className="w-4 h-4" /> Print Statement
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Replenishment Request Modal ── */}
