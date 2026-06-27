@@ -612,6 +612,149 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
   doc.save(fileName);
 }
 
+// ── Individual voucher print ─────────────────────────────────────────────────
+function printVoucher(entry, projectName) {
+  const fmt  = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const items = (entry.items || []).filter(it => it.material_name);
+  const basic  = Number(entry.basic_amount  || entry.amount || 0);
+  const gstAmt = Number(entry.gst_amount    || 0);
+  const total  = Number(entry.total_amount  || entry.amount || 0);
+  const gstPct = Number(entry.gst_pct       || 0);
+
+  const TD = 'border:1px solid #000;padding:4px 6px;vertical-align:top;font-size:10px;';
+  const TH = 'border:1px solid #000;padding:4px 6px;font-weight:700;background:#f0f0f0;font-size:10px;text-align:center;';
+
+  const itemRows = items.length
+    ? items.map((it, i) => `<tr>
+        <td style="${TD}text-align:center;">${i + 1}</td>
+        <td style="${TD}">${it.material_name || '–'}</td>
+        <td style="${TD}text-align:center;">${it.unit || '–'}</td>
+        <td style="${TD}text-align:right;">${it.quantity || '–'}</td>
+        <td style="${TD}text-align:right;">${it.rate ? fmt(it.rate) : '–'}</td>
+        <td style="${TD}text-align:center;">${it.gst_pct != null ? it.gst_pct + '%' : gstPct ? gstPct + '%' : '–'}</td>
+        <td style="${TD}text-align:right;font-weight:600;">${it.total ? fmt(it.total) : fmt(it.rate && it.quantity ? it.rate * it.quantity : 0)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="7" style="${TD}text-align:center;color:#888;font-style:italic;padding:10px;">No line items recorded</td></tr>`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PC Voucher ${entry.pc_voucher_no || ''}</title>
+  <style>
+    @media print {
+      @page { margin: 12mm 12mm 20mm 12mm; size: A4; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    body { font-family: 'Times New Roman', Times, serif; font-size: 11px; color: #000; margin: 0; padding: 10mm 12mm; }
+    table { border-collapse: collapse; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+    <img src="/bcim-logo.png" alt="BCIM" style="height:44px;object-fit:contain;">
+    <div style="text-align:center;flex:1;">
+      <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">PETTY CASH VOUCHER</div>
+      <div style="font-size:11px;margin-top:2px;">BCIM ENGINEERING PRIVATE LIMITED</div>
+      <div style="font-size:9px;color:#333;">#11, B Wing, Divyasree Chambers, O'Shaughnessy Road, Bangalore - 560025 | GSTIN: 29AAHCB6485A1ZL</div>
+    </div>
+    <div style="text-align:right;font-size:9px;font-weight:700;color:#333;">BCIM-STO-PC-01</div>
+  </div>
+  <div style="border-top:1.5px solid #000;border-bottom:1px solid #000;padding:5px 0;margin-bottom:10px;">
+    <table style="width:100%;">
+      <tr>
+        <td style="border:none;padding:2px 0;width:50%;font-size:10px;">
+          <strong>Voucher No :</strong>
+          <span style="font-family:monospace;font-size:12px;font-weight:700;margin-left:6px;">${entry.pc_voucher_no || '—'}</span>
+        </td>
+        <td style="border:none;padding:2px 0;text-align:right;font-size:10px;">
+          <strong>Date :</strong> ${dayjs(entry.entry_date).format('DD-MM-YYYY')}
+        </td>
+      </tr>
+      <tr>
+        <td style="border:none;padding:2px 0;font-size:10px;">
+          <strong>Project :</strong> ${projectName || '—'}
+        </td>
+        <td style="border:none;padding:2px 0;text-align:right;font-size:10px;">
+          <strong>Status :</strong> ${entry.status || '—'}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Supplier block -->
+  <table style="width:100%;margin-bottom:10px;">
+    <tr>
+      <td style="border:1px solid #000;padding:5px 8px;width:50%;">
+        <div style="font-size:9px;font-weight:700;color:#555;margin-bottom:2px;">SUPPLIER</div>
+        <div style="font-weight:700;font-size:11px;">${entry.supplier || '—'}</div>
+      </td>
+      <td style="border:1px solid #000;padding:5px 8px;border-left:none;">
+        <div style="font-size:9px;font-weight:700;color:#555;margin-bottom:2px;">INVOICE DETAILS</div>
+        <div><strong>Invoice No :</strong> ${entry.invoice_no || '—'}</div>
+        ${entry.remarks ? `<div style="margin-top:2px;"><strong>Remarks :</strong> ${entry.remarks}</div>` : ''}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Materials table -->
+  <table style="width:100%;margin-bottom:10px;">
+    <thead>
+      <tr>
+        <th style="${TH}width:30px;">#</th>
+        <th style="${TH}text-align:left;">Material / Description</th>
+        <th style="${TH}width:48px;">Unit</th>
+        <th style="${TH}width:48px;">Qty</th>
+        <th style="${TH}width:80px;">Rate (₹)</th>
+        <th style="${TH}width:48px;">GST%</th>
+        <th style="${TH}width:90px;">Amount (₹)</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+    <tfoot>
+      ${gstAmt ? `
+      <tr>
+        <td colspan="6" style="${TD}text-align:right;font-weight:700;background:#f8f8f8;">Basic Amount</td>
+        <td style="${TD}text-align:right;font-weight:700;background:#f8f8f8;">${fmt(basic)}</td>
+      </tr>
+      <tr>
+        <td colspan="6" style="${TD}text-align:right;background:#f8f8f8;">GST (${gstPct}%)</td>
+        <td style="${TD}text-align:right;background:#f8f8f8;">${fmt(gstAmt)}</td>
+      </tr>` : ''}
+      <tr>
+        <td colspan="6" style="${TD}text-align:right;font-weight:700;font-size:11px;background:#f0f0f0;">TOTAL AMOUNT</td>
+        <td style="${TD}text-align:right;font-weight:700;font-size:12px;background:#f0f0f0;">${fmt(total)}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Amount in words placeholder -->
+  <div style="border:1px solid #000;padding:5px 8px;margin-bottom:14px;font-size:10px;">
+    <strong>Amount in Words :</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Only
+  </div>
+
+  <!-- Signatures -->
+  <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+    <tr>
+      ${['Prepared By', 'Checked By', 'Site Incharge', 'Managing Director'].map(lbl => `
+        <td style="border:none;width:25%;text-align:center;padding:0 6px;vertical-align:bottom;">
+          <div style="height:36px;"></div>
+          <div style="border-top:1px solid #000;padding-top:3px;font-weight:700;font-size:9px;">${lbl}</div>
+        </td>`).join('')}
+    </tr>
+  </table>
+
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.print();
+}
+
 // ── File opener — OneDrive links open directly; legacy /uploads/ links use auth fetch ──
 async function openAttachment(url) {
   if (!url) return;
@@ -2363,6 +2506,10 @@ export default function StoresPettyCashPage() {
                                 <button onClick={() => setAttachModal({ entry: row })}
                                   className="p-1 rounded-md bg-amber-50 text-amber-600 hover:bg-amber-100" title="Upload / replace attachments">
                                   <Paperclip className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => printVoucher(row, selectedProject?.name)}
+                                  className="p-1 rounded-md bg-indigo-50 text-indigo-500 hover:bg-indigo-100" title="Print voucher">
+                                  <Printer className="w-3.5 h-3.5" />
                                 </button>
                                 <button onClick={() => { if (window.confirm('Delete this entry?')) deleteEntryMut.mutate(row.id); }}
                                   className="p-1 rounded-md text-slate-300 hover:bg-red-50 hover:text-red-500" title="Delete">
