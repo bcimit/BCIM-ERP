@@ -1098,6 +1098,7 @@ export default function StoresPettyCashPage() {
       qc.invalidateQueries({ queryKey: ['spc-budgets'] });
       qc.invalidateQueries({ queryKey: ['analytics-executive'] });
       qc.invalidateQueries({ queryKey: ['my-approvals'] });
+      qc.invalidateQueries({ queryKey: ['spc-entries-accounts'] });
     },
     onError: e => toast.error(e?.response?.data?.error || 'Status update failed'),
   });

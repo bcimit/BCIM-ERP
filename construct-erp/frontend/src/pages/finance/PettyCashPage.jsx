@@ -1291,13 +1291,13 @@ function StoresPCTab({ projectId }) {
                   <td className="px-3 py-2 font-medium text-gray-800 max-w-[160px] truncate">{e.supplier}</td>
                   <td className="px-3 py-2 text-gray-500">{e.invoice_no || '—'}</td>
                   <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate">{e.project_name || '—'}</td>
-                  <td className="px-3 py-2 text-right font-medium">{fmt(e.basic_amount || e.amount)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{fmt(e.basic_amount ?? 0)}</td>
                   <td className="px-3 py-2 text-right text-purple-600">{fmt(e.gst_amount)}</td>
-                  <td className="px-3 py-2 text-right font-bold text-green-700">{fmt(e.total_amount || e.amount)}</td>
+                  <td className="px-3 py-2 text-right font-bold text-green-700">{fmt(e.total_amount ?? e.amount)}</td>
                   <td className="px-3 py-2 text-gray-500">{e.approved_by_name || '—'}</td>
                   <td className="px-3 py-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                      <CheckCircle size={9} /> Posted
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
+                      <CheckCircle size={9} /> Auto-JV
                     </span>
                   </td>
                 </tr>
@@ -1310,9 +1310,9 @@ function StoresPCTab({ projectId }) {
               <tfoot>
                 <tr className="bg-gray-50 font-bold text-gray-700">
                   <td colSpan={5} className="px-3 py-2">Total ({filtered.length} entries)</td>
-                  <td className="px-3 py-2 text-right">{fmt(filtered.reduce((s, e) => s + parseFloat(e.basic_amount || e.amount || 0), 0))}</td>
+                  <td className="px-3 py-2 text-right">{fmt(filtered.reduce((s, e) => s + parseFloat(e.basic_amount ?? 0), 0))}</td>
                   <td className="px-3 py-2 text-right text-purple-600">{fmt(filtered.reduce((s, e) => s + parseFloat(e.gst_amount || 0), 0))}</td>
-                  <td className="px-3 py-2 text-right text-green-700">{fmt(filtered.reduce((s, e) => s + parseFloat(e.total_amount || e.amount || 0), 0))}</td>
+                  <td className="px-3 py-2 text-right text-green-700">{fmt(filtered.reduce((s, e) => s + parseFloat(e.total_amount ?? e.amount ?? 0), 0))}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
