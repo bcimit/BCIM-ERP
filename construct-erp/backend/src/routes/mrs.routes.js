@@ -1155,7 +1155,7 @@ router.patch('/:id', async (req, res) => {
     }
     const {
       department, head_office_project_name, site_incharge, required_by,
-      priority, remarks, items,
+      priority, remarks, items, request_date,
     } = req.body;
 
     const mrs = await query(
@@ -1178,10 +1178,13 @@ router.patch('/:id', async (req, res) => {
            site_incharge = COALESCE($3, site_incharge),
            required_by = COALESCE($4, required_by),
            priority = COALESCE($5, priority),
-           remarks = COALESCE($6, remarks)
+           remarks = COALESCE($6, remarks),
+           request_date = COALESCE($8, request_date),
+           updated_at = NOW()
          WHERE id = $7`,
         [department || null, head_office_project_name || null, site_incharge || null,
-         required_by || null, priority || null, remarks || null, req.params.id]
+         required_by || null, priority || null, remarks || null, req.params.id,
+         request_date || null]
       );
 
       if (Array.isArray(items)) {

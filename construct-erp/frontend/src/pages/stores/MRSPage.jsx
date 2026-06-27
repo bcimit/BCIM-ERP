@@ -2498,6 +2498,7 @@ function MDApprovalModal({ mrs, items, loading, onClose, onApprove }) {
 function MRSEditModal({ mrs, items, loading, onClose, onSave }) {
   const [form, setForm] = useState({
     priority: mrs.priority || 'medium',
+    request_date: mrs.request_date ? dayjs(mrs.request_date).format('YYYY-MM-DD') : '',
     required_by: mrs.required_by ? dayjs(mrs.required_by).format('YYYY-MM-DD') : '',
     site_incharge: mrs.site_incharge || '',
     remarks: mrs.remarks || '',
@@ -2541,7 +2542,20 @@ function MRSEditModal({ mrs, items, loading, onClose, onSave }) {
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Header fields */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">MR Raised Date <span className="text-red-500">*</span></label>
+              <input type="date" value={form.request_date} onChange={e => setField('request_date', e.target.value)}
+                className="w-full h-9 bg-yellow-50 border border-yellow-300 rounded-lg px-2 text-sm outline-none focus:border-blue-400 transition" />
+              <p className="text-[10px] text-slate-400 mt-0.5">Date the MRS was actually raised</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1.5">Required By</label>
+              <input type="date" value={form.required_by} onChange={e => setField('required_by', e.target.value)}
+                className="w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-blue-400 transition" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-1.5">Priority</label>
               <select value={form.priority} onChange={e => setField('priority', e.target.value)}
@@ -2551,11 +2565,6 @@ function MRSEditModal({ mrs, items, loading, onClose, onSave }) {
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
               </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1.5">Required By</label>
-              <input type="date" value={form.required_by} onChange={e => setField('required_by', e.target.value)}
-                className="w-full h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm outline-none focus:border-blue-400 transition" />
             </div>
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-1.5">Site Incharge</label>
@@ -2616,6 +2625,7 @@ function MRSEditModal({ mrs, items, loading, onClose, onSave }) {
             <button
               onClick={() => onSave({
                 priority: form.priority,
+                request_date: form.request_date || null,
                 required_by: form.required_by || null,
                 site_incharge: form.site_incharge || null,
                 remarks: form.remarks || null,
