@@ -957,7 +957,7 @@ router.post('/email-weekly-report', authenticate, async (req, res) => {
     const { sendMail } = require('../services/mail.service');
     const companyId = req.user.company_id;
 
-    const { from: reqFrom, to: reqTo, recipient = 'it@bcim.in,stephen@bcim.in' } = req.body || {};
+    const { from: reqFrom, to: reqTo, recipient = 'it@bcim.in,stephen@bcim.in', pdfBase64, pdfFileName } = req.body || {};
     let weekFrom, weekTo;
     if (reqFrom && reqTo) {
       weekFrom = reqFrom;
@@ -1194,11 +1194,16 @@ router.post('/email-weekly-report', authenticate, async (req, res) => {
   </div>
 </div>`;
 
+    const attachments = pdfBase64
+      ? [{ filename: pdfFileName || 'PettyCash_Statement.pdf', base64: pdfBase64, contentType: 'application/pdf' }]
+      : [];
+
     const result = await sendMail({
       to: recipient,
       subject,
       html,
       text: `Stores Petty Cash Weekly Report — ${weekLabel}\n\nTotal Received: ${inrF(totalRec)}\nApproved Purchases: ${inrF(totalLP)}\nSalary Advances: ${inrF(totalAdv)}\nSC Advances: ${inrF(totalSC)}\nNet: ${inrF(Math.abs(balance))}${balance<0?' Dr':''}\n\nView at: https://erp.bcim.in`,
+      attachments,
     });
 
     res.json({ sent: result.sent, recipient, period: { from: weekFrom, to: weekTo }, summary: { totalRec, totalLP, totalAdv, totalSC, balance, entries: entries.length, pending: pendingEntries.length } });

@@ -443,7 +443,7 @@ function printStatement({ entries, advances, scAdvances, receipts, projectName, 
 }
 
 // ── PDF export helper (jsPDF + autoTable) ────────────────────────────────────
-function exportPdf({ entries, advances, scAdvances, receipts, projectName, period }) {
+function exportPdf({ entries, advances, scAdvances, receipts, projectName, period, returnBase64 = false }) {
   const fmt = (v) => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sc = scAdvances || [];
 
@@ -609,6 +609,9 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
   addSignatureFooter();
 
   const fileName = `PettyCash_${projectName ? projectName.replace(/\s+/g, '_') + '_' : ''}${period ? period.replace(/[^a-zA-Z0-9]/g, '_') : dayjs().format('YYYY-MM-DD')}.pdf`;
+  if (returnBase64) {
+    return { base64: doc.output('datauristring').split(',')[1], fileName };
+  }
   doc.save(fileName);
 }
 
@@ -3231,11 +3234,30 @@ export default function StoresPettyCashPage() {
                 onClick={async () => {
                   const { from, to } = mdModal;
                   setMdModal(null);
-                  const tid = toast.loading('Sending to MD…');
+                  const tid = toast.loading('Generating PDF & sending to MD…');
                   try {
-                    await storesPettyCashAPI.emailWeeklyReport({ from, to, recipient: 'dheenadayalan@bcim.in' });
+                    const filterByDate = (arr, dateKey) =>
+                      (from || to) ? arr.filter(r => (!from || r[dateKey] >= from) && (!to || r[dateKey] <= to)) : arr;
+                    const period = (from || to)
+                      ? `${from ? dayjs(from).format('DD-MM-YYYY') : '—'} to ${to ? dayjs(to).format('DD-MM-YYYY') : '—'}`
+                      : null;
+                    const { base64, fileName } = exportPdf({
+                      entries:     filterByDate(approvedEntries, 'entry_date'),
+                      advances:    filterByDate(advances,        'advance_date'),
+                      scAdvances:  filterByDate(scAdvances,      'advance_date'),
+                      receipts:    filterByDate(receipts,        'receipt_date'),
+                      projectName: selectedProject?.name,
+                      period,
+                      returnBase64: true,
+                    });
+                    await storesPettyCashAPI.emailWeeklyReport({
+                      from, to,
+                      recipient:   'dheenadayalan@bcim.in',
+                      pdfBase64:   base64,
+                      pdfFileName: fileName,
+                    });
                     toast.dismiss(tid);
-                    toast.success(`Statement sent to dheenadayalan@bcim.in (${dayjs(from).format('DD-MM-YYYY')} – ${dayjs(to).format('DD-MM-YYYY')})`);
+                    toast.success(`Statement + PDF sent to dheenadayalan@bcim.in (${dayjs(from).format('DD-MM-YYYY')} – ${dayjs(to).format('DD-MM-YYYY')})`);
                   } catch (e) {
                     toast.dismiss(tid);
                     toast.error(e?.response?.data?.error || 'Failed to send');

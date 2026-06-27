@@ -72,7 +72,7 @@ const filterAlertRecipients = ({ recipients, subject }) => {
   return recipients.filter(email => !excluded.has(String(email).toLowerCase()));
 };
 
-const sendViaGraph = async ({ to, cc, subject, html, text }) => {
+const sendViaGraph = async ({ to, cc, subject, html, text, attachments = [] }) => {
   const token  = await getGraphToken();
   const sender = process.env.MAIL_FROM || process.env.ONEDRIVE_USER_EMAIL;
 
@@ -87,6 +87,12 @@ const sendViaGraph = async ({ to, cc, subject, html, text }) => {
       },
       toRecipients: [{ emailAddress: { address: to } }],
       ccRecipients: normalizeRecipients(cc).map(address => ({ emailAddress: { address } })),
+      attachments: attachments.map(a => ({
+        '@odata.type':  '#microsoft.graph.fileAttachment',
+        name:           a.filename,
+        contentType:    a.contentType || 'application/octet-stream',
+        contentBytes:   a.base64,
+      })),
     },
     saveToSentItems: false,
   };
@@ -134,7 +140,7 @@ const getTransport = () =>
     },
   });
 
-const sendMail = async ({ to, cc, subject, html, text }) => {
+const sendMail = async ({ to, cc, subject, html, text, attachments = [] }) => {
   let recipients = filterAlertRecipients({ recipients: normalizeRecipients(to), subject });
   let ccRecipients = filterAlertRecipients({ recipients: normalizeRecipients(cc), subject });
   recipients = recipients.filter(email => !isBlockedEmail(email));
@@ -145,7 +151,7 @@ const sendMail = async ({ to, cc, subject, html, text }) => {
   for (const recipient of recipients) {
     if (isGraphConfigured()) {
       try {
-        await sendViaGraph({ to: recipient, cc: ccRecipients, subject, html, text });
+        await sendViaGraph({ to: recipient, cc: ccRecipients, subject, html, text, attachments });
         results.push({ to: recipient, sent: true, provider: 'graph' });
         continue;
       } catch (err) {
@@ -163,6 +169,11 @@ const sendMail = async ({ to, cc, subject, html, text }) => {
           subject,
           text,
           html,
+          attachments: attachments.map(a => ({
+            filename:    a.filename,
+            content:     Buffer.from(a.base64, 'base64'),
+            contentType: a.contentType || 'application/octet-stream',
+          })),
         });
         results.push({ to: recipient, sent: true, provider: 'smtp' });
         continue;
