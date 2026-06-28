@@ -7,6 +7,7 @@ import {
   Trash2, Edit2, CheckCircle2, Clock, Users, X,
 } from 'lucide-react';
 import { hrAdvancedAPI } from '../../api/client';
+import toast from 'react-hot-toast';
 
 const CATEGORIES = ['HR', 'Finance', 'IT', 'Operations', 'Compliance', 'Safety', 'Other'];
 const STATUS_COLORS = { published: '#10B981', draft: '#F59E0B', archived: '#6B7280' };
@@ -101,8 +102,26 @@ export default function HRPoliciesPage() {
 
   const createMut = useMutation({
     mutationFn: hrAdvancedAPI.createPolicy,
-    onSuccess: () => { qc.invalidateQueries(['hr-policies']); setModalData(null); },
+    onSuccess: () => { qc.invalidateQueries(['hr-policies']); setModalData(null); toast.success('Policy created'); },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
   });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, ...data }) => hrAdvancedAPI.updatePolicy(id, data),
+    onSuccess: () => { qc.invalidateQueries(['hr-policies']); setModalData(null); toast.success('Policy updated'); },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: id => hrAdvancedAPI.deletePolicy(id),
+    onSuccess: () => { qc.invalidateQueries(['hr-policies']); toast.success('Deleted'); },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+
+  const handleSave = (form) => {
+    if (form.id) updateMut.mutate(form);
+    else createMut.mutate(form);
+  };
 
   const list = policies.filter(p => {
     const q = search.toLowerCase();
@@ -173,7 +192,7 @@ export default function HRPoliciesPage() {
             </button>
             {!expanded[cat] && (
               <div className="divide-y divide-gray-50">
-                {items.map(p => <PolicyRow key={p.id} p={p} onEdit={()=>setModalData(p)}/>)}
+                {items.map(p => <PolicyRow key={p.id} p={p} onEdit={()=>setModalData(p)} onDelete={id=>deleteMut.mutate(id)}/>)}
               </div>
             )}
           </motion.div>
@@ -181,7 +200,7 @@ export default function HRPoliciesPage() {
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden"
             style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
             <div className="divide-y divide-gray-50">
-              {list.map(p => <PolicyRow key={p.id} p={p} onEdit={()=>setModalData(p)}/>)}
+              {list.map(p => <PolicyRow key={p.id} p={p} onEdit={()=>setModalData(p)} onDelete={id=>deleteMut.mutate(id)}/>)}
             </div>
           </div>
         )}
@@ -192,7 +211,7 @@ export default function HRPoliciesPage() {
           <PolicyModal
             policy={modalData || null}
             onClose={()=>setModalData(null)}
-            onSave={(form) => createMut.mutate(form)}
+            onSave={handleSave}
           />
         )}
       </AnimatePresence>
@@ -200,7 +219,7 @@ export default function HRPoliciesPage() {
   );
 }
 
-function PolicyRow({ p, onEdit }) {
+function PolicyRow({ p, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const color = STATUS_COLORS[p.status] || '#6B7280';
   return (
@@ -231,6 +250,9 @@ function PolicyRow({ p, onEdit }) {
         </button>
         <button onClick={onEdit} className="text-gray-400 hover:text-blue-600 p-1 rounded-lg hover:bg-blue-50 transition-colors">
           <Edit2 size={14}/>
+        </button>
+        <button onClick={()=>{ if(window.confirm('Delete this policy?')) onDelete(p.id); }} className="text-gray-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors">
+          <Trash2 size={14}/>
         </button>
       </div>
       {expanded && p.body && (

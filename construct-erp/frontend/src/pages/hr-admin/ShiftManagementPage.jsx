@@ -5,7 +5,7 @@ import { Plus, X, Pencil, Trash2, Clock, Users, CheckCircle2, XCircle } from 'lu
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { hrShiftsAPI } from '../../api/client';
+import { hrShiftsAPI, hrEmployeesAPI } from '../../api/client';
 import { PageHeader } from '../../theme';
 import { FIELD_HL } from '../../constants/fieldStyles';
 
@@ -66,13 +66,68 @@ function ShiftForm({ shift, onClose, onSaved }) {
   );
 }
 
+function AssignShiftForm({ shifts, employees, onClose, onSaved }) {
+  const [f, setF] = useState({ employee_id:'', shift_id:'', effective_from: dayjs().format('YYYY-MM-DD'), effective_to:'' });
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const mut = useMutation({
+    mutationFn: d => hrShiftsAPI.assignShift(d),
+    onSuccess: () => { toast.success('Shift assigned'); onSaved(); onClose(); },
+    onError: e => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h3 className="text-sm font-semibold">Assign Shift to Employee</h3>
+          <button onClick={onClose}><X size={16}/></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div>
+            <label className="block text-[11px] text-slate-500 mb-1">Employee *</label>
+            <select value={f.employee_id} onChange={e=>set('employee_id',e.target.value)} className={INP}>
+              <option value="">Select employee…</option>
+              {employees.map(e=><option key={e.id} value={e.id}>{e.full_name||e.name} ({e.employee_code||e.emp_code})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-slate-500 mb-1">Shift *</label>
+            <select value={f.shift_id} onChange={e=>set('shift_id',e.target.value)} className={INP}>
+              <option value="">Select shift…</option>
+              {shifts.map(s=><option key={s.id} value={s.id}>{s.name} {s.code ? `(${s.code})` : ''} · {s.start_time}–{s.end_time}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-slate-500 mb-1">Effective From *</label>
+              <input type="date" value={f.effective_from} onChange={e=>set('effective_from',e.target.value)} className={INP} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-500 mb-1">Effective To (optional)</label>
+              <input type="date" value={f.effective_to} onChange={e=>set('effective_to',e.target.value)} className={INP} />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-3 border-t">
+          <button onClick={onClose} className="h-9 px-4 rounded-xl border text-xs">Cancel</button>
+          <button onClick={()=>mut.mutate(f)} disabled={mut.isPending||!f.employee_id||!f.shift_id}
+            className="h-9 px-5 rounded-xl bg-blue-600 text-white text-xs font-semibold disabled:opacity-50">
+            {mut.isPending ? 'Assigning…' : 'Assign Shift'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ShiftManagementPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('Shifts');
   const [showForm, setShowForm] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
   const [editItem, setEditItem] = useState(null);
 
   const { data: shifts=[] } = useQuery({ queryKey:['hr-shifts'], queryFn:()=>hrShiftsAPI.shifts().then(r=>r.data?.data||[]) });
+  const { data: employees=[] } = useQuery({ queryKey:['hr-employees-active'], queryFn:()=>hrEmployeesAPI.list({ is_active:true, limit:500 }).then(r=>r.data?.data||[]) });
   const { data: overtime=[] } = useQuery({ queryKey:['hr-ot'], queryFn:()=>hrShiftsAPI.overtime().then(r=>r.data?.data||[]) });
   const { data: compoff=[] } = useQuery({ queryKey:['hr-compoff'], queryFn:()=>hrShiftsAPI.compOff().then(r=>r.data?.data||[]) });
   const { data: empShifts=[] } = useQuery({ queryKey:['hr-emp-shifts'], queryFn:()=>hrShiftsAPI.empShifts().then(r=>r.data?.data||[]) });
@@ -83,7 +138,8 @@ export default function ShiftManagementPage() {
   });
   const approveOT  = useMutation({ mutationFn:id=>hrShiftsAPI.approveOT(id), onSuccess:()=>{ toast.success('OT Approved'); qc.invalidateQueries({queryKey:['hr-ot']}); } });
   const rejectOT   = useMutation({ mutationFn:id=>hrShiftsAPI.rejectOT(id),  onSuccess:()=>{ toast.success('OT Rejected'); qc.invalidateQueries({queryKey:['hr-ot']}); } });
-  const approveComp= useMutation({ mutationFn:id=>hrShiftsAPI.approveCompOff(id), onSuccess:()=>{ toast.success('Comp-off Approved'); qc.invalidateQueries({queryKey:['hr-compoff']}); } });
+  const approveComp   = useMutation({ mutationFn:id=>hrShiftsAPI.approveCompOff(id), onSuccess:()=>{ toast.success('Comp-off Approved'); qc.invalidateQueries({queryKey:['hr-compoff']}); } });
+  const removeShiftMut = useMutation({ mutationFn:id=>hrShiftsAPI.removeShift(id), onSuccess:()=>{ toast.success('Assignment removed'); qc.invalidateQueries({queryKey:['hr-emp-shifts']}); } });
 
   const refresh = () => { qc.invalidateQueries({queryKey:['hr-shifts']}); };
 
@@ -91,11 +147,17 @@ export default function ShiftManagementPage() {
     <div className="h-full flex flex-col overflow-hidden bg-[#f5f6fa]">
       <PageHeader title="Shift Management" subtitle="Shifts · Overtime · Comp-off"
         breadcrumbs={[{label:'HR & Admin'},{label:'Shift Management'}]}
-        actions={tab==='Shifts' ? (
-          <button onClick={()=>{setEditItem(null);setShowForm(true);}} className="h-9 px-4 rounded-xl bg-blue-600 text-white text-xs font-semibold flex items-center gap-2">
-            <Plus size={14}/> New Shift
-          </button>
-        ) : null}
+        actions={
+          tab==='Shifts' ? (
+            <button onClick={()=>{setEditItem(null);setShowForm(true);}} className="h-9 px-4 rounded-xl bg-blue-600 text-white text-xs font-semibold flex items-center gap-2">
+              <Plus size={14}/> New Shift
+            </button>
+          ) : tab==='Employee Assignment' ? (
+            <button onClick={()=>setShowAssign(true)} className="h-9 px-4 rounded-xl bg-blue-600 text-white text-xs font-semibold flex items-center gap-2">
+              <Plus size={14}/> Assign Shift
+            </button>
+          ) : null
+        }
       />
 
       <div className="flex gap-1 px-5 pt-3 bg-white border-b flex-shrink-0">
@@ -146,7 +208,7 @@ export default function ShiftManagementPage() {
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden max-w-5xl">
             <table className="w-full text-xs">
               <thead className="bg-slate-50"><tr>
-                {['Employee','Shift','Start Time','End Time','Effective From','Effective To'].map(h=>(
+                {['Employee','Shift','Start Time','End Time','Effective From','Effective To',''].map(h=>(
                   <th key={h} className="px-4 py-3 text-left font-semibold text-slate-500">{h}</th>
                 ))}
               </tr></thead>
@@ -159,9 +221,15 @@ export default function ShiftManagementPage() {
                     <td className="px-4 py-3 font-mono">{es.end_time}</td>
                     <td className="px-4 py-3">{dayjs(es.effective_from).format('DD-MM-YYYY')}</td>
                     <td className="px-4 py-3">{es.effective_to ? dayjs(es.effective_to).format('DD-MM-YYYY') : '—'}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={()=>{if(window.confirm('Remove this shift assignment?'))removeShiftMut.mutate(es.id);}}
+                        className="w-6 h-6 rounded hover:bg-red-100 flex items-center justify-center">
+                        <Trash2 size={12} className="text-red-400"/>
+                      </button>
+                    </td>
                   </tr>
                 ))}
-                {empShifts.length===0 && <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">No shift assignments yet</td></tr>}
+                {empShifts.length===0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400">No shift assignments yet. Click "Assign Shift" to assign a shift to an employee.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -248,6 +316,9 @@ export default function ShiftManagementPage() {
 
       {showForm && (
         <ShiftForm shift={editItem} onClose={()=>{setShowForm(false);setEditItem(null);}} onSaved={refresh} />
+      )}
+      {showAssign && (
+        <AssignShiftForm shifts={shifts} employees={employees} onClose={()=>setShowAssign(false)} onSaved={()=>qc.invalidateQueries({queryKey:['hr-emp-shifts']})} />
       )}
     </div>
   );

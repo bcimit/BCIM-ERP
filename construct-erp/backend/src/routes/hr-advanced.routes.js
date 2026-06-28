@@ -1062,6 +1062,26 @@ router.post('/policies', async (req, res) => {
   res.status(201).json({ data: rows[0] });
 });
 
+router.patch('/policies/:id', async (req, res) => {
+  const { policy_code, title, category, version, effective_date, body, status } = req.body;
+  try {
+    const { rows } = await query(
+      `UPDATE hr_policy_documents SET policy_code=$1,title=$2,category=$3,version=$4,effective_date=$5,body=$6,status=$7,updated_at=NOW()
+       WHERE id=$8 AND company_id=$9 RETURNING *`,
+      [policy_code||null, title, category||'HR', version||'1.0', effective_date||new Date().toISOString().slice(0,10), body, status||'published', req.params.id, companyId(req)]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/policies/:id', async (req, res) => {
+  try {
+    await query(`DELETE FROM hr_policy_documents WHERE id=$1 AND company_id=$2`, [req.params.id, companyId(req)]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/policies/acknowledgements', async (req, res) => {
   const { policy_id, user_id } = req.query;
   const params = [companyId(req)];

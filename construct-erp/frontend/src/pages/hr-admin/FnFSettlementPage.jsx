@@ -5,7 +5,7 @@ import { Plus, X, Eye, CheckCircle2, IndianRupee } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { hrFnfAPI } from '../../api/client';
+import { hrFnfAPI, hrEmployeesAPI } from '../../api/client';
 import { PageHeader } from '../../theme';
 import { FIELD_HL } from '../../constants/fieldStyles';
 
@@ -58,7 +58,7 @@ function FnFForm({ onClose, onSaved, employees=[] }) {
             <div><label className="block text-[11px] text-slate-500 mb-1">Employee *</label>
               <select value={f.employee_id} onChange={e=>set('employee_id',e.target.value)} className={INP}>
                 <option value="">Select…</option>
-                {employees.map(e=><option key={e.id} value={e.id}>{e.full_name} ({e.employee_id})</option>)}
+                {employees.map(e=><option key={e.id} value={e.id}>{e.full_name||e.name} ({e.employee_code||e.emp_code})</option>)}
               </select>
             </div>
             <div><label className="block text-[11px] text-slate-500 mb-1">Last Working Day *</label>
@@ -153,6 +153,7 @@ export default function FnFSettlementPage() {
   const [showForm, setShowForm] = useState(false);
 
   const { data: list=[] } = useQuery({ queryKey:['hr-fnf'], queryFn:()=>hrFnfAPI.list().then(r=>r.data?.data||[]) });
+  const { data: employees=[] } = useQuery({ queryKey:['hr-employees-active'], queryFn:()=>hrEmployeesAPI.list({ is_active:true, limit:500 }).then(r=>r.data?.data||[]) });
 
   const approve = useMutation({ mutationFn:id=>hrFnfAPI.approve(id), onSuccess:()=>{ toast.success('Approved'); qc.invalidateQueries({queryKey:['hr-fnf']}); } });
 
@@ -197,7 +198,7 @@ export default function FnFSettlementPage() {
           </table>
         </div>
       </div>
-      {showForm && <FnFForm onClose={()=>setShowForm(false)} onSaved={()=>qc.invalidateQueries({queryKey:['hr-fnf']})} />}
+      {showForm && <FnFForm onClose={()=>setShowForm(false)} onSaved={()=>qc.invalidateQueries({queryKey:['hr-fnf']})} employees={employees} />}
     </div>
   );
 }

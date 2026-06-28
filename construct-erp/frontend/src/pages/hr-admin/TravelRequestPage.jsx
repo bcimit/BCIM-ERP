@@ -5,7 +5,7 @@ import { Plus, X, CheckCircle2, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { hrTravelAPI } from '../../api/client';
+import { hrTravelAPI, hrEmployeesAPI } from '../../api/client';
 import { PageHeader } from '../../theme';
 import { FIELD_HL } from '../../constants/fieldStyles';
 
@@ -13,8 +13,8 @@ const INP = `w-full h-9 rounded-lg px-3 text-xs font-medium outline-none transit
 const STATUS_C = { pending:'yellow', approved:'blue', rejected:'red', advance_paid:'purple', settled:'green', cancelled:'slate' };
 const MODES = ['air','train','bus','own_vehicle','cab','others'];
 
-function TravelForm({ onClose, onSaved }) {
-  const [f, setF] = useState({ purpose:'', from_date:'', to_date:'', from_city:'', to_city:'', mode:'train', travel_class:'', advance_requested:0, remarks:'' });
+function TravelForm({ onClose, onSaved, employees=[] }) {
+  const [f, setF] = useState({ employee_id:'', purpose:'', from_date:'', to_date:'', from_city:'', to_city:'', mode:'train', travel_class:'', advance_requested:0, remarks:'' });
   const set = (k,v) => setF(p=>({...p,[k]:v}));
   const mut = useMutation({
     mutationFn: d => { const fd = new FormData(); Object.entries(d).forEach(([k,v])=>v!==undefined&&fd.append(k,v)); return hrTravelAPI.create(fd); },
@@ -29,6 +29,14 @@ function TravelForm({ onClose, onSaved }) {
           <button onClick={onClose}><X size={16}/></button>
         </div>
         <div className="p-5 space-y-3">
+          {employees.length > 0 && (
+            <div><label className="block text-[11px] text-slate-500 mb-1">Employee (leave blank for self)</label>
+              <select value={f.employee_id} onChange={e=>set('employee_id',e.target.value)} className={INP}>
+                <option value="">Self</option>
+                {employees.map(e=><option key={e.id} value={e.id}>{e.full_name||e.name} ({e.employee_code||e.emp_code})</option>)}
+              </select>
+            </div>
+          )}
           <div><label className="block text-[11px] text-slate-500 mb-1">Purpose *</label>
             <input value={f.purpose} onChange={e=>set('purpose',e.target.value)} placeholder="Site visit, client meeting…" className={INP} /></div>
           <div className="grid grid-cols-2 gap-3">
@@ -105,6 +113,7 @@ export default function TravelRequestPage() {
   const [filterStatus, setFilterStatus] = useState('');
 
   const { data: list=[] } = useQuery({ queryKey:['hr-travel',filterStatus], queryFn:()=>hrTravelAPI.list({status:filterStatus||undefined}).then(r=>r.data?.data||[]) });
+  const { data: employees=[] } = useQuery({ queryKey:['hr-employees-active'], queryFn:()=>hrEmployeesAPI.list({ is_active:true, limit:500 }).then(r=>r.data?.data||[]) });
 
   const reject = useMutation({ mutationFn:id=>hrTravelAPI.reject(id,{}), onSuccess:()=>{ toast.success('Rejected'); qc.invalidateQueries({queryKey:['hr-travel']}); } });
 
@@ -168,7 +177,7 @@ export default function TravelRequestPage() {
           </table>
         </div>
       </div>
-      {showForm && <TravelForm onClose={()=>setShowForm(false)} onSaved={refresh} />}
+      {showForm && <TravelForm onClose={()=>setShowForm(false)} onSaved={refresh} employees={employees} />}
       {approveItem && <ApproveModal travel={approveItem} onClose={()=>setApproveItem(null)} onSaved={refresh} />}
     </div>
   );
