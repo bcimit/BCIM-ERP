@@ -3260,6 +3260,7 @@ export default function StoresPettyCashPage() {
                     await storesPettyCashAPI.emailWeeklyReport({
                       from, to,
                       recipient:   'dheenadayalan@bcim.in,stephen@bcim.in',
+                      projectName: selectedProject?.name,
                       pdfBase64:   base64,
                       pdfFileName: fileName,
                     });

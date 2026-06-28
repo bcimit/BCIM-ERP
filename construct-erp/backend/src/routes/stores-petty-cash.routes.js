@@ -957,7 +957,7 @@ router.post('/email-weekly-report', authenticate, async (req, res) => {
     const { sendMail } = require('../services/mail.service');
     const companyId = req.user.company_id;
 
-    const { from: reqFrom, to: reqTo, recipient = 'stephen@bcim.in', pdfBase64, pdfFileName } = req.body || {};
+    const { from: reqFrom, to: reqTo, recipient = 'stephen@bcim.in', projectName, pdfBase64, pdfFileName } = req.body || {};
     let weekFrom, weekTo;
     if (reqFrom && reqTo) {
       weekFrom = reqFrom;
@@ -1163,7 +1163,8 @@ router.post('/email-weekly-report', authenticate, async (req, res) => {
     const cardRowsHtml = `<tr>${cards.map(cardCell).join('')}</tr>`;
 
     const weekLabel = `${fmtD(weekFrom)} to ${fmtD(weekTo)}`;
-    const subject = `Stores Petty Cash Weekly Report — ${weekLabel} — ${totalItems} transaction(s)`;
+    const projectTag = projectName ? ` — ${projectName}` : '';
+    const subject = `Stores Petty Cash${projectTag} — ${weekLabel} — ${totalItems} transaction(s)`;
 
     const html = `
 <div style="font-family:Arial,sans-serif;max-width:1180px;margin:0 auto;color:#10233f">
