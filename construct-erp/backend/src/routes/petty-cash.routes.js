@@ -246,14 +246,39 @@ runSchemaInit('petty_cash_v2', async () => {
     amount DECIMAL(12,2), voucher_number VARCHAR(50), received_by VARCHAR(100),
     remarks TEXT, created_by UUID, created_at TIMESTAMPTZ DEFAULT NOW()
   )`);
+
+  // Cost head for BOQ budget matching (Material / Consumables / Electrical / Safety / P&M)
+  await safe(`ALTER TABLE pc_expenses ADD COLUMN IF NOT EXISTS cost_head TEXT`);
+
+  // Sub-contractor advances paid via petty cash
+  await safe(`CREATE TABLE IF NOT EXISTS pc_sc_advances (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id      UUID NOT NULL,
+    voucher_number  VARCHAR(50) NOT NULL,
+    project_id      UUID REFERENCES projects(id),
+    vendor_id       UUID,
+    vendor_name     TEXT NOT NULL,
+    advance_date    DATE NOT NULL,
+    amount          NUMERIC(14,2) NOT NULL,
+    wo_number       TEXT,
+    payment_mode    VARCHAR(50) DEFAULT 'cash',
+    reference_number VARCHAR(100),
+    remarks         TEXT,
+    advance_voucher_id INTEGER REFERENCES tqs_advance_vouchers(id),
+    status          VARCHAR(20) DEFAULT 'issued',
+    created_by      UUID REFERENCES users(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  await safe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_sc_advances_num ON pc_sc_advances(company_id, voucher_number)`);
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 async function nextSeq(table, prefix, companyId) {
-  const col = table === 'pc_requests' ? 'request_number'
-            : table === 'pc_expenses' ? 'voucher_number'
+  const col = table === 'pc_requests'    ? 'request_number'
+            : table === 'pc_expenses'    ? 'voucher_number'
             : table === 'pc_settlements' ? 'settlement_number'
             : table === 'pc_transfers'   ? 'transfer_number'
+            : table === 'pc_sc_advances' ? 'voucher_number'
             : 'adjustment_number';
   const yr = new Date().getFullYear().toString().slice(2);
   const { rows } = await query(
@@ -689,15 +714,17 @@ router.get('/expenses', async (req, res) => {
 router.post('/expenses', async (req, res) => {
   try {
     const { request_id, project_id, site_location, custodian_id, category_id,
-            expense_date, description, amount, payment_mode, bill_number, bill_date, vendor_name, remarks } = req.body;
+            expense_date, description, amount, payment_mode, bill_number, bill_date,
+            vendor_name, remarks, cost_head } = req.body;
     if (!expense_date || !description || !amount) return res.status(400).json({ error: 'expense_date, description, amount required' });
     const voucher_number = await nextSeq('pc_expenses', 'PCE', req.user.company_id);
     const { rows: [row] } = await query(
-      `INSERT INTO pc_expenses (company_id,voucher_number,request_id,project_id,site_location,custodian_id,category_id,expense_date,description,amount,payment_mode,bill_number,bill_date,vendor_name,remarks,status,created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'draft',$16) RETURNING *`,
+      `INSERT INTO pc_expenses (company_id,voucher_number,request_id,project_id,site_location,custodian_id,category_id,expense_date,description,amount,payment_mode,bill_number,bill_date,vendor_name,remarks,cost_head,status,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'draft',$17) RETURNING *`,
       [req.user.company_id, voucher_number, request_id||null, project_id||null, site_location||null,
        custodian_id||null, category_id||null, expense_date, description, Number(amount),
-       payment_mode||'cash', bill_number||null, bill_date||null, vendor_name||null, remarks||null, req.user.id]
+       payment_mode||'cash', bill_number||null, bill_date||null, vendor_name||null, remarks||null,
+       cost_head||null, req.user.id]
     );
     res.status(201).json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1148,6 +1175,82 @@ router.get('/summary', async (req, res) => {
   if (to_date)    { sql += ` AND entry_date<=$${i++}`; params.push(to_date); }
   const r = await query(sql, params).catch(() => ({ rows: [{}] }));
   res.json({ data: r.rows[0] });
+});
+
+// ── SC ADVANCES (Petty Cash Sub-Contractor Advances) ──────────────────────────
+
+// Vendor lookup for SC advance dropdown
+router.get('/sc-advances/lookup/vendors', async (req, res) => {
+  try {
+    const { project_id, search } = req.query;
+    let sql = `SELECT v.id, v.name, v.vendor_code FROM vendors v WHERE v.company_id=$1`;
+    const params = [req.user.company_id];
+    if (search) { sql += ` AND v.name ILIKE $${params.length+1}`; params.push(`%${search}%`); }
+    sql += ' ORDER BY v.name LIMIT 50';
+    const { rows } = await query(sql, params);
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// List SC advances
+router.get('/sc-advances', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let sql = `
+      SELECT sa.*, p.name AS project_name,
+             u.name AS created_by_name
+      FROM pc_sc_advances sa
+      LEFT JOIN projects p ON p.id = sa.project_id
+      LEFT JOIN users u ON u.id = sa.created_by
+      WHERE sa.company_id=$1
+    `;
+    const params = [req.user.company_id];
+    if (project_id) { sql += ` AND sa.project_id=$2`; params.push(project_id); }
+    sql += ' ORDER BY sa.advance_date DESC, sa.created_at DESC';
+    const { rows } = await query(sql, params);
+    res.json({ data: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Create SC advance — inserts into both pc_sc_advances and tqs_advance_vouchers
+router.post('/sc-advances', async (req, res) => {
+  try {
+    const { project_id, vendor_id, vendor_name, advance_date, amount,
+            wo_number, payment_mode, reference_number, remarks } = req.body;
+    if (!vendor_name || !advance_date || !amount) {
+      return res.status(400).json({ error: 'vendor_name, advance_date and amount are required' });
+    }
+
+    const voucher_number = await nextSeq('pc_sc_advances', 'PCSC', req.user.company_id);
+
+    // Insert into tqs_advance_vouchers so it shows in BOQ Budget Breakdown
+    const advRes = await query(
+      `INSERT INTO tqs_advance_vouchers
+         (company_id, project_id, vendor_id, vendor_name, work_desc, wo_number,
+          voucher_number, voucher_date, advance_value, paid_amount,
+          status, created_by, remarks)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,'issued',$10,$11)
+       RETURNING id`,
+      [req.user.company_id, project_id||null, vendor_id||null, vendor_name,
+       `Petty Cash Advance — ${voucher_number}`, wo_number||null,
+       voucher_number, advance_date, Number(amount),
+       req.user.id, remarks||null]
+    );
+    const advVoucherId = advRes.rows[0]?.id || null;
+
+    const { rows: [row] } = await query(
+      `INSERT INTO pc_sc_advances
+         (company_id, voucher_number, project_id, vendor_id, vendor_name,
+          advance_date, amount, wo_number, payment_mode, reference_number,
+          remarks, advance_voucher_id, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'issued',$13) RETURNING *`,
+      [req.user.company_id, voucher_number, project_id||null, vendor_id||null, vendor_name,
+       advance_date, Number(amount), wo_number||null, payment_mode||'cash',
+       reference_number||null, remarks||null, advVoucherId, req.user.id]
+    );
+
+    res.status(201).json({ data: row });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
