@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
+const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 router.use(authenticate);
 
 // PF/ESI constants (India)
@@ -105,8 +106,46 @@ router.post('/generate', authorize('super_admin','admin','hr','accountant'), asy
 // PATCH /payroll/:id/pay
 router.patch('/:id/pay', authorize('super_admin','admin','accountant'), async (req, res) => {
   const { payment_mode, payment_date } = req.body;
+
+  const { rows: [pr] } = await query(
+    `SELECT p.*, w.name AS worker_name FROM payroll p JOIN workers w ON w.id=p.worker_id WHERE p.id=$1`,
+    [req.params.id]
+  );
+  if (!pr) return res.status(404).json({ error: 'Payroll record not found' });
+
   await query('UPDATE payroll SET payment_status=$1,payment_date=$2,payment_mode=$3 WHERE id=$4',
     ['paid', payment_date || new Date(), payment_mode || 'cash', req.params.id]);
+
+  const gross   = parseFloat(pr.gross_wages  || 0);
+  const pfEmp   = parseFloat(pr.pf_employee  || 0);
+  const pfEr    = parseFloat(pr.pf_employer  || 0);
+  const esiEmp  = parseFloat(pr.esi_employee || 0);
+  const esiEr   = parseFloat(pr.esi_employer || 0);
+  const netPay  = parseFloat(pr.net_wages    || 0);
+  const cashCode = (payment_mode || 'cash') === 'cash' ? '1000' : '1010';
+
+  if (gross > 0) {
+    const lines = [
+      { code: '6000', debit: Math.round(gross  * 100)/100, description: `Worker wages — ${pr.worker_name}` },
+    ];
+    if (pfEr  > 0) lines.push({ code: '6010', debit: Math.round(pfEr  * 100)/100, description: 'EPF Employer' });
+    if (esiEr > 0) lines.push({ code: '6020', debit: Math.round(esiEr * 100)/100, description: 'ESI Employer' });
+    lines.push({ code: cashCode,  credit: Math.round(netPay * 100)/100, description: `Cash payment — ${pr.worker_name}` });
+    if (pfEmp + pfEr   > 0) lines.push({ code: '2410', credit: Math.round((pfEmp+pfEr)   * 100)/100, description: 'EPF Payable' });
+    if (esiEmp + esiEr > 0) lines.push({ code: '2420', credit: Math.round((esiEmp+esiEr) * 100)/100, description: 'ESI Payable' });
+
+    postAutoJournalStandalone({
+      companyId: req.user.company_id,
+      userId:    req.user.id,
+      entryDate: payment_date || new Date().toISOString().slice(0, 10),
+      projectId: pr.project_id || null,
+      reference: `WPR-${req.params.id.slice(0, 8)}`,
+      narration: `Worker payroll — ${pr.worker_name} (${pr.period_from}–${pr.period_to})`,
+      source:    'auto_worker_payroll',
+      lines,
+    }).catch(() => {});
+  }
+
   res.json({ message: 'Payment recorded' });
 });
 

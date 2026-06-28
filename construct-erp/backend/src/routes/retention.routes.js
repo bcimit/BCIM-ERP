@@ -4,6 +4,7 @@ const router  = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { loadProjectScope, appendProjectScope } = require('../middleware/projectScope');
+const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 
 router.use(authenticate);
 router.use(loadProjectScope);
@@ -238,7 +239,27 @@ router.patch('/:id/approve', authorize('super_admin', 'admin', 'project_manager'
     `, [req.user.id, req.params.id, req.user.company_id]);
 
     if (!result.rows.length) return res.status(404).json({ error: 'Release not found or not in pending status' });
-    res.json({ data: result.rows[0] });
+
+    const rel = result.rows[0];
+    const amt = parseFloat(rel.release_amount || 0);
+    if (amt > 0) {
+      // Dr Accounts Receivable (retention now collectible), Cr Retention Held (liability cleared)
+      postAutoJournalStandalone({
+        companyId: req.user.company_id,
+        userId:    req.user.id,
+        entryDate: rel.release_date,
+        projectId: rel.project_id || null,
+        reference: rel.release_number,
+        narration: `Retention released — ${rel.contractor_name} (${rel.milestone})`,
+        source:    'auto_retention_release',
+        lines: [
+          { code: '1100', debit:  amt, description: `Retention receivable — ${rel.contractor_name}` },
+          { code: '2060', credit: amt, description: `Retention held cleared — ${rel.release_number}` },
+        ],
+      }).catch(() => {});
+    }
+
+    res.json({ data: rel });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
