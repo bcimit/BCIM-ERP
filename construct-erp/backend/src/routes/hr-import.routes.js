@@ -43,11 +43,34 @@ function parseCSV(buffer) {
 // ─── helper: parse XLSX buffer → array of objects ────────────────────────────
 // Converts all cell values to strings to avoid float/scientific-notation issues
 // with numeric fields like mobile, bank account, UAN, employee code.
+// Auto-detects the real header row in case the file has a title row on top.
 function parseXLSX(buffer) {
-  const wb   = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  const ws   = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'dd-mm-yyyy', defval: '' });
-  // Trim all string values
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+
+  // Scan the first 10 rows to find the one containing recognisable headers
+  const sheetRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+  const KNOWN_HEADERS = ['employee code', 'emp code', 'employee_code', 'name', 'employee name', 'employeecode'];
+  let headerRow = sheetRange.s.r;
+
+  outer:
+  for (let r = sheetRange.s.r; r <= Math.min(sheetRange.s.r + 9, sheetRange.e.r); r++) {
+    for (let c = sheetRange.s.c; c <= sheetRange.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (cell && KNOWN_HEADERS.includes(String(cell.v || '').trim().toLowerCase())) {
+        headerRow = r;
+        break outer;
+      }
+    }
+  }
+
+  const rows = XLSX.utils.sheet_to_json(ws, {
+    raw: false,
+    dateNF: 'dd-mm-yyyy',
+    defval: '',
+    range: headerRow,
+  });
+
   return rows.map(row => {
     const clean = {};
     for (const [k, v] of Object.entries(row)) {
