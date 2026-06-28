@@ -260,6 +260,35 @@ function vendorFromName(name) {
   return (tail && !/^\d+$/.test(tail)) ? tail : '';
 }
 
+// Map module + doc_type to an organised OneDrive folder path.
+// All paths sit under the root ConstructERP/ folder configured in ONEDRIVE_FOLDER.
+function resolveOneDriveFolder(module, docType, vendorName) {
+  const dt = (docType || 'general').replace(/_/g, ' ');
+  switch ((module || 'general').toLowerCase()) {
+    case 'sc':
+      return `SC Documents/${dt}`;
+    case 'qaqc':
+    case 'qa_qc':
+      return `QA-QC/${dt}`;
+    case 'hse':
+      return `HSE/${dt}`;
+    case 'hr':
+      return `HR Documents/${dt}`;
+    case 'plant':
+      return `Plant & Machinery/${dt}`;
+    case 'assets':
+      return `Assets/${dt}`;
+    case 'accounts':
+    case 'finance':
+      return `Finance/${dt}`;
+    case 'project':
+      return `Projects/${dt}`;
+    default:
+      // Vendor invoices / bills keep the legacy structure
+      return vendorName ? `Vendor Invoices/${vendorName}` : `Vendor Invoices`;
+  }
+}
+
 router.post('/upload', upload.array('files', 20), async (req, res) => {
   try {
     if (!req.files || !req.files.length) return res.status(400).json({ error: 'No files provided' });
@@ -338,28 +367,32 @@ router.post('/upload', upload.array('files', 20), async (req, res) => {
         if (vendorName) effectiveFolderId = await ensureVendorFolder(vendorName);
       }
 
-      // Upload to SharePoint/OneDrive
+      // Upload to OneDrive via Microsoft Graph API
+      // Folder path is derived from module + doc_type so files land in the right place.
       let oneDriveUrl = null;
+      let oneDriveId  = null;
       try {
         const fileBuffer = fs.readFileSync(file.path);
-        const folderPath = vendorName ? `Vendor Invoices/${vendorName}` : 'Vendor Invoices';
+        const folderPath = resolveOneDriveFolder(module, doc_type, vendorName);
         const uploadResult = await uploadToSharePoint(file.originalname, fileBuffer, folderPath);
         oneDriveUrl = uploadResult.webUrl;
+        oneDriveId  = uploadResult.id || null;
+        console.log(`[DMS] OneDrive upload OK → ${folderPath}/${file.originalname}`);
       } catch (e) {
-        console.warn(`SharePoint upload failed for ${file.originalname}: ${e.message}`);
-        // Continue without SharePoint URL - local upload is still available
+        console.error(`[DMS] OneDrive upload FAILED for ${file.originalname}: ${e.message}`);
+        // File still saved locally as fallback, but log clearly so it can be investigated
       }
 
       const r = await db().query(`
         INSERT INTO documents
           (company_id, project_id, folder_id, module, module_record_id,
-           file_name, file_type, file_size, local_url, onedrive_url,
+           file_name, file_type, file_size, local_url, onedrive_url, onedrive_id,
            doc_type, doc_number, doc_title, discipline, description,
            tags, expiry_date, access_level, status, uploaded_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'draft',$19)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'draft',$20)
         RETURNING *`,
         [CID(req), project_id||null, effectiveFolderId, module||'general', module_record_id||null,
-         file.originalname, ext, file.size, localUrl, oneDriveUrl,
+         file.originalname, ext, file.size, localUrl, oneDriveUrl, oneDriveId,
          doc_type||'general', doc_number||null,
          doc_title || file.originalname, discipline||null, description||null,
          tagArr, expiry_date||null, access_level||'internal', req.user.id]);
