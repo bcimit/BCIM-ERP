@@ -67,8 +67,13 @@ function UploadModal({ subs, onClose }) {
       if (form.expiry_date) fd.append('expiry_date', form.expiry_date);
       return dmsAPI.upload(fd);
     },
-    onSuccess: () => {
-      toast.success('Document uploaded');
+    onSuccess: (res) => {
+      const warn = res?.data?.data?.[0]?._onedrive_warn;
+      if (warn) {
+        toast.error(`Saved locally. OneDrive error: ${warn}`, { duration: 8000 });
+      } else {
+        toast.success('Document uploaded to OneDrive');
+      }
       qc.invalidateQueries({ queryKey: ['sc-dms-docs'] });
       onClose();
     },
