@@ -46,7 +46,7 @@ function parseCSV(buffer) {
 function parseXLSX(buffer) {
   const wb   = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const ws   = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'yyyy-mm-dd', defval: '' });
+  const rows = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'dd-mm-yyyy', defval: '' });
   // Trim all string values
   return rows.map(row => {
     const clean = {};
