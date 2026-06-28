@@ -30,7 +30,11 @@ function downloadSample(content, filename) {
 
 function FileDropzone({ onFile, file }) {
   const onDrop = useCallback(accepted=>{ if(accepted[0]) onFile(accepted[0]); },[onFile]);
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept:{'text/csv':['.csv']}, maxFiles:1 });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'text/csv': ['.csv'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
+    maxFiles: 1,
+  });
   return (
     <div {...getRootProps()} className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
       isDragActive?'border-blue-400 bg-blue-50':'border-gray-200 hover:border-blue-300 bg-gray-50 hover:bg-blue-50'
@@ -46,8 +50,8 @@ function FileDropzone({ onFile, file }) {
         </div>
       ) : (
         <div>
-          <p className="text-gray-700 font-bold">Drop your HR CSV here</p>
-          <p className="text-gray-400 text-sm mt-1">or click to browse — CSV files only, max 10 MB</p>
+          <p className="text-gray-700 font-bold">Drop your Excel or CSV file here</p>
+          <p className="text-gray-400 text-sm mt-1">or click to browse — .xlsx and .csv supported, max 10 MB</p>
         </div>
       )}
     </div>
@@ -163,11 +167,11 @@ function EmployeeImportTab() {
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800 space-y-1">
-        <p className="font-black text-blue-900">How to prepare the employee CSV:</p>
-        <p>1. Export employees from your HR system → Download CSV</p>
-        <p>2. Upload the CSV below. We auto-map all standard column formats.</p>
-        <p>3. <strong>Create mode</strong> → new employees created (default password = employee code).</p>
-        <p>4. <strong>Update mode</strong> → only updates existing employee profiles.</p>
+        <p className="font-black text-blue-900">How to import employees:</p>
+        <p>1. Upload your Excel (.xlsx) or CSV file below — standard column names are auto-mapped.</p>
+        <p>2. A <strong>Project</strong> column (last column) assigns each employee to their site/project location.</p>
+        <p>3. <strong>Create mode</strong> → new employees created; default login password = employee code.</p>
+        <p>4. <strong>Update mode</strong> → only updates profiles for employees already in the system.</p>
       </div>
 
       <button onClick={()=>downloadSample(EMPLOYEE_SAMPLE,'employee-sample.csv')}

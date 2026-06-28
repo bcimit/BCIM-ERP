@@ -1,9 +1,10 @@
 // src/routes/hr-import.routes.js
-// CSV import — Employees & Attendance
+// CSV + Excel import — Employees & Attendance
 const express  = require('express');
 const multer   = require('multer');
 const bcrypt   = require('bcryptjs');
 const { parse } = require('csv-parse');
+const XLSX     = require('xlsx');
 const { query, pool } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
 
@@ -11,16 +12,16 @@ const router = express.Router();
 router.use(authenticate);
 router.use(authorize('super_admin', 'admin', 'hr_admin'));
 
-// ─── multer: memory storage (we parse the buffer directly) ───────────────────
+// ─── multer: memory storage, accept CSV + XLSX ───────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only CSV files are supported'));
-    }
+    const ok = file.mimetype === 'text/csv'
+      || file.originalname.endsWith('.csv')
+      || file.originalname.endsWith('.xlsx')
+      || file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    ok ? cb(null, true) : cb(new Error('Only CSV or XLSX files are supported'));
   },
 });
 
@@ -28,15 +29,38 @@ const upload = multer({
 function parseCSV(buffer) {
   return new Promise((resolve, reject) => {
     parse(buffer, {
-      columns: true,          // use first row as keys
+      columns: true,
       skip_empty_lines: true,
       trim: true,
-      bom: true,              // handle BOM from Windows exports
+      bom: true,
     }, (err, records) => {
       if (err) reject(err);
       else resolve(records);
     });
   });
+}
+
+// ─── helper: parse XLSX buffer → array of objects ────────────────────────────
+// Converts all cell values to strings to avoid float/scientific-notation issues
+// with numeric fields like mobile, bank account, UAN, employee code.
+function parseXLSX(buffer) {
+  const wb   = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'yyyy-mm-dd', defval: '' });
+  // Trim all string values
+  return rows.map(row => {
+    const clean = {};
+    for (const [k, v] of Object.entries(row)) {
+      clean[k.trim()] = typeof v === 'string' ? v.trim() : String(v === null || v === undefined ? '' : v).trim();
+    }
+    return clean;
+  });
+}
+
+// ─── helper: detect file type and parse ──────────────────────────────────────
+function parseFile(file) {
+  if (file.originalname.endsWith('.xlsx')) return parseXLSX(file.buffer);
+  return parseCSV(file.buffer);
 }
 
 // ─── helper: normalise date strings DD-MM-YYYY / DD/MM/YYYY / YYYY-MM-DD ────
@@ -91,7 +115,7 @@ function pick(row, ...keys) {
 router.post('/preview-employees', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const records = await parseCSV(req.file.buffer);
+    const records = await parseFile(req.file);
     res.json({
       total: records.length,
       columns: Object.keys(records[0] || {}),
@@ -109,7 +133,7 @@ router.post('/preview-employees', upload.single('file'), async (req, res) => {
 router.post('/preview-attendance', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const records = await parseCSV(req.file.buffer);
+    const records = await parseFile(req.file);
     res.json({
       total: records.length,
       columns: Object.keys(records[0] || {}),
@@ -133,7 +157,7 @@ router.post('/employees', upload.single('file'), async (req, res) => {
 
     const companyId = req.user.company_id;
     const mode = req.body.mode || 'create'; // 'create' | 'update'
-    const records = await parseCSV(req.file.buffer);
+    const records = await parseFile(req.file);
 
     // Pre-load departments & designations for name→id lookup
     const deptRows = await query(`SELECT id, LOWER(name) as name FROM hr_departments WHERE company_id=$1`, [companyId]);
@@ -177,6 +201,7 @@ router.post('/employees', upload.single('file'), async (req, res) => {
         const ctc      = parseFloat(pick(row, 'CTC', 'Annual CTC', 'CTC Annual')) || null;
         const categoryRaw = pick(row, 'Employee Category', 'Category', 'Staff Type').toLowerCase();
         const empCategory = categoryRaw.includes('work') ? 'workman' : 'staff';
+        const workLocation = pick(row, 'Project', 'Project Location', 'Site', 'Location', 'work_location');
 
         if (!empCode && !name) {
           results.errors.push({ row: rowNum, error: 'Missing Employee Code and Name' });
@@ -203,8 +228,8 @@ router.post('/employees', upload.single('file'), async (req, res) => {
                 blood_group, pan_number, aadhaar_number, uan_number, pf_account_number,
                 esi_number, bank_account_number, bank_ifsc, bank_name,
                 employment_type, employee_category, employment_status, permanent_address, notice_period_days,
-                updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,NOW())
+                work_location, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,NOW())
              ON CONFLICT (user_id) DO UPDATE SET
                department_id=EXCLUDED.department_id,
                designation_id=EXCLUDED.designation_id,
@@ -227,12 +252,14 @@ router.post('/employees', upload.single('file'), async (req, res) => {
                employment_status=COALESCE(NULLIF(EXCLUDED.employment_status,''), employee_profiles.employment_status),
                permanent_address=COALESCE(NULLIF(EXCLUDED.permanent_address,''), employee_profiles.permanent_address),
                notice_period_days=EXCLUDED.notice_period_days,
+               work_location=COALESCE(NULLIF(EXCLUDED.work_location,''), employee_profiles.work_location),
                updated_at=NOW()`,
             [userId, companyId, deptId, desigId,
              doj, dob, gender||null, fatherName||null, marital||null,
              blood||null, pan||null, aadhaar||null, uan||null, pf||null,
              esi||null, bankAcc||null, ifsc||null, bankName||null,
-             empType||'permanent', empCategory, empStatus, address||null, noticeDays]
+             empType||'permanent', empCategory, empStatus, address||null, noticeDays,
+             workLocation||null]
           );
           results.updated++;
         } else {
@@ -271,13 +298,15 @@ router.post('/employees', upload.single('file'), async (req, res) => {
                   date_of_joining, date_of_birth, gender, father_name, marital_status,
                   blood_group, pan_number, aadhaar_number, uan_number, pf_account_number,
                   esi_number, bank_account_number, bank_ifsc, bank_name,
-                  employment_type, employee_category, employment_status, permanent_address, notice_period_days)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+                  employment_type, employee_category, employment_status, permanent_address, notice_period_days,
+                  work_location)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
               [userId, companyId, deptId, desigId,
                doj, dob, gender||null, fatherName||null, marital||null,
                blood||null, pan||null, aadhaar||null, uan||null, pf||null,
                esi||null, bankAcc||null, ifsc||null, bankName||null,
-               empType||'permanent', empCategory, empStatus, address||null, noticeDays]
+               empType||'permanent', empCategory, empStatus, address||null, noticeDays,
+               workLocation||null]
             );
 
             // Auto-assign salary if CTC present
@@ -329,8 +358,8 @@ router.post('/attendance', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const companyId = req.user.company_id;
-    const records   = await parseCSV(req.file.buffer);
-    if (!records.length) return res.status(400).json({ error: 'CSV is empty' });
+    const records   = await parseFile(req.file);
+    if (!records.length) return res.status(400).json({ error: 'File is empty' });
 
     // ── Build employee code → user_id map ─────────────────────────────────
     const empRows = await query(
