@@ -513,7 +513,7 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
   const addTable = (y, head, body, foot, columnStyles = {}) => {
     autoTable(doc, {
       startY: y,
-      margin: { left: MARGIN, right: MARGIN },
+      margin: { left: MARGIN, right: MARGIN, bottom: 28 },
       head,
       body,
       foot,
@@ -595,7 +595,7 @@ function exportPdf({ entries, advances, scAdvances, receipts, projectName, perio
   y = addSectionTitle(y, 'E. Summary');
   autoTable(doc, {
     startY: y,
-    margin: { left: MARGIN, right: MARGIN + COL_W / 2 },
+    margin: { left: MARGIN, right: MARGIN + COL_W / 2, bottom: 28 },
     body: [
       ['Total Cash Received from HO', fmt(totalRec)],
       ['Less: Local Purchases',       `(${fmt(totalLP)})`],
