@@ -247,8 +247,22 @@ router.post('/employees', upload.single('file'), async (req, res) => {
             results.skipped++;
             continue;
           }
-          // ── UPDATE mode: refresh profile fields ──
+          // ── UPDATE mode: refresh users table + profile fields ──
           const userId = existing.rows[0].id;
+
+          // Update users table (name, phone, designation, department, status)
+          await query(
+            `UPDATE users SET
+               name        = COALESCE(NULLIF($1,''), name),
+               phone       = COALESCE(NULLIF($2,''), phone),
+               designation = COALESCE(NULLIF($3,''), designation),
+               department  = COALESCE(NULLIF($4,''), department),
+               is_active   = ($5 = 'active'),
+               updated_at  = NOW()
+             WHERE id = $6`,
+            [name||null, phone||null, desig||null, dept||null, empStatus, userId]
+          );
+
           await query(
             `INSERT INTO employee_profiles
                (user_id, company_id, department_id, designation_id,

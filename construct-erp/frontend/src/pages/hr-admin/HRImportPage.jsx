@@ -140,7 +140,7 @@ function EmployeeImportTab() {
   const [file,    setFile]    = useState(null);
   const [preview, setPreview] = useState(null);
   const [result,  setResult]  = useState(null);
-  const [mode,    setMode]    = useState('create_only');
+  const [mode,    setMode]    = useState('create');
   const [loading, setLoading] = useState(false);
   const [step,    setStep]    = useState('upload');
 
@@ -199,7 +199,7 @@ function EmployeeImportTab() {
         {step==='upload' && (
           <button onClick={handlePreview} disabled={!file||loading}
             className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-700 rounded-xl text-sm font-bold flex items-center gap-2">
-            {loading?<RefreshCw className="w-4 h-4 animate-spin"/>:<FileText className="w-4 h-4"/>} Preview CSV
+            {loading?<RefreshCw className="w-4 h-4 animate-spin"/>:<FileText className="w-4 h-4"/>} Preview File
           </button>
         )}
         {step==='preview' && <>
@@ -293,7 +293,7 @@ function AttendanceImportTab() {
         {step==='upload' && (
           <button onClick={handlePreview} disabled={!file||loading}
             className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-700 rounded-xl text-sm font-bold flex items-center gap-2">
-            {loading?<RefreshCw className="w-4 h-4 animate-spin"/>:<FileText className="w-4 h-4"/>} Preview CSV
+            {loading?<RefreshCw className="w-4 h-4 animate-spin"/>:<FileText className="w-4 h-4"/>} Preview File
           </button>
         )}
         {step==='preview' && <>
