@@ -2,7 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { BarChart3, Scale, FileBarChart, Download, FileDown, Clock3, Wallet, BookOpen } from 'lucide-react';
+import { BarChart3, Scale, FileBarChart, Download, FileDown, Clock3, Wallet, BookOpen,
+         ChevronDown, ChevronRight, Search, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, Hash } from 'lucide-react';
 import { chartOfAccountsAPI, reportAPI, journalEntryAPI, projectAPI } from '../../api/client';
 import { inr } from '../dashboards/DashKPI';
 import { downloadCsv, downloadPdf } from '../../utils/exportCsv';
@@ -59,6 +60,218 @@ function AgingTable({ rows, buckets, total, dateLabel, nameLabel, amountLabel })
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100 bg-slate-50">
           <span className="text-sm font-semibold text-slate-800">Total Outstanding</span>
           <span className="text-sm font-mono font-semibold text-slate-800">{inr(total)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Trial Balance Redesign ──────────────────────────────────────────────────────
+const TB_GROUPS = [
+  { key: 'asset',     label: 'Assets',      side: 'debit',  accent: '#2563EB', bg: '#EFF6FF', pill: 'bg-blue-100 text-blue-700'   },
+  { key: 'expense',   label: 'Expenses',    side: 'debit',  accent: '#D97706', bg: '#FFFBEB', pill: 'bg-amber-100 text-amber-700'  },
+  { key: 'liability', label: 'Liabilities', side: 'credit', accent: '#DC2626', bg: '#FEF2F2', pill: 'bg-red-100 text-red-700'      },
+  { key: 'equity',    label: 'Equity',      side: 'credit', accent: '#7C3AED', bg: '#F5F3FF', pill: 'bg-violet-100 text-violet-700'},
+  { key: 'income',    label: 'Income',      side: 'credit', accent: '#059669', bg: '#ECFDF5', pill: 'bg-emerald-100 text-emerald-700'},
+];
+
+function TBKpiCard({ label, value, sub, icon: Icon, color }) {
+  const colors = {
+    blue:    'bg-blue-50 text-blue-600 border-blue-100',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    amber:   'bg-amber-50 text-amber-600 border-amber-100',
+    slate:   'bg-slate-50 text-slate-600 border-slate-100',
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4 flex items-center gap-4"
+      style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center border ${colors[color]}`}>
+        <Icon size={20}/>
+      </div>
+      <div>
+        <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{label}</div>
+        <div className="text-xl font-black text-gray-900 mt-0.5">{value}</div>
+        {sub && <div className="text-[11px] text-gray-400 mt-0.5">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function TrialBalanceView({ byType, trialDebit, trialCredit, projectId, projects, onProjectChange, onExportCsv, onExportPdf }) {
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState({});
+  const toggle = key => setCollapsed(p => ({ ...p, [key]: !p[key] }));
+
+  const balanced = Math.abs(Math.abs(trialDebit) - Math.abs(trialCredit)) < 0.01;
+  const totalAccounts = TB_GROUPS.reduce((s, g) => s + (byType[g.key]?.length || 0), 0);
+
+  const filterRows = rows => !search.trim() ? rows
+    : rows.filter(r => r.name?.toLowerCase().includes(search.toLowerCase()) || r.code?.toLowerCase().includes(search.toLowerCase()));
+
+  const groupSum = (key, side) => {
+    const rows = byType[key] || [];
+    const raw = rows.reduce((s, r) => s + Number(r.balance || 0), 0);
+    return side === 'credit' ? Math.abs(raw) : Math.abs(raw);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <TBKpiCard label="Total Debit" value={`₹${inr(Math.abs(trialDebit))}`} sub="Assets + Expenses" icon={TrendingUp} color="blue"/>
+        <TBKpiCard label="Total Credit" value={`₹${inr(Math.abs(trialCredit))}`} sub="Liabilities + Equity + Income" icon={TrendingDown} color="amber"/>
+        <TBKpiCard label="Accounts" value={totalAccounts} sub="Active ledger accounts" icon={Hash} color="slate"/>
+        <div className={`bg-white rounded-2xl border px-5 py-4 flex items-center gap-4 ${balanced ? 'border-emerald-200' : 'border-red-200'}`}
+          style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${balanced ? 'bg-emerald-50' : 'bg-red-50'}`}>
+            {balanced ? <CheckCircle2 size={20} className="text-emerald-600"/> : <AlertCircle size={20} className="text-red-600"/>}
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Balance</div>
+            <div className={`text-base font-black mt-0.5 ${balanced ? 'text-emerald-700' : 'text-red-700'}`}>
+              {balanced ? 'Balanced ✓' : 'Out of Balance'}
+            </div>
+            {!balanced && (
+              <div className="text-[11px] text-red-500">Diff: ₹{inr(Math.abs(Math.abs(trialDebit) - Math.abs(trialCredit)))}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Controls row */}
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex gap-3 items-center flex-wrap">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search accounts…"
+              className="pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-xl w-52 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white"/>
+          </div>
+          <select value={projectId} onChange={e => onProjectChange(e.target.value)}
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-64">
+            <option value="">All Projects (company-wide)</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ` : ''}{p.name}</option>)}
+          </select>
+          {projectId && (
+            <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+              Scoped to selected project
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onExportCsv}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 bg-white">
+            <Download size={13}/> CSV
+          </button>
+          <button onClick={onExportPdf}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 bg-white">
+            <FileDown size={13}/> PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Main trial balance table */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden"
+        style={{boxShadow:'0 4px 20px rgba(10,31,92,0.07)'}}>
+
+        {/* Table header */}
+        <div className="grid grid-cols-[3rem_1fr_8rem_8rem] md:grid-cols-[4rem_1fr_10rem_10rem] bg-[#0A1F5C] text-white">
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider">Code</div>
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider">Account Name</div>
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-right">Debit (₹)</div>
+          <div className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-right">Credit (₹)</div>
+        </div>
+
+        {/* Groups */}
+        {TB_GROUPS.map((group, gi) => {
+          const rows = filterRows(byType[group.key] || []);
+          const subtotal = groupSum(group.key, group.side);
+          const isCollapsed = collapsed[group.key];
+          const allRows = byType[group.key] || [];
+
+          return (
+            <div key={group.key} className={gi > 0 ? 'border-t border-gray-100' : ''}>
+              {/* Group header row */}
+              <button onClick={() => toggle(group.key)}
+                className="w-full grid grid-cols-[3rem_1fr_8rem_8rem] md:grid-cols-[4rem_1fr_10rem_10rem] items-center hover:brightness-95 transition-all"
+                style={{background: group.bg}}>
+                <div className="px-4 py-3 flex items-center justify-center">
+                  {isCollapsed
+                    ? <ChevronRight size={14} style={{color: group.accent}}/>
+                    : <ChevronDown  size={14} style={{color: group.accent}}/>}
+                </div>
+                <div className="px-4 py-3 flex items-center gap-2.5">
+                  <span className="font-black text-sm" style={{color: group.accent}}>{group.label.toUpperCase()}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.pill}`}>
+                    {allRows.length} accounts
+                  </span>
+                </div>
+                <div className="px-4 py-3 text-right font-black text-sm" style={{color: group.side === 'debit' ? group.accent : 'transparent'}}>
+                  {group.side === 'debit' ? `₹${inr(subtotal)}` : ''}
+                </div>
+                <div className="px-4 py-3 text-right font-black text-sm" style={{color: group.side === 'credit' ? group.accent : 'transparent'}}>
+                  {group.side === 'credit' ? `₹${inr(subtotal)}` : ''}
+                </div>
+              </button>
+
+              {/* Account rows */}
+              {!isCollapsed && (
+                <div>
+                  {rows.length === 0 && search && (
+                    <div className="px-8 py-3 text-xs text-gray-400 italic border-t border-gray-50">No accounts match "{search}"</div>
+                  )}
+                  {rows.map((r, ri) => {
+                    const bal = Math.abs(Number(r.balance || 0));
+                    return (
+                      <div key={r.id}
+                        className={`grid grid-cols-[3rem_1fr_8rem_8rem] md:grid-cols-[4rem_1fr_10rem_10rem] border-t border-gray-50 hover:bg-gray-50/60 transition-colors ${ri % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                        <div className="px-4 py-2.5 text-[11px] font-mono text-gray-400 truncate">{r.code}</div>
+                        <div className="px-4 py-2.5 text-sm text-gray-800 truncate">{r.name}</div>
+                        <div className="px-4 py-2.5 text-right font-mono text-sm font-semibold text-blue-800">
+                          {group.side === 'debit' && bal > 0 ? inr(bal) : <span className="text-gray-200">—</span>}
+                        </div>
+                        <div className="px-4 py-2.5 text-right font-mono text-sm font-semibold text-emerald-800">
+                          {group.side === 'credit' && bal > 0 ? inr(bal) : <span className="text-gray-200">—</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Subtotal row */}
+                  <div className="grid grid-cols-[3rem_1fr_8rem_8rem] md:grid-cols-[4rem_1fr_10rem_10rem] border-t border-dashed"
+                    style={{borderColor: group.accent + '40', background: group.bg + 'cc'}}>
+                    <div/>
+                    <div className="px-4 py-2 text-xs font-bold" style={{color: group.accent}}>
+                      Total {group.label}
+                    </div>
+                    <div className="px-4 py-2 text-right font-mono font-black text-sm" style={{color: group.side === 'debit' ? group.accent : 'transparent'}}>
+                      {group.side === 'debit' ? `₹${inr(subtotal)}` : ''}
+                    </div>
+                    <div className="px-4 py-2 text-right font-mono font-black text-sm" style={{color: group.side === 'credit' ? group.accent : 'transparent'}}>
+                      {group.side === 'credit' ? `₹${inr(subtotal)}` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Grand total */}
+        <div className="grid grid-cols-[3rem_1fr_8rem_8rem] md:grid-cols-[4rem_1fr_10rem_10rem] border-t-2 border-gray-900 bg-[#0A1F5C] text-white">
+          <div/>
+          <div className="px-4 py-4 font-black text-sm tracking-wide">GRAND TOTAL</div>
+          <div className="px-4 py-4 text-right font-mono font-black text-base">₹{inr(Math.abs(trialDebit))}</div>
+          <div className="px-4 py-4 text-right font-mono font-black text-base">₹{inr(Math.abs(trialCredit))}</div>
+        </div>
+
+        {/* Balance status footer */}
+        <div className={`px-5 py-3 flex items-center justify-between ${balanced ? 'bg-emerald-50 border-t border-emerald-100' : 'bg-red-50 border-t border-red-100'}`}>
+          <div className={`flex items-center gap-2 text-sm font-semibold ${balanced ? 'text-emerald-700' : 'text-red-700'}`}>
+            {balanced
+              ? <><CheckCircle2 size={16}/> Trial Balance is balanced — Debit equals Credit</>
+              : <><AlertCircle size={16}/> Out of balance by ₹{inr(Math.abs(Math.abs(trialDebit) - Math.abs(trialCredit)))}</>}
+          </div>
+          <div className="text-[11px] text-gray-400">As of {dayjs().format('DD MMM YYYY')}</div>
         </div>
       </div>
     </div>
@@ -289,16 +502,18 @@ export default function AccountingReportsPage({ initialTab }) {
               <p className="text-xs text-slate-400">Trial Balance, Profit &amp; Loss and Balance Sheet from posted journal entries</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={exportCsv}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">
-              <Download className="w-3.5 h-3.5" /> CSV
-            </button>
-            <button onClick={exportPdf}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">
-              <FileDown className="w-3.5 h-3.5" /> PDF
-            </button>
-          </div>
+          {tab !== 'trial-balance' && (
+            <div className="flex items-center gap-2">
+              <button onClick={exportCsv}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">
+                <Download className="w-3.5 h-3.5" /> CSV
+              </button>
+              <button onClick={exportPdf}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm border border-slate-200 rounded-md text-slate-700 hover:bg-slate-50">
+                <FileDown className="w-3.5 h-3.5" /> PDF
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -317,7 +532,7 @@ export default function AccountingReportsPage({ initialTab }) {
         </div>
       </div>
 
-      {!['ar-aging', 'ap-aging', 'day-book'].includes(tab) && (
+      {!['ar-aging', 'ap-aging', 'day-book', 'trial-balance'].includes(tab) && (
         <div className="px-6 pt-4 flex flex-wrap items-center gap-2">
           <select className="border border-slate-200 rounded-md px-3 py-2 text-sm bg-white w-64 focus:outline-none focus:ring-2 focus:ring-blue-200"
             value={projectId} onChange={e => setProjectId(e.target.value)}>
@@ -346,19 +561,16 @@ export default function AccountingReportsPage({ initialTab }) {
         ) : tab === 'day-book' ? (
           <DayBookView entries={dayBookEntries} from={dbFrom} to={dbTo} onFrom={setDbFrom} onTo={setDbTo} />
         ) : tab === 'trial-balance' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Section title="Debit Balances (Assets &amp; Expenses)" rows={[...byType.asset, ...byType.expense]} total={trialDebit} totalLabel="Total Debit" />
-            <Section title="Credit Balances (Liabilities, Equity &amp; Income)" rows={[...byType.liability, ...byType.equity, ...byType.income]} total={trialCredit} totalLabel="Total Credit" />
-            <div className={clsx('lg:col-span-2 rounded-md border p-4 flex items-center justify-between',
-              Math.abs(trialDebit - trialCredit) < 0.01 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100')}>
-              <span className="text-sm font-medium text-slate-700">
-                {Math.abs(trialDebit - trialCredit) < 0.01 ? 'Trial balance is balanced ✓' : 'Trial balance is out of balance'}
-              </span>
-              <span className="text-sm font-mono font-semibold text-slate-800">
-                Dr {inr(trialDebit)} &nbsp;|&nbsp; Cr {inr(trialCredit)}
-              </span>
-            </div>
-          </div>
+          <TrialBalanceView
+            byType={byType}
+            trialDebit={trialDebit}
+            trialCredit={trialCredit}
+            projectId={projectId}
+            projects={projects}
+            onProjectChange={setProjectId}
+            onExportCsv={exportCsv}
+            onExportPdf={exportPdf}
+          />
         ) : tab === 'pnl' ? (
           <div className="space-y-4 max-w-3xl">
             <Section title="Income" rows={byType.income} total={totalIncome} totalLabel="Total Income" />
