@@ -3,11 +3,11 @@
 // category (Upto 3 Hours / After 3 Hours / For 1 Day...) across many invoices,
 // recording both vendor-Invoiced and site-Certified hours before raising the
 // actual bill — mirrors the manual tracking sheet used for this billing type.
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hireLogAPI, scAPI } from '../../api/client';
 import { PageHeader, Theme } from '../../theme';
-import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck } from 'lucide-react';
+import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -304,11 +304,152 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
   );
 }
 
+// ─── Setup WO Modal — tag items with equipment_group + usage_category ──────────
+const UNIT_OPTIONS = ['Shift', 'Hours', 'Day'];
+
+function SetupWOModal({ onClose, onDone }) {
+  const qc = useQueryClient();
+  const [selectedWoId, setSelectedWoId] = useState('');
+  const [tags, setTags] = useState({}); // itemId -> { equipment_group, usage_category, category_order }
+  const [saving, setSaving] = useState(false);
+
+  const { data: allWOs = [], isLoading: wosLoading } = useQuery({
+    queryKey: ['sc-wos-for-setup'],
+    queryFn: () => scAPI.listWO().then(r => r.data?.data || r.data || []),
+  });
+
+  const { data: woDetail, isLoading: detailLoading } = useQuery({
+    queryKey: ['sc-wo-detail-setup', selectedWoId],
+    queryFn: () => scAPI.getWO(selectedWoId).then(r => r.data?.data || r.data),
+    enabled: !!selectedWoId,
+  });
+
+  const items = woDetail?.items || [];
+
+  useEffect(() => {
+    if (!items.length) return;
+    const init = {};
+    items.forEach(it => {
+      init[it.id] = {
+        equipment_group: it.equipment_group || '',
+        usage_category:  it.usage_category  || '',
+        category_order:  it.category_order  != null ? it.category_order : 0,
+      };
+    });
+    setTags(init);
+  }, [woDetail]);
+
+  const setTag = (id, field, val) =>
+    setTags(prev => ({ ...prev, [id]: { ...prev[id], [field]: val } }));
+
+  const handleSave = async () => {
+    if (!selectedWoId) return;
+    setSaving(true);
+    try {
+      const toSave = items.filter(it => tags[it.id]?.equipment_group && tags[it.id]?.usage_category);
+      await Promise.all(toSave.map(it =>
+        hireLogAPI.categorizeItem(selectedWoId, it.id, tags[it.id])
+      ));
+      qc.invalidateQueries({ queryKey: ['hire-log-wos'] });
+      onDone(selectedWoId);
+      onClose();
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"
+          style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+          <div>
+            <h2 className="font-bold text-white text-sm">Setup WO for Hire Tracker</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>Tag each WO line with an equipment group + usage category</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* WO selector */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Select Work Order</label>
+            <select className={inp} value={selectedWoId} onChange={e => setSelectedWoId(e.target.value)}>
+              <option value="">— Select a work order —</option>
+              {allWOs.map(w => (
+                <option key={w.id} value={w.id}>{w.wo_number} · {w.sc_name || w.subject}</option>
+              ))}
+            </select>
+          </div>
+
+          {detailLoading && <p className="text-xs text-slate-400 animate-pulse">Loading items…</p>}
+
+          {items.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                Tag items — Equipment Group + Usage Category (leave blank to skip)
+              </p>
+              <div className="space-y-2">
+                {items.map((it, idx) => (
+                  <div key={it.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                    <p className="text-xs font-semibold text-slate-700 mb-2">
+                      <span className="text-slate-400 mr-1.5">#{idx + 1}</span>
+                      {it.description}
+                      <span className="ml-2 text-[10px] text-indigo-500">{it.unit} · ₹{Number(it.rate || 0).toLocaleString('en-IN')}</span>
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[9px] text-slate-400 mb-0.5">Equipment Group</label>
+                        <input className={inp} placeholder="e.g. Hydra Crane (12 Ton)"
+                          value={tags[it.id]?.equipment_group || ''}
+                          onChange={e => setTag(it.id, 'equipment_group', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-400 mb-0.5">Usage Category</label>
+                        <input className={inp} placeholder="e.g. Min 3 Hrs Shift"
+                          value={tags[it.id]?.usage_category || ''}
+                          onChange={e => setTag(it.id, 'usage_category', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-400 mb-0.5">Sort Order</label>
+                        <input type="number" className={inp} min="0"
+                          value={tags[it.id]?.category_order ?? 0}
+                          onChange={e => setTag(it.id, 'category_order', Number(e.target.value))} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">
+                Tip: Use the same Equipment Group name for all rates of the same machine (e.g. all 3 Hydra Crane lines → "Hydra Crane (12 Ton)"). Sort order: Shift=1, Hours=2, Day=3.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 px-5 py-4 border-t bg-slate-50/60">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !selectedWoId || !items.length}
+            className="px-5 py-2 text-white text-sm font-bold rounded-lg disabled:opacity-50"
+            style={{ background: `linear-gradient(135deg, ${Theme.navyLight} 0%, ${Theme.navyDark} 100%)` }}>
+            {saving ? 'Saving…' : 'Save & Use This WO'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function HireUsageTrackerPage() {
   const qc = useQueryClient();
   const [woId, setWoId] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const [raisingId, setRaisingId] = useState(null);
 
   const { data: wos = [] } = useQuery({
@@ -371,13 +512,22 @@ export default function HireUsageTrackerPage() {
         title="Hire / Rental Usage Tracker"
         subtitle="Track Invoiced vs Certified hours per usage category, then raise the bill"
         breadcrumbs={[{ label: 'Subcontractors' }, { label: 'Hire Usage Tracker' }]}
-        actions={wo && (
-          <button onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition shadow-sm"
-            style={{ background: '#fff', color: Theme.navyDark }}>
-            <Plus className="w-3.5 h-3.5" /> Add Bill Entry
-          </button>
-        )}
+        actions={
+          <div className="flex gap-2">
+            <button onClick={() => setShowSetup(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition shadow-sm"
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}>
+              <Settings className="w-3.5 h-3.5" /> Setup WO
+            </button>
+            {wo && (
+              <button onClick={() => setShowAdd(true)}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition shadow-sm"
+                style={{ background: '#fff', color: Theme.navyDark }}>
+                <Plus className="w-3.5 h-3.5" /> Add Bill Entry
+              </button>
+            )}
+          </div>
+        }
       />
 
       <div className="p-5 md:p-6 max-w-[1400px] mx-auto space-y-5">
@@ -391,9 +541,15 @@ export default function HireUsageTrackerPage() {
             ))}
           </select>
           {wos.length === 0 && (
-            <p className="text-xs text-amber-600 mt-2">
-              No work orders have categorized usage items yet. A work order needs its line items tagged with an equipment group + category before it appears here.
-            </p>
+            <div className="mt-2 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p className="text-xs text-amber-700 flex-1">
+                No work orders set up yet. Click <b>Setup WO</b> (top right) to tag a WO's items with equipment groups and usage categories.
+              </p>
+              <button onClick={() => setShowSetup(true)}
+                className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-600 text-white hover:bg-amber-700">
+                <Settings className="w-3 h-3" /> Setup WO
+              </button>
+            </div>
           )}
         </div>
 
@@ -420,6 +576,12 @@ export default function HireUsageTrackerPage() {
 
       {showAdd && wo && (
         <EntryModal wo={wo} equipmentGroups={equipmentGroups} onClose={() => setShowAdd(false)} />
+      )}
+      {showSetup && (
+        <SetupWOModal
+          onClose={() => setShowSetup(false)}
+          onDone={(id) => { setWoId(id); }}
+        />
       )}
     </div>
   );
