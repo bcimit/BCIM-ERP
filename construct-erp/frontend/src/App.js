@@ -892,6 +892,7 @@ export default function App() {
                 <Route path="stores/reports/view/:type" element={<RequireModule module="Stores"><StoresReportViewer /></RequireModule>} />
                 <Route path="stores/reports/vendor-wise" element={<RequireModule module="Stores"><VendorWiseReportsPage /></RequireModule>} />
                 <Route path="stores/reports/dmr" element={<RequireModule module="Stores"><DailyMaterialRegisterPage /></RequireModule>} />
+                <Route path="stores/dmr" element={<RequireModule module="Stores"><DailyMaterialRegisterPage /></RequireModule>} />
 
                 {/* Quality (QA/QC) */}
                 <Route path="quality"                    element={<RequireModule module="Quality (QA/QC)"><QAQCDashboard /></RequireModule>} />

@@ -147,6 +147,43 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── GET /ign/register ─────────────────────────────────────────────────────────
+// Flattened receipt LINE ITEMS (material received against PO) for the Daily
+// Material Register / Receipt. One row per ign_item joined with its header + PO.
+// Registered BEFORE /:id so the wildcard can't swallow it.
+router.get('/register', async (req, res) => {
+  try {
+    const { project_id, status, from_date, to_date } = req.query;
+    let sql = `
+      SELECT n.id AS ign_id, n.ign_number, n.date_time, n.project_id, n.po_id,
+             n.po_number, n.dc_number, n.bill_number, n.vehicle_no, n.status,
+             p.name AS project_name, p.project_code,
+             COALESCE(v.name, n.supplier_name) AS vendor_name,
+             po.serial_no_formatted AS po_serial, po.po_ref_no,
+             ii.id AS item_id, ii.material_name, ii.unit, ii.rate,
+             ii.qty_as_per_dc, ii.qty_inspected, ii.qty_rejected,
+             ii.batch_number, ii.expiry_date, ii.remarks AS item_remarks, ii.sort_order
+      FROM ign n
+      JOIN projects p ON n.project_id = p.id
+      JOIN ign_items ii ON ii.ign_id = n.id
+      LEFT JOIN vendors v ON n.vendor_id = v.id
+      LEFT JOIN purchase_orders po ON po.id = n.po_id
+      WHERE p.company_id = $1`;
+    let params = [req.user.company_id];
+    let i = 2;
+    if (project_id) { sql += ` AND n.project_id = $${i++}`; params.push(project_id); }
+    if (status)     { sql += ` AND n.status = $${i++}`;     params.push(status); }
+    if (from_date)  { sql += ` AND n.date_time >= $${i++}`; params.push(from_date); }
+    if (to_date)    { sql += ` AND n.date_time <= $${i++}`; params.push(to_date); }
+    ({ sql, params } = appendProjectScope(req, sql, params, 'n'));
+    sql += ` ORDER BY n.date_time DESC, n.ign_number, COALESCE(ii.sort_order, 0)`;
+    const result = await query(sql, params);
+    res.json({ data: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /ign/:id ──────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {

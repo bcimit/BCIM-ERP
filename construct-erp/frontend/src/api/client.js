@@ -455,6 +455,7 @@ export const grsAPI = {
 
 export const ignAPI = {
   list:    (params) => api.get('/ign', { params }),
+  register:(params) => api.get('/ign/register', { params }),
   get:     (id)     => api.get(`/ign/${id}`),
   create:  (data)   => api.post('/ign', data),
   inspect: (id)     => api.patch(`/ign/${id}/inspect`),

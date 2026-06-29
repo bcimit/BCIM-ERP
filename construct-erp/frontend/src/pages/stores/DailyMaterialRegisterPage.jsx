@@ -1,347 +1,340 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { projectAPI } from '../../api/client';
-import { Calendar, Download, TrendingUp, AlertCircle, ArrowDown, ArrowUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import {
+  Download, Search, Building2, PackageCheck, ClipboardList,
+  Boxes, ShoppingCart, Users, XCircle, Truck,
+} from 'lucide-react';
+import { ignAPI, projectAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
+import toast from 'react-hot-toast';
 
-const inr = (v) => `₹${Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`;
-const fmt_date = (d) => {
+const STATUS = {
+  pending:   { label: 'Pending',   bg: 'bg-amber-100',   text: 'text-amber-800'   },
+  inspected: { label: 'Inspected', bg: 'bg-blue-100',    text: 'text-blue-800'    },
+  approved:  { label: 'Approved',  bg: 'bg-emerald-100', text: 'text-emerald-800' },
+  cancelled: { label: 'Cancelled', bg: 'bg-red-100',     text: 'text-red-700'     },
+};
+
+const fmtQty   = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+const fmtMoney = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtDate  = (d) => {
   if (!d) return '—';
   const x = new Date(d);
   if (isNaN(x.getTime())) return '—';
-  return `${String(x.getDate()).padStart(2,'0')}-${String(x.getMonth()+1).padStart(2,'0')}-${x.getFullYear()}`;
+  return `${String(x.getDate()).padStart(2, '0')}-${String(x.getMonth() + 1).padStart(2, '0')}-${x.getFullYear()}`;
+};
+const dayKey = (d) => {
+  const x = new Date(d);
+  if (isNaN(x.getTime())) return '0000-00-00';
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+
+/* per-line receipt derivations */
+const acceptedOf = (r) => {
+  const insp = r.qty_inspected != null ? Number(r.qty_inspected) : Number(r.qty_as_per_dc || 0);
+  return Math.max(insp - Number(r.qty_rejected || 0), 0);
+};
+const valueOf = (r) => acceptedOf(r) * Number(r.rate || 0);
+const poOf    = (r) => r.po_serial || r.po_ref_no || r.po_number || '—';
+
+const TH = ({ children, right }) => (
+  <th className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-600 whitespace-nowrap ${right ? 'text-right' : 'text-left'}`}>{children}</th>
+);
+const TD = ({ children, right, bold, mono, className = '' }) => (
+  <td className={`px-3 py-2 text-sm ${right ? 'text-right' : 'text-left'} ${bold ? 'font-semibold text-slate-900' : 'text-slate-700'} ${mono ? 'font-mono text-xs' : ''} ${className}`}>{children}</td>
+);
+const Pill = ({ s }) => {
+  const c = STATUS[s] || STATUS.pending;
+  return <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${c.bg} ${c.text}`}>{c.label}</span>;
 };
 
 export default function DailyMaterialRegisterPage() {
-  const [searchParams] = useSearchParams();
-  const [projectId, setProjectId] = useState(searchParams.get('project') || '');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [materialType, setMaterialType] = useState('');
+  const { selectedProjectId } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [projectId, setProjectId] = useState(searchParams.get('project') || selectedProjectId || '');
+  const [from, setFrom] = useState('');
+  const [to, setTo]     = useState('');
+  const [status, setStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState(searchParams.get('tab') === 'register' ? 'register' : 'receipt');
+
+  // keep tab in URL so the two sidebar menus land on the right view
+  useEffect(() => {
+    const q = searchParams.get('tab');
+    if (q === 'register' && tab !== 'register') setTab('register');
+    if (q === 'receipt'  && tab !== 'receipt')  setTab('receipt');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+  const switchTab = (t) => { setTab(t); const sp = new URLSearchParams(searchParams); sp.set('tab', t); setSearchParams(sp, { replace: true }); };
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => projectAPI.list().then(r => {
-      const d = r?.data;
-      if (Array.isArray(d)) return d;
-      if (d?.data) return d.data;
-      return [];
-    }).catch(() => []),
+    queryFn: () => projectAPI.list().then(r => r.data?.data || r.data || []).catch(() => []),
   });
 
-  const materialTypes = [
-    { id: 'all', label: 'All Materials' },
-    { id: 'inward', label: 'Inward (GRS/IGN)' },
-    { id: 'outward', label: 'Outward (Issue Slip)' },
-    { id: 'transfer', label: 'Transfer (MTR)' },
-  ];
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ['dmr-register', projectId, from, to, status],
+    queryFn: () => ignAPI.register({
+      project_id: projectId || undefined,
+      from_date: from || undefined,
+      to_date: to ? `${to}T23:59:59` : undefined,
+      status: status || undefined,
+    }).then(r => r.data?.data ?? r.data ?? []),
+  });
 
-  // Mock data - in production this would come from API
-  const dmrData = useMemo(() => [
-    {
-      date: new Date().toISOString(),
-      type: 'inward',
-      material: 'Cement (50kg bags)',
-      qty: 500,
-      unit: 'bags',
-      rate: 350,
-      amount: 175000,
-      reference: 'GRS-001',
-      warehouse: 'Main Store',
-      remarks: 'From ABC Suppliers',
-    },
-    {
-      date: new Date().toISOString(),
-      type: 'outward',
-      material: 'Steel Bars (16mm)',
-      qty: 2000,
-      unit: 'kg',
-      rate: 75,
-      amount: 150000,
-      reference: 'IS-001',
-      warehouse: 'Main Store',
-      remarks: 'Issued to site',
-    },
-    {
-      date: new Date(Date.now() - 86400000).toISOString(),
-      type: 'inward',
-      material: 'Bricks (Common)',
-      qty: 50000,
-      unit: 'nos',
-      rate: 8,
-      amount: 400000,
-      reference: 'IGN-001',
-      warehouse: 'Yard A',
-      remarks: 'From supplier XYZ',
-    },
-  ], []);
+  /* client-side search */
+  const lines = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter(r => [r.material_name, r.ign_number, poOf(r), r.vendor_name, r.dc_number, r.bill_number]
+      .join(' ').toLowerCase().includes(needle));
+  }, [rows, search]);
 
-  const filtered = useMemo(() => {
-    return dmrData.filter(d => {
-      if (projectId && !d.projectId) return false;
-      if (fromDate && new Date(d.date) < new Date(fromDate)) return false;
-      if (toDate && new Date(d.date) > new Date(toDate + 'T23:59:59')) return false;
-      if (materialType === 'inward' && d.type !== 'inward') return false;
-      if (materialType === 'outward' && d.type !== 'outward') return false;
-      if (materialType === 'transfer' && d.type !== 'transfer') return false;
-      return true;
-    });
-  }, [dmrData, projectId, fromDate, toDate, materialType]);
+  /* KPIs */
+  const kpi = useMemo(() => {
+    const igns = new Set(), pos = new Set(), vendors = new Set();
+    let value = 0, rejected = 0;
+    for (const r of lines) {
+      igns.add(r.ign_id);
+      if (r.po_number || r.po_serial) pos.add(r.po_number || r.po_serial);
+      if (r.vendor_name) vendors.add(r.vendor_name);
+      value += valueOf(r);
+      rejected += Number(r.qty_rejected || 0);
+    }
+    return { receipts: igns.size, items: lines.length, value, rejected, pos: pos.size, vendors: vendors.size };
+  }, [lines]);
 
-  const summary = useMemo(() => {
-    const inward = filtered.filter(d => d.type === 'inward').reduce((s, d) => s + d.amount, 0);
-    const outward = filtered.filter(d => d.type === 'outward').reduce((s, d) => s + d.amount, 0);
-    return { inward, outward, balance: inward - outward };
-  }, [filtered]);
+  /* date-grouped register */
+  const grouped = useMemo(() => {
+    const map = {};
+    for (const r of lines) {
+      const k = dayKey(r.date_time);
+      if (!map[k]) map[k] = { key: k, date: r.date_time, rows: [], value: 0, accepted: 0 };
+      map[k].rows.push(r);
+      map[k].value += valueOf(r);
+      map[k].accepted += acceptedOf(r);
+    }
+    return Object.values(map).sort((a, b) => b.key.localeCompare(a.key));
+  }, [lines]);
 
-  const exportExcel = () => {
-    const rows = filtered.map(d => ({
-      'Date': fmt_date(d.date),
-      'Type': d.type === 'inward' ? 'Inward' : d.type === 'outward' ? 'Outward' : 'Transfer',
-      'Material': d.material,
-      'Quantity': d.qty,
-      'Unit': d.unit,
-      'Rate': inr(d.rate),
-      'Amount': inr(d.amount),
-      'Reference': d.reference,
-      'Warehouse': d.warehouse,
-      'Remarks': d.remarks,
+  const handleExport = () => {
+    if (!lines.length) return toast.error('Nothing to export');
+    const data = lines.map(r => ({
+      'Date': fmtDate(r.date_time), 'IGN No': r.ign_number, 'PO No': poOf(r),
+      'Vendor': r.vendor_name || '', 'DC No': r.dc_number || '', 'Invoice No': r.bill_number || '',
+      'Vehicle': r.vehicle_no || '', 'Material': r.material_name, 'Unit': r.unit || '',
+      'DC Qty': Number(r.qty_as_per_dc || 0), 'Accepted Qty': acceptedOf(r), 'Rejected Qty': Number(r.qty_rejected || 0),
+      'Rate': Number(r.rate || 0), 'Value': valueOf(r),
+      'Batch': r.batch_number || '', 'Status': (STATUS[r.status] || {}).label || r.status,
     }));
-
-    const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'DMR');
-    XLSX.writeFile(wb, `DMR_${fromDate || 'all'}_to_${toDate || 'all'}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Daily Material Register');
+    const proj = projects.find(p => p.id === projectId);
+    XLSX.writeFile(wb, `DMR_${proj?.project_code || 'all'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success('Excel downloaded');
   };
 
+  const selectedProject = projects.find(p => p.id === projectId);
+
+  const KPI = ({ icon: Icon, label, value, color }) => (
+    <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}><Icon className="w-4 h-4" /></div>
+      <div>
+        <p className="text-base font-bold text-slate-900 leading-none tabular-nums">{value}</p>
+        <p className="text-[11px] text-slate-500 mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: '100vh', background: '#F8FAFC', padding: '2rem' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#0F172A', margin: 0 }}>
-              Daily Material Register (DMR)
-            </h1>
-            <p style={{ fontSize: '14px', color: '#64748B', marginTop: '0.5rem' }}>
-              Track all inward, outward, and transfer movements
-            </p>
+    <div className="min-h-screen bg-slate-50">
+      <style>{`
+        div.mrs-hscroll { scrollbar-width: thin; scrollbar-color: #94a3b8 transparent; }
+        div.mrs-hscroll::-webkit-scrollbar { height: 10px; }
+        div.mrs-hscroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+        div.mrs-hscroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        div.mrs-hscroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
+
+      {/* ── Header ── */}
+      <div className="bg-white border-b border-slate-200 px-6 py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 mr-2">
+            <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center">
+              <PackageCheck className="w-4 h-4 text-teal-600" />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold text-slate-900">Daily Material Register (DMR)</h1>
+              <p className="text-xs text-slate-500">Materials received against POs — daily receipt log (from IGN)</p>
+            </div>
           </div>
-          <button
-            onClick={exportExcel}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: filtered.length > 0 ? '#059669' : '#D1D5DB',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '0.5rem',
-              cursor: filtered.length > 0 ? 'pointer' : 'not-allowed',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <Download size={16} /> Export Excel
+
+          <select className="h-9 pl-3 pr-8 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:border-indigo-400 min-w-[180px]"
+            value={projectId} onChange={e => setProjectId(e.target.value)}>
+            <option value="">All projects</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input type="date" className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:border-indigo-400"
+            value={from} onChange={e => setFrom(e.target.value)} title="From date" />
+          <span className="text-slate-400 text-xs">to</span>
+          <input type="date" className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white outline-none focus:border-indigo-400"
+            value={to} onChange={e => setTo(e.target.value)} title="To date" />
+
+          <div className="ml-auto">
+            <button onClick={handleExport}
+              className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+              <Download className="w-4 h-4" /> Download Excel
+            </button>
+          </div>
+        </div>
+
+        {/* filters */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search material, IGN, PO, vendor, DC…"
+              className="h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg bg-white outline-none focus:border-indigo-400 w-72" />
+          </div>
+          <select value={status} onChange={e => setStatus(e.target.value)}
+            className="h-8 pl-2 pr-7 text-xs border border-slate-200 rounded-lg bg-white outline-none focus:border-indigo-400">
+            <option value="">All statuses</option>
+            {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          {selectedProject && (
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
+              <Building2 className="w-3.5 h-3.5" />
+              <span className="font-medium text-slate-700">{selectedProject.name}</span>
+              <span>·</span><span>{selectedProject.project_code}</span>
+            </span>
+          )}
+        </div>
+
+        {/* KPI strip */}
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-6 gap-2.5">
+          <KPI icon={ClipboardList} label="Receipts (IGN)" value={kpi.receipts}        color="bg-teal-50 text-teal-600" />
+          <KPI icon={Boxes}         label="Line Items"     value={kpi.items}           color="bg-slate-100 text-slate-600" />
+          <KPI icon={Download}      label="Accepted Value" value={fmtMoney(kpi.value)} color="bg-emerald-50 text-emerald-600" />
+          <KPI icon={XCircle}       label="Rejected Qty"   value={fmtQty(kpi.rejected)} color="bg-rose-50 text-rose-600" />
+          <KPI icon={ShoppingCart}  label="POs"            value={kpi.pos}             color="bg-indigo-50 text-indigo-600" />
+          <KPI icon={Users}         label="Vendors"        value={kpi.vendors}         color="bg-amber-50 text-amber-600" />
+        </div>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="border-b border-slate-200 bg-white px-6">
+        {[
+          { id: 'receipt',  label: 'Daily Material Receipt',  count: lines.length },
+          { id: 'register', label: 'Daily Material Register', count: grouped.length },
+        ].map(t => (
+          <button key={t.id} onClick={() => switchTab(t.id)}
+            className={`mr-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {t.label}
+            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600">{t.count}</span>
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Filters */}
-        <div style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <select
-            value={projectId}
-            onChange={e => setProjectId(e.target.value)}
-            style={{
-              padding: '0.75rem 1rem',
-              border: '1px solid #E2E8F0',
-              borderRadius: '0.5rem',
-              fontSize: '14px',
-              backgroundColor: '#fff',
-              minWidth: '200px',
-            }}
-          >
-            <option value="">All Projects</option>
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-
-          <input
-            type="date"
-            value={fromDate}
-            onChange={e => setFromDate(e.target.value)}
-            style={{
-              padding: '0.75rem 1rem',
-              border: '1px solid #E2E8F0',
-              borderRadius: '0.5rem',
-              fontSize: '14px',
-            }}
-          />
-
-          <input
-            type="date"
-            value={toDate}
-            onChange={e => setToDate(e.target.value)}
-            style={{
-              padding: '0.75rem 1rem',
-              border: '1px solid #E2E8F0',
-              borderRadius: '0.5rem',
-              fontSize: '14px',
-            }}
-          />
-
-          <select
-            value={materialType}
-            onChange={e => setMaterialType(e.target.value)}
-            style={{
-              padding: '0.75rem 1rem',
-              border: '1px solid #E2E8F0',
-              borderRadius: '0.5rem',
-              fontSize: '14px',
-              backgroundColor: '#fff',
-              minWidth: '200px',
-            }}
-          >
-            {materialTypes.map(mt => (
-              <option key={mt.id} value={mt.id === 'all' ? '' : mt.id}>{mt.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Summary Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '1.5rem',
-          marginBottom: '2rem',
-        }}>
-          <div style={{
-            backgroundColor: '#D1FAE5',
-            borderLeft: '4px solid #059669',
-            borderRadius: '0.75rem',
-            padding: '1.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}>
-            <ArrowDown size={24} style={{ color: '#059669' }} />
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#065F46', textTransform: 'uppercase', margin: 0 }}>Total Inward</p>
-              <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#065F46', margin: '0.25rem 0 0 0' }}>{inr(summary.inward)}</p>
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: '#FEE2E2',
-            borderLeft: '4px solid #DC2626',
-            borderRadius: '0.75rem',
-            padding: '1.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}>
-            <ArrowUp size={24} style={{ color: '#DC2626' }} />
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#991B1B', textTransform: 'uppercase', margin: 0 }}>Total Outward</p>
-              <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#991B1B', margin: '0.25rem 0 0 0' }}>{inr(summary.outward)}</p>
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: '#DBEAFE',
-            borderLeft: '4px solid #2563EB',
-            borderRadius: '0.75rem',
-            padding: '1.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '1rem',
-          }}>
-            <TrendingUp size={24} style={{ color: '#2563EB' }} />
-            <div>
-              <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1E40AF', textTransform: 'uppercase', margin: 0 }}>Net Balance</p>
-              <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#1E40AF', margin: '0.25rem 0 0 0' }}>{inr(summary.balance)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Table */}
-        {filtered.length === 0 ? (
-          <div style={{
-            backgroundColor: '#FEF3C7',
-            border: '1px solid #FCD34D',
-            borderRadius: '0.75rem',
-            padding: '2rem',
-            textAlign: 'center',
-            color: '#92400E',
-          }}>
-            <AlertCircle size={32} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
-            No material movements found for the selected filters
+      {/* ── Content ── */}
+      <div className="p-6">
+        {isLoading ? (
+          <div className="flex justify-center py-20 text-slate-400 text-sm">Loading…</div>
+        ) : lines.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <PackageCheck className="w-10 h-10 mb-3" />
+            <p className="text-sm">No material receipts found</p>
+            <p className="text-xs mt-1">Adjust the project, date range, or filters above. Receipts come from IGN (Inward Goods).</p>
           </div>
         ) : (
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '0.75rem',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-          }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#F1F5F9', borderBottom: '2px solid #E2E8F0' }}>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Date</th>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Type</th>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Material</th>
-                    <th style={{ padding: '1rem', textAlign: 'right', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Qty</th>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Unit</th>
-                    <th style={{ padding: '1rem', textAlign: 'right', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Rate</th>
-                    <th style={{ padding: '1rem', textAlign: 'right', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Amount</th>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Reference</th>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Warehouse</th>
-                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase' }}>Remarks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((row, idx) => (
-                    <tr key={idx} style={{
-                      borderBottom: '1px solid #E2E8F0',
-                      backgroundColor: idx % 2 === 0 ? '#fff' : '#F8FAFC',
-                    }}>
-                      <td style={{ padding: '1rem', fontSize: '13px', fontWeight: 'bold', color: '#1E293B' }}>{fmt_date(row.date)}</td>
-                      <td style={{ padding: '1rem' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '0.25rem 0.75rem',
-                          borderRadius: '9999px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          backgroundColor: row.type === 'inward' ? '#D1FAE5' : '#FEE2E2',
-                          color: row.type === 'inward' ? '#065F46' : '#991B1B',
-                        }}>
-                          {row.type === 'inward' ? '↓ Inward' : row.type === 'outward' ? '↑ Outward' : '↔ Transfer'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '1rem', fontSize: '13px', color: '#1E293B' }}>{row.material}</td>
-                      <td style={{ padding: '1rem', fontSize: '13px', textAlign: 'right', fontWeight: 'bold', color: '#1E293B' }}>{row.qty.toLocaleString()}</td>
-                      <td style={{ padding: '1rem', fontSize: '12px', color: '#64748B' }}>{row.unit}</td>
-                      <td style={{ padding: '1rem', fontSize: '13px', textAlign: 'right', color: '#64748B' }}>{inr(row.rate)}</td>
-                      <td style={{ padding: '1rem', fontSize: '13px', textAlign: 'right', fontWeight: 'bold', color: '#1E293B' }}>{inr(row.amount)}</td>
-                      <td style={{ padding: '1rem', fontSize: '12px', fontFamily: 'monospace', color: '#64748B' }}>{row.reference}</td>
-                      <td style={{ padding: '1rem', fontSize: '12px', color: '#64748B' }}>{row.warehouse}</td>
-                      <td style={{ padding: '1rem', fontSize: '12px', color: '#64748B' }}>{row.remarks || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto mrs-hscroll">
 
-        {/* Count */}
-        {filtered.length > 0 && (
-          <div style={{ marginTop: '1rem', fontSize: '13px', color: '#64748B', textAlign: 'right' }}>
-            Total Transactions: <strong>{filtered.length}</strong>
+              {/* ── Daily Material Receipt (line-item detail) ── */}
+              {tab === 'receipt' && (
+                <table className="w-full text-left border-collapse min-w-[1180px]">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <TH>Date</TH><TH>IGN No</TH><TH>PO No</TH><TH>Vendor</TH>
+                      <TH>Material</TH><TH>Unit</TH><TH right>DC Qty</TH><TH right>Accepted</TH><TH right>Rejected</TH>
+                      <TH right>Rate</TH><TH right>Value</TH><TH>Status</TH>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {lines.map((r, idx) => (
+                      <tr key={r.item_id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <TD>{fmtDate(r.date_time)}</TD>
+                        <TD mono bold>{r.ign_number}</TD>
+                        <TD mono className="text-indigo-700">{poOf(r)}</TD>
+                        <TD>{r.vendor_name || '—'}</TD>
+                        <TD bold>{r.material_name}</TD>
+                        <TD>{r.unit || '—'}</TD>
+                        <TD right>{fmtQty(r.qty_as_per_dc)}</TD>
+                        <TD right className="text-emerald-700 font-semibold">{fmtQty(acceptedOf(r))}</TD>
+                        <TD right className={Number(r.qty_rejected) > 0 ? 'text-rose-600 font-semibold' : 'text-slate-400'}>{fmtQty(r.qty_rejected)}</TD>
+                        <TD right>{Number(r.rate) > 0 ? fmtMoney(r.rate) : '—'}</TD>
+                        <TD right bold>{valueOf(r) > 0 ? fmtMoney(valueOf(r)) : '—'}</TD>
+                        <TD><Pill s={r.status} /></TD>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-teal-50 border-t-2 border-teal-200">
+                      <td colSpan={10} className="px-3 py-2.5 text-sm font-semibold text-teal-900">TOTAL — {lines.length} receipt lines</td>
+                      <TD right bold className="text-teal-900">{fmtMoney(kpi.value)}</TD>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+
+              {/* ── Daily Material Register (date-grouped) ── */}
+              {tab === 'register' && (
+                <table className="w-full text-left border-collapse min-w-[980px]">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <TH>Material</TH><TH>IGN No</TH><TH>PO No</TH><TH>Vendor</TH>
+                      <TH>Unit</TH><TH right>Accepted</TH><TH right>Rejected</TH><TH right>Rate</TH><TH right>Value</TH>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grouped.map(g => (
+                      <React.Fragment key={g.key}>
+                        <tr className="bg-slate-800 text-white">
+                          <td colSpan={5} className="px-3 py-2 text-xs font-bold uppercase tracking-wide flex items-center gap-2">
+                            <Truck className="w-3.5 h-3.5 opacity-70" /> {fmtDate(g.date)}
+                            <span className="ml-1 font-normal text-slate-300">· {g.rows.length} item(s)</span>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-right font-semibold text-emerald-300">{fmtQty(g.accepted)}</td>
+                          <td colSpan={2} />
+                          <td className="px-3 py-2 text-xs text-right font-bold text-amber-300">{fmtMoney(g.value)}</td>
+                        </tr>
+                        {g.rows.map((r, idx) => (
+                          <tr key={r.item_id || idx} className="border-b border-slate-100 hover:bg-slate-50">
+                            <TD bold>{r.material_name}</TD>
+                            <TD mono className="text-slate-500 text-xs">{r.ign_number}</TD>
+                            <TD mono className="text-indigo-700">{poOf(r)}</TD>
+                            <TD>{r.vendor_name || '—'}</TD>
+                            <TD>{r.unit || '—'}</TD>
+                            <TD right className="text-emerald-700 font-semibold">{fmtQty(acceptedOf(r))}</TD>
+                            <TD right className={Number(r.qty_rejected) > 0 ? 'text-rose-600 font-semibold' : 'text-slate-400'}>{fmtQty(r.qty_rejected)}</TD>
+                            <TD right>{Number(r.rate) > 0 ? fmtMoney(r.rate) : '—'}</TD>
+                            <TD right bold>{valueOf(r) > 0 ? fmtMoney(valueOf(r)) : '—'}</TD>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-teal-50 border-t-2 border-teal-200">
+                      <td colSpan={8} className="px-3 py-2.5 text-sm font-semibold text-teal-900">GRAND TOTAL — {grouped.length} day(s), {lines.length} lines</td>
+                      <TD right bold className="text-teal-900">{fmtMoney(kpi.value)}</TD>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+
+            </div>
           </div>
         )}
       </div>
