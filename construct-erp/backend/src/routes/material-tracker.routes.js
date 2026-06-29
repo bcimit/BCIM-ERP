@@ -716,17 +716,25 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     const importedGrnSet  = new Set(imported.rows.map(r => r.source_grn_id).filter(Boolean));
     const importedBillSet = new Set(imported.rows.map(r => r.source_bill_id).filter(Boolean));
 
-    // Content-based dedup: entry_id|invoice_no pairs already in the DB.
-    // Prevents re-import when source UUIDs differ (GRN→IGN migration)
-    // and prevents IGN + bill double-import in the same sync run.
+    // Dedup sets built from existing loads in the DB:
+    //   importedIgnKeys — entry_id|ign_no  → prevents re-importing the same IGN record
+    //                     (fallback when source UUID is missing, e.g. old imports)
+    //   importedInvKeys — entry_id|invoice_no → used by the bills path to skip any
+    //                     invoice already covered by an IGN load in this entry
     const entryIds = Array.from(entryByPo.values());
-    const existingInv = entryIds.length ? await query(`
-      SELECT entry_id, LOWER(TRIM(invoice_no)) AS inv_key
+    const existingLoadsInv = entryIds.length ? await query(`
+      SELECT entry_id,
+        LOWER(TRIM(COALESCE(invoice_no,''))) AS inv_key,
+        LOWER(TRIM(COALESCE(ign_no,'')))     AS ign_key
       FROM material_tracker_loads
       WHERE entry_id = ANY($1::uuid[])
-        AND invoice_no IS NOT NULL AND invoice_no <> ''
     `, [entryIds]) : { rows: [] };
-    const importedInvKeys = new Set(existingInv.rows.map(r => `${r.entry_id}|${r.inv_key}`));
+    const importedIgnKeys = new Set(
+      existingLoadsInv.rows.filter(r => r.ign_key).map(r => `${r.entry_id}|${r.ign_key}`)
+    );
+    const importedInvKeys = new Set(
+      existingLoadsInv.rows.filter(r => r.inv_key).map(r => `${r.entry_id}|${r.inv_key}`)
+    );
 
     // ── Bulk fetch ALL matching IGN receipts for these POs in one query ──
     const mcGi = matCond(material_type, 'ii', 'material_name', 2);
@@ -776,9 +784,10 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       const entryId = entryByPo.get(grn.po_id);
       if (!entryId) continue;
 
-      // Content dedup: skip if same entry+invoice already exists in DB or earlier in this run
-      const invKey = grn.invoice_number ? `${entryId}|${grn.invoice_number.trim().toLowerCase()}` : null;
-      if (invKey && importedInvKeys.has(invKey)) continue;
+      // Dedup on IGN number — same invoice can legitimately appear on multiple partial IGN deliveries,
+      // so we key on ign_no (not invoice_no) to avoid blocking those.
+      const ignKey = grn.grn_number ? `${entryId}|${grn.grn_number.trim().toLowerCase()}` : null;
+      if (ignKey && importedIgnKeys.has(ignKey)) continue;
 
       const billRow = billByGrn.get(grn.grn_id)
         || billByPoInv.get(`${grn.po_id}|${(grn.invoice_number || '').trim().toLowerCase()}`);
@@ -790,7 +799,9 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       const gstAmt   = billRow?.gst_amount   != null ? parseFloat(billRow.gst_amount)   : (basic * gstRate / 100);
       const grandTot = billRow?.total_amount != null ? parseFloat(billRow.total_amount) : (basic + gstAmt);
 
-      // Mark this invoice as being imported so the bills path won't re-import it
+      // Register: ign_no for IGN dedup; invoice_no so the bills path skips this invoice
+      if (ignKey) importedIgnKeys.add(ignKey);
+      const invKey = grn.invoice_number ? `${entryId}|${grn.invoice_number.trim().toLowerCase()}` : null;
       if (invKey) importedInvKeys.add(invKey);
 
       grnRows.push([
@@ -878,7 +889,30 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     await chunkInsert(billCols, billRows);
     loads_created = grnRows.length + billRows.length;
 
-    res.json({ data: { entries_created, loads_created, total_pos: pos.rows.length } });
+    // Auto-cleanup ghost rows: loads with no ign_no and no source_grn_id whose invoice is
+    // now covered by a proper IGN row in the same entry. These are artefacts from old syncs
+    // (bills or pre-UUID imports) that predate the IGN dedup.
+    let ghost_cleaned = 0;
+    if (entryIds.length) {
+      const cleanup = await query(`
+        DELETE FROM material_tracker_loads main
+        WHERE main.entry_id = ANY($1::uuid[])
+          AND main.ign_no IS NULL
+          AND main.source_grn_id IS NULL
+          AND main.invoice_no IS NOT NULL AND TRIM(main.invoice_no) <> ''
+          AND EXISTS (
+            SELECT 1 FROM material_tracker_loads ref
+            WHERE ref.entry_id = main.entry_id
+              AND LOWER(TRIM(ref.invoice_no)) = LOWER(TRIM(main.invoice_no))
+              AND ref.ign_no IS NOT NULL AND TRIM(ref.ign_no) <> ''
+              AND ref.id <> main.id
+          )
+        RETURNING id
+      `, [entryIds]);
+      ghost_cleaned = cleanup.rows.length;
+    }
+
+    res.json({ data: { entries_created, loads_created, ghost_cleaned, total_pos: pos.rows.length } });
   } catch (err) {
     console.error('[MaterialTracker] auto-import run error:', err);
     res.status(500).json({ error: err.message });
