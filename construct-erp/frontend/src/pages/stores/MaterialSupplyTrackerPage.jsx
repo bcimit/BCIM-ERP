@@ -1,6 +1,6 @@
 // src/pages/stores/MaterialSupplyTrackerPage.jsx
 // Material Supply Tracker — end-to-end MR → PO → Delivery → Issue lifecycle
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Package, Truck, CheckCircle2, Clock, AlertTriangle, XCircle,
@@ -13,6 +13,50 @@ import { supplyTrackerAPI, projectAPI } from '../../api/client';
 import { PageHeader, Theme } from '../../theme';
 import dayjs from 'dayjs';
 import { clsx } from 'clsx';
+
+// ── Drag-to-scroll ────────────────────────────────────────────────────────────
+function useDragScroll() {
+  const ref = useRef(null);
+  const drag = useRef({ active: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const onDown = (e) => {
+      if (e.button !== 0) return;
+      drag.current = { active: true, startX: e.pageX - el.offsetLeft, startY: e.pageY - el.offsetTop, scrollLeft: el.scrollLeft, scrollTop: el.scrollTop };
+      el.style.cursor = 'grabbing';
+      el.style.userSelect = 'none';
+    };
+    const onUp = () => {
+      drag.current.active = false;
+      el.style.cursor = 'grab';
+      el.style.userSelect = '';
+    };
+    const onMove = (e) => {
+      if (!drag.current.active) return;
+      e.preventDefault();
+      const x = e.pageX - el.offsetLeft;
+      const y = e.pageY - el.offsetTop;
+      el.scrollLeft = drag.current.scrollLeft - (x - drag.current.startX);
+      el.scrollTop  = drag.current.scrollTop  - (y - drag.current.startY);
+    };
+
+    el.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
+    el.addEventListener('mousemove', onMove);
+    el.style.cursor = 'grab';
+
+    return () => {
+      el.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
+      el.removeEventListener('mousemove', onMove);
+    };
+  }, []);
+
+  return ref;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const n = (v, d = 3) => parseFloat(v || 0).toFixed(d);
@@ -332,6 +376,7 @@ function FiltersPanel({ filters, setFilters, projects, onReset }) {
 function TrackerTable({ rows, isLoading, onRowClick }) {
   const [expanded, setExpanded] = useState(null);
   const toggle = (id) => setExpanded(e => (e === id ? null : id));
+  const scrollRef = useDragScroll();
 
   if (isLoading) {
     return (
@@ -353,12 +398,16 @@ function TrackerTable({ rows, isLoading, onRowClick }) {
     );
   }
 
-  // Compact 10-column layout — expand row for extra detail
+  // Compact layout — drag to scroll in any direction
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs min-w-[900px]">
-          <thead>
+      <div
+        ref={scrollRef}
+        className="overflow-auto select-none"
+        style={{ maxHeight: 'calc(100vh - 340px)', minHeight: 300 }}
+      >
+        <table className="text-xs" style={{ minWidth: 1000, width: '100%' }}>
+          <thead className="sticky top-0 z-10">
             <tr className="bg-slate-800 text-white">
               <th className="w-7 px-2 py-2" />
               <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">MR Number</th>
