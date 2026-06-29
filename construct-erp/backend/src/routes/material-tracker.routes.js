@@ -560,6 +560,7 @@ router.get('/auto-import/preview', async (req, res) => {
   try {
     const { project_id, material_type = 'cement' } = req.query;
     const companyId = req.user.company_id;
+    const useIGN = material_type === 'cement';
 
     // pos query — material match params go LAST so indices stay predictable
     const posParams = [companyId];
@@ -592,35 +593,37 @@ router.get('/auto-import/preview', async (req, res) => {
     let grnsNew = 0, billsNew = 0;
 
     if (poIds.length) {
-      const importedGrns = await query(
-        `SELECT source_grn_id FROM material_tracker_loads WHERE source_grn_id IS NOT NULL`
-      );
-      const importedGrnSet = new Set(importedGrns.rows.map(r => r.source_grn_id));
-
-      const mcGi = matCond(material_type, 'ii', 'material_name', 2);
-      const grns = await query(`
-        SELECT DISTINCT n.id
-        FROM ign n
-        JOIN ign_items ii ON ii.ign_id = n.id
-        WHERE n.po_id = ANY($1::uuid[])
-          AND COALESCE(n.status,'') NOT IN ('cancelled')
-          AND ${mcGi.sql}
-      `, [poIds, ...mcGi.params]);
-      grnsNew = grns.rows.filter(r => !importedGrnSet.has(r.id)).length;
-
       const importedBills = await query(
         `SELECT source_bill_id FROM material_tracker_loads WHERE source_bill_id IS NOT NULL`
       );
       const importedBillSet = new Set(importedBills.rows.map(r => r.source_bill_id));
 
-      // Bills with no linked GRN (so we don't double-count)
+      if (useIGN) {
+        const importedGrns = await query(
+          `SELECT source_grn_id FROM material_tracker_loads WHERE source_grn_id IS NOT NULL`
+        );
+        const importedGrnSet = new Set(importedGrns.rows.map(r => r.source_grn_id));
+
+        const mcGi = matCond(material_type, 'ii', 'material_name', 2);
+        const grns = await query(`
+          SELECT DISTINCT n.id
+          FROM ign n
+          JOIN ign_items ii ON ii.ign_id = n.id
+          WHERE n.po_id = ANY($1::uuid[])
+            AND COALESCE(n.status,'') NOT IN ('cancelled')
+            AND ${mcGi.sql}
+        `, [poIds, ...mcGi.params]);
+        grnsNew = grns.rows.filter(r => !importedGrnSet.has(r.id)).length;
+      }
+
+      // For concrete/steel: all bills (GRN-linked or not). For cement: no-GRN bills only.
       const mcLi = matCond(material_type, 'li', 'item_name', 2);
       const bills = await query(`
         SELECT DISTINCT b.id
         FROM tqs_bills b
         LEFT JOIN tqs_bill_line_items li ON li.bill_id = b.id
         WHERE b.po_id = ANY($1::uuid[])
-          AND b.grn_id IS NULL
+          ${useIGN ? 'AND b.grn_id IS NULL' : ''}
           AND b.is_deleted = FALSE
           AND (li.item_name IS NULL OR (${mcLi.sql}))
       `, [poIds, ...mcLi.params]);
@@ -649,6 +652,10 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     const { project_id, material_type = 'cement' } = req.body;
     const companyId = req.user.company_id;
     const todayStr = new Date().toISOString().slice(0, 10);
+    // Cement syncs from IGN (physical receipts). Concrete & steel sync from the
+    // Bill Tracker (tqs_bills) because RMC is poured directly (no IGN) and steel
+    // bills are the authoritative source the user manages in the Bill Tracker.
+    const useIGN = material_type === 'cement';
     const trunc = (v, n = 150) => (v == null ? null : String(v).slice(0, n));
 
     // pos query — material match params go LAST so indices stay predictable.
@@ -740,87 +747,87 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       existingLoadsInv.rows.filter(r => r.inv_key).map(r => `${r.entry_id}|${r.inv_key}`)
     );
 
-    // ── Bulk fetch ALL matching IGN receipts for these POs in one query ──
-    const mcGi = matCond(material_type, 'ii', 'material_name', 2);
-    const grns = await query(`
-      SELECT
-        n.po_id,
-        n.id                                            AS grn_id,
-        n.date_time::date                               AS grn_date,
-        n.bill_number                                   AS invoice_number,
-        n.ign_number                                    AS grn_number,
-        n.dc_number                                     AS challan_number,
-        n.vehicle_no                                    AS vehicle_number,
-        NULL::text                                      AS wb_slip_no,
-        SUM(COALESCE(ii.qty_inspected, ii.qty_as_per_dc, 0)) AS qty,
-        MAX(ii.rate)                                    AS rate,
-        MAX(ii.unit)                                    AS unit
-      FROM ign n
-      JOIN ign_items ii ON ii.ign_id = n.id
-      WHERE n.po_id = ANY($1::uuid[])
-        AND COALESCE(n.status,'') NOT IN ('cancelled')
-        AND ${mcGi.sql}
-      GROUP BY n.po_id, n.id
-      ORDER BY n.date_time
-    `, [poIds, ...mcGi.params]);
-
-    // ── Bulk fetch bills for GST/total lookup (by grn_id and po_id+inv_number) ──
-    const gstBills = await query(`
-      SELECT b.id, b.grn_id, b.po_id, LOWER(TRIM(b.inv_number)) AS inv_key,
-        b.gst_amount, b.total_amount,
-        (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate
-      FROM tqs_bills b
-      WHERE b.po_id = ANY($1::uuid[]) AND b.is_deleted = FALSE
-    `, [poIds]);
-    const billByGrn   = new Map();
-    const billByPoInv = new Map();
-    for (const b of gstBills.rows) {
-      if (b.grn_id) billByGrn.set(b.grn_id, b);
-      if (b.inv_key) billByPoInv.set(`${b.po_id}|${b.inv_key}`, b);
-    }
-
-    // Build IGN load rows
+    // ── IGN receipts — only for cement ──────────────────────────────────────────
     const grnCols = ['entry_id','received_date','invoice_no','ign_no','grs_no','vehicle_no',
                      'invoice_qty','rate','gst_rate','gst_amount','grand_total','created_by','source_grn_id'];
     const grnRows = [];
-    for (const grn of grns.rows) {
-      if (importedGrnSet.has(grn.grn_id)) continue;
-      const entryId = entryByPo.get(grn.po_id);
-      if (!entryId) continue;
+    if (useIGN) {
+      const mcGi = matCond(material_type, 'ii', 'material_name', 2);
+      const grns = await query(`
+        SELECT
+          n.po_id,
+          n.id                                            AS grn_id,
+          n.date_time::date                               AS grn_date,
+          n.bill_number                                   AS invoice_number,
+          n.ign_number                                    AS grn_number,
+          n.dc_number                                     AS challan_number,
+          n.vehicle_no                                    AS vehicle_number,
+          NULL::text                                      AS wb_slip_no,
+          SUM(COALESCE(ii.qty_inspected, ii.qty_as_per_dc, 0)) AS qty,
+          MAX(ii.rate)                                    AS rate,
+          MAX(ii.unit)                                    AS unit
+        FROM ign n
+        JOIN ign_items ii ON ii.ign_id = n.id
+        WHERE n.po_id = ANY($1::uuid[])
+          AND COALESCE(n.status,'') NOT IN ('cancelled')
+          AND ${mcGi.sql}
+        GROUP BY n.po_id, n.id
+        ORDER BY n.date_time
+      `, [poIds, ...mcGi.params]);
 
-      // Dedup on IGN number — same invoice can legitimately appear on multiple partial IGN deliveries,
-      // so we key on ign_no (not invoice_no) to avoid blocking those.
-      const ignKey = grn.grn_number ? `${entryId}|${grn.grn_number.trim().toLowerCase()}` : null;
-      if (ignKey && importedIgnKeys.has(ignKey)) continue;
+      // Fetch bills for GST/total lookup against IGN rows
+      const gstBills = await query(`
+        SELECT b.id, b.grn_id, b.po_id, LOWER(TRIM(b.inv_number)) AS inv_key,
+          b.gst_amount, b.total_amount,
+          (COALESCE(b.cgst_pct,0)*2 + COALESCE(b.igst_pct,0)) AS gst_rate
+        FROM tqs_bills b
+        WHERE b.po_id = ANY($1::uuid[]) AND b.is_deleted = FALSE
+      `, [poIds]);
+      const billByGrn   = new Map();
+      const billByPoInv = new Map();
+      for (const b of gstBills.rows) {
+        if (b.grn_id) billByGrn.set(b.grn_id, b);
+        if (b.inv_key) billByPoInv.set(`${b.po_id}|${b.inv_key}`, b);
+      }
 
-      const billRow = billByGrn.get(grn.grn_id)
-        || billByPoInv.get(`${grn.po_id}|${(grn.invoice_number || '').trim().toLowerCase()}`);
-      if (billRow?.id && importedBillSet.has(billRow.id)) continue;
-      const rate     = parseFloat(grn.rate || 0);
-      const qty      = parseFloat(grn.qty  || 0);
-      const basic    = qty * rate;
-      const gstRate  = parseFloat(billRow?.gst_rate || DEFAULT_GST_RATE[material_type] || 18);
-      const gstAmt   = billRow?.gst_amount   != null ? parseFloat(billRow.gst_amount)   : (basic * gstRate / 100);
-      const grandTot = billRow?.total_amount != null ? parseFloat(billRow.total_amount) : (basic + gstAmt);
+      for (const grn of grns.rows) {
+        if (importedGrnSet.has(grn.grn_id)) continue;
+        const entryId = entryByPo.get(grn.po_id);
+        if (!entryId) continue;
 
-      // Register: ign_no for IGN dedup; invoice_no so the bills path skips this invoice
-      if (ignKey) importedIgnKeys.add(ignKey);
-      const invKey = grn.invoice_number ? `${entryId}|${grn.invoice_number.trim().toLowerCase()}` : null;
-      if (invKey) importedInvKeys.add(invKey);
+        const ignKey = grn.grn_number ? `${entryId}|${grn.grn_number.trim().toLowerCase()}` : null;
+        if (ignKey && importedIgnKeys.has(ignKey)) continue;
 
-      grnRows.push([
-        entryId, grn.grn_date || todayStr,
-        trunc(grn.invoice_number),
-        trunc(grn.grn_number || grn.wb_slip_no),
-        trunc(grn.challan_number),
-        trunc(grn.vehicle_number),
-        qty || null, rate || null,
-        gstRate, gstAmt || null, grandTot || null,
-        req.user.id, grn.grn_id,
-      ]);
+        const billRow = billByGrn.get(grn.grn_id)
+          || billByPoInv.get(`${grn.po_id}|${(grn.invoice_number || '').trim().toLowerCase()}`);
+        if (billRow?.id && importedBillSet.has(billRow.id)) continue;
+        const rate     = parseFloat(grn.rate || 0);
+        const qty      = parseFloat(grn.qty  || 0);
+        const basic    = qty * rate;
+        const gstRate  = parseFloat(billRow?.gst_rate || DEFAULT_GST_RATE[material_type] || 18);
+        const gstAmt   = billRow?.gst_amount   != null ? parseFloat(billRow.gst_amount)   : (basic * gstRate / 100);
+        const grandTot = billRow?.total_amount != null ? parseFloat(billRow.total_amount) : (basic + gstAmt);
+
+        if (ignKey) importedIgnKeys.add(ignKey);
+        const invKey = grn.invoice_number ? `${entryId}|${grn.invoice_number.trim().toLowerCase()}` : null;
+        if (invKey) importedInvKeys.add(invKey);
+
+        grnRows.push([
+          entryId, grn.grn_date || todayStr,
+          trunc(grn.invoice_number),
+          trunc(grn.grn_number || grn.wb_slip_no),
+          trunc(grn.challan_number),
+          trunc(grn.vehicle_number),
+          qty || null, rate || null,
+          gstRate, gstAmt || null, grandTot || null,
+          req.user.id, grn.grn_id,
+        ]);
+      }
     }
 
-    // ── Bulk fetch ALL no-GRN bills for these POs in one query ──
+    // ── Bulk fetch bills for these POs ──────────────────────────────────────────
+    // For cement: restrict to bills with no linked GRN (IGN handles those).
+    // For concrete/steel: pull ALL bills — GRN-linked or not — since IGN is not used.
     const mcLi = matCond(material_type, 'li', 'item_name', 2);
     const bills = await query(`
       SELECT
@@ -835,7 +842,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       LEFT JOIN tqs_bill_line_items li ON li.bill_id = b.id
       LEFT JOIN tqs_bill_updates bu ON bu.bill_id = b.id
       WHERE b.po_id = ANY($1::uuid[])
-        AND b.grn_id IS NULL
+        ${useIGN ? 'AND b.grn_id IS NULL' : ''}
         AND b.is_deleted = FALSE
         AND (li.item_name IS NULL OR (${mcLi.sql}))
       GROUP BY b.po_id, b.id
@@ -898,7 +905,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     // Deliberately does NOT filter on source_grn_id — ghost rows from old GRN syncs still
     // carry a stale GRN UUID there even after the GRN→IGN migration.
     let ghost_cleaned = 0;
-    if (entryIds.length) {
+    if (useIGN && entryIds.length) {
       const cleanup = await query(`
         WITH ghost_ids AS (
           SELECT m.id
@@ -924,7 +931,7 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     // Remove loads whose IGN was cancelled or deleted from the IGN module.
     // Only targets rows with source_grn_id set (i.e. synced from IGN, not manually entered).
     let ign_removed = 0;
-    if (entryIds.length) {
+    if (useIGN && entryIds.length) {
       const ignCleanup = await query(`
         WITH orphan_ids AS (
           SELECT l.id
