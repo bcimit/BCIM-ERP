@@ -917,7 +917,30 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       ghost_cleaned = cleanup.rows.length;
     }
 
-    res.json({ data: { entries_created, loads_created, ghost_cleaned, total_pos: pos.rows.length } });
+    // Remove loads whose IGN was cancelled or deleted from the IGN module.
+    // Only targets rows with source_grn_id set (i.e. synced from IGN, not manually entered).
+    let ign_removed = 0;
+    if (entryIds.length) {
+      const ignCleanup = await query(`
+        WITH orphan_ids AS (
+          SELECT l.id
+          FROM material_tracker_loads l
+          WHERE l.entry_id = ANY($1::uuid[])
+            AND l.source_grn_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ign n
+              WHERE n.id = l.source_grn_id
+                AND COALESCE(n.status, '') NOT IN ('cancelled')
+            )
+        )
+        DELETE FROM material_tracker_loads
+        WHERE id IN (SELECT id FROM orphan_ids)
+        RETURNING id
+      `, [entryIds]);
+      ign_removed = ignCleanup.rows.length;
+    }
+
+    res.json({ data: { entries_created, loads_created, ghost_cleaned, ign_removed, total_pos: pos.rows.length } });
   } catch (err) {
     console.error('[MaterialTracker] auto-import run error:', err);
     res.status(500).json({ error: err.message });

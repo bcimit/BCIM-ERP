@@ -405,14 +405,22 @@ function SyncModal({ materialType, projectId, onClose, onSynced }) {
             <div className="text-center space-y-3 py-4">
               <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto"><Zap size={26} className="text-emerald-600" /></div>
               <div className="font-semibold text-slate-800">Import complete!</div>
-              <div className={`grid gap-3 text-center ${result.ghost_cleaned > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
-                <div className="bg-blue-50 rounded-xl p-3"><div className="text-xl font-bold text-blue-700">{result.total_pos}</div><div className="text-[11px] text-slate-500">POs found</div></div>
-                <div className="bg-emerald-50 rounded-xl p-3"><div className="text-xl font-bold text-emerald-700">{result.entries_created}</div><div className="text-[11px] text-slate-500">POs registered</div></div>
-                <div className="bg-purple-50 rounded-xl p-3"><div className="text-xl font-bold text-purple-700">{result.loads_created}</div><div className="text-[11px] text-slate-500">Loads imported</div></div>
-                {result.ghost_cleaned > 0 && (
-                  <div className="bg-amber-50 rounded-xl p-3"><div className="text-xl font-bold text-amber-700">{result.ghost_cleaned}</div><div className="text-[11px] text-slate-500">Duplicates cleaned</div></div>
-                )}
-              </div>
+              {(() => {
+                const extras = (result.ghost_cleaned > 0 ? 1 : 0) + (result.ign_removed > 0 ? 1 : 0);
+                return (
+                  <div className={`grid gap-3 text-center grid-cols-${3 + extras}`}>
+                    <div className="bg-blue-50 rounded-xl p-3"><div className="text-xl font-bold text-blue-700">{result.total_pos}</div><div className="text-[11px] text-slate-500">POs found</div></div>
+                    <div className="bg-emerald-50 rounded-xl p-3"><div className="text-xl font-bold text-emerald-700">{result.entries_created}</div><div className="text-[11px] text-slate-500">POs registered</div></div>
+                    <div className="bg-purple-50 rounded-xl p-3"><div className="text-xl font-bold text-purple-700">{result.loads_created}</div><div className="text-[11px] text-slate-500">Loads imported</div></div>
+                    {result.ghost_cleaned > 0 && (
+                      <div className="bg-amber-50 rounded-xl p-3"><div className="text-xl font-bold text-amber-700">{result.ghost_cleaned}</div><div className="text-[11px] text-slate-500">Duplicates cleaned</div></div>
+                    )}
+                    {result.ign_removed > 0 && (
+                      <div className="bg-red-50 rounded-xl p-3"><div className="text-xl font-bold text-red-600">{result.ign_removed}</div><div className="text-[11px] text-slate-500">IGN removals synced</div></div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
