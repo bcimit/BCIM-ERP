@@ -528,8 +528,9 @@ router.delete('/:id/loads/:loadId', authorize(...WRITE_ROLES), async (req, res) 
 const MATERIAL_MATCH = {
   cement:   { include: ['cement', 'opc', 'ppc'],
               exclude: ['concrete', 'rmc', 'ready mix', 'ready-mix', 'pcc', 'rcc'] },
-  concrete: { include: ['scp', 'rmc', 'ready mix', 'ready-mix', 'ready mixed'],
-              exclude: [] },
+  concrete: { include: ['scp', 'concrete', 'rmc', 'ready mix', 'ready-mix', 'ready mixed'],
+              exclude: ['drill', 'grinding', 'chipping', 'chisel', 'vibrat', 'cutter',
+                        'breaker', 'polisher', 'scabbler', 'bit ', 'bits '] },
   steel:    { include: ['steel', 'tmt', 'rebar', 'ms rod', 'reinforcement'],
               exclude: [] },
 };
