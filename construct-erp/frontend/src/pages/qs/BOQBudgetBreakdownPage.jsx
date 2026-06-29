@@ -233,13 +233,29 @@ export default function BOQBudgetBreakdownPage() {
   // Independent of the search box so the summary/print always covers the whole BOQ.
   const toNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
   const toTitleCase = (s) => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  const normName = (s) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // Adaptive: group by chapter_name when multiple distinct names exist, else by chapter_no
+  const useNameGrouping = useMemo(() => {
+    const names = new Set(allItems.map(i => normName(i.chapter_name)).filter(Boolean));
+    return names.size > 1;
+  }, [allItems]);
+
   const chapterKey = (it) => {
-    const name = (it.chapter_name || '').trim().replace(/\s+/g, ' ');
-    return name ? name.toLowerCase() : `__no:${it.chapter_no || 'ZZZ'}`;
+    if (useNameGrouping) {
+      const name = normName(it.chapter_name);
+      return name || `__no:${it.chapter_no || 'ZZZ'}`;
+    }
+    return it.chapter_no || '0';
   };
   const chapterLabel = (it) => {
-    const name = (it.chapter_name || '').trim().replace(/\s+/g, ' ');
-    return name ? toTitleCase(name) : (it.chapter_no ? `Chapter ${it.chapter_no}` : 'Other Miscellaneous Works');
+    if (useNameGrouping) {
+      const name = (it.chapter_name || '').trim().replace(/\s+/g, ' ');
+      return name ? toTitleCase(name) : (it.chapter_no ? `Chapter ${it.chapter_no}` : 'Other Miscellaneous Works');
+    }
+    return it.chapter_name && it.chapter_no
+      ? `${it.chapter_no} — ${toTitleCase((it.chapter_name || '').trim())}`
+      : it.chapter_no ? `Chapter ${it.chapter_no}` : 'Miscellaneous';
   };
 
   const chapterRows = useMemo(() => {
@@ -280,6 +296,23 @@ export default function BOQBudgetBreakdownPage() {
       ch.items.sort((a, b) => toNum(a.item_no) - toNum(b.item_no) || String(a.item_no).localeCompare(String(b.item_no))));
     return Object.values(map).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
   }, [allItems]);
+
+  // Groups the computed items (with budgeted/spent rollups) by chapter for the breakdown view
+  const itemsByChapter = useMemo(() => {
+    const map = {};
+    items.forEach(it => {
+      if (it.id === 'project-level-unlinked') return;
+      const key = chapterKey(it);
+      if (!map[key]) map[key] = { key, name: chapterLabel(it), items: [], sort: Infinity };
+      map[key].items.push(it);
+      const sk = toNum(it.chapter_no) || toNum(it.item_no);
+      if (sk && sk < map[key].sort) map[key].sort = sk;
+    });
+    return Object.values(map).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+  }, [items, useNameGrouping]);
+
+  // unlinked row (if any) shown after all chapters
+  const unlinkedItem = items.find(isUnlinkedRow);
 
   const selectedProject = projects.find(p => p.id === projectId);
   const printRef = useRef();
@@ -440,51 +473,92 @@ export default function BOQBudgetBreakdownPage() {
               </div>
 
               <div className="divide-y divide-slate-100">
-                {items.map(item => {
-                  const isOpen = expanded[item.id];
-                  const unlinked = isUnlinkedRow(item);
-                  return (
-                    <div key={item.id}>
-                      {/* Summary row */}
-                      <button onClick={() => toggle(item.id)}
-                        className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
-                          isOpen && 'bg-indigo-50/40', unlinked && 'italic bg-slate-50/60')}>
-                        <span className="w-4 text-slate-400">
-                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        </span>
-                        <span className="font-mono font-bold text-indigo-700 truncate">{item.item_no}</span>
-                        <span className="text-slate-700 font-medium truncate pr-2" title={item.description}>{item.description}</span>
-                        <span className="text-right font-semibold text-slate-800">{unlinked ? <span className="text-slate-300">—</span> : inr(item.amount)}</span>
-                        <span className={clsx('text-right font-semibold', item.over ? 'text-rose-600' : item.allocated ? 'text-indigo-700' : 'text-slate-300')}>
-                          {item.budgeted > 0 ? inr(item.budgeted) : '—'}
-                        </span>
-                        <span className="text-right font-medium text-purple-600">{item.advance > 0 ? inr(item.advance) : <span className="text-slate-300">—</span>}</span>
-                        <span className="text-right font-medium text-emerald-600">{item.invoiced > 0 ? inr(item.invoiced) : <span className="text-slate-300">—</span>}</span>
-                        <span className={clsx('text-right font-bold', item.balance < 0 ? 'text-rose-600' : item.allocated ? 'text-emerald-600' : 'text-slate-300')}>
-                          {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
-                        </span>
-                        <span className="text-right">
-                          {unlinked
-                            ? <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Unlinked</span>
-                            : !item.allocated
-                              ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Not set</span>
-                              : item.over
-                                ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
-                                : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
-                        </span>
-                      </button>
-
-                      {/* Detail */}
-                      {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
-                    </div>
-                  );
-                })}
-
                 {items.length === 0 && (
                   <div className="text-center py-16 text-slate-400 text-sm">
                     {search ? 'No BOQ items match your search.' : 'No BOQ items found for this project.'}
                   </div>
                 )}
+
+                {itemsByChapter.map(ch => {
+                  const chBoq      = ch.items.reduce((s, i) => s + i.amount, 0);
+                  const chBudgeted = ch.items.reduce((s, i) => s + i.budgeted, 0);
+                  const chBalance  = ch.items.reduce((s, i) => s + i.balance, 0);
+                  return (
+                    <div key={ch.key}>
+                      {/* Chapter header */}
+                      <div className="grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px] gap-2 items-center px-4 py-2 bg-[#0B2E59] text-white text-[10px] font-bold uppercase tracking-wide">
+                        <span className="w-4" />
+                        <span className="col-span-2">{ch.name}</span>
+                        <span className="text-right">{inr(chBoq)}</span>
+                        <span className={clsx('text-right', chBudgeted > 0 ? 'text-indigo-200' : 'text-slate-400')}>{chBudgeted > 0 ? inr(chBudgeted) : '—'}</span>
+                        <span className="text-right text-purple-300">—</span>
+                        <span className="text-right text-emerald-300">—</span>
+                        <span className={clsx('text-right', chBalance < 0 ? 'text-rose-300' : 'text-emerald-300')}>{chBudgeted > 0 ? inr(chBalance) : '—'}</span>
+                        <span />
+                      </div>
+
+                      {ch.items.map(item => {
+                        const isOpen = expanded[item.id];
+                        return (
+                          <div key={item.id}>
+                            <button onClick={() => toggle(item.id)}
+                              className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
+                                isOpen && 'bg-indigo-50/40')}>
+                              <span className="w-4 text-slate-400">
+                                {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                              </span>
+                              <span className="font-mono font-bold text-indigo-700 truncate">{item.item_no}</span>
+                              <span className="text-slate-700 font-medium truncate pr-2" title={item.description}>{item.description}</span>
+                              <span className="text-right font-semibold text-slate-800">{inr(item.amount)}</span>
+                              <span className={clsx('text-right font-semibold', item.over ? 'text-rose-600' : item.allocated ? 'text-indigo-700' : 'text-slate-300')}>
+                                {item.budgeted > 0 ? inr(item.budgeted) : '—'}
+                              </span>
+                              <span className="text-right font-medium text-purple-600">{item.advance > 0 ? inr(item.advance) : <span className="text-slate-300">—</span>}</span>
+                              <span className="text-right font-medium text-emerald-600">{item.invoiced > 0 ? inr(item.invoiced) : <span className="text-slate-300">—</span>}</span>
+                              <span className={clsx('text-right font-bold', item.balance < 0 ? 'text-rose-600' : item.allocated ? 'text-emerald-600' : 'text-slate-300')}>
+                                {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
+                              </span>
+                              <span className="text-right">
+                                {!item.allocated
+                                  ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Not set</span>
+                                  : item.over
+                                    ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
+                                    : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
+                              </span>
+                            </button>
+                            {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                {/* Unlinked project-level row (no chapter) */}
+                {unlinkedItem && (() => {
+                  const item = unlinkedItem;
+                  const isOpen = expanded[item.id];
+                  return (
+                    <div key={item.id}>
+                      <button onClick={() => toggle(item.id)}
+                        className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition italic bg-slate-50/60',
+                          isOpen && 'bg-indigo-50/40')}>
+                        <span className="w-4 text-slate-400">
+                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        </span>
+                        <span className="font-mono font-bold text-indigo-700 truncate">{item.item_no}</span>
+                        <span className="text-slate-700 font-medium truncate pr-2" title={item.description}>{item.description}</span>
+                        <span className="text-right font-semibold text-slate-300">—</span>
+                        <span className="text-slate-300 text-right">—</span>
+                        <span className="text-right font-medium text-purple-600">{item.advance > 0 ? inr(item.advance) : <span className="text-slate-300">—</span>}</span>
+                        <span className="text-right font-medium text-emerald-600">{item.invoiced > 0 ? inr(item.invoiced) : <span className="text-slate-300">—</span>}</span>
+                        <span className="text-slate-300 text-right">—</span>
+                        <span className="text-right"><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Unlinked</span></span>
+                      </button>
+                      {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Grand total footer */}
