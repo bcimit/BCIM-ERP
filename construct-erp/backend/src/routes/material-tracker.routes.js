@@ -320,6 +320,46 @@ router.delete('/:id', authorize('admin','super_admin'), async (req, res) => {
   }
 });
 
+// Returns an error message string if a duplicate grs_no / ign_no / invoice_no
+// already exists for the same entry, or null if clear. excludeLoadId skips the
+// current row when called from the edit (PUT) path.
+async function checkLoadDuplicate(entryId, { grs_no, ign_no, invoice_no }, excludeLoadId = null) {
+  const fields = [
+    { col: 'grs_no',     val: grs_no,     label: 'GRS No' },
+    { col: 'ign_no',     val: ign_no,     label: 'IGN No' },
+    { col: 'invoice_no', val: invoice_no, label: 'Invoice No' },
+  ].filter(f => f.val && String(f.val).trim());
+
+  if (!fields.length) return null;
+
+  const params = [entryId];
+  let idx = 2;
+  const clauses = fields.map(f => {
+    params.push(String(f.val).trim());
+    return `(LOWER(TRIM(${f.col})) = LOWER($${idx++}))`;
+  });
+  if (excludeLoadId) { params.push(excludeLoadId); }
+
+  const { rows } = await query(
+    `SELECT grs_no, ign_no, invoice_no FROM material_tracker_loads
+     WHERE entry_id = $1
+       AND (${clauses.join(' OR ')})
+       ${excludeLoadId ? `AND id <> $${params.length}` : ''}
+     LIMIT 1`,
+    params
+  );
+
+  if (!rows.length) return null;
+  const d = rows[0];
+  for (const f of fields) {
+    const existing = d[f.col];
+    if (existing && existing.trim().toLowerCase() === String(f.val).trim().toLowerCase()) {
+      return `Duplicate load: ${f.label} "${f.val}" already exists for this entry.`;
+    }
+  }
+  return null;
+}
+
 // ── POST /material-tracker/:id/loads — add a load ────────────────────────────
 router.post('/:id/loads', authorize(...WRITE_ROLES), async (req, res) => {
   try {
@@ -341,6 +381,10 @@ router.post('/:id/loads', authorize(...WRITE_ROLES), async (req, res) => {
 
     const diaErr = diaMismatchError(check.rows[0].material_type, invoice_qty, dia);
     if (diaErr) return res.status(400).json({ error: diaErr });
+
+    // Duplicate check: grs_no, ign_no, invoice_no must be unique per entry
+    const dupErr = await checkLoadDuplicate(req.params.id, { grs_no, ign_no, invoice_no });
+    if (dupErr) return res.status(409).json({ error: dupErr });
 
     const load = await query(`
       INSERT INTO material_tracker_loads
@@ -408,6 +452,10 @@ router.put('/:id/loads/:loadId', authorize(...WRITE_ROLES), async (req, res) => 
 
     const diaErr = diaMismatchError(check.rows[0].material_type, invoice_qty, dia);
     if (diaErr) return res.status(400).json({ error: diaErr });
+
+    // Duplicate check (exclude current load)
+    const dupErr = await checkLoadDuplicate(req.params.id, { grs_no, ign_no, invoice_no }, req.params.loadId);
+    if (dupErr) return res.status(409).json({ error: dupErr });
 
     await query(`
       UPDATE material_tracker_loads
