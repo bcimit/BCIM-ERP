@@ -232,11 +232,15 @@ export default function BOQBudgetBreakdownPage() {
   // even when sub-items carry different hierarchical chapter_no values.
   // Independent of the search box so the summary/print always covers the whole BOQ.
   const toNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+  const toTitleCase = (s) => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   const chapterKey = (it) => {
-    const name = (it.chapter_name || '').trim();
+    const name = (it.chapter_name || '').trim().replace(/\s+/g, ' ');
     return name ? name.toLowerCase() : `__no:${it.chapter_no || 'ZZZ'}`;
   };
-  const chapterLabel = (it) => (it.chapter_name || '').trim() || (it.chapter_no ? `Chapter ${it.chapter_no}` : 'Other Miscellaneous Works');
+  const chapterLabel = (it) => {
+    const name = (it.chapter_name || '').trim().replace(/\s+/g, ' ');
+    return name ? toTitleCase(name) : (it.chapter_no ? `Chapter ${it.chapter_no}` : 'Other Miscellaneous Works');
+  };
 
   const chapterRows = useMemo(() => {
     const map = {};
