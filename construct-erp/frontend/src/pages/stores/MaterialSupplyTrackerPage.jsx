@@ -196,6 +196,56 @@ function DetailPopup({ item, onClose }) {
                 ))}
               </div>
 
+              {/* Balance Summary */}
+              {(() => {
+                const req  = parseFloat(item.requested_qty  || 0);
+                const ord  = parseFloat(item.ordered_qty    || 0);
+                const recv = parseFloat(item.received_qty   || 0);
+                const toOrder   = Math.max(0, req - ord);
+                const toReceive = Math.max(0, ord - recv);
+                const ordPct  = req > 0 ? Math.min(100, Math.round((ord  / req) * 100)) : 0;
+                const recvPct = req > 0 ? Math.min(100, Math.round((recv / req) * 100)) : 0;
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Material Balance</h3>
+                    {/* Progress bars */}
+                    <div className="space-y-2 mb-4">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                          <span>Ordered</span><span>{n(ord, 3)} / {n(req, 3)} {item.unit} ({ordPct}%)</span>
+                        </div>
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${ordPct}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                          <span>Received</span><span>{n(recv, 3)} / {n(req, 3)} {item.unit} ({recvPct}%)</span>
+                        </div>
+                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${recvPct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Pending callouts */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className={clsx('rounded-lg px-3 py-2 border', toOrder > 0 ? 'bg-orange-50 border-orange-200' : 'bg-slate-100 border-slate-200')}>
+                        <div className="text-[10px] text-slate-500 mb-0.5">Still to Order</div>
+                        <div className={clsx('text-sm font-bold', toOrder > 0 ? 'text-orange-600' : 'text-slate-400')}>
+                          {toOrder > 0 ? `${n(toOrder, 3)} ${item.unit}` : 'Fully Ordered ✓'}
+                        </div>
+                      </div>
+                      <div className={clsx('rounded-lg px-3 py-2 border', toReceive > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-100 border-slate-200')}>
+                        <div className="text-[10px] text-slate-500 mb-0.5">Still to Receive</div>
+                        <div className={clsx('text-sm font-bold', toReceive > 0 ? 'text-red-600' : 'text-slate-400')}>
+                          {toReceive > 0 ? `${n(toReceive, 3)} ${item.unit}` : 'Fully Received ✓'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* MR Info + PO Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
