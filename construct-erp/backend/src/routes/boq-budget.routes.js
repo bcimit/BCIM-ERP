@@ -529,44 +529,51 @@ router.get('/:project_id/costhead-monthly', async (req, res) => {
     if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
 
     const raM = await query(`
-      SELECT TO_CHAR(rb.bill_date, 'YYYY-MM') AS month, rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+      SELECT TO_CHAR(COALESCE(rb.bill_date, rb.created_at), 'YYYY-MM') AS month,
+             rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
       FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       WHERE rb.project_id=$1 AND rb.status IN ('certified','paid') AND rbi.cost_head IS NOT NULL
       GROUP BY 1, 2`, [project_id]);
 
     const scM = await query(`
-      SELECT TO_CHAR(sb.bill_date, 'YYYY-MM') AS month, 'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
+      SELECT TO_CHAR(COALESCE(sb.bill_date, sb.created_at), 'YYYY-MM') AS month,
+             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
       FROM sc_bill_items bi JOIN sc_bills sb ON sb.id = bi.bill_id
       WHERE sb.project_id=$1 AND sb.status NOT IN ('draft','rejected','queried')
       GROUP BY 1`, [project_id]);
 
     const scPayM = await query(`
-      SELECT TO_CHAR(payment_date, 'YYYY-MM') AS month, 'Sub Con' AS cost_head, SUM(amount) AS actual
+      SELECT TO_CHAR(COALESCE(payment_date, created_at), 'YYYY-MM') AS month,
+             'Sub Con' AS cost_head, SUM(amount) AS actual
       FROM sc_payments
       WHERE project_id=$1
       GROUP BY 1`, [project_id]);
 
     const tqsM = await query(`
-      SELECT TO_CHAR(tb.bill_date, 'YYYY-MM') AS month, li.cost_head, SUM(li.basic_amount) AS actual
+      SELECT TO_CHAR(COALESCE(tb.bill_date, tb.created_at), 'YYYY-MM') AS month,
+             li.cost_head, SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
       WHERE tb.project_id=$1 AND tb.workflow_status='paid' AND li.cost_head IS NOT NULL
       GROUP BY 1, 2`, [project_id]);
 
     const advM = await query(`
-      SELECT TO_CHAR(advance_date, 'YYYY-MM') AS month, 'Sub Con' AS cost_head, SUM(amount) AS actual
+      SELECT TO_CHAR(COALESCE(advance_date, created_at), 'YYYY-MM') AS month,
+             'Sub Con' AS cost_head, SUM(amount) AS actual
       FROM sc_advances
       WHERE project_id=$1 AND status NOT IN ('cancelled')
       GROUP BY 1`, [project_id]);
 
     const advTrkM = await query(`
-      SELECT TO_CHAR(pay_date, 'YYYY-MM') AS month, 'Sub Con' AS cost_head, SUM(paid_amount) AS actual
+      SELECT TO_CHAR(COALESCE(pay_date, created_at), 'YYYY-MM') AS month,
+             'Sub Con' AS cost_head, SUM(paid_amount) AS actual
       FROM tqs_advance_vouchers
       WHERE project_id=$1 AND is_deleted=false
         AND status IN ('issued','partial','recovered') AND paid_amount > 0
       GROUP BY 1`, [project_id]);
 
     const spcM = await query(`
-      SELECT TO_CHAR(entry_date, 'YYYY-MM') AS month, 'Petty Cash' AS cost_head, SUM(amount) AS actual
+      SELECT TO_CHAR(COALESCE(entry_date, created_at), 'YYYY-MM') AS month,
+             'Petty Cash' AS cost_head, SUM(amount) AS actual
       FROM stores_petty_cash_entries
       WHERE project_id=$1 AND status='Approved'
       GROUP BY 1`, [project_id]);
