@@ -486,6 +486,7 @@ function CostHeadBudgetTab({ projectId }) {
             <th className="px-4 py-2.5 text-left">Description of Works</th>
             <th className="px-4 py-2.5 text-right w-52">Budget</th>
             <th className="px-4 py-2.5 text-right w-44">Actual Expenditure</th>
+            <th className="px-4 py-2.5 text-right w-24">% Used</th>
             <th className="px-4 py-2.5 text-right w-44">Balance</th>
           </tr>
         </thead>
@@ -560,6 +561,16 @@ function CostHeadBudgetTab({ projectId }) {
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
+                  <td className="px-4 py-2 text-right text-xs font-bold tabular-nums">
+                    {r.budget > 0 ? (
+                      <span className={clsx(
+                        r.actual / r.budget > 1 ? 'text-rose-600' :
+                        r.actual / r.budget > 0.85 ? 'text-amber-600' : 'text-slate-600'
+                      )}>
+                        {((r.actual / r.budget) * 100).toFixed(1)}%
+                      </span>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td className={clsx('px-4 py-2 text-right font-bold',
                     r.budget === 0 ? 'text-slate-300' : over ? 'text-rose-600' : 'text-emerald-600')}>
                     {r.budget > 0 || r.actual > 0
@@ -579,6 +590,9 @@ function CostHeadBudgetTab({ projectId }) {
             <td className="px-4 py-2.5 text-sm font-bold text-slate-800">Total</td>
             <td className="px-4 py-2.5 text-right text-sm">₹{Math.round(totalBudget).toLocaleString('en-IN')}</td>
             <td className="px-4 py-2.5 text-right text-sm text-emerald-700">₹{Math.round(totalActual).toLocaleString('en-IN')}</td>
+            <td className="px-4 py-2.5 text-right text-xs font-bold text-slate-600">
+              {totalBudget > 0 ? `${((totalActual / totalBudget) * 100).toFixed(1)}%` : '—'}
+            </td>
             <td className={clsx('px-4 py-2.5 text-right text-sm font-bold', totalBudget - totalActual < 0 ? 'text-rose-600' : 'text-emerald-600')}>
               ₹{Math.round(totalBudget - totalActual).toLocaleString('en-IN')}
             </td>
