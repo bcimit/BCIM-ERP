@@ -349,14 +349,15 @@ function SyncModal({ materialType, projectId, onClose, onSynced }) {
     onError: e => toast.error(e?.response?.data?.error || 'Import failed'),
   });
 
-  const label = materialType === 'concrete' ? 'RMC' : 'Steel';
+  const label = materialType === 'concrete' ? 'RMC' : materialType === 'steel' ? 'Steel' : 'Cement';
+  const fromBills = materialType !== 'cement';
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2"><Zap size={16} className="text-yellow-500" />
-            <h3 className="text-sm font-semibold">Sync {label} from IGN & Bills</h3></div>
+            <h3 className="text-sm font-semibold">Sync {label} from {fromBills ? 'Bill Tracker' : 'IGN & Bills'}</h3></div>
           <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center"><X size={14} className="text-slate-500" /></button>
         </div>
         <div className="p-6">
@@ -366,14 +367,18 @@ function SyncModal({ materialType, projectId, onClose, onSynced }) {
               {error && <div className="text-red-600 text-sm py-4">Failed to scan: {error.message}</div>}
               {preview && !isLoading && (
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-500">Found {label} records in Purchase Orders, IGN receipts and Bills. The following will be auto-imported.</p>
+                  <p className="text-xs text-slate-500">
+                    {fromBills
+                      ? `Found ${label} bills in the Bill Tracker. The following will be auto-imported.`
+                      : `Found ${label} records in Purchase Orders, IGN receipts and Bills. The following will be auto-imported.`}
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       { label: `${label} POs found`, value: preview.pos_found, color: 'blue' },
                       { label: 'New POs to register', value: preview.pos_new, color: preview.pos_new > 0 ? 'emerald' : 'slate' },
-                      { label: 'From IGN (loads)', value: preview.grns_new, color: preview.grns_new > 0 ? 'emerald' : 'slate' },
+                      !fromBills && { label: 'From IGN (loads)', value: preview.grns_new ?? 0, color: (preview.grns_new ?? 0) > 0 ? 'emerald' : 'slate' },
                       { label: 'From Bills (loads)', value: preview.bills_new, color: preview.bills_new > 0 ? 'blue' : 'slate' },
-                    ].map(k => (
+                    ].filter(Boolean).map(k => (
                       <div key={k.label} className={`bg-${k.color}-50 border border-${k.color}-100 rounded-xl p-3`}>
                         <div className={`text-2xl font-bold text-${k.color}-700`}>{k.value}</div>
                         <div className="text-[11px] text-slate-500 mt-0.5">{k.label}</div>
@@ -606,7 +611,7 @@ function TrackerTab({ materialType, projectId, projects, canWrite }) {
             <>
               <button onClick={() => setShowSync(true)}
                 className="h-8 px-3 flex items-center gap-1.5 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-[11px] font-semibold hover:bg-yellow-100">
-                <Zap size={12} /> Sync from IGN
+                <Zap size={12} /> {materialType === 'cement' ? 'Sync from IGN' : 'Sync from Bills'}
               </button>
               <button onClick={() => setShowRegister(true)}
                 className="h-8 px-3 flex items-center gap-1.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold hover:bg-slate-50">
