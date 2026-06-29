@@ -401,10 +401,17 @@ function TrackerTable({ rows, isLoading, onRowClick }) {
   // Compact layout — drag to scroll in any direction
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <style>{`
+        .supply-scroll::-webkit-scrollbar { width: 14px; height: 14px; }
+        .supply-scroll::-webkit-scrollbar-track { background: #ffe4e6; border-radius: 8px; }
+        .supply-scroll::-webkit-scrollbar-thumb { background: #f43f5e; border-radius: 8px; border: 2px solid #ffe4e6; }
+        .supply-scroll::-webkit-scrollbar-thumb:hover { background: #e11d48; }
+        .supply-scroll::-webkit-scrollbar-corner { background: #ffe4e6; }
+      `}</style>
       <div
         ref={scrollRef}
-        className="overflow-auto select-none"
-        style={{ maxHeight: 'calc(100vh - 340px)', minHeight: 300 }}
+        className="overflow-auto select-none supply-scroll"
+        style={{ maxHeight: 'calc(100vh - 340px)', minHeight: 300, scrollbarWidth: 'auto', scrollbarColor: '#f43f5e #ffe4e6' }}
       >
         <table className="text-xs" style={{ minWidth: 1000, width: '100%' }}>
           <thead className="sticky top-0 z-10">
