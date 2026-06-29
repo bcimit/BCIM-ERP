@@ -979,12 +979,13 @@ async function notifyScAdvance(adv, createdByName, projectName) {
       </div>
     </div>`;
 
-  await sendMail({
+  const result = await sendMail({
     to: SC_NOTIFY,
     subject: `[SC Advance] ${adv.vendor_name} — ${fmtINR(adv.amount)} | ${projectName || 'General'}`,
     html,
     text: `Sub-Contractor Advance issued.\nSub-Contractor: ${adv.vendor_name}\nDate: ${fmtD(adv.advance_date)}\nProject: ${projectName || '—'}\nWO: ${adv.wo_number || '—'}\nAmount: ${fmtINR(adv.amount)}\nRemarks: ${adv.remarks || '—'}\nEntered by: ${createdByName}`,
   });
+  return result;
 }
 
 // Vendor lookup for SC advance form
@@ -1066,13 +1067,16 @@ router.post('/sc-advances/resend-notifications', authenticate, async (req, res) 
     const results = [];
     for (const adv of r.rows) {
       try {
-        await notifyScAdvance(adv, adv.created_by_name || req.user.name, adv.project_name);
-        results.push({ id: adv.id, vendor: adv.vendor_name, sent: true });
+        const mailResult = await notifyScAdvance(adv, adv.created_by_name || req.user.name, adv.project_name);
+        results.push({
+          id: adv.id, vendor: adv.vendor_name,
+          recipients: mailResult?.results || [],
+        });
       } catch (e) {
-        results.push({ id: adv.id, vendor: adv.vendor_name, sent: false, error: e.message });
+        results.push({ id: adv.id, vendor: adv.vendor_name, error: e.message });
       }
     }
-    res.json({ sent: results.filter(r => r.sent).length, total: r.rows.length, results });
+    res.json({ total: r.rows.length, results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
