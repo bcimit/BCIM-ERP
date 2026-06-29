@@ -545,12 +545,13 @@ router.get('/auto-import/preview', async (req, res) => {
       );
       const importedGrnSet = new Set(importedGrns.rows.map(r => r.source_grn_id));
 
-      const mcGi = matCond(material_type, 'gi', 'material_name', 2);
+      const mcGi = matCond(material_type, 'ii', 'material_name', 2);
       const grns = await query(`
-        SELECT DISTINCT g.id
-        FROM grn g
-        JOIN grn_items gi ON gi.grn_id = g.id
-        WHERE g.po_id = ANY($1::uuid[])
+        SELECT DISTINCT n.id
+        FROM ign n
+        JOIN ign_items ii ON ii.ign_id = n.id
+        WHERE n.po_id = ANY($1::uuid[])
+          AND COALESCE(n.status,'') NOT IN ('cancelled')
           AND ${mcGi.sql}
       `, [poIds, ...mcGi.params]);
       grnsNew = grns.rows.filter(r => !importedGrnSet.has(r.id)).length;
@@ -667,21 +668,28 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     const importedGrnSet  = new Set(imported.rows.map(r => r.source_grn_id).filter(Boolean));
     const importedBillSet = new Set(imported.rows.map(r => r.source_bill_id).filter(Boolean));
 
-    // ── Bulk fetch ALL matching GRNs for these POs in one query ──
-    const mcGi = matCond(material_type, 'gi', 'material_name', 2);
+    // ── Bulk fetch ALL matching IGN receipts for these POs in one query ──
+    const mcGi = matCond(material_type, 'ii', 'material_name', 2);
     const grns = await query(`
       SELECT
-        g.po_id, g.id AS grn_id, g.grn_date, g.invoice_number, g.grn_number,
-        g.challan_number, g.vehicle_number, g.wb_slip_no,
-        SUM(gi.quantity_received) AS qty,
-        MAX(gi.rate)              AS rate,
-        MAX(gi.unit)              AS unit
-      FROM grn g
-      JOIN grn_items gi ON gi.grn_id = g.id
-      WHERE g.po_id = ANY($1::uuid[])
+        n.po_id,
+        n.id                                            AS grn_id,
+        n.date_time::date                               AS grn_date,
+        n.bill_number                                   AS invoice_number,
+        n.ign_number                                    AS grn_number,
+        n.dc_number                                     AS challan_number,
+        n.vehicle_no                                    AS vehicle_number,
+        NULL::text                                      AS wb_slip_no,
+        SUM(COALESCE(ii.qty_inspected, ii.qty_as_per_dc, 0)) AS qty,
+        MAX(ii.rate)                                    AS rate,
+        MAX(ii.unit)                                    AS unit
+      FROM ign n
+      JOIN ign_items ii ON ii.ign_id = n.id
+      WHERE n.po_id = ANY($1::uuid[])
+        AND COALESCE(n.status,'') NOT IN ('cancelled')
         AND ${mcGi.sql}
-      GROUP BY g.po_id, g.id
-      ORDER BY g.grn_date
+      GROUP BY n.po_id, n.id
+      ORDER BY n.date_time
     `, [poIds, ...mcGi.params]);
 
     // ── Bulk fetch bills for GST/total lookup (by grn_id and po_id+inv_number) ──

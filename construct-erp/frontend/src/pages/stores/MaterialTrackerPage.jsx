@@ -356,7 +356,7 @@ function SyncModal({ materialType, projectId, onClose, onSynced }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2"><Zap size={16} className="text-yellow-500" />
-            <h3 className="text-sm font-semibold">Sync {label} from GRNs & Bills</h3></div>
+            <h3 className="text-sm font-semibold">Sync {label} from IGN & Bills</h3></div>
           <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center"><X size={14} className="text-slate-500" /></button>
         </div>
         <div className="p-6">
@@ -366,12 +366,12 @@ function SyncModal({ materialType, projectId, onClose, onSynced }) {
               {error && <div className="text-red-600 text-sm py-4">Failed to scan: {error.message}</div>}
               {preview && !isLoading && (
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-500">Found {label} records in Purchase Orders, GRNs and Bills. The following will be auto-imported.</p>
+                  <p className="text-xs text-slate-500">Found {label} records in Purchase Orders, IGN receipts and Bills. The following will be auto-imported.</p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       { label: `${label} POs found`, value: preview.pos_found, color: 'blue' },
                       { label: 'New POs to register', value: preview.pos_new, color: preview.pos_new > 0 ? 'emerald' : 'slate' },
-                      { label: 'From GRNs (loads)', value: preview.grns_new, color: preview.grns_new > 0 ? 'emerald' : 'slate' },
+                      { label: 'From IGN (loads)', value: preview.grns_new, color: preview.grns_new > 0 ? 'emerald' : 'slate' },
                       { label: 'From Bills (loads)', value: preview.bills_new, color: preview.bills_new > 0 ? 'blue' : 'slate' },
                     ].map(k => (
                       <div key={k.label} className={`bg-${k.color}-50 border border-${k.color}-100 rounded-xl p-3`}>
@@ -592,7 +592,7 @@ function TrackerTab({ materialType, projectId, projects, canWrite }) {
             <>
               <button onClick={() => setShowSync(true)}
                 className="h-8 px-3 flex items-center gap-1.5 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-[11px] font-semibold hover:bg-yellow-100">
-                <Zap size={12} /> Sync from GRNs
+                <Zap size={12} /> Sync from IGN
               </button>
               <button onClick={() => setShowRegister(true)}
                 className="h-8 px-3 flex items-center gap-1.5 rounded-lg border border-slate-200 text-slate-700 text-[11px] font-semibold hover:bg-slate-50">
