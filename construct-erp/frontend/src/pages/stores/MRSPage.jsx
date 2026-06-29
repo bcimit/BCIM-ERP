@@ -1366,7 +1366,7 @@ export default function MRSPage() {
         <StatCard icon={AlertCircle}   label="Urgent / Critical" value={urgentCount}         sub="High priority"      color="red" />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5 mb-5">
+      <div className="space-y-5 mb-5">
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center gap-4">
             <div className="flex items-center gap-3">
@@ -1570,7 +1570,7 @@ export default function MRSPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
 
           {/* Approval Pipeline breakdown */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
