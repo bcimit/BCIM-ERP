@@ -1595,6 +1595,13 @@ export const scAPI = {
   closeWO:            (id, d)   => api.patch(`/sc/work-orders/${id}/close`, d),
 };
 
+export const supplyTrackerAPI = {
+  dashboard: (params) => api.get('/supply-tracker/dashboard', { params }),
+  list:      (params) => api.get('/supply-tracker', { params }),
+  detail:    (mrId, itemId) => api.get(`/supply-tracker/item/${mrId}/${itemId}`),
+  summary:   (params) => api.get('/supply-tracker/summary', { params }),
+};
+
 export const hireLogAPI = {
   listWOs:       ()           => api.get('/hire-log/work-orders'),
   get:           (woId)       => api.get(`/hire-log/${woId}`),

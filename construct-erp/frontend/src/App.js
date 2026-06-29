@@ -221,6 +221,7 @@ const StoresReportsPage         = lazy(() => import('./pages/stores/StoresReport
 const StoresReportViewer        = lazy(() => import('./pages/stores/StoresReportViewer'));
 const VendorWiseReportsPage     = lazy(() => import('./pages/stores/VendorWiseReportsPage'));
 const DailyMaterialRegisterPage = lazy(() => import('./pages/stores/DailyMaterialRegisterPage'));
+const MaterialSupplyTrackerPage = lazy(() => import('./pages/stores/MaterialSupplyTrackerPage'));
 // StockReportPage merged into StoreLedgerPage as "Monthly Movement" tab
 const VendorInvoicePage   = lazy(() => import('./pages/finance/VendorInvoicePage'));
 const BillBookingPage     = lazy(() => import('./pages/finance/BillBookingPage'));
@@ -893,6 +894,7 @@ export default function App() {
                 <Route path="stores/reports/vendor-wise" element={<RequireModule module="Stores"><VendorWiseReportsPage /></RequireModule>} />
                 <Route path="stores/reports/dmr" element={<RequireModule module="Stores"><DailyMaterialRegisterPage /></RequireModule>} />
                 <Route path="stores/dmr" element={<RequireModule module="Stores"><DailyMaterialRegisterPage /></RequireModule>} />
+                <Route path="stores/supply-tracker" element={<RequireModule module="Stores"><MaterialSupplyTrackerPage /></RequireModule>} />
 
                 {/* Quality (QA/QC) */}
                 <Route path="quality"                    element={<RequireModule module="Quality (QA/QC)"><QAQCDashboard /></RequireModule>} />
