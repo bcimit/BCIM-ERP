@@ -341,12 +341,11 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       WHERE project_id=$1 AND status NOT IN ('cancelled')`, [project_id]);
 
     // Petty cash
+    // Petty cash — total from stores petty cash tracker (all approved entries → "Petty Cash" head)
     const spcActuals = await query(`
-      SELECT si.cost_head, SUM(si.total_amount) AS actual
-      FROM stores_petty_cash_items si
-      JOIN stores_petty_cash_entries se ON se.id = si.entry_id
-      WHERE se.project_id=$1 AND se.status='Approved' AND si.cost_head IS NOT NULL
-      GROUP BY si.cost_head`, [project_id]);
+      SELECT 'Petty Cash' AS cost_head, SUM(COALESCE(total_amount, amount)) AS actual
+      FROM stores_petty_cash_entries
+      WHERE project_id=$1 AND status='Approved'`, [project_id]);
 
     // Merge actuals by cost head
     const actualMap = {};
