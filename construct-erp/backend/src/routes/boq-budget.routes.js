@@ -320,11 +320,17 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       WHERE rb.project_id=$1 AND rb.status IN ('certified','paid')
       GROUP BY rbi.cost_head`, [project_id]);
 
-    // Actuals: SC bills — all mapped to "Sub Con" (SC module is exclusively subcontractor)
+    // Actuals: SC bills — all mapped to "Sub Con" (any non-draft/non-rejected bill counts)
     const scActuals = await query(`
       SELECT 'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
       FROM sc_bill_items bi JOIN sc_bills sb ON sb.id = bi.bill_id
-      WHERE sb.project_id=$1 AND sb.status IN ('approved','paid')`, [project_id]);
+      WHERE sb.project_id=$1 AND sb.status NOT IN ('draft','rejected','queried')`, [project_id]);
+
+    // Actuals: SC payments (actual money paid to subcontractors) — mapped to "Sub Con"
+    const scPayActuals = await query(`
+      SELECT 'Sub Con' AS cost_head, SUM(amount) AS actual
+      FROM sc_payments
+      WHERE project_id=$1`, [project_id]);
 
     // Actuals: TQS material bills (paid) — grouped by cost_head on line items
     const tqsActuals = await query(`
@@ -347,7 +353,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
 
     // Merge actuals by cost head
     const actualMap = {};
-    for (const rows of [raActuals.rows, scActuals.rows, tqsActuals.rows, advActuals.rows, spcActuals.rows]) {
+    for (const rows of [raActuals.rows, scActuals.rows, scPayActuals.rows, tqsActuals.rows, advActuals.rows, spcActuals.rows]) {
       for (const r of rows) {
         if (!r.cost_head) continue;
         actualMap[r.cost_head] = (actualMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
