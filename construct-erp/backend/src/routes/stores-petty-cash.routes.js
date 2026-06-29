@@ -1051,6 +1051,31 @@ router.post('/sc-advances', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// One-shot: resend SC advance notifications for all existing entries
+router.post('/sc-advances/resend-notifications', authenticate, async (req, res) => {
+  try {
+    const r = await query(
+      `SELECT s.*, pr.name AS project_name, u.name AS created_by_name
+       FROM stores_pc_sc_advances s
+       LEFT JOIN projects pr ON pr.id = s.project_id
+       LEFT JOIN users u ON u.id = s.created_by
+       WHERE s.company_id = $1
+       ORDER BY s.advance_date DESC`,
+      [req.user.company_id]
+    );
+    const results = [];
+    for (const adv of r.rows) {
+      try {
+        await notifyScAdvance(adv, adv.created_by_name || req.user.name, adv.project_name);
+        results.push({ id: adv.id, vendor: adv.vendor_name, sent: true });
+      } catch (e) {
+        results.push({ id: adv.id, vendor: adv.vendor_name, sent: false, error: e.message });
+      }
+    }
+    res.json({ sent: results.filter(r => r.sent).length, total: r.rows.length, results });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Delete SC advance
 router.delete('/sc-advances/:id', authenticate, async (req, res) => {
   try {
