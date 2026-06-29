@@ -889,23 +889,29 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     await chunkInsert(billCols, billRows);
     loads_created = grnRows.length + billRows.length;
 
-    // Auto-cleanup ghost rows: loads with no ign_no whose invoice is now covered by a proper
-    // IGN row in the same entry. Deliberately does NOT check source_grn_id because ghost rows
-    // from old GRN syncs (pre-IGN migration) still carry a stale GRN UUID in that column.
+    // Auto-cleanup ghost rows: loads with no ign_no whose invoice is covered by a proper
+    // IGN row in the same entry. Uses a CTE to avoid any DELETE-alias ambiguity in PostgreSQL.
+    // Deliberately does NOT filter on source_grn_id — ghost rows from old GRN syncs still
+    // carry a stale GRN UUID there even after the GRN→IGN migration.
     let ghost_cleaned = 0;
     if (entryIds.length) {
       const cleanup = await query(`
-        DELETE FROM material_tracker_loads main
-        WHERE main.entry_id = ANY($1::uuid[])
-          AND (main.ign_no IS NULL OR TRIM(main.ign_no) = '')
-          AND main.invoice_no IS NOT NULL AND TRIM(main.invoice_no) <> ''
-          AND EXISTS (
-            SELECT 1 FROM material_tracker_loads ref
-            WHERE ref.entry_id = main.entry_id
-              AND LOWER(TRIM(ref.invoice_no)) = LOWER(TRIM(main.invoice_no))
-              AND ref.ign_no IS NOT NULL AND TRIM(ref.ign_no) <> ''
-              AND ref.id <> main.id
-          )
+        WITH ghost_ids AS (
+          SELECT m.id
+          FROM material_tracker_loads m
+          WHERE m.entry_id = ANY($1::uuid[])
+            AND (m.ign_no IS NULL OR TRIM(m.ign_no) = '')
+            AND m.invoice_no IS NOT NULL AND TRIM(m.invoice_no) <> ''
+            AND EXISTS (
+              SELECT 1 FROM material_tracker_loads r
+              WHERE r.entry_id = m.entry_id
+                AND LOWER(TRIM(r.invoice_no)) = LOWER(TRIM(m.invoice_no))
+                AND r.ign_no IS NOT NULL AND TRIM(r.ign_no) <> ''
+                AND r.id <> m.id
+            )
+        )
+        DELETE FROM material_tracker_loads
+        WHERE id IN (SELECT id FROM ghost_ids)
         RETURNING id
       `, [entryIds]);
       ghost_cleaned = cleanup.rows.length;

@@ -418,10 +418,10 @@ function SyncModal({ materialType, projectId, onClose, onSynced }) {
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
           <button onClick={onClose} className="h-9 px-4 rounded-xl border border-slate-200 text-xs text-slate-600 hover:bg-slate-50">{step === 'done' ? 'Close' : 'Cancel'}</button>
-          {step === 'preview' && preview && (preview.loads_new > 0 || preview.pos_new > 0) && (
+          {step === 'preview' && preview && (
             <button onClick={() => { setStep('running'); runMut.mutate(); }} disabled={runMut.isPending}
               className="h-9 px-5 rounded-xl bg-yellow-500 text-white text-xs font-semibold hover:bg-yellow-600 disabled:opacity-50 flex items-center gap-2">
-              <Zap size={13} /> {runMut.isPending ? 'Importing…' : `Import ${preview.loads_new} load${preview.loads_new !== 1 ? 's' : ''}`}
+              <Zap size={13} /> {runMut.isPending ? 'Syncing…' : preview.loads_new > 0 ? `Import ${preview.loads_new} load${preview.loads_new !== 1 ? 's' : ''}` : 'Sync & Clean'}
             </button>
           )}
         </div>
