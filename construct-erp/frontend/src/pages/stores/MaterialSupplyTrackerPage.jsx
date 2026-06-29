@@ -2,17 +2,29 @@
 // Material Supply Tracker — end-to-end MR → PO → Delivery → Issue lifecycle
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useReactToPrint } from 'react-to-print';
 import {
   Package, Truck, CheckCircle2, Clock, AlertTriangle, XCircle,
   FileText, BarChart3, Search, X, ChevronDown, ChevronRight,
   RefreshCw, Download, Filter, TrendingUp, IndianRupee,
   ArrowRight, Circle, CheckCircle, Layers, ShoppingCart,
-  ClipboardList, Warehouse, Zap,
+  ClipboardList, Warehouse, Zap, Printer,
 } from 'lucide-react';
 import { supplyTrackerAPI, projectAPI } from '../../api/client';
 import { PageHeader, Theme } from '../../theme';
 import dayjs from 'dayjs';
 import { clsx } from 'clsx';
+
+function exportCSV(filename, headers, dataRows) {
+  const csv = [headers, ...dataRows]
+    .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ── Drag-to-scroll ────────────────────────────────────────────────────────────
 function useDragScroll() {
@@ -643,14 +655,31 @@ function TrackerTable({ rows, isLoading, onRowClick }) {
 // ── Summary Tab ───────────────────────────────────────────────────────────────
 function SummaryTab({ projectId }) {
   const [groupBy, setGroupBy] = useState('vendor');
+  const summaryPrintRef = useRef();
   const { data = [], isLoading } = useQuery({
     queryKey: ['supply-summary', projectId, groupBy],
     queryFn: () => supplyTrackerAPI.summary({ project_id: projectId || undefined, group_by: groupBy }).then(r => r.data?.data || []),
   });
 
+  const handlePrint = useReactToPrint({
+    contentRef: summaryPrintRef,
+    documentTitle: `Supply_Summary_${dayjs().format('YYYY-MM-DD')}`,
+    pageStyle: '@page { size: A4; margin: 10mm; }',
+  });
+
+  const handleExportCSV = () => {
+    const headers = ['Name', 'Items', 'Requested Qty', 'Ordered Qty', 'Received Qty', 'POs', 'GRNs', 'Supply %'];
+    const csvRows = data.map(r => [
+      r.label, r.item_count, n(r.requested_qty), n(r.ordered_qty),
+      n(r.received_qty), r.po_count, r.grn_count,
+      pct(r.received_qty, r.ordered_qty || r.requested_qty) + '%',
+    ]);
+    exportCSV(`Supply_Summary_${groupBy}_${dayjs().format('YYYY-MM-DD')}.csv`, headers, csvRows);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <label className="text-xs font-bold text-slate-500">Group by:</label>
         {['vendor', 'category', 'project'].map(g => (
           <button key={g} onClick={() => setGroupBy(g)}
@@ -659,40 +688,56 @@ function SummaryTab({ projectId }) {
             {g}
           </button>
         ))}
+        <div className="flex-1" />
+        <button onClick={handleExportCSV}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
+          <Download className="w-3.5 h-3.5" /> Export CSV
+        </button>
+        <button onClick={handlePrint}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+          <Printer className="w-3.5 h-3.5" /> Print PDF
+        </button>
       </div>
       {isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse" />)}</div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {['Name', 'Items', 'Requested Qty', 'Ordered Qty', 'Received Qty', 'POs', 'GRNs', 'Supply %'].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((r, i) => {
-                const supplyPct = pct(r.received_qty, r.ordered_qty || r.requested_qty);
-                return (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{r.label}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{r.item_count}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{n(r.requested_qty)}</td>
-                    <td className="px-4 py-2.5 text-blue-700 font-medium">{n(r.ordered_qty)}</td>
-                    <td className="px-4 py-2.5 text-emerald-700 font-medium">{n(r.received_qty)}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{r.po_count}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{r.grn_count}</td>
-                    <td className="px-4 py-2.5 w-32"><SupplyBar pct={supplyPct} /></td>
-                  </tr>
-                );
-              })}
-              {!data.length && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400 text-xs">No data</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div ref={summaryPrintRef}>
+          <div className="hidden print:block mb-4 text-center">
+            <div className="text-base font-bold">BCIM Engineering — Material Supply Summary</div>
+            <div className="text-sm">Grouped by: {groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}</div>
+            <div className="text-xs text-slate-500">Generated: {dayjs().format('DD MMM YYYY')}</div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Name', 'Items', 'Requested Qty', 'Ordered Qty', 'Received Qty', 'POs', 'GRNs', 'Supply %'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r, i) => {
+                  const supplyPct = pct(r.received_qty, r.ordered_qty || r.requested_qty);
+                  return (
+                    <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-2.5 font-medium text-slate-800">{r.label}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{r.item_count}</td>
+                      <td className="px-4 py-2.5 text-slate-700">{n(r.requested_qty)}</td>
+                      <td className="px-4 py-2.5 text-blue-700 font-medium">{n(r.ordered_qty)}</td>
+                      <td className="px-4 py-2.5 text-emerald-700 font-medium">{n(r.received_qty)}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{r.po_count}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{r.grn_count}</td>
+                      <td className="px-4 py-2.5 w-32"><SupplyBar pct={supplyPct} /></td>
+                    </tr>
+                  );
+                })}
+                {!data.length && (
+                  <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400 text-xs">No data</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -735,6 +780,25 @@ export default function MaterialSupplyTrackerPage() {
   const totalCount = trackerResp?.total ?? null;
   const isTruncated = totalCount !== null && totalCount > rows.length;
 
+  const trackerPrintRef = useRef();
+  const handlePrintTracker = useReactToPrint({
+    contentRef: trackerPrintRef,
+    documentTitle: `Supply_Tracker_${dayjs().format('YYYY-MM-DD')}`,
+    pageStyle: '@page { size: A4 landscape; margin: 8mm; }',
+  });
+
+  const exportTrackerCSV = () => {
+    const headers = ['MR Number', 'Date', 'Material', 'Project', 'Unit', 'Req Qty', 'Ordered', 'Received', 'Balance', 'Supply %', 'Status', 'PO Number', 'Vendor', 'Exp. Delivery', 'Priority'];
+    const csvRows = rows.map(r => [
+      r.mr_number, fmtDate(r.mr_date), r.material_name, r.project_name, r.unit,
+      n(r.requested_qty), n(r.ordered_qty || 0), n(r.received_qty), n(r.balance_qty),
+      r.supply_pct + '%', r.overall_status,
+      r.po_number || '', r.vendor_name || '',
+      fmtDate(r.expected_delivery_date), r.priority || '',
+    ]);
+    exportCSV(`Supply_Tracker_${dayjs().format('YYYY-MM-DD')}.csv`, headers, csvRows);
+  };
+
   const handleKpiClick = useCallback((statusFilter) => {
     setKpiFilter(prev => prev === statusFilter ? null : statusFilter);
     setTab('tracker');
@@ -765,6 +829,18 @@ export default function MaterialSupplyTrackerPage() {
         breadcrumbs={[{ label: 'Stores' }, { label: 'Material Supply Tracker' }]}
         actions={
           <div className="flex items-center gap-2">
+            {tab === 'tracker' && (
+              <>
+                <button onClick={exportTrackerCSV}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-white/15 text-white hover:bg-white/25 border border-white/20">
+                  <Download className="w-3.5 h-3.5" /> Export CSV
+                </button>
+                <button onClick={handlePrintTracker}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-white/15 text-white hover:bg-white/25 border border-white/20">
+                  <Printer className="w-3.5 h-3.5" /> Print
+                </button>
+              </>
+            )}
             <button onClick={() => refetch()}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-white/15 text-white hover:bg-white/25 border border-white/20">
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
@@ -830,7 +906,13 @@ export default function MaterialSupplyTrackerPage() {
                 </span>
               </div>
             )}
-            <TrackerTable rows={rows} isLoading={isLoading} onRowClick={setDetail} />
+            <div ref={trackerPrintRef}>
+              <div className="hidden print:block mb-4 text-center">
+                <div className="text-base font-bold">BCIM Engineering — Material Supply Tracker</div>
+                <div className="text-xs text-slate-500">Generated: {dayjs().format('DD MMM YYYY')}</div>
+              </div>
+              <TrackerTable rows={rows} isLoading={isLoading} onRowClick={setDetail} />
+            </div>
           </>
         )}
         {tab === 'summary' && (
