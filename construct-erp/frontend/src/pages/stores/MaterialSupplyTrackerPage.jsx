@@ -331,14 +331,13 @@ function FiltersPanel({ filters, setFilters, projects, onReset }) {
 // ── Main Tracker Table ────────────────────────────────────────────────────────
 function TrackerTable({ rows, isLoading, onRowClick }) {
   const [expanded, setExpanded] = useState(null);
-
   const toggle = (id) => setExpanded(e => (e === id ? null : id));
 
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-12 bg-slate-50 border-b border-slate-100 animate-pulse mx-4 my-2 rounded-lg" />
+          <div key={i} className="h-10 bg-slate-50 border-b border-slate-100 animate-pulse mx-4 my-1.5 rounded-lg" />
         ))}
       </div>
     );
@@ -354,133 +353,137 @@ function TrackerTable({ rows, isLoading, onRowClick }) {
     );
   }
 
+  // Compact 10-column layout — expand row for extra detail
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="bg-slate-50 border-b border-slate-200">
-            <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider w-8" />
-            {[
-              'MR Number', 'MR Date', 'Project', 'Material', 'Category',
-              'UOM', 'Req Qty', 'Ordered', 'Received', 'Balance',
-              'PO Number', 'Vendor', 'Exp. Delivery', 'Status', 'Priority', 'Supply %',
-            ].map(h => (
-              <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
-            ))}
-            <th className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => {
-            const isExp = expanded === row.item_id;
-            const overdue = row.is_overdue;
-            return (
-              <React.Fragment key={row.item_id || idx}>
-                <tr
-                  className={clsx(
-                    'border-b border-slate-100 hover:bg-slate-50/60 cursor-pointer transition-colors',
-                    overdue && 'bg-red-50/40 hover:bg-red-50/60',
-                    isExp && 'bg-blue-50/30',
-                  )}
-                  onClick={() => toggle(row.item_id)}
-                >
-                  <td className="px-3 py-2.5">
-                    <ChevronRight className={clsx('w-3.5 h-3.5 text-slate-400 transition-transform', isExp && 'rotate-90')} />
-                  </td>
-                  <td className="px-3 py-2.5 font-mono font-bold text-blue-700 whitespace-nowrap">{row.mr_number}</td>
-                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(row.mr_date)}</td>
-                  <td className="px-3 py-2.5 text-slate-600 max-w-[120px] truncate" title={row.project_name}>{row.project_name}</td>
-                  <td className="px-3 py-2.5 font-medium text-slate-800 max-w-[160px] truncate" title={row.material_name}>
-                    {row.is_overdue && <AlertTriangle className="w-3 h-3 text-red-500 inline mr-1" />}
-                    {row.material_name}
-                    {row.item_code && <span className="text-slate-400 ml-1">({row.item_code})</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500">{row.material_category || '—'}</td>
-                  <td className="px-3 py-2.5 text-slate-500">{row.unit}</td>
-                  <td className="px-3 py-2.5 font-medium text-slate-700">{n(row.requested_qty)}</td>
-                  <td className="px-3 py-2.5 font-medium text-blue-700">{row.ordered_qty ? n(row.ordered_qty) : '—'}</td>
-                  <td className="px-3 py-2.5 font-medium text-emerald-700">{n(row.received_qty)}</td>
-                  <td className={clsx('px-3 py-2.5 font-bold', row.balance_qty > 0 ? 'text-red-600' : 'text-emerald-600')}>
-                    {n(row.balance_qty)}
-                  </td>
-                  <td className="px-3 py-2.5 font-mono text-slate-600 whitespace-nowrap">{row.po_number || '—'}</td>
-                  <td className="px-3 py-2.5 text-slate-600 max-w-[120px] truncate" title={row.vendor_name}>{row.vendor_name || '—'}</td>
-                  <td className={clsx('px-3 py-2.5 whitespace-nowrap', overdue ? 'text-red-600 font-bold' : 'text-slate-500')}>
-                    {fmtDate(row.expected_delivery_date)}
-                  </td>
-                  <td className="px-3 py-2.5"><StatusBadge status={row.overall_status} /></td>
-                  <td className="px-3 py-2.5">
-                    {row.priority && (
-                      <span className={clsx('px-2 py-0.5 rounded-full text-[10px] font-bold capitalize', PRIORITY_CFG[row.priority] || PRIORITY_CFG.low)}>
-                        {row.priority}
-                      </span>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs min-w-[900px]">
+          <thead>
+            <tr className="bg-slate-800 text-white">
+              <th className="w-7 px-2 py-2" />
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">MR Number</th>
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider">Material</th>
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">UOM</th>
+              <th className="px-2 py-2 text-right text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Req Qty</th>
+              <th className="px-2 py-2 text-right text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Ordered</th>
+              <th className="px-2 py-2 text-right text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Received</th>
+              <th className="px-2 py-2 text-right text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Balance</th>
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Supply %</th>
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Status</th>
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">PO / Vendor</th>
+              <th className="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Exp. Delivery</th>
+              <th className="px-2 py-2 w-16" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => {
+              const isExp = expanded === (row.item_id || idx);
+              const overdue = row.is_overdue;
+              const uid = row.item_id || idx;
+              return (
+                <React.Fragment key={uid}>
+                  <tr
+                    className={clsx(
+                      'border-b border-slate-100 cursor-pointer transition-colors',
+                      overdue ? 'bg-red-50/50 hover:bg-red-50' : idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/40 hover:bg-slate-50',
+                      isExp && '!bg-blue-50/40',
                     )}
-                  </td>
-                  <td className="px-3 py-2.5 w-28">
-                    <SupplyBar pct={row.supply_pct} overdue={overdue} />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <button
-                      onClick={e => { e.stopPropagation(); onRowClick(row); }}
-                      className="px-2 py-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors whitespace-nowrap"
-                    >
-                      Details →
-                    </button>
-                  </td>
-                </tr>
-
-                {/* Expanded inline detail */}
-                {isExp && (
-                  <tr className="bg-blue-50/20 border-b border-blue-100">
-                    <td colSpan={18} className="px-6 py-3">
-                      <div className="grid grid-cols-3 md:grid-cols-6 gap-3 text-xs">
-                        {[
-                          ['MR Date', fmtDate(row.mr_date)],
-                          ['Required By', fmtDate(row.required_date)],
-                          ['Raised By', row.raised_by || '—'],
-                          ['Department', row.department || '—'],
-                          ['Cost Centre', row.cost_center || '—'],
-                          ['Stock (Proj.)', row.stock_qty > 0 ? `${n(row.stock_qty)} ${row.unit}` : 'No stock'],
-                          ['Approved Qty', row.approved_qty ? n(row.approved_qty) : '—'],
-                          ['GRN Count', row.grn_count || '0'],
-                          ['Actual Delivery', fmtDate(row.actual_delivery_date)],
-                          ['Issued to Site', row.issued_qty > 0 ? `${n(row.issued_qty)} ${row.unit}` : '—'],
-                          ['Unit Rate', row.unit_rate ? `₹${inr(row.unit_rate)}` : '—'],
-                          ['Vendor Phone', row.vendor_phone || '—'],
-                        ].map(([k, v]) => (
-                          <div key={k}>
-                            <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">{k}</div>
-                            <div className="font-medium text-slate-700">{v}</div>
-                          </div>
-                        ))}
+                    onClick={() => toggle(uid)}
+                  >
+                    <td className="px-2 py-2 text-center">
+                      <ChevronRight className={clsx('w-3 h-3 text-slate-400 transition-transform', isExp && 'rotate-90')} />
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="font-mono font-bold text-blue-700 text-[11px] whitespace-nowrap">{row.mr_number}</div>
+                      <div className="text-[9px] text-slate-400">{fmtDate(row.mr_date)}</div>
+                    </td>
+                    <td className="px-2 py-2 max-w-[180px]">
+                      <div className="font-medium text-slate-800 text-[11px] truncate" title={row.material_name}>
+                        {overdue && <AlertTriangle className="w-2.5 h-2.5 text-red-500 inline mr-0.5" />}
+                        {row.material_name}
                       </div>
-                      {row.mr_remarks && (
-                        <div className="mt-2 text-[11px] text-slate-500 italic bg-white px-3 py-1.5 rounded-lg border border-slate-100">
-                          Remarks: {row.mr_remarks}
-                        </div>
-                      )}
+                      <div className="text-[9px] text-slate-400 truncate">{row.project_name}</div>
+                    </td>
+                    <td className="px-2 py-2 text-slate-500 text-[11px]">{row.unit}</td>
+                    <td className="px-2 py-2 text-right font-medium text-slate-700 text-[11px]">{n(row.requested_qty)}</td>
+                    <td className="px-2 py-2 text-right font-medium text-blue-700 text-[11px]">{row.ordered_qty ? n(row.ordered_qty) : <span className="text-slate-300">—</span>}</td>
+                    <td className="px-2 py-2 text-right font-medium text-emerald-700 text-[11px]">{n(row.received_qty)}</td>
+                    <td className={clsx('px-2 py-2 text-right font-bold text-[11px]', row.balance_qty > 0 ? 'text-red-600' : 'text-emerald-600')}>
+                      {n(row.balance_qty)}
+                    </td>
+                    <td className="px-2 py-2 w-20">
+                      <SupplyBar pct={row.supply_pct} overdue={overdue} />
+                    </td>
+                    <td className="px-2 py-2"><StatusBadge status={row.overall_status} /></td>
+                    <td className="px-2 py-2 max-w-[130px]">
+                      {row.po_number
+                        ? <div className="font-mono text-[10px] text-slate-700 truncate">{row.po_number}</div>
+                        : <span className="text-slate-300 text-[10px]">No PO</span>
+                      }
+                      {row.vendor_name && <div className="text-[9px] text-slate-400 truncate">{row.vendor_name}</div>}
+                    </td>
+                    <td className={clsx('px-2 py-2 text-[11px] whitespace-nowrap', overdue ? 'text-red-600 font-bold' : 'text-slate-500')}>
+                      {fmtDate(row.expected_delivery_date)}
+                    </td>
+                    <td className="px-2 py-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); onRowClick(row); }}
+                        className="px-1.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-blue-100 rounded transition-colors whitespace-nowrap"
+                      >
+                        Detail
+                      </button>
                     </td>
                   </tr>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-        {rows.length > 0 && (
-          <tfoot>
-            <tr className="bg-slate-800 text-white font-bold text-xs">
-              <td colSpan={7} className="px-3 py-2 uppercase text-slate-300 text-[10px]">
-                TOTAL — {rows.length} items
-              </td>
-              <td className="px-3 py-2">{n(rows.reduce((s, r) => s + parseFloat(r.requested_qty || 0), 0))}</td>
-              <td className="px-3 py-2 text-blue-300">{n(rows.reduce((s, r) => s + parseFloat(r.ordered_qty || 0), 0))}</td>
-              <td className="px-3 py-2 text-emerald-300">{n(rows.reduce((s, r) => s + parseFloat(r.received_qty || 0), 0))}</td>
-              <td className="px-3 py-2 text-red-300">{n(rows.reduce((s, r) => s + parseFloat(r.balance_qty || 0), 0))}</td>
-              <td colSpan={7} />
-            </tr>
-          </tfoot>
-        )}
-      </table>
+
+                  {/* Expanded inline row */}
+                  {isExp && (
+                    <tr className="border-b border-blue-100 bg-blue-50/30">
+                      <td colSpan={13} className="px-4 py-3">
+                        <div className="grid grid-cols-4 md:grid-cols-8 gap-3 text-[11px]">
+                          {[
+                            ['MR Date', fmtDate(row.mr_date)],
+                            ['Required By', fmtDate(row.required_date)],
+                            ['Raised By', row.raised_by || '—'],
+                            ['Department', row.department || '—'],
+                            ['Category', row.material_category || '—'],
+                            ['GRN Count', row.grn_count || '0'],
+                            ['Actual Delivery', fmtDate(row.actual_delivery_date)],
+                            ['Unit Rate', row.unit_rate ? `₹${inr(row.unit_rate)}` : '—'],
+                          ].map(([k, v]) => (
+                            <div key={k}>
+                              <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">{k}</div>
+                              <div className="font-medium text-slate-700">{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {row.mr_remarks && (
+                          <div className="mt-2 text-[11px] text-slate-500 italic bg-white px-3 py-1.5 rounded-lg border border-slate-100">
+                            Remarks: {row.mr_remarks}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot>
+              <tr className="bg-slate-800 text-white font-bold text-[11px]">
+                <td colSpan={4} className="px-2 py-2 text-slate-300 text-[10px] uppercase">
+                  {rows.length} items total
+                </td>
+                <td className="px-2 py-2 text-right">{n(rows.reduce((s, r) => s + parseFloat(r.requested_qty || 0), 0))}</td>
+                <td className="px-2 py-2 text-right text-blue-300">{n(rows.reduce((s, r) => s + parseFloat(r.ordered_qty || 0), 0))}</td>
+                <td className="px-2 py-2 text-right text-emerald-300">{n(rows.reduce((s, r) => s + parseFloat(r.received_qty || 0), 0))}</td>
+                <td className="px-2 py-2 text-right text-red-300">{n(rows.reduce((s, r) => s + parseFloat(r.balance_qty || 0), 0))}</td>
+                <td colSpan={5} />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
     </div>
   );
 }
