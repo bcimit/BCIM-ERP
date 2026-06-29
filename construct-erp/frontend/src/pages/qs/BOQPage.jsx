@@ -124,38 +124,48 @@ export default function BOQPage() {
   });
 
   // ── Derived data ──────────────────────────────────────────────────────────────
+  // Use chapter_name grouping only when items have multiple distinct chapter names.
+  // If all items share one name (e.g. the project title), fall back to chapter_no.
+  const useNameGrouping = useMemo(() => {
+    const names = new Set(boqItems.map(i => normName(i.chapter_name)).filter(Boolean));
+    return names.size > 1;
+  }, [boqItems]);
+
+  const getKey   = (it) => useNameGrouping ? chKey(it) : (it.chapter_no || '0');
+  const getLabel = (it) => useNameGrouping ? chLabel(it) : (it.chapter_name && it.chapter_no ? `${it.chapter_no} — ${toTitleCase((it.chapter_name || '').trim())}` : it.chapter_no ? `Chapter ${it.chapter_no}` : 'Miscellaneous');
+
   const filtered = useMemo(() => {
     return boqItems.filter(i => {
       const matchSearch = !search ||
         i.description?.toLowerCase().includes(search.toLowerCase()) ||
         (i.item_no || '').toLowerCase().includes(search.toLowerCase()) ||
         (i.chapter_name || '').toLowerCase().includes(search.toLowerCase());
-      const matchChapter = filterChapter === 'all' || chKey(i) === filterChapter;
+      const matchChapter = filterChapter === 'all' || getKey(i) === filterChapter;
       return matchSearch && matchChapter;
     });
-  }, [boqItems, search, filterChapter]);
+  }, [boqItems, search, filterChapter, useNameGrouping]);
 
   const chapters = useMemo(() => {
     const map = {};
     filtered.forEach(item => {
-      const key = chKey(item);
-      if (!map[key]) map[key] = { key, name: chLabel(item), items: [], sort: Infinity };
+      const key = getKey(item);
+      if (!map[key]) map[key] = { key, name: getLabel(item), items: [], sort: Infinity };
       map[key].items.push(item);
       const sk = toNum(item.chapter_no) || toNum(item.item_no);
       if (sk && sk < map[key].sort) map[key].sort = sk;
     });
     return Object.values(map).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
-  }, [filtered]);
+  }, [filtered, useNameGrouping]);
 
   const allChapters = useMemo(() => {
     const seen = new Set();
     const list = [];
     boqItems.forEach(i => {
-      const k = chKey(i);
-      if (!seen.has(k)) { seen.add(k); list.push({ key: k, label: chLabel(i) }); }
+      const k = getKey(i);
+      if (!seen.has(k)) { seen.add(k); list.push({ key: k, label: getLabel(i) }); }
     });
     return list.sort((a, b) => a.label.localeCompare(b.label));
-  }, [boqItems]);
+  }, [boqItems, useNameGrouping]);
 
   const totals = useMemo(() => {
     const contract = filtered.reduce((s, i) => s + itemAmount(i), 0);
