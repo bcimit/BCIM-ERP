@@ -25,6 +25,13 @@ const num = (v, d = 3) => parseFloat(v || 0).toLocaleString('en-IN', { minimumFr
 const pct = (v) => `${Math.min(100, parseFloat(v || 0)).toFixed(1)}%`;
 const itemAmount = (i) => parseFloat(i.amount) || (parseFloat(i.quantity || 0) * parseFloat(i.rate || 0));
 
+// ── Chapter grouping helpers (group by chapter_name, not chapter_no) ──────────
+const toNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+const toTitleCase = (s) => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+const normName = (s) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const chKey   = (it) => { const n = normName(it.chapter_name); return n || `__no:${it.chapter_no || 'ZZZ'}`; };
+const chLabel = (it) => { const n = (it.chapter_name || '').trim().replace(/\s+/g, ' '); return n ? toTitleCase(n) : (it.chapter_no ? `Chapter ${it.chapter_no}` : 'Miscellaneous'); };
+
 import { CONSTRUCTION_UNITS as UNITS } from '../../constants/units';
 
 const EMPTY_FORM = {
@@ -123,7 +130,7 @@ export default function BOQPage() {
         i.description?.toLowerCase().includes(search.toLowerCase()) ||
         (i.item_no || '').toLowerCase().includes(search.toLowerCase()) ||
         (i.chapter_name || '').toLowerCase().includes(search.toLowerCase());
-      const matchChapter = filterChapter === 'all' || i.chapter_no === filterChapter;
+      const matchChapter = filterChapter === 'all' || chKey(i) === filterChapter;
       return matchSearch && matchChapter;
     });
   }, [boqItems, search, filterChapter]);
@@ -131,19 +138,23 @@ export default function BOQPage() {
   const chapters = useMemo(() => {
     const map = {};
     filtered.forEach(item => {
-      const key = item.chapter_no || '0';
-      if (!map[key]) map[key] = { chapter_no: item.chapter_no, chapter_name: item.chapter_name, items: [] };
+      const key = chKey(item);
+      if (!map[key]) map[key] = { key, name: chLabel(item), items: [], sort: Infinity };
       map[key].items.push(item);
+      const sk = toNum(item.chapter_no) || toNum(item.item_no);
+      if (sk && sk < map[key].sort) map[key].sort = sk;
     });
-    const toNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
-    return Object.values(map).sort((a, b) =>
-      toNum(a.chapter_no) - toNum(b.chapter_no) || String(a.chapter_no).localeCompare(String(b.chapter_no))
-    );
+    return Object.values(map).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
   }, [filtered]);
 
   const allChapters = useMemo(() => {
-    const set = new Set(boqItems.map(i => i.chapter_no).filter(Boolean));
-    return Array.from(set).sort();
+    const seen = new Set();
+    const list = [];
+    boqItems.forEach(i => {
+      const k = chKey(i);
+      if (!seen.has(k)) { seen.add(k); list.push({ key: k, label: chLabel(i) }); }
+    });
+    return list.sort((a, b) => a.label.localeCompare(b.label));
   }, [boqItems]);
 
   const totals = useMemo(() => {
@@ -418,14 +429,14 @@ export default function BOQPage() {
                     className="pl-10 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-400 transition-all shadow-sm appearance-none"
                   >
                     <option value="all">All Chapters</option>
-                    {allChapters.map(c => <option key={c} value={c}>Chapter {c}</option>)}
+                    {allChapters.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                   </select>
                 </div>
                 <button
                   onClick={() => setCollapsed(prev => {
-                    const allOpen = chapters.every(c => !prev[c.chapter_no]);
+                    const allOpen = chapters.every(c => !prev[c.key]);
                     const next = {};
-                    if (allOpen) chapters.forEach(c => { next[c.chapter_no] = true; });
+                    if (allOpen) chapters.forEach(c => { next[c.key] = true; });
                     return next;
                   })}
                   className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-900 text-[10px] font-medium uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-all shadow-sm whitespace-nowrap"
@@ -440,18 +451,18 @@ export default function BOQPage() {
               ) : (
                 <div className="space-y-3">
                   {chapters.map((ch) => {
-                    const isOpen = !collapsed[ch.chapter_no];
+                    const isOpen = !collapsed[ch.key];
                     const chContract  = ch.items.reduce((s, i) => s + itemAmount(i), 0);
                     const chExecuted  = ch.items.reduce((s, i) => s + parseFloat(i.executed_qty || 0) * parseFloat(i.rate || 0), 0);
                     const chPct       = chContract > 0 ? (chExecuted / chContract) * 100 : 0;
                     const isOverrun   = chExecuted > chContract && chContract > 0;
 
                     return (
-                      <div key={ch.chapter_no} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                      <div key={ch.key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
 
                         {/* Chapter Header */}
                         <button
-                          onClick={() => setCollapsed(p => ({ ...p, [ch.chapter_no]: !p[ch.chapter_no] }))}
+                          onClick={() => setCollapsed(p => ({ ...p, [ch.key]: !p[ch.key] }))}
                           className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors text-left"
                         >
                           <div className="flex items-center gap-3">
@@ -463,8 +474,7 @@ export default function BOQPage() {
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="text-[11px] font-medium text-slate-900 font-medium uppercase tracking-widest">Ch. {ch.chapter_no}</span>
-                                <span className="text-sm font-medium text-slate-900 uppercase tracking-tight">{ch.chapter_name}</span>
+                                <span className="text-sm font-bold text-slate-900 uppercase tracking-tight">{ch.name}</span>
                                 {isOverrun && (
                                   <span className="flex items-center gap-1 px-2 py-0.5 bg-red-50 border border-red-200 text-red-600 text-[9px] font-medium uppercase rounded-full">
                                     <AlertTriangle className="w-2.5 h-2.5" /> Overrun
@@ -629,7 +639,7 @@ export default function BOQPage() {
                               <tfoot>
                                 <tr className="bg-slate-50 border-t border-slate-200">
                                   <td colSpan={6} className="px-4 py-2.5 text-[10px] font-medium text-slate-900 font-medium uppercase tracking-widest">
-                                    Chapter {ch.chapter_no} Subtotal — {ch.items.length} items
+                                    {ch.name} Subtotal — {ch.items.length} items
                                   </td>
                                   <td className="px-4 py-2.5 text-right bg-indigo-50/40">
                                     <span className="text-[12px] font-medium font-mono text-slate-900">{inr(chContract)}</span>
