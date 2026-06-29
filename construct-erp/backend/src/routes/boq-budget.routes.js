@@ -334,12 +334,11 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       WHERE tb.project_id=$1 AND tb.workflow_status='paid' AND li.cost_head IS NOT NULL
       GROUP BY li.cost_head`, [project_id]);
 
-    // Advances
+    // SC advances (Sub Con)
     const advActuals = await query(`
-      SELECT 'Sub Con' AS cost_head, SUM(paid_amount) AS actual
-      FROM tqs_advance_vouchers
-      WHERE project_id=$1 AND status IN ('issued','partial','recovered')
-        AND is_deleted=false AND paid_amount>0`, [project_id]);
+      SELECT 'Sub Con' AS cost_head, SUM(amount) AS actual
+      FROM sc_advances
+      WHERE project_id=$1 AND status NOT IN ('cancelled')`, [project_id]);
 
     // Petty cash
     const spcActuals = await query(`
@@ -407,6 +406,41 @@ router.put('/:project_id/costhead-budget', async (req, res) => {
       [project_id, cost_head, parseFloat(budget_amount) || 0, req.user.id]
     );
     res.json({ data: r.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /boq-budget/:project_id/bulk-costhead-budget
+// Accepts array of {cost_head, budget_amount} and upserts all at once.
+router.post('/:project_id/bulk-costhead-budget', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const { entries } = req.body;
+    if (!Array.isArray(entries) || !entries.length) {
+      return res.status(400).json({ error: 'entries array required' });
+    }
+    const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
+    if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
+    if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
+
+    const saved = await withTransaction(async (client) => {
+      const results = [];
+      for (const e of entries) {
+        if (!e.cost_head) continue;
+        const r = await client.query(`
+          INSERT INTO project_costhead_budgets (project_id, cost_head, budget_amount, created_by)
+          VALUES ($1,$2,$3,$4)
+          ON CONFLICT (project_id, cost_head)
+          DO UPDATE SET budget_amount=$3, updated_at=NOW()
+          RETURNING *`,
+          [project_id, e.cost_head, parseFloat(e.budget_amount) || 0, req.user.id]
+        );
+        results.push(r.rows[0]);
+      }
+      return results;
+    });
+    res.json({ data: saved, count: saved.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
