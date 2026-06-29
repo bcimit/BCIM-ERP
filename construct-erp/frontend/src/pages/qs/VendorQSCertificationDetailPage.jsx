@@ -24,7 +24,7 @@ const dedBg  = '#FFFBF0';
 const netBg  = '#EAF1FB';
 
 const T = {
-  page:     { fontFamily: "'Tinos','Times New Roman',Times,serif", fontSize: '11px', color: '#0A0A0A', fontWeight: '500' },
+  page:     { fontFamily: "'Times New Roman',Times,serif", fontSize: '11px', color: '#0A0A0A', fontWeight: '500' },
   sheet:    { width: '100%', background: '#fff', padding: '4mm 3mm 6mm 3mm', boxSizing: 'border-box', pageBreakAfter: 'always' },
   masthead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `3px double ${navy}`, paddingBottom: '10px', marginBottom: '10px' },
   logoArea: { display: 'flex', alignItems: 'center', gap: '12px' },
@@ -42,7 +42,7 @@ const T = {
   th:       { background: navy, color: '#fff', padding: '4px 3px', textAlign: 'center', border: `1px solid #8AAAD0`, fontWeight: 'bold', verticalAlign: 'middle', letterSpacing: '0.2px', fontSize: '9px', lineHeight: '1.3' },
   td:       { padding: '3px 4px', border: '1px solid #9AB0CC', verticalAlign: 'top', lineHeight: '1.4', fontWeight: '500', color: '#0A0A0A', wordBreak: 'break-word' },
   tdC:      { padding: '3px 4px', border: '1px solid #9AB0CC', textAlign: 'center', verticalAlign: 'middle', fontWeight: '500', color: '#0A0A0A' },
-  tdR:      { padding: '3px 4px', border: '1px solid #9AB0CC', textAlign: 'right', verticalAlign: 'middle', fontFamily: "'Courier New',monospace", fontSize: '9px', fontWeight: '600', color: '#0A0A0A' },
+  tdR:      { padding: '3px 4px', border: '1px solid #9AB0CC', textAlign: 'right', verticalAlign: 'middle', fontFamily: "'Times New Roman',Times,serif", fontSize: '9px', fontWeight: '600', color: '#0A0A0A' },
   totRow:   { background: '#D6E6F8', fontWeight: 'bold' },
   netRow:   { background: navy, color: '#fff', fontWeight: 'bold' },
   dedRow:   { background: dedBg },
@@ -61,6 +61,7 @@ const INR   = (v) => v == null ? '—' : '₹ ' + Math.abs(Number(v)).toLocaleSt
 const raw   = (v) => v == null ? '—' : Math.abs(Number(v)).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 const inr   = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n     = (v) => Number(v || 0);
+const fq    = (v) => { const x = parseFloat(n(v).toFixed(3)); return x || '—'; }; // qty: 3dp, no trailing-zero noise
 const fmt   = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 const fmtSh = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
@@ -253,16 +254,16 @@ function AbstractSheet({ cert }) {
                 <td style={T.tdC}>{raBillNo}</td>
                 <td style={{...T.td, whiteSpace:'pre-wrap', lineHeight:'1.5'}}>{it.description}</td>
                 <td style={T.tdC}>{it.unit}</td>
-                <td style={T.tdR}>{n(it.order_qty) || '—'}</td>
+                <td style={T.tdR}>{fq(it.order_qty)}</td>
                 <td style={T.tdR}>{raw(it.order_rate)}</td>
                 <td style={T.tdR}>{raw(orderAmt)}</td>
-                <td style={T.tdR}>{n(it.inv_prev_qty) || '—'}</td>
-                <td style={T.tdR}>{n(it.inv_pres_qty) || '—'}</td>
+                <td style={T.tdR}>{fq(it.inv_prev_qty)}</td>
+                <td style={T.tdR}>{fq(it.inv_pres_qty)}</td>
                 <td style={T.tdR}>{raw(invAmt)}</td>
-                <td style={T.tdR}>{n(it.qs_prev_qty) || '—'}</td>
-                <td style={T.tdR}>{n(it.qs_pres_qty) || '—'}</td>
+                <td style={T.tdR}>{fq(it.qs_prev_qty)}</td>
+                <td style={T.tdR}>{fq(it.qs_pres_qty)}</td>
                 <td style={T.tdR}>{raw(qsAmt)}</td>
-                <td style={T.tdR}>{balQty || '—'}</td>
+                <td style={T.tdR}>{fq(balQty)}</td>
                 <td style={T.tdR}>{raw(balAmt)}</td>
               </tr>
             );
