@@ -521,11 +521,14 @@ router.delete('/:id/loads/:loadId', authorize(...WRITE_ROLES), async (req, res) 
 // ── Material match rules ─────────────────────────────────────────────────────
 // cement   = bulk cement we purchase (OPC/PPC bags/bulk) — exclude concrete items
 //            that merely contain the word "cement" (PCC / RCC / cement concrete).
-// concrete = external ready-mix concrete (RMC) bought from outside suppliers.
+// concrete = external SCP / RMC ready-mix concrete only.
+//            Deliberately does NOT include bare 'concrete' because that also matches
+//            concrete tools (drill bits, grinding wheels, chipping machines, etc.).
+//            Only SCP (Self-Compacting Pumped) and explicit RMC terms qualify.
 const MATERIAL_MATCH = {
   cement:   { include: ['cement', 'opc', 'ppc'],
               exclude: ['concrete', 'rmc', 'ready mix', 'ready-mix', 'pcc', 'rcc'] },
-  concrete: { include: ['concrete', 'rmc', 'ready mix', 'ready-mix'],
+  concrete: { include: ['scp', 'rmc', 'ready mix', 'ready-mix', 'ready mixed'],
               exclude: [] },
   steel:    { include: ['steel', 'tmt', 'rebar', 'ms rod', 'reinforcement'],
               exclude: [] },
@@ -940,7 +943,34 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
       ign_removed = ignCleanup.rows.length;
     }
 
-    res.json({ data: { entries_created, loads_created, ghost_cleaned, ign_removed, total_pos: pos.rows.length } });
+    // Remove tracker entries that no longer match the material filter (e.g. concrete tools
+    // that were pulled in by the old broad 'concrete' keyword). Only deletes entries that
+    // have zero loads — entries with actual deliveries are left for manual review.
+    let stale_removed = 0;
+    if (entryIds.length) {
+      const mcStale = matCond(material_type, 'pi', 'material_name', 2);
+      const staleCleanup = await query(`
+        WITH non_matching AS (
+          SELECT e.id
+          FROM material_tracker_entries e
+          WHERE e.id = ANY($1::uuid[])
+            AND NOT EXISTS (
+              SELECT 1 FROM po_items pi
+              WHERE pi.po_id = e.po_id
+                AND ${mcStale.sql}
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM material_tracker_loads l WHERE l.entry_id = e.id
+            )
+        )
+        DELETE FROM material_tracker_entries
+        WHERE id IN (SELECT id FROM non_matching)
+        RETURNING id
+      `, [entryIds, ...mcStale.params]);
+      stale_removed = staleCleanup.rows.length;
+    }
+
+    res.json({ data: { entries_created, loads_created, ghost_cleaned, ign_removed, stale_removed, total_pos: pos.rows.length } });
   } catch (err) {
     console.error('[MaterialTracker] auto-import run error:', err);
     res.status(500).json({ error: err.message });
