@@ -1316,6 +1316,16 @@ export default function MRSPage() {
 
   return (
     <>
+    {/* Re-enable a visible horizontal scrollbar for the requisitions table.
+        Overrides the Layout's global `.overflow-x-auto::-webkit-scrollbar { height:0 }`
+        via higher specificity (element + class) so all columns stay reachable. */}
+    <style>{`
+      div.mrs-hscroll { scrollbar-width: thin; scrollbar-color: #94a3b8 transparent; }
+      div.mrs-hscroll::-webkit-scrollbar { height: 10px; }
+      div.mrs-hscroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+      div.mrs-hscroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+      div.mrs-hscroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    `}</style>
     <div style={{ background: Theme.pageBg, minHeight: '100vh' }}>
 
       <PageHeader
@@ -1448,7 +1458,7 @@ export default function MRSPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto mrs-hscroll">
             <table className="w-full text-sm min-w-[1180px]">
               <thead>
                 <tr className="bg-white border-b border-slate-100">

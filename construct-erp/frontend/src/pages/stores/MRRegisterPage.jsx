@@ -210,6 +210,14 @@ export default function MRRegisterPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Visible horizontal scrollbar for wide register tables (beats Layout's global height:0 rule) */}
+      <style>{`
+        div.mrs-hscroll { scrollbar-width: thin; scrollbar-color: #94a3b8 transparent; }
+        div.mrs-hscroll::-webkit-scrollbar { height: 10px; }
+        div.mrs-hscroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
+        div.mrs-hscroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        div.mrs-hscroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
       {/* ── Header ── */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -312,7 +320,7 @@ export default function MRRegisterPage() {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mrs-hscroll">
 
               {/* ── Line Item Tracking ── */}
               {tab === 'items' && (
