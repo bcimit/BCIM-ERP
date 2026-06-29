@@ -1,14 +1,18 @@
 // src/pages/qs/BOQBudgetBreakdownPage.jsx — Master-detail BOQ budget allocation
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useReactToPrint } from 'react-to-print';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import {
   Percent, IndianRupee, AlertTriangle, ChevronRight, ChevronDown,
-  Search, Layers, CheckCircle2, Wallet,
+  Search, Layers, CheckCircle2, Wallet, Printer, LayoutList, FileText,
 } from 'lucide-react';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import { boqBudgetAPI, projectAPI } from '../../api/client';
+import BOQSummaryPrintTemplate from './BOQSummaryPrintTemplate';
+
+const GST_PCT = 18;
 
 const inr  = (v) => `₹${(parseFloat(v) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 const inr2 = (v) => `₹${(parseFloat(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -222,6 +226,49 @@ export default function BOQBudgetBreakdownPage() {
 
   const toggle = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
 
+  // ── BOQ Summary rollup (chapter-level Bill Value vs Budgeted value) ───────────
+  // Independent of the search box so the summary/print always covers the whole BOQ.
+  const chapterRows = useMemo(() => {
+    const map = {};
+    const toNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+    allItems.forEach(it => {
+      if (it.id === 'project-level-unlinked') return;
+      const key = it.chapter_no || 'ZZZ';
+      let budget = 0;
+      for (const h of costHeads) budget += num(it.breakdown?.[h]?.amount);
+      if (!map[key]) map[key] = { chapter_no: it.chapter_no, name: it.chapter_name || 'Other Miscellaneous Works', bill: 0, budget: 0 };
+      map[key].bill   += num(it.amount);
+      map[key].budget += budget;
+    });
+    return Object.values(map).sort((a, b) =>
+      toNum(a.chapter_no) - toNum(b.chapter_no) || String(a.chapter_no).localeCompare(String(b.chapter_no)));
+  }, [allItems, costHeads]);
+
+  const summaryTotals = useMemo(() => {
+    const bill   = chapterRows.reduce((s, c) => s + c.bill, 0);
+    const budget = chapterRows.reduce((s, c) => s + c.budget, 0);
+    const gst    = bill * GST_PCT / 100; // bill-side GST on both columns (matches client sheet)
+    return { bill, budget, gst, billGrand: bill + gst, budgetGrand: budget + gst };
+  }, [chapterRows]);
+
+  const lineItemsByChapter = useMemo(() => {
+    const map = {};
+    const toNum = (v) => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+    allItems.forEach(it => {
+      if (it.id === 'project-level-unlinked') return;
+      const key = it.chapter_no || 'ZZZ';
+      if (!map[key]) map[key] = { chapter_no: it.chapter_no, name: it.chapter_name || 'Other Miscellaneous Works', items: [] };
+      map[key].items.push(it);
+    });
+    return Object.values(map).sort((a, b) =>
+      toNum(a.chapter_no) - toNum(b.chapter_no) || String(a.chapter_no).localeCompare(String(b.chapter_no)));
+  }, [allItems]);
+
+  const selectedProject = projects.find(p => p.id === projectId);
+  const printRef = useRef();
+  const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: `BOQ_${selectedProject?.name || 'Summary'}` });
+  const [view, setView] = useState('breakdown'); // 'breakdown' | 'summary'
+
   return (
     <div style={{ background: Theme.pageBg, minHeight: '100vh' }}>
       <PageHeader
@@ -229,14 +276,27 @@ export default function BOQBudgetBreakdownPage() {
         subtitle="Allocate each BOQ item's budget across cost heads and track advance, invoiced & balance"
         breadcrumbs={[{ label: 'QS & Billing' }, { label: 'Budget Breakdown' }]}
         actions={
-          <button
-            onClick={() => setMode(mode === 'amount' ? 'pct' : 'amount')}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg transition"
-            style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff' }}
-            title="Toggle budget entry mode">
-            {mode === 'amount' ? <IndianRupee className="w-3.5 h-3.5" /> : <Percent className="w-3.5 h-3.5" />}
-            Enter as {mode === 'amount' ? 'Amount' : 'Percent'}
-          </button>
+          <div className="flex items-center gap-2">
+            {mode !== undefined && view === 'breakdown' && (
+              <button
+                onClick={() => setMode(mode === 'amount' ? 'pct' : 'amount')}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg transition"
+                style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff' }}
+                title="Toggle budget entry mode">
+                {mode === 'amount' ? <IndianRupee className="w-3.5 h-3.5" /> : <Percent className="w-3.5 h-3.5" />}
+                Enter as {mode === 'amount' ? 'Amount' : 'Percent'}
+              </button>
+            )}
+            {projectId && (
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg transition"
+                style={{ background: '#fff', color: '#0B2E59', border: '1px solid rgba(255,255,255,0.25)' }}
+                title="Print BOQ Summary + Items">
+                <Printer className="w-3.5 h-3.5" /> Print BOQ
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -272,6 +332,72 @@ export default function BOQBudgetBreakdownPage() {
 
         {projectId && !isLoading && (
           <>
+            {/* View tabs */}
+            <div className="flex gap-2">
+              {[
+                { id: 'breakdown', label: 'Budget Breakdown', icon: LayoutList },
+                { id: 'summary',   label: 'BOQ Summary',      icon: FileText },
+              ].map(t => (
+                <button key={t.id} onClick={() => setView(t.id)}
+                  className={clsx('flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg border transition',
+                    view === t.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
+                  <t.icon className="w-3.5 h-3.5" /> {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── BOQ SUMMARY VIEW (chapter rollup — same data as print) ── */}
+            {view === 'summary' && (
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
+                  <h3 className="text-sm font-bold text-slate-700">{selectedProject?.name} — BOQ Summary</h3>
+                  <p className="text-[11px] text-slate-400">Bill Value vs Budgeted value, by chapter</p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-[#7E93B8] text-white">
+                      <th className="px-3 py-2.5 text-center w-14 font-bold border border-slate-300">S.No</th>
+                      <th className="px-3 py-2.5 text-left font-bold border border-slate-300">Description of Works</th>
+                      <th className="px-3 py-2.5 text-right font-bold border border-slate-300">Bill Value</th>
+                      <th className="px-3 py-2.5 text-right font-bold border border-slate-300">Budgeted value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chapterRows.map((c, i) => (
+                      <tr key={c.chapter_no || i} className="border-b border-slate-100">
+                        <td className="px-3 py-2 text-center font-bold border border-slate-200">{i + 1}</td>
+                        <td className="px-3 py-2 font-semibold text-slate-700 border border-slate-200">{c.name}</td>
+                        <td className="px-3 py-2 text-right border border-slate-200">{inr2(c.bill)}</td>
+                        <td className="px-3 py-2 text-right border border-slate-200">{inr2(c.budget)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-[#E4EFDC] font-bold">
+                      <td className="border border-slate-200" />
+                      <td className="px-3 py-2 border border-slate-200">Total Works Value excluding GST</td>
+                      <td className="px-3 py-2 text-right border border-slate-200">{inr2(summaryTotals.bill)}</td>
+                      <td className="px-3 py-2 text-right border border-slate-200">{inr2(summaryTotals.budget)}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-slate-200" />
+                      <td className="px-3 py-2 border border-slate-200">GST {GST_PCT}%</td>
+                      <td className="px-3 py-2 text-right border border-slate-200">{inr2(summaryTotals.gst)}</td>
+                      <td className="px-3 py-2 text-right border border-slate-200">{inr2(summaryTotals.gst)}</td>
+                    </tr>
+                    <tr className="bg-[#E4EFDC] font-bold">
+                      <td className="border border-slate-200" />
+                      <td className="px-3 py-2 border border-slate-200">Grand Total Including GST</td>
+                      <td className="px-3 py-2 text-right border border-slate-200">{inr2(summaryTotals.billGrand)}</td>
+                      <td className="px-3 py-2 text-right border border-slate-200">{inr2(summaryTotals.budgetGrand)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── BUDGET BREAKDOWN VIEW (existing) ── */}
+            {view === 'breakdown' && (
+            <>
             {/* Summary KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <ThemeKpiCard icon={IndianRupee} label="BOQ Value"     value={inr(totals.boq)}      color="blue"    sub="Total contract value" />
@@ -358,8 +484,23 @@ export default function BOQBudgetBreakdownPage() {
                 </div>
               )}
             </div>
+            </>
+            )}
           </>
         )}
+      </div>
+
+      {/* Hidden print zone — Page 1 summary + Page 2 detailed items */}
+      <div style={{ display: 'none' }}>
+        <div ref={printRef}>
+          <BOQSummaryPrintTemplate
+            projectName={selectedProject?.name || ''}
+            chapterRows={chapterRows}
+            lineItemsByChapter={lineItemsByChapter}
+            totals={summaryTotals}
+            gstPct={GST_PCT}
+          />
+        </div>
       </div>
     </div>
   );
