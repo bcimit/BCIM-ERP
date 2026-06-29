@@ -64,39 +64,47 @@ function ChapterBudgetCell({ value, onSave, saving }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
 
+  const open  = () => { setVal(value ? Math.round(value).toString() : ''); setEditing(true); };
+  const cancel = () => setEditing(false);
   const commit = () => {
-    setEditing(false);
     const n = parseFloat(val);
-    if (!isNaN(n) && n >= 0) onSave(n);
+    if (isNaN(n) || n < 0) { toast.error('Enter a valid amount'); return; }
+    setEditing(false);
+    onSave(n);
   };
 
   if (editing) return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 px-1 py-1">
       <input
-        autoFocus type="number" value={val}
+        autoFocus
+        type="number"
+        value={val}
         onChange={e => setVal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-        placeholder="Enter budget amount"
-        className="flex-1 border border-indigo-400 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
+        placeholder="Amount"
+        className="flex-1 min-w-0 border border-indigo-400 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-2 focus:ring-indigo-200"
       />
+      <button onClick={commit} disabled={saving}
+        className="shrink-0 px-2 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-500 disabled:opacity-50">
+        Save
+      </button>
+      <button onClick={cancel}
+        className="shrink-0 px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-slate-200">
+        ✕
+      </button>
     </div>
   );
 
   return (
-    <button
-      disabled={saving}
-      onClick={() => { setVal(value ? Math.round(value).toString() : ''); setEditing(true); }}
-      className={clsx(
-        'w-full text-right text-sm font-semibold px-3 py-1.5 rounded-lg transition border',
-        value > 0
-          ? 'text-slate-800 hover:bg-indigo-50 border-transparent hover:border-indigo-200'
-          : 'text-indigo-400 italic font-normal hover:bg-indigo-50 border-dashed border-indigo-200',
-        saving && 'opacity-50 cursor-wait'
-      )}
-    >
-      {value > 0 ? `₹${Math.round(value).toLocaleString('en-IN')}` : '+ Set budget'}
-    </button>
+    <div className="flex items-center justify-end gap-2 px-3 py-1.5">
+      <span className={clsx('text-sm font-semibold', value > 0 ? 'text-slate-800' : 'text-slate-300 italic text-xs')}>
+        {value > 0 ? `₹${Math.round(value).toLocaleString('en-IN')}` : 'Not set'}
+      </span>
+      <button onClick={open} disabled={saving}
+        className="shrink-0 px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-600 text-[10px] font-bold rounded hover:bg-indigo-100 disabled:opacity-50">
+        {saving ? '…' : 'Edit'}
+      </button>
+    </div>
   );
 }
 
