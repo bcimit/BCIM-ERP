@@ -4,7 +4,7 @@ const { authenticate } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
 const { runSchemaInit } = require('../utils/schemaInit');
-const { BOQ_COST_HEADS, PROFIT_BASE_HEADS, PROFIT_PCT } = require('../constants/boqCostHeads');
+const { BOQ_COST_HEADS, PROFIT_BASE_HEADS, PROFIT_PCT, CONTINGENCY_HEAD } = require('../constants/boqCostHeads');
 
 runSchemaInit('boq_item_budget_breakdown', async () => {
   await query(`
@@ -371,15 +371,29 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     const budgetMap = {};
     for (const b of budgets.rows) budgetMap[b.cost_head] = parseFloat(b.budget_amount || 0);
 
+    // Total BOQ value (contract value) — used for Contingency calculation
+    const boqTotalR = await query(
+      `SELECT COALESCE(SUM(quantity * rate), 0) AS total FROM boq_items WHERE project_id=$1 AND is_active=true`,
+      [project_id]
+    );
+    const totalBoqValue = parseFloat(boqTotalR.rows[0]?.total || 0);
+
     // Profit (head 19) = 10% of sum of heads 1-18 — derived, not stored
     const baseActual = PROFIT_BASE_HEADS.reduce((s, h) => s + (actualMap[h] || 0), 0);
     actualMap['Profit'] = baseActual * PROFIT_PCT;
     const baseBudget = PROFIT_BASE_HEADS.reduce((s, h) => s + (budgetMap[h] || 0), 0);
     if (baseBudget > 0) budgetMap['Profit'] = baseBudget * PROFIT_PCT;
 
+    // Contingency (head 20) = Total BOQ Value − sum(heads 1-18) − Profit
+    // Represents the emergency reserve within the contract value.
+    actualMap[CONTINGENCY_HEAD] = totalBoqValue - baseActual - actualMap['Profit'];
+    if (baseBudget > 0) {
+      budgetMap[CONTINGENCY_HEAD] = totalBoqValue - baseBudget - budgetMap['Profit'];
+    }
+
     // Build result for all known cost heads + any extra heads with actuals
     const allHeads = new Set([...BOQ_COST_HEADS, ...Object.keys(actualMap), ...Object.keys(budgetMap)]);
-    const DERIVED_HEADS = new Set(['Profit']);
+    const DERIVED_HEADS = new Set(['Profit', CONTINGENCY_HEAD]);
     const data = [...allHeads].map(head => ({
       cost_head: head,
       budget: budgetMap[head] || 0,
@@ -398,7 +412,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       return ia - ib;
     });
 
-    res.json({ data });
+    res.json({ data, total_boq_value: totalBoqValue });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

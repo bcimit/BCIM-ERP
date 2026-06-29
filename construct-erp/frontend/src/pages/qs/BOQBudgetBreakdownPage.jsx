@@ -419,11 +419,13 @@ function CostHeadBudgetTab({ projectId }) {
   const [bulkText, setBulkText] = useState(DEFAULT_BULK_TEXT);
   const [costheadView, setCostheadView] = useState('summary'); // 'summary' | 'monthly'
 
-  const { data, isLoading } = useQuery({
+  const { data: summaryResp, isLoading } = useQuery({
     queryKey: ['costhead-summary', projectId],
-    queryFn: () => boqBudgetAPI.costheadSummary(projectId).then(r => r.data?.data || []),
+    queryFn: () => boqBudgetAPI.costheadSummary(projectId).then(r => r.data),
     enabled: !!projectId,
   });
+  const data = summaryResp?.data || [];
+  const totalBoqValue = summaryResp?.total_boq_value || 0;
 
   const saveMutation = useMutation({
     mutationFn: ({ cost_head, budget_amount }) =>
@@ -475,9 +477,17 @@ function CostHeadBudgetTab({ projectId }) {
 
       {costheadView === 'summary' && (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
-        <h3 className="text-sm font-bold text-slate-700">Actual Expenditure — Cost Head Budget vs Actual</h3>
-        <p className="text-[11px] text-slate-400">Click Budget cell to enter amount · Click Actual amount to expand transaction details</p>
+      <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-700">Actual Expenditure — Cost Head Budget vs Actual</h3>
+          <p className="text-[11px] text-slate-400">Click Budget cell to enter amount · Click Actual amount to expand transaction details</p>
+        </div>
+        {totalBoqValue > 0 && (
+          <div className="text-right">
+            <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Total BOQ Value</div>
+            <div className="text-sm font-bold text-slate-700">₹{Math.round(totalBoqValue).toLocaleString('en-IN')}</div>
+          </div>
+        )}
       </div>
       <table className="w-full text-sm">
         <thead>
@@ -517,9 +527,13 @@ function CostHeadBudgetTab({ projectId }) {
                     {r.derived ? (
                       <div className="flex items-center justify-end gap-2 px-2">
                         <span className="text-sm font-semibold text-slate-800">
-                          {r.budget > 0 ? `₹${Math.round(r.budget).toLocaleString('en-IN')}` : '—'}
+                          {r.budget !== 0 ? `₹${Math.round(r.budget).toLocaleString('en-IN')}` : '—'}
                         </span>
-                        <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 font-bold">auto 10%</span>
+                        {r.cost_head === 'Profit' ? (
+                          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 font-bold">auto 10%</span>
+                        ) : (
+                          <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 font-bold">reserved</span>
+                        )}
                       </div>
                     ) : isEditing ? (
                       <div className="flex items-center gap-1">

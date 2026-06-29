@@ -75,4 +75,8 @@ function classifyItemCostHead(itemName = '') {
 const PROFIT_BASE_HEADS = BOQ_COST_HEADS.filter(h => h !== 'Profit' && h !== 'Contingency');
 const PROFIT_PCT = 0.10;
 
-module.exports = { BOQ_COST_HEADS, BOQ_COST_HEADS_ALL, PROFIT_BASE_HEADS, PROFIT_PCT, classifyItemCostHead };
+// Contingency = Total BOQ Value − sum(heads 1–18) − Profit
+// It is the emergency reserve that stays within the contract value.
+const CONTINGENCY_HEAD = 'Contingency';
+
+module.exports = { BOQ_COST_HEADS, BOQ_COST_HEADS_ALL, PROFIT_BASE_HEADS, PROFIT_PCT, CONTINGENCY_HEAD, classifyItemCostHead };
