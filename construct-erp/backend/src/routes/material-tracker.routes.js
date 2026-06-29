@@ -889,16 +889,15 @@ router.post('/auto-import/run', authorize(...WRITE_ROLES), async (req, res) => {
     await chunkInsert(billCols, billRows);
     loads_created = grnRows.length + billRows.length;
 
-    // Auto-cleanup ghost rows: loads with no ign_no and no source_grn_id whose invoice is
-    // now covered by a proper IGN row in the same entry. These are artefacts from old syncs
-    // (bills or pre-UUID imports) that predate the IGN dedup.
+    // Auto-cleanup ghost rows: loads with no ign_no whose invoice is now covered by a proper
+    // IGN row in the same entry. Deliberately does NOT check source_grn_id because ghost rows
+    // from old GRN syncs (pre-IGN migration) still carry a stale GRN UUID in that column.
     let ghost_cleaned = 0;
     if (entryIds.length) {
       const cleanup = await query(`
         DELETE FROM material_tracker_loads main
         WHERE main.entry_id = ANY($1::uuid[])
-          AND main.ign_no IS NULL
-          AND main.source_grn_id IS NULL
+          AND (main.ign_no IS NULL OR TRIM(main.ign_no) = '')
           AND main.invoice_no IS NOT NULL AND TRIM(main.invoice_no) <> ''
           AND EXISTS (
             SELECT 1 FROM material_tracker_loads ref
