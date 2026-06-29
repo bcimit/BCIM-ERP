@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import {
   Percent, IndianRupee, AlertTriangle, ChevronRight, ChevronDown,
-  Search, Layers, CheckCircle2, Wallet, Printer, LayoutList, FileText, BarChart2,
+  Search, Layers, CheckCircle2, Wallet, Printer, LayoutList, FileText, BarChart2, Download,
 } from 'lucide-react';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import { boqBudgetAPI, projectAPI } from '../../api/client';
@@ -297,7 +297,14 @@ function CostHeadDrilldown({ projectId, costHead }) {
 }
 
 // ─── Monthly Analysis Matrix (cost heads × months) ───────────────────────────
-function CostHeadMonthlyTab({ projectId }) {
+function CostHeadMonthlyTab({ projectId, projectName }) {
+  const printRef = useRef();
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Monthly_Analysis_${projectName || projectId}`,
+    pageStyle: '@page { size: A4 landscape; margin: 12mm; } body { font-size: 10px; }',
+  });
+
   const { data: resp, isLoading } = useQuery({
     queryKey: ['costhead-monthly', projectId],
     queryFn: () => boqBudgetAPI.costheadMonthly(projectId).then(r => r.data),
@@ -350,6 +357,21 @@ function CostHeadMonthlyTab({ projectId }) {
   };
   const fmtAmt = (v) => v > 0 ? `₹${Math.round(v).toLocaleString('en-IN')}` : '—';
 
+  const exportCSV = () => {
+    const rows = [];
+    rows.push(['Cost Head', ...months.map(fmtMonth), 'Total']);
+    for (const head of BOQ_COST_HEADS_ORDER) {
+      rows.push([head, ...months.map(m => (byMonthBreakdown[m]?.[head] || 0).toFixed(2)), (headTotals[head] || 0).toFixed(2)]);
+    }
+    rows.push(['Monthly Total', ...months.map(m => (monthTotals[m] || 0).toFixed(2)), grandTotal.toFixed(2)]);
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `Monthly_Analysis_${projectName || projectId}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) return <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>;
   if (!months.length) return (
     <div className="py-16 text-center text-slate-400 text-sm">No paid expenditure records found for this project.</div>
@@ -357,11 +379,29 @@ function CostHeadMonthlyTab({ projectId }) {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      <div className="px-5 py-3 bg-slate-100 border-b border-slate-200">
-        <h3 className="text-sm font-bold text-slate-700">Monthly Expenditure — Cost Head × Month</h3>
-        <p className="text-[11px] text-slate-400">All paid transactions grouped by month · Use for project analysis and trend review</p>
+      <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-slate-700">Monthly Expenditure — Cost Head × Month</h3>
+          <p className="text-[11px] text-slate-400">All paid transactions grouped by month · Use for project analysis and trend review</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={exportCSV}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition">
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </button>
+          <button onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">
+            <Printer className="w-3.5 h-3.5" /> Print
+          </button>
+        </div>
       </div>
-      <div className="overflow-x-auto">
+      <div ref={printRef} className="overflow-x-auto">
+        {/* Print-only header */}
+        <div className="hidden print:block px-6 pt-4 pb-2 border-b border-slate-200">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">BCIM Engineering</p>
+          <h2 className="text-base font-bold text-slate-800">{projectName} — Monthly Cost Head Expenditure Analysis</h2>
+          <p className="text-xs text-slate-400">Generated: {new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}</p>
+        </div>
         <table className="text-xs w-full min-w-max">
           <thead>
             <tr className="bg-[#0B2E59] text-white">
@@ -410,7 +450,7 @@ function CostHeadMonthlyTab({ projectId }) {
 }
 
 // ─── Cost Head Budget Tab ─────────────────────────────────────────────────────
-function CostHeadBudgetTab({ projectId }) {
+function CostHeadBudgetTab({ projectId, projectName }) {
   const qc = useQueryClient();
   const [editingHead, setEditingHead] = useState(null);
   const [editVal, setEditVal] = useState('');
@@ -418,6 +458,12 @@ function CostHeadBudgetTab({ projectId }) {
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState(DEFAULT_BULK_TEXT);
   const [costheadView, setCostheadView] = useState('summary'); // 'summary' | 'monthly'
+  const printBudgetRef = useRef();
+  const handlePrintBudget = useReactToPrint({
+    contentRef: printBudgetRef,
+    documentTitle: `Cost_Head_Budget_${projectName || projectId}`,
+    pageStyle: '@page { size: A4 portrait; margin: 14mm; }',
+  });
 
   const { data: summaryResp, isLoading } = useQuery({
     queryKey: ['costhead-summary', projectId],
@@ -473,7 +519,7 @@ function CostHeadBudgetTab({ projectId }) {
         ))}
       </div>
 
-      {costheadView === 'monthly' && <CostHeadMonthlyTab projectId={projectId} />}
+      {costheadView === 'monthly' && <CostHeadMonthlyTab projectId={projectId} projectName={projectName} />}
 
       {costheadView === 'summary' && (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -482,13 +528,29 @@ function CostHeadBudgetTab({ projectId }) {
           <h3 className="text-sm font-bold text-slate-700">Actual Expenditure — Cost Head Budget vs Actual</h3>
           <p className="text-[11px] text-slate-400">Click Budget cell to enter amount · Click Actual amount to expand transaction details</p>
         </div>
-        {totalBoqValue > 0 && (
-          <div className="text-right">
-            <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Total BOQ Value</div>
-            <div className="text-sm font-bold text-slate-700">₹{Math.round(totalBoqValue).toLocaleString('en-IN')}</div>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {totalBoqValue > 0 && (
+            <div className="text-right">
+              <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Total BOQ Value</div>
+              <div className="text-sm font-bold text-slate-700">₹{Math.round(totalBoqValue).toLocaleString('en-IN')}</div>
+            </div>
+          )}
+          <button onClick={handlePrintBudget}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">
+            <Printer className="w-3.5 h-3.5" /> Print
+          </button>
+        </div>
       </div>
+      <div ref={printBudgetRef}>
+        {/* Print-only header */}
+        <div className="hidden print:block px-6 pt-4 pb-2 border-b border-slate-200">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">BCIM Engineering</p>
+          <h2 className="text-base font-bold text-slate-800">{projectName} — Cost Head Budget vs Actual</h2>
+          <div className="flex gap-6 mt-1">
+            <p className="text-xs text-slate-500">Generated: {new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}</p>
+            {totalBoqValue > 0 && <p className="text-xs text-slate-500">Total BOQ Value: ₹{Math.round(totalBoqValue).toLocaleString('en-IN')}</p>}
+          </div>
+        </div>
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-[#0B2E59] text-white text-xs">
@@ -613,6 +675,7 @@ function CostHeadBudgetTab({ projectId }) {
           </tr>
         </tfoot>
       </table>
+      </div>
     </div>
       )}
     </div>
@@ -946,7 +1009,7 @@ export default function BOQBudgetBreakdownPage() {
 
             {/* ── COST HEAD BUDGET VIEW ── */}
             {view === 'costhead' && (
-              <CostHeadBudgetTab projectId={projectId} />
+              <CostHeadBudgetTab projectId={projectId} projectName={selectedProject?.name || ''} />
             )}
 
             {/* ── BUDGET BREAKDOWN VIEW (existing) ── */}
