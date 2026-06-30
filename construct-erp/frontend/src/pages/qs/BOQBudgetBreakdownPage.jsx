@@ -1631,10 +1631,10 @@ export default function BOQBudgetBreakdownPage() {
                 </button>
               </div>
               {/* Column header */}
-              <div className="grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <div className="grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 <span className="w-4" />
-                <span>Item No</span>
-                <span>Description</span>
+                <span>S.No</span>
+                <span>Chapter / Description</span>
                 <span className="text-right">BOQ Value</span>
                 <span className="text-right">Budget</span>
                 <span className="text-right">Spent</span>
@@ -1649,56 +1649,70 @@ export default function BOQBudgetBreakdownPage() {
                   </div>
                 )}
 
-                {itemsByChapter.map(ch => {
+                {itemsByChapter.map((ch, ci) => {
                   const chBoq      = ch.items.reduce((s, i) => s + i.amount, 0);
                   const chBudgeted = ch.items.reduce((s, i) => s + i.budgeted, 0);
                   const chSpent    = ch.items.reduce((s, i) => s + i.spent, 0);
-                  const chBalance  = ch.items.reduce((s, i) => s + i.balance, 0);
+                  const chBalance  = chBudgeted - chSpent;
+                  const chOver     = chSpent > chBoq + 0.01;
+                  const chAllocated = chBudgeted > 0;
+                  const isOpen     = expanded[`ch-${ch.key}`];
                   return (
                     <div key={ch.key}>
-                      {/* Chapter header */}
-                      <div className="grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-2 bg-[#0B2E59] text-white text-[10px] font-bold uppercase tracking-wide">
-                        <span className="w-4" />
-                        <span className="col-span-2">{ch.name}</span>
-                        <span className="text-right">{inr(chBoq)}</span>
-                        <span className={clsx('text-right', chBudgeted > 0 ? 'text-indigo-200' : 'text-slate-400')}>{chBudgeted > 0 ? inr(chBudgeted) : '—'}</span>
-                        <span className={clsx('text-right', chSpent > 0 ? 'text-amber-200' : 'text-slate-400')}>{chSpent > 0 ? inr(chSpent) : '—'}</span>
-                        <span className={clsx('text-right', chBalance < 0 ? 'text-rose-300' : 'text-emerald-300')}>{chBudgeted > 0 || chSpent > 0 ? inr(chBalance) : '—'}</span>
-                        <span />
-                      </div>
-
-                      {ch.items.map(item => {
-                        const isOpen = expanded[item.id];
-                        return (
-                          <div key={item.id}>
-                            <button onClick={() => toggle(item.id)}
-                              className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
-                                isOpen && 'bg-indigo-50/40')}>
-                              <span className="w-4 text-slate-400">
-                                {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                              </span>
-                              <span className="font-mono font-bold text-indigo-700 truncate">{item.item_no}</span>
-                              <span className="text-slate-700 font-medium truncate pr-2" title={item.description}>{item.description}</span>
-                              <span className="text-right font-semibold text-slate-800">{inr(item.amount)}</span>
-                              <span className={clsx('text-right font-semibold', item.over ? 'text-rose-600' : item.allocated ? 'text-indigo-700' : 'text-slate-300')}>
-                                {item.budgeted > 0 ? inr(item.budgeted) : '—'}
-                              </span>
-                              <span className="text-right font-medium text-amber-600">{item.spent > 0 ? inr(item.spent) : <span className="text-slate-300">—</span>}</span>
-                              <span className={clsx('text-right font-bold', item.balance < 0 ? 'text-rose-600' : item.allocated ? 'text-emerald-600' : 'text-slate-300')}>
-                                {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
-                              </span>
-                              <span className="text-right">
-                                {!item.allocated
-                                  ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Not set</span>
-                                  : item.over
-                                    ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
-                                    : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
-                              </span>
-                            </button>
-                            {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
-                          </div>
-                        );
-                      })}
+                      <button onClick={() => toggle(`ch-${ch.key}`)}
+                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
+                          isOpen && 'bg-indigo-50/40')}>
+                        <span className="w-4 text-slate-400">
+                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        </span>
+                        <span className="font-bold text-slate-500">{ci + 1}</span>
+                        <span className="font-semibold text-slate-800">{ch.name}</span>
+                        <span className="text-right font-semibold text-slate-800">{inr(chBoq)}</span>
+                        <span className={clsx('text-right font-semibold', chOver ? 'text-rose-600' : chAllocated ? 'text-indigo-700' : 'text-slate-300')}>
+                          {chBudgeted > 0 ? inr(chBudgeted) : '—'}
+                        </span>
+                        <span className="text-right font-medium text-amber-600">{chSpent > 0 ? inr(chSpent) : <span className="text-slate-300">—</span>}</span>
+                        <span className={clsx('text-right font-bold', chBalance < 0 ? 'text-rose-600' : chAllocated ? 'text-emerald-600' : 'text-slate-300')}>
+                          {chAllocated || chSpent > 0 ? inr(chBalance) : '—'}
+                        </span>
+                        <span className="text-right">
+                          {!chAllocated
+                            ? <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Not set</span>
+                            : chOver
+                              ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
+                              : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="bg-slate-50 border-t border-slate-200">
+                          {ch.items.map(item => {
+                            const itemOpen = expanded[item.id];
+                            return (
+                              <div key={item.id}>
+                                <button onClick={() => toggle(item.id)}
+                                  className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-2 text-xs text-left hover:bg-white/60 transition pl-10',
+                                    itemOpen && 'bg-indigo-50/40')}>
+                                  <span className="w-4 text-slate-300">
+                                    {itemOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-indigo-600 truncate">{item.item_no}</span>
+                                  <span className="text-slate-600 truncate pr-2" title={item.description}>{item.description}</span>
+                                  <span className="text-right text-slate-700">{inr(item.amount)}</span>
+                                  <span className={clsx('text-right', item.allocated ? 'text-indigo-600' : 'text-slate-300')}>
+                                    {item.budgeted > 0 ? inr(item.budgeted) : '—'}
+                                  </span>
+                                  <span className="text-right text-amber-600">{item.spent > 0 ? inr(item.spent) : <span className="text-slate-300">—</span>}</span>
+                                  <span className={clsx('text-right', item.balance < 0 ? 'text-rose-600' : item.allocated ? 'text-emerald-600' : 'text-slate-300')}>
+                                    {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
+                                  </span>
+                                  <span />
+                                </button>
+                                {itemOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1710,13 +1724,13 @@ export default function BOQBudgetBreakdownPage() {
                   return (
                     <div key={item.id}>
                       <button onClick={() => toggle(item.id)}
-                        className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition italic bg-slate-50/60',
+                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition italic bg-slate-50/60',
                           isOpen && 'bg-indigo-50/40')}>
                         <span className="w-4 text-slate-400">
                           {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </span>
-                        <span className="font-mono font-bold text-indigo-700 truncate">{item.item_no}</span>
-                        <span className="text-slate-700 font-medium truncate pr-2" title={item.description}>{item.description}</span>
+                        <span className="font-bold text-slate-500">—</span>
+                        <span className="text-slate-700 font-medium">Unlinked Spend</span>
                         <span className="text-right font-semibold text-slate-300">—</span>
                         <span className="text-slate-300 text-right">—</span>
                         <span className="text-right font-medium text-amber-600">{item.spent > 0 ? inr(item.spent) : <span className="text-slate-300">—</span>}</span>
@@ -1731,7 +1745,7 @@ export default function BOQBudgetBreakdownPage() {
 
               {/* Grand total footer */}
               {items.length > 0 && (
-                <div className="grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-900 text-xs">
+                <div className="grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-900 text-xs">
                   <span className="w-4" />
                   <span className="font-bold text-white uppercase tracking-wide col-span-2">Grand Total</span>
                   <span className="text-right font-bold text-white">{inr(totals.boq)}</span>
