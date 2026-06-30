@@ -748,8 +748,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
     saveMutation.mutate({ cost_head, budget_amount: n });
   };
 
-  // Heads at ≥80% or over budget (only those with a budget set)
-  const alertHeads     = data.filter(r => r.budget > 0 && r.actual / r.budget >= 0.8);
+  // Heads at ≥80% or over budget (derived heads like Profit/Contingency are reserves — never flagged)
+  const alertHeads     = data.filter(r => !r.derived && r.budget > 0 && r.actual / r.budget >= 0.8);
   const overHeads      = alertHeads.filter(r => r.actual > r.budget);
   const nearHeads      = alertHeads.filter(r => r.actual <= r.budget);
 
@@ -875,7 +875,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
           {rows.map((r, i) => {
             const isEditing = editingHead === r.cost_head;
             const isExpanded = expandedHead === r.cost_head;
-            const over = r.actual > r.budget && r.budget > 0;
+            const over = !r.derived && r.actual > r.budget && r.budget > 0;
             const hasActual = r.actual > 0;
             return (
               <React.Fragment key={r.cost_head}>
