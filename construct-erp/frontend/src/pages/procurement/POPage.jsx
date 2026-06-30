@@ -2129,6 +2129,7 @@ export default function POPage() {
       const ref = (p.po_ref_no || p.serial_no_formatted || p.po_number || '').toUpperCase();
       if (!ref.startsWith(filterSeries.toUpperCase())) return false;
     }
+    if (projectFilter !== 'all' && String(p.project_id) !== String(projectFilter)) return false;
     if (statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();

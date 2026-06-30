@@ -1387,7 +1387,7 @@ function WODetailPanel({ wo, onClose, onEdit, onApprove, onMDApprove, onReject, 
 
 /* ── Main Page ─────────────────────────────────────────────────────────── */
 export default function WorkOrderPage() {
-  const user = useAuthStore(s => s.user);
+  const { user, selectedProjectId } = useAuthStore(s => ({ user: s.user, selectedProjectId: s.selectedProjectId }));
   const { data: companyData } = useQuery({
     queryKey: ['company-settings'],
     queryFn: () => companySettingsAPI.get().then(r => r.data?.data ?? r.data),
@@ -1401,7 +1401,7 @@ export default function WorkOrderPage() {
   const [attachWOId,      setAttachWOId]      = useState(null);
   const [search,          setSearch]          = useState('');
   const [filterStatus,    setFilterStatus]    = useState('');
-  const [filterProject,   setFilterProject]   = useState('');
+  const [filterProject,   setFilterProject]   = useState(selectedProjectId || '');
   const [filterCategory,  setFilterCategory]  = useState('');
   const [dateFrom,        setDateFrom]        = useState('');
   const [dateTo,          setDateTo]          = useState('');
@@ -1410,6 +1410,8 @@ export default function WorkOrderPage() {
   const qc = useQueryClient();
   const location = useLocation();
   const [filterSeries, setFilterSeries] = useState('');
+
+  useEffect(() => { setFilterProject(selectedProjectId || ''); }, [selectedProjectId]);
 
   const { data: woData = [], isLoading } = useQuery({
     queryKey: ['work-orders'],
@@ -1704,11 +1706,19 @@ export default function WorkOrderPage() {
         {/* ── Search + Filter Bar ── */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
           {/* Main search row */}
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="relative flex-1 max-w-xs">
+          <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+            <div className="relative min-w-[180px]">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
+                className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 text-xs text-slate-700 outline-none focus:border-indigo-400 transition-all appearance-none cursor-pointer">
+                <option value="">All Projects</option>
+                {projectsData.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search WO#, vendor, project, subject…"
+                placeholder="Search WO#, vendor, subject…"
                 className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-all placeholder:text-slate-400" />
             </div>
             <button onClick={() => setShowFilters(v => !v)}
@@ -1738,14 +1748,6 @@ export default function WorkOrderPage() {
           {showFilters && (
             <div className="px-4 pb-3 pt-0 border-t border-slate-100">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Project</label>
-                  <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
-                    className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs text-slate-700 outline-none focus:border-indigo-400 transition-all">
-                    <option value="">All Projects</option>
-                    {projectsData.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Work Category</label>
                   <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
