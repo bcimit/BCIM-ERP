@@ -1409,7 +1409,7 @@ export default function WorkOrderPage() {
   const [sortConfig,      setSortConfig]      = useState({ key: 'date', dir: 'desc' });
   const qc = useQueryClient();
   const location = useLocation();
-  const seriesFilter = new URLSearchParams(location.search).get('series') || '';
+  const [filterSeries, setFilterSeries] = useState('');
 
   const { data: woData = [], isLoading } = useQuery({
     queryKey: ['work-orders'],
@@ -1490,7 +1490,7 @@ export default function WorkOrderPage() {
   /* ── Filtering ── */
   const filtered = allWOs.filter(wo => {
     const q = search.toLowerCase();
-    const matchSeries   = !seriesFilter || (wo.wo_number || '').toUpperCase().startsWith(seriesFilter.toUpperCase());
+    const matchSeries   = !filterSeries || (wo.wo_number || '').toUpperCase().startsWith(filterSeries.toUpperCase());
     const matchSearch   = !search || `${wo.wo_number} ${wo.vendor_name||''} ${wo.project_name||''} ${wo.subject||''} ${wo.work_category||''}`.toLowerCase().includes(q);
     const matchStatus   = !filterStatus   || wo.status        === filterStatus;
     const matchProject  = !filterProject  || String(wo.project_id) === String(filterProject);
@@ -1555,12 +1555,8 @@ export default function WorkOrderPage() {
               <ChevronRight className="w-3 h-3" />
               <span className="text-slate-500 font-semibold">Work Orders</span>
             </div>
-            <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">
-              {seriesFilter === 'WOTQS' ? 'TQS Work Orders' : seriesFilter === 'WODQS' ? 'DQS Work Orders' : 'Work Orders'}
-            </h1>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {seriesFilter ? `Showing ${seriesFilter}* series only` : 'Subcontractor & labour work order management'}
-            </p>
+            <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Work Orders</h1>
+            <p className="text-xs text-slate-400 mt-0.5">Subcontractor & labour work order management</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setShowPdfImport(true)}
@@ -1665,6 +1661,21 @@ export default function WorkOrderPage() {
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">{overdueWOs.length > 0 ? 'Overdue WOs' : 'Completed'}</div>
           </div>
+        </div>
+
+        {/* ── Series Filter Pills ── */}
+        <div className="flex items-center gap-1.5">
+          {[['', 'All Series'], ['WOTQS', 'WOTQS — TQS'], ['WODQS', 'WODQS — DQS']].map(([val, lbl]) => (
+            <button key={val} onClick={() => setFilterSeries(val)}
+              className={clsx(
+                'px-3 h-7 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all border',
+                filterSeries === val
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-amber-400 hover:text-amber-600'
+              )}>
+              {lbl}
+            </button>
+          ))}
         </div>
 
         {/* ── Status Tabs ── */}
