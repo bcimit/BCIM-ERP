@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, User, Briefcase, Shield, X, Check } from 'lucide-react';
-import { hrEmployeesAPI, hrMastersAPI } from '../../api/client';
+import { hrEmployeesAPI, hrMastersAPI, projectAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 
 const B = { navy:'#0A1F5C', blue:'#2563EB', yellow:'#F4C430' };
@@ -72,7 +72,7 @@ export default function EmployeeFormPage() {
     employee_category:'staff',
     department_id:'', designation_id:'', employment_type:'permanent',
     date_of_joining:'', probation_end_date:'', notice_period_days:30,
-    reporting_manager_id:'', work_location:'',
+    reporting_manager_id:'', work_location:'', project_id:'',
     date_of_birth:'', gender:'', father_name:'', mother_name:'',
     marital_status:'', blood_group:'', nationality:'Indian',
     permanent_address:'', current_address:'',
@@ -84,10 +84,12 @@ export default function EmployeeFormPage() {
   const { data:deptData  } = useQuery({ queryKey:['hr-departments'],  queryFn:()=>hrMastersAPI.listDepts().then(r=>r.data) });
   const { data:desigData } = useQuery({ queryKey:['hr-designations',form.department_id], queryFn:()=>hrMastersAPI.listDesigs({ department_id:form.department_id||undefined }).then(r=>r.data) });
   const { data:managerData } = useQuery({ queryKey:['hr-employees-managers'], queryFn:()=>hrEmployeesAPI.list({employment_status:'active'}).then(r=>r.data) });
+  const { data:projectsData } = useQuery({ queryKey:['projects-list'], queryFn:()=>projectAPI.list().then(r=>r.data) });
 
   const departments  = deptData?.data  || [];
   const designations = desigData?.data || [];
   const managers = (managerData?.data||[]).filter(e=>e.id!==id);
+  const projects = (projectsData?.data||[]).filter(p=>p.is_active);
 
   const { data:empData } = useQuery({
     queryKey:['hr-employee-detail',id],
@@ -103,7 +105,7 @@ export default function EmployeeFormPage() {
         employee_code:e.employee_code||'', employee_category:e.employee_category||'staff',
         department_id:e.department_id||'', designation_id:e.designation_id||'',
         employment_type:e.employment_type||'permanent', reporting_manager_id:e.reporting_manager_id||'',
-        work_location:e.work_location||'', date_of_joining:e.date_of_joining?.split('T')[0]||'',
+        work_location:e.work_location||'', project_id:e.project_id||'', date_of_joining:e.date_of_joining?.split('T')[0]||'',
         probation_end_date:e.probation_end_date?.split('T')[0]||'', notice_period_days:e.notice_period_days||30,
         date_of_birth:e.date_of_birth?.split('T')[0]||'', gender:e.gender||'',
         father_name:e.father_name||'', mother_name:e.mother_name||'', marital_status:e.marital_status||'',
@@ -316,7 +318,19 @@ export default function EmployeeFormPage() {
                   {managers.map(m=><option key={m.id} value={m.id}>{m.name} - {m.designation_name||'Employee'}</option>)}
                 </select>
               </Field>
-              <Field label="Work Location / Site"><input className={inp} value={form.work_location} onChange={e=>set('work_location',e.target.value)} placeholder="e.g. HO, Lancho LH10"/></Field>
+              <Field label="Project Assignment">
+                <select className={inp} value={form.project_id} onChange={e=>{
+                  const pid = e.target.value;
+                  set('project_id', pid);
+                  const proj = projects.find(p=>p.id===pid);
+                  if(proj) set('work_location', proj.name);
+                  else if(!pid) set('work_location','');
+                }}>
+                  <option value="">— No Project / Head Office —</option>
+                  {projects.map(p=><option key={p.id} value={p.id}>{p.project_code ? `[${p.project_code}] ` : ''}{p.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Work Location / Site (override)"><input className={inp} value={form.work_location} onChange={e=>set('work_location',e.target.value)} placeholder="Auto-filled from project, or type manually"/></Field>
               <Field label="System Role">
                 <select className={inp} value={form.role} onChange={e=>set('role',e.target.value)}>
                   <option value="viewer">Viewer</option>

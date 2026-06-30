@@ -95,6 +95,7 @@ const initTables = async () => {
   `);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS reporting_manager_id UUID REFERENCES users(id)`);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS work_location TEXT`);
+  await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id)`);
   // 'staff' = office/management employees, 'workman' = registered workmen/labour
   // (Form A — Employee Register category) — both live in the same rich profile
   // table so statutory fields (PAN/Aadhaar/UAN/ESI/bank) are never lost.
@@ -146,7 +147,8 @@ const employeeSelect = `
          ep.bank_ifsc, ep.permanent_address, ep.current_address,
          ep.emergency_contact_name, ep.emergency_contact_phone,
          ep.employment_type, ep.employee_category, ep.reporting_manager_id, mgr.name as reporting_manager_name,
-         ep.work_location, ep.probation_end_date, ep.notice_period_days,
+         ep.work_location, ep.project_id, proj.name as project_name, proj.project_code,
+         ep.probation_end_date, ep.notice_period_days,
          ep.date_of_leaving, ep.leaving_reason, ep.employment_status, ep.profile_photo_url,
          dep.name as department_name, des.name as designation_name, des.grade
   FROM users u
@@ -154,6 +156,7 @@ const employeeSelect = `
   LEFT JOIN hr_departments dep ON dep.id = ep.department_id
   LEFT JOIN hr_designations des ON des.id = ep.designation_id
   LEFT JOIN users mgr ON mgr.id = ep.reporting_manager_id
+  LEFT JOIN projects proj ON proj.id = ep.project_id
 `;
 
 async function addTimeline(client, companyId, userId, eventType, title, description, actorId, eventDate = null) {
@@ -387,7 +390,7 @@ router.post('/', async (req, res) => {
       permanent_address, current_address,
       emergency_contact_name, emergency_contact_phone,
       employment_type, probation_end_date, notice_period_days,
-      reporting_manager_id, work_location,
+      reporting_manager_id, work_location, project_id,
     } = req.body;
 
     // Generate employee code if not provided
@@ -423,8 +426,8 @@ router.post('/', async (req, res) => {
         pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
         bank_name, bank_account_number, bank_ifsc, permanent_address, current_address,
         emergency_contact_name, emergency_contact_phone, employment_type, employee_category,
-        reporting_manager_id, work_location, probation_end_date, notice_period_days)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
+        reporting_manager_id, work_location, project_id, probation_end_date, notice_period_days)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
       [userId, req.user.company_id, department_id || null, designation_id || null,
        date_of_joining || null, date_of_birth || null, gender || null,
        father_name || null, mother_name || null, marital_status || null,
@@ -435,7 +438,7 @@ router.post('/', async (req, res) => {
        emergency_contact_name || null, emergency_contact_phone || null,
        employment_type || 'permanent', req.body.employee_category || 'staff',
        reporting_manager_id || null, work_location || null,
-       probation_end_date || null, notice_period_days || 30]
+       project_id || null, probation_end_date || null, notice_period_days || 30]
     );
 
     await addTimeline(
@@ -480,7 +483,7 @@ router.put('/:id', async (req, res) => {
       pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
       bank_name, bank_account_number, bank_ifsc, permanent_address, current_address,
       emergency_contact_name, emergency_contact_phone, employment_type, employee_category,
-      probation_end_date, notice_period_days, reporting_manager_id, work_location,
+      probation_end_date, notice_period_days, reporting_manager_id, work_location, project_id,
     } = req.body;
 
     let deptName = '', desigName = '';
@@ -507,8 +510,8 @@ router.put('/:id', async (req, res) => {
         pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
         bank_name, bank_account_number, bank_ifsc, permanent_address, current_address,
         emergency_contact_name, emergency_contact_phone, employment_type, employee_category,
-        reporting_manager_id, work_location, probation_end_date, notice_period_days, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW())
+        reporting_manager_id, work_location, project_id, probation_end_date, notice_period_days, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          department_id=$3, designation_id=$4, date_of_joining=$5, date_of_birth=$6,
          gender=$7, father_name=$8, mother_name=$9, marital_status=$10, blood_group=$11,
@@ -517,7 +520,7 @@ router.put('/:id', async (req, res) => {
          bank_ifsc=$20, permanent_address=$21, current_address=$22,
          emergency_contact_name=$23, emergency_contact_phone=$24, employment_type=$25,
          employee_category=$26, reporting_manager_id=$27, work_location=$28,
-         probation_end_date=$29, notice_period_days=$30, updated_at=NOW()`,
+         project_id=$29, probation_end_date=$30, notice_period_days=$31, updated_at=NOW()`,
       [req.params.id, req.user.company_id, department_id || null, designation_id || null,
        date_of_joining || null, date_of_birth || null, gender || null,
        father_name || null, mother_name || null, marital_status || null,
@@ -528,7 +531,7 @@ router.put('/:id', async (req, res) => {
        emergency_contact_name || null, emergency_contact_phone || null,
        employment_type || 'permanent', employee_category || 'staff',
        reporting_manager_id || null, work_location || null,
-       probation_end_date || null, notice_period_days || 30]
+       project_id || null, probation_end_date || null, notice_period_days || 30]
     );
 
     await addTimeline(
