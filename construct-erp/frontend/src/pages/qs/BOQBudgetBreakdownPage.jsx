@@ -1003,6 +1003,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
         <BOQPrintFooter />
       </div>
     </div>
+    </div>
       )}
     </div>
   );
