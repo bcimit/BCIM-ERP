@@ -1712,7 +1712,7 @@ export default function WorkOrderPage() {
               <select value={filterProject} onChange={e => setFilterProject(e.target.value)}
                 className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 text-xs text-slate-700 outline-none focus:border-indigo-400 transition-all appearance-none cursor-pointer">
                 <option value="">All Projects</option>
-                {projectsData.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {projectsData.map(p => <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ${p.name}` : p.name}</option>)}
               </select>
             </div>
             <div className="relative flex-1 min-w-[180px]">

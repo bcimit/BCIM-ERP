@@ -2262,7 +2262,7 @@ export default function POPage() {
           >
             <option value="all">All Projects</option>
             {projectsData.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>{p.project_code ? `${p.project_code} — ${p.name}` : p.name}</option>
             ))}
           </select>
         </div>
