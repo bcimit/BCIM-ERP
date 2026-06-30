@@ -5,7 +5,7 @@ import { Plus, X, Pencil, Trash2, RotateCcw, Package } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { hrEmpAssetsAPI } from '../../api/client';
+import { hrEmpAssetsAPI, hrEmployeesAPI } from '../../api/client';
 import { PageHeader } from '../../theme';
 import { FIELD_HL } from '../../constants/fieldStyles';
 
@@ -34,7 +34,7 @@ function AssetForm({ asset, employees=[], onClose, onSaved }) {
           <div><label className="block text-[11px] text-slate-500 mb-1">Employee *</label>
             <select value={f.employee_id} onChange={e=>set('employee_id',e.target.value)} className={INP}>
               <option value="">Select…</option>
-              {employees.map(e=><option key={e.id} value={e.id}>{e.full_name} ({e.employee_id})</option>)}
+              {employees.map(e=><option key={e.id} value={e.id}>{e.name||e.full_name} ({e.employee_code||e.emp_code})</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -125,6 +125,8 @@ export default function EmployeeAssetsPage() {
   const [filterStatus, setFilterStatus] = useState('assigned');
 
   const { data: assets=[] } = useQuery({ queryKey:['hr-emp-assets',filterStatus], queryFn:()=>hrEmpAssetsAPI.list({status:filterStatus||undefined}).then(r=>r.data?.data||[]) });
+  const { data: empRes } = useQuery({ queryKey:['hr-employees-simple'], queryFn:()=>hrEmployeesAPI.list({ employment_status:'active', limit:500 }).then(r=>r.data) });
+  const employees = empRes?.data || [];
   const del = useMutation({ mutationFn:id=>hrEmpAssetsAPI.remove(id), onSuccess:()=>{ toast.success('Deleted'); qc.invalidateQueries({queryKey:['hr-emp-assets']}); } });
 
   return (
@@ -188,7 +190,7 @@ export default function EmployeeAssetsPage() {
           </table>
         </div>
       </div>
-      {showForm && <AssetForm asset={editAsset} onClose={()=>{setShowForm(false);setEditAsset(null);}} onSaved={()=>qc.invalidateQueries({queryKey:['hr-emp-assets']})} />}
+      {showForm && <AssetForm asset={editAsset} employees={employees} onClose={()=>{setShowForm(false);setEditAsset(null);}} onSaved={()=>qc.invalidateQueries({queryKey:['hr-emp-assets']})} />}
       {returnAsset && <ReturnModal asset={returnAsset} onClose={()=>setReturnAsset(null)} onSaved={()=>qc.invalidateQueries({queryKey:['hr-emp-assets']})} />}
     </div>
   );
