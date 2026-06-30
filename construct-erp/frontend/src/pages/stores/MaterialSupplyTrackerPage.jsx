@@ -26,6 +26,61 @@ function exportCSV(filename, headers, dataRows) {
   URL.revokeObjectURL(url);
 }
 
+function PrintHeader({ title, subtitle, meta = [] }) {
+  return (
+    <div className="hidden print:block" style={{ fontFamily: 'Arial, sans-serif', marginBottom: 18 }}>
+      {/* Top colour bar */}
+      <div style={{ height: 5, background: 'linear-gradient(90deg,#1e3a5f 0%,#2563eb 60%,#38bdf8 100%)', marginBottom: 14 }} />
+      {/* Letterhead row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 48, height: 48, background: '#1e3a5f', borderRadius: 6,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontWeight: 900, fontSize: 13, letterSpacing: 1, flexShrink: 0,
+          }}>BCIM</div>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#1e3a5f', lineHeight: 1.15 }}>
+              BCIM Engineering Pvt. Ltd.
+            </div>
+            <div style={{ fontSize: 9, color: '#64748b', marginTop: 3 }}>
+              Construction &amp; Infrastructure Management
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 9, color: '#94a3b8', lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 600, color: '#64748b' }}>Confidential — Internal Use Only</div>
+          <div>Generated: {dayjs().format('DD MMM YYYY, hh:mm A')}</div>
+        </div>
+      </div>
+      {/* Section title band */}
+      <div style={{
+        background: '#1e3a5f', color: '#fff', padding: '6px 12px',
+        borderRadius: 4, marginBottom: 8,
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>
+          {title}
+        </div>
+        {subtitle && (
+          <div style={{ fontSize: 9, color: '#93c5fd', marginTop: 2 }}>{subtitle}</div>
+        )}
+      </div>
+      {/* Meta row */}
+      {meta.filter(([, v]) => v).length > 0 && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 20,
+          fontSize: 9, color: '#475569',
+          borderBottom: '1px solid #e2e8f0', paddingBottom: 8, marginBottom: 10,
+        }}>
+          {meta.filter(([, v]) => v).map(([k, v]) => (
+            <span key={k}><span style={{ fontWeight: 700, color: '#1e293b' }}>{k}:</span> {v}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Drag-to-scroll ────────────────────────────────────────────────────────────
 function useDragScroll() {
   const ref = useRef(null);
@@ -664,7 +719,10 @@ function SummaryTab({ projectId }) {
   const handlePrint = useReactToPrint({
     contentRef: summaryPrintRef,
     documentTitle: `Supply_Summary_${dayjs().format('YYYY-MM-DD')}`,
-    pageStyle: '@page { size: A4; margin: 10mm; }',
+    pageStyle: `
+      @page { size: A4; margin: 10mm 10mm 12mm 10mm; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    `,
   });
 
   const handleExportCSV = () => {
@@ -702,11 +760,14 @@ function SummaryTab({ projectId }) {
         <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse" />)}</div>
       ) : (
         <div ref={summaryPrintRef}>
-          <div className="hidden print:block mb-4 text-center">
-            <div className="text-base font-bold">BCIM Engineering — Material Supply Summary</div>
-            <div className="text-sm">Grouped by: {groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}</div>
-            <div className="text-xs text-slate-500">Generated: {dayjs().format('DD MMM YYYY')}</div>
-          </div>
+          <PrintHeader
+            title="Material Supply Summary / Abstract"
+            subtitle="Aggregated view of material procurement and delivery progress"
+            meta={[
+              ['Grouped By', groupBy.charAt(0).toUpperCase() + groupBy.slice(1)],
+              ['Total Groups', String(data.length)],
+            ]}
+          />
           <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
             <table className="w-full text-xs">
               <thead>
@@ -784,7 +845,10 @@ export default function MaterialSupplyTrackerPage() {
   const handlePrintTracker = useReactToPrint({
     contentRef: trackerPrintRef,
     documentTitle: `Supply_Tracker_${dayjs().format('YYYY-MM-DD')}`,
-    pageStyle: '@page { size: A4 landscape; margin: 8mm; }',
+    pageStyle: `
+      @page { size: A4 landscape; margin: 10mm 10mm 12mm 10mm; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    `,
   });
 
   const exportTrackerCSV = () => {
@@ -907,10 +971,15 @@ export default function MaterialSupplyTrackerPage() {
               </div>
             )}
             <div ref={trackerPrintRef}>
-              <div className="hidden print:block mb-4 text-center">
-                <div className="text-base font-bold">BCIM Engineering — Material Supply Tracker</div>
-                <div className="text-xs text-slate-500">Generated: {dayjs().format('DD MMM YYYY')}</div>
-              </div>
+              <PrintHeader
+                title="Material Supply Tracker"
+                subtitle="End-to-end MR → PO → Delivery → GRN → Site Issue tracking"
+                meta={[
+                  ['Project', filters.project_id ? (projects.find(p => p.id === filters.project_id)?.name || filters.project_id) : 'All Projects'],
+                  ['Status Filter', filters.status || 'All Statuses'],
+                  ['Records', `${rows.length}${isTruncated ? ` of ${totalCount}` : ''}`],
+                ]}
+              />
               <TrackerTable rows={rows} isLoading={isLoading} onRowClick={setDetail} />
             </div>
           </>
