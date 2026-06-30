@@ -149,7 +149,7 @@ router.get('/:project_id', async (req, res) => {
       SELECT li.boq_item_id, li.cost_head, SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li
       JOIN tqs_bills tb ON tb.id = li.bill_id
-      WHERE tb.project_id = $1 AND tb.workflow_status = 'paid'
+      WHERE tb.project_id = $1 AND tb.is_deleted = FALSE
       GROUP BY li.boq_item_id, li.cost_head
     `, [project_id]);
 
@@ -336,7 +336,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     const tqsActuals = await query(`
       SELECT li.cost_head, SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
-      WHERE tb.project_id=$1 AND tb.workflow_status='paid' AND li.cost_head IS NOT NULL
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
       GROUP BY li.cost_head`, [project_id]);
 
     // SC advances (dedicated SC module) — mapped to "Sub Con"
@@ -405,7 +405,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       SELECT MIN(txn_date)::date AS first_date FROM (
         SELECT MIN(bill_date) AS txn_date FROM ra_bills WHERE project_id=$1 AND status IN ('certified','paid') AND bill_date IS NOT NULL
         UNION ALL
-        SELECT MIN(inv_date)  AS txn_date FROM tqs_bills WHERE project_id=$1 AND workflow_status='paid' AND inv_date IS NOT NULL
+        SELECT MIN(inv_date)  AS txn_date FROM tqs_bills WHERE project_id=$1 AND is_deleted = FALSE AND inv_date IS NOT NULL
         UNION ALL
         SELECT MIN(entry_date) AS txn_date FROM stores_petty_cash_entries WHERE project_id=$1 AND status='Approved' AND entry_date IS NOT NULL
       ) d WHERE txn_date IS NOT NULL
@@ -530,7 +530,7 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         FROM tqs_bill_line_items li
         JOIN tqs_bills tb ON tb.id = li.bill_id
         WHERE tb.project_id=$1 AND li.cost_head=$2
-          AND tb.workflow_status IN ('paid','accounts')
+          AND tb.is_deleted = FALSE
         ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, cost_head]);
       rows.push(...tqs.rows);
 
@@ -590,7 +590,7 @@ router.get('/:project_id/costhead-monthly', async (req, res) => {
       SELECT TO_CHAR(COALESCE(tb.inv_date, tb.created_at), 'YYYY-MM') AS month,
              li.cost_head, SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
-      WHERE tb.project_id=$1 AND tb.workflow_status='paid' AND li.cost_head IS NOT NULL
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
       GROUP BY 1, 2`, [project_id]);
 
     const advM = await query(`
@@ -806,7 +806,7 @@ router.post('/:project_id/send-budget-alert', async (req, res) => {
     );
     const raA   = await query(`SELECT rbi.cost_head, SUM(rbi.current_qty*rbi.rate) AS actual FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id=rbi.ra_bill_id WHERE rb.project_id=$1 AND rb.status IN ('certified','paid') GROUP BY rbi.cost_head`, [project_id]);
     const scA   = await query(`SELECT 'Sub Con' AS cost_head, SUM(bi.curr_qty*bi.rate) AS actual FROM sc_bill_items bi JOIN sc_bills sb ON sb.id=bi.bill_id WHERE sb.project_id=$1 AND sb.status NOT IN ('draft','rejected','queried')`, [project_id]);
-    const tqsA  = await query(`SELECT li.cost_head, SUM(li.basic_amount) AS actual FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id=li.bill_id WHERE tb.project_id=$1 AND tb.workflow_status='paid' AND li.cost_head IS NOT NULL GROUP BY li.cost_head`, [project_id]);
+    const tqsA  = await query(`SELECT li.cost_head, SUM(li.basic_amount) AS actual FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id=li.bill_id WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL GROUP BY li.cost_head`, [project_id]);
     const spcA  = await query(`SELECT 'Petty Cash' AS cost_head, SUM(amount) AS actual FROM stores_petty_cash_entries WHERE project_id=$1 AND status='Approved'`, [project_id]);
     const advA  = await query(`SELECT 'Sub Con' AS cost_head, SUM(paid_amount) AS actual FROM tqs_advance_vouchers WHERE project_id=$1 AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0`, [project_id]);
 
