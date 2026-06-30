@@ -1409,6 +1409,7 @@ export default function WorkOrderPage() {
   const [sortConfig,      setSortConfig]      = useState({ key: 'date', dir: 'desc' });
   const qc = useQueryClient();
   const location = useLocation();
+  const seriesFilter = new URLSearchParams(location.search).get('series') || '';
 
   const { data: woData = [], isLoading } = useQuery({
     queryKey: ['work-orders'],
@@ -1489,6 +1490,7 @@ export default function WorkOrderPage() {
   /* ── Filtering ── */
   const filtered = allWOs.filter(wo => {
     const q = search.toLowerCase();
+    const matchSeries   = !seriesFilter || (wo.wo_number || '').toUpperCase().startsWith(seriesFilter.toUpperCase());
     const matchSearch   = !search || `${wo.wo_number} ${wo.vendor_name||''} ${wo.project_name||''} ${wo.subject||''} ${wo.work_category||''}`.toLowerCase().includes(q);
     const matchStatus   = !filterStatus   || wo.status        === filterStatus;
     const matchProject  = !filterProject  || String(wo.project_id) === String(filterProject);
@@ -1496,7 +1498,7 @@ export default function WorkOrderPage() {
     const woDate        = wo.start_date || wo.created_at;
     const matchFrom     = !dateFrom || !woDate || dayjs(woDate).isAfter(dayjs(dateFrom).subtract(1, 'day'));
     const matchTo       = !dateTo   || !woDate || dayjs(woDate).isBefore(dayjs(dateTo).add(1, 'day'));
-    return matchSearch && matchStatus && matchProject && matchCategory && matchFrom && matchTo;
+    return matchSeries && matchSearch && matchStatus && matchProject && matchCategory && matchFrom && matchTo;
   });
 
   /* ── Sorting ── */
@@ -1553,8 +1555,12 @@ export default function WorkOrderPage() {
               <ChevronRight className="w-3 h-3" />
               <span className="text-slate-500 font-semibold">Work Orders</span>
             </div>
-            <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Work Orders</h1>
-            <p className="text-xs text-slate-400 mt-0.5">Subcontractor & labour work order management</p>
+            <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">
+              {seriesFilter === 'WOTQS' ? 'TQS Work Orders' : seriesFilter === 'WODQS' ? 'DQS Work Orders' : 'Work Orders'}
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {seriesFilter ? `Showing ${seriesFilter}* series only` : 'Subcontractor & labour work order management'}
+            </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setShowPdfImport(true)}
