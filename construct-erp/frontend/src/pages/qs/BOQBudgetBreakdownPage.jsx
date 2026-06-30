@@ -901,9 +901,11 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
     saveMutation.mutate({ cost_head, budget_amount: n });
   };
 
+  const rows = data || [];
+  const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
+  const totalActual = rows.reduce((s, r) => s + r.actual, 0);
+
   // Contingency absorption: overages in non-derived heads draw from the contingency reserve.
-  // Contingency is an emergency fund — it absorbs cost head overruns so they are not "over budget"
-  // as long as there is contingency remaining to cover them.
   const totalNonDerivedOverage = rows
     .filter(r => !r.derived && r.budget > 0 && r.actual > r.budget)
     .reduce((s, r) => s + (r.actual - r.budget), 0);
@@ -911,10 +913,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
   const contBudget = contRow?.budget || 0;
   const contAbsorbed = Math.min(totalNonDerivedOverage, contBudget);
   const contRemaining = contBudget - contAbsorbed;
-  // Fully covered = all overages fit within contingency
   const contingencyCoversAll = contBudget > 0 && totalNonDerivedOverage <= contBudget;
 
-  // Heads at ≥80% or over budget (derived heads like Profit/Contingency are reserves — never flagged)
   const alertHeads     = data.filter(r => !r.derived && r.budget > 0 && r.actual / r.budget >= 0.8);
   const overHeads      = alertHeads.filter(r => r.actual > r.budget);
   const nearHeads      = alertHeads.filter(r => r.actual <= r.budget);
@@ -923,10 +923,6 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
     if (!hasActual) return;
     setExpandedHead(prev => prev === cost_head ? null : cost_head);
   };
-
-  const rows = data || [];
-  const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
-  const totalActual = rows.reduce((s, r) => s + r.actual, 0);
 
   if (isLoading && costheadView === 'summary') return <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>;
 
