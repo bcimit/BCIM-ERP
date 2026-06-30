@@ -665,7 +665,7 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
     ? Math.max(0, dayjs(form.end_date).diff(dayjs(form.start_date), 'day'))
     : null;
 
-  const valid = form.project_id && form.vendor_id && form.subject;
+  const valid = form.project_id && form.vendor_id && form.subject && form.mrs_id;
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
@@ -731,9 +731,9 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
               <ZField label="Cost Head">
                 <input className={Z_INP} placeholder="e.g. Civil Works" value={form.cost_head} onChange={e => f('cost_head', e.target.value)} />
               </ZField>
-              <ZField label="Approved MR (optional)" className="col-span-2 md:col-span-2">
-                <select className={Z_INP} value={form.mrs_id} onChange={e => selectMR(e.target.value)}>
-                  <option value="">— Not linked to an MR —</option>
+              <ZField label="Approved MR *" className="col-span-2 md:col-span-2">
+                <select className={`${Z_INP}${!form.mrs_id ? ' border-red-300' : ''}`} value={form.mrs_id} onChange={e => selectMR(e.target.value)}>
+                  <option value="">— Select an Approved MR (required) —</option>
                   {activeMrsList.map(m => (
                     <option key={m.id} value={m.id}>{mrLabel(m)}</option>
                   ))}
