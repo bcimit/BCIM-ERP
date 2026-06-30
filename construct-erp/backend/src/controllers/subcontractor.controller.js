@@ -90,20 +90,14 @@ const getWorkOrders = async (req, res) => {
       LEFT JOIN (
         SELECT
           COALESCE(tb.wo_number, tb.po_number) AS wo_number,
-          tb.vendor_id,
-          tb.vendor_name,
           SUM(COALESCE(tb.basic_amount, tb.total_amount, 0)) AS total_billed,
           SUM(CASE WHEN tb.workflow_status = 'paid' THEN COALESCE(tb.basic_amount, tb.total_amount, 0) ELSE 0 END) AS total_paid
         FROM tqs_bills tb
         WHERE tb.is_deleted = FALSE
           AND (LOWER(COALESCE(tb.bill_type, '')) = 'wo' OR tb.wo_number IS NOT NULL OR tb.po_number ILIKE 'WO%')
-        GROUP BY COALESCE(tb.wo_number, tb.po_number), tb.vendor_id, tb.vendor_name
+        GROUP BY COALESCE(tb.wo_number, tb.po_number)
       ) tqs_billed
         ON tqs_billed.wo_number = wo.wo_number
-       AND (
-         tqs_billed.vendor_id = wo.vendor_id
-         OR (tqs_billed.vendor_id IS NULL AND LOWER(TRIM(tqs_billed.vendor_name)) = LOWER(TRIM(v.name)))
-       )
       WHERE p.company_id = $1
     `;
     // NOTE: previously this list was hard-filtered to subcontractor/labour/
