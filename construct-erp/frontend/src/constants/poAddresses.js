@@ -9,6 +9,11 @@ Survey nos 201, Manikonda, Rajendranagar Mandal,
 HYDERABAD - 500089
 Contact Person BCIM: Mr. Vijayan - 82700 94285`;
 
+export const DQS_YELAHANKA_DELIVERY_ADDRESS = `Residential Apartments - Yelahanka (Retaining Wall & STP)
+Project: DQS, YNT 63, Survey No. 5/3 & 6/1, Mandalakunte Village,
+Chikkabommasandra, Yelahanka Hobli, Near Mother Dairy, Bangalore 560065
+Contact Person: Mr. Ananthan 73036 75533`;
+
 export const BCIM_BILLING_ADDRESS_LANCO = `BCIM Engineering Private Limited
 TOWER VIEW APARTMENT, NO 403, 4th FLOOR,
 PLOT NO 26 & 27, SRI LAKSHMI NAGAR COLONY,
@@ -28,6 +33,12 @@ export function isLancoProject(...parts) {
   return s.includes('lanco') || s.includes('lancho') || s.includes('lh10');
 }
 
+// DQS Yelahanka project — code WDIRY0151 or name containing 'yelah'/'dqs'.
+export function isDQSYelahankaProject(...parts) {
+  const s = parts.filter(Boolean).join(' ').toLowerCase().replace(/[\s-]/g, '');
+  return s.includes('wdiry0151') || s.includes('yelah') || (s.includes('dqs') && s.includes('ynt'));
+}
+
 // Billing address (BCIM's own address, as the buyer) — varies per project/company entity.
 export function getBillingAddress(projectCode, projectName) {
   return isLancoProject(projectCode, projectName) ? BCIM_BILLING_ADDRESS_LANCO : BCIM_BILLING_ADDRESS_DEFAULT;
@@ -38,6 +49,7 @@ export function getBillingAddress(projectCode, projectName) {
 export function getDeliveryAddress(project) {
   if (!project) return '';
   if (isLancoProject(project.project_code, project.name)) return LANCO_DELIVERY_ADDRESS;
+  if (isDQSYelahankaProject(project.project_code, project.name)) return DQS_YELAHANKA_DELIVERY_ADDRESS;
   const lines = [project.name].filter(Boolean);
   if (project.location) lines.push(project.location);
   const cityState = [project.city, project.state].filter(Boolean).join(', ');
