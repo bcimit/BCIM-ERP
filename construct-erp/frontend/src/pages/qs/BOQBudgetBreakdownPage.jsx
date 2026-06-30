@@ -903,7 +903,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
 
   const rows = data || [];
   const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
-  const totalActual = rows.reduce((s, r) => s + r.actual, 0);
+  const totalActual = rows.filter(r => !r.derived).reduce((s, r) => s + r.actual, 0);
 
   // Contingency absorption: overages in non-derived heads draw from the contingency reserve.
   const totalNonDerivedOverage = rows
