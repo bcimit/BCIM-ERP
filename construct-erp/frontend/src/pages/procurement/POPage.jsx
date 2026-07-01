@@ -352,7 +352,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
   });
 
   // BOQ items for the selected project — drives Chapter + Line Item dropdowns on each PO line
-  const { data: boqItemsRaw = [] } = useQuery({
+  const { data: boqItemsRaw = [], isLoading: boqLoading } = useQuery({
     queryKey: ['boq-items-for-po', form.project_id],
     queryFn: () => boqAPI.list({ project_id: form.project_id }).then(r => r.data?.data ?? []),
     enabled: !!form.project_id,
@@ -360,7 +360,8 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
   });
   const boqChapters = useMemo(() => {
     const seen = new Set();
-    return boqItemsRaw.filter(it => it.chapter_no && !seen.has(it.chapter_no) && seen.add(it.chapter_no))
+    return boqItemsRaw
+      .filter(it => it.chapter_no != null && String(it.chapter_no).trim() !== '' && !seen.has(it.chapter_no) && seen.add(it.chapter_no))
       .map(it => ({ chapter_no: it.chapter_no, chapter_name: it.chapter_name }));
   }, [boqItemsRaw]);
 
@@ -836,54 +837,62 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                     </div>
                     {/* BOQ linkage sub-row */}
                     <div className="flex flex-wrap gap-2 pt-1 pb-0.5 pl-[calc(32px+8px+90px+8px)]">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">Chapter</span>
-                        <select
-                          className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[140px]"
-                          value={it.boq_chapter || ''}
-                          onChange={e => {
-                            setItem(i, 'boq_chapter', e.target.value);
-                            setItem(i, 'boq_item_id', '');
-                          }}
-                        >
-                          <option value="">— Select chapter —</option>
-                          {boqChapters.map(ch => (
-                            <option key={ch.chapter_no} value={ch.chapter_no}>
-                              {ch.chapter_no} – {ch.chapter_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {it.boq_chapter && (
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">BOQ Item</span>
-                          <select
-                            className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[220px]"
-                            value={it.boq_item_id || ''}
-                            onChange={e => setItem(i, 'boq_item_id', e.target.value)}
-                          >
-                            <option value="">— Select line item —</option>
-                            {boqItemsRaw
-                              .filter(b => b.chapter_no === it.boq_chapter)
-                              .map(b => (
-                                <option key={b.id} value={b.id}>
-                                  {b.item_no} – {b.description}
+                      {!form.project_id ? (
+                        <span className="text-[10px] text-slate-400 italic">Select a project in Step 1 to link BOQ chapter / cost head</span>
+                      ) : boqLoading ? (
+                        <span className="text-[10px] text-slate-400 italic">Loading BOQ…</span>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">Chapter</span>
+                            <select
+                              className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[140px]"
+                              value={it.boq_chapter || ''}
+                              onChange={e => {
+                                setItem(i, 'boq_chapter', e.target.value);
+                                setItem(i, 'boq_item_id', '');
+                              }}
+                            >
+                              <option value="">— Select chapter —</option>
+                              {boqChapters.map(ch => (
+                                <option key={ch.chapter_no} value={ch.chapter_no}>
+                                  {ch.chapter_no} – {ch.chapter_name}
                                 </option>
                               ))}
-                          </select>
-                        </div>
+                            </select>
+                          </div>
+                          {it.boq_chapter && (
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">BOQ Item</span>
+                              <select
+                                className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[220px]"
+                                value={it.boq_item_id || ''}
+                                onChange={e => setItem(i, 'boq_item_id', e.target.value)}
+                              >
+                                <option value="">— Select line item —</option>
+                                {boqItemsRaw
+                                  .filter(b => String(b.chapter_no) === String(it.boq_chapter))
+                                  .map(b => (
+                                    <option key={b.id} value={b.id}>
+                                      {b.item_no} – {b.description}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">Cost Head</span>
+                            <select
+                              className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[160px]"
+                              value={it.cost_head || ''}
+                              onChange={e => setItem(i, 'cost_head', e.target.value)}
+                            >
+                              <option value="">— Select cost head —</option>
+                              {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                          </div>
+                        </>
                       )}
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">Cost Head</span>
-                        <select
-                          className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[160px]"
-                          value={it.cost_head || ''}
-                          onChange={e => setItem(i, 'cost_head', e.target.value)}
-                        >
-                          <option value="">— Select cost head —</option>
-                          {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                      </div>
                     </div>
                   </div>
                   );
