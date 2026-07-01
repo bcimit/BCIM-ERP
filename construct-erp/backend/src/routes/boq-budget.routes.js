@@ -476,7 +476,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     const DERIVED_HEADS = new Set(['Profit', CONTINGENCY_HEAD]);
     const data = [...allHeads].map(head => ({
       cost_head: head,
-      boq_value: boqValueMap[head] || 0,
+      boq_value: boqValueMap[head] > 0 ? boqValueMap[head] : (budgetMap[head] || 0),
       budget: budgetMap[head] || 0,
       actual: actualMap[head] || 0,
       balance: (budgetMap[head] || 0) - (actualMap[head] || 0),
