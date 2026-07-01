@@ -1316,4 +1316,28 @@ router.post('/celebrations/trigger', async (req, res) => {
   }
 });
 
+// ── POST /compliance/celebrations/test-email — send sample greeting to any email
+router.post('/celebrations/test-email', async (req, res) => {
+  try {
+    const { type = 'birthday', email, name = 'Raja', years = 3 } = req.body;
+    if (!email) return res.status(400).json({ error: 'email is required' });
+
+    const { sendMail } = require('../services/mail.service');
+    const companyRes = await query('SELECT name FROM companies WHERE id = $1', [req.user.company_id]);
+    const companyName = companyRes.rows[0]?.name || 'BCIM Construction';
+
+    // Import template builders from the service
+    const svc = require('../utils/hr-birthday-anniversary.service');
+    const html    = type === 'anniversary' ? svc.anniversaryEmailHtml(name, years, companyName) : svc.birthdayEmailHtml(name, companyName);
+    const subject = type === 'anniversary'
+      ? `🏆 Happy ${svc.ORDINAL(years)} Work Anniversary, ${name}! — ${companyName}`
+      : `🎂 Happy Birthday, ${name}! — ${companyName}`;
+
+    await sendMail({ to: email, subject, html });
+    res.json({ ok: true, sent_to: email, type, subject });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

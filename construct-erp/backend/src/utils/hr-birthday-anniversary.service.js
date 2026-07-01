@@ -356,4 +356,4 @@ function initBirthdayAnniversary() {
   logger.info(`Initialized — cron: "${schedule}" tz: ${tz}`);
 }
 
-module.exports = { initBirthdayAnniversary, runBirthdayAnniversary, getTodayCelebrations };
+module.exports = { initBirthdayAnniversary, runBirthdayAnniversary, getTodayCelebrations, birthdayEmailHtml, anniversaryEmailHtml, ORDINAL };
