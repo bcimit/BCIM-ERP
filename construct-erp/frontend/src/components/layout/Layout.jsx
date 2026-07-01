@@ -58,7 +58,6 @@ const navGroups = [
     { to: '/procurement/po',               icon: ShoppingCart,  label: 'Purchase Orders' },
     { to: '/procurement/po-amendments',    icon: FileSignature, label: 'PO Amendments' },
     { to: '/procurement/po-register',      icon: ClipboardList, label: 'PO Register' },
-    { to: '/procurement/budget-control',   icon: PieChart,      label: 'Budget & Cost Control' },
     { to: '/procurement/boq-budget',      icon: BarChart3,     label: 'BOQ Budget Breakdown' },
     { to: '/procurement/work-orders',      icon: Hammer,        label: 'Work Orders' },
     { to: '/procurement/wo-register',      icon: ClipboardList, label: 'WO Register' },
