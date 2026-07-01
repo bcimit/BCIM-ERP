@@ -1,6 +1,6 @@
 // src/pages/procurement/POPage.jsx
 import RecordAttachments from '../../components/shared/RecordAttachments';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import useAuthStore from '../../store/authStore';
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
-import { poAPI, vendorAPI, projectAPI, mrsAPI, inventoryAPI, companySettingsAPI } from '../../api/client';
+import { poAPI, vendorAPI, projectAPI, mrsAPI, inventoryAPI, companySettingsAPI, boqAPI } from '../../api/client';
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import VendorSelect from '../../components/shared/VendorSelect';
@@ -328,10 +328,13 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
           hsn_code:      it.hsn_code || '',
           req_date:      it.req_date ? dayjs(it.req_date).format('YYYY-MM-DD') : '',
           mrs_item_id:   it.mrs_item_id || null,
+          boq_item_id:   it.boq_item_id || '',
+          boq_chapter:   it.boq_chapter || '',
+          cost_head:     it.cost_head || '',
         }))
       : prefill?.items?.length
         ? prefill.items
-        : [{ material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '', item_code: '', discount_pct: '0' }]
+        : [{ material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '', item_code: '', discount_pct: '0', boq_item_id: '', boq_chapter: '', cost_head: '' }]
   );
 
   // Vendors mapped to the selected project — restricts the Vendor dropdown so
@@ -347,6 +350,19 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
     queryFn: () => inventoryAPI.itemsLookup().then(r => r.data?.data ?? []),
     staleTime: 5 * 60 * 1000,
   });
+
+  // BOQ items for the selected project — drives Chapter + Line Item dropdowns on each PO line
+  const { data: boqItemsRaw = [] } = useQuery({
+    queryKey: ['boq-items-for-po', form.project_id],
+    queryFn: () => boqAPI.list({ project_id: form.project_id }).then(r => r.data?.data ?? []),
+    enabled: !!form.project_id,
+    staleTime: 2 * 60 * 1000,
+  });
+  const boqChapters = useMemo(() => {
+    const seen = new Set();
+    return boqItemsRaw.filter(it => it.chapter_no && !seen.has(it.chapter_no) && seen.add(it.chapter_no))
+      .map(it => ({ chapter_no: it.chapter_no, chapter_name: it.chapter_name }));
+  }, [boqItemsRaw]);
 
   let vendorOptions = form.project_id && projectVendors?.length ? projectVendors : vendors;
   // Always include the PO's original vendor even if it's not in the project's
@@ -411,7 +427,7 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
     }
   };
   const setItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
-  const addItem = () => setItems(p => [...p, { material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '' }]);
+  const addItem = () => setItems(p => [...p, { material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '', item_code: '', discount_pct: '0', boq_item_id: '', boq_chapter: '', cost_head: '' }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
   const activeMrsList = mrsList.filter(m => m.status !== 'rejected');
 
@@ -817,6 +833,57 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
                         className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                    </div>
+                    {/* BOQ linkage sub-row */}
+                    <div className="flex flex-wrap gap-2 pt-1 pb-0.5 pl-[calc(32px+8px+90px+8px)]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">Chapter</span>
+                        <select
+                          className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[140px]"
+                          value={it.boq_chapter || ''}
+                          onChange={e => {
+                            setItem(i, 'boq_chapter', e.target.value);
+                            setItem(i, 'boq_item_id', '');
+                          }}
+                        >
+                          <option value="">— Select chapter —</option>
+                          {boqChapters.map(ch => (
+                            <option key={ch.chapter_no} value={ch.chapter_no}>
+                              {ch.chapter_no} – {ch.chapter_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {it.boq_chapter && (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">BOQ Item</span>
+                          <select
+                            className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[220px]"
+                            value={it.boq_item_id || ''}
+                            onChange={e => setItem(i, 'boq_item_id', e.target.value)}
+                          >
+                            <option value="">— Select line item —</option>
+                            {boqItemsRaw
+                              .filter(b => b.chapter_no === it.boq_chapter)
+                              .map(b => (
+                                <option key={b.id} value={b.id}>
+                                  {b.item_no} – {b.description}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap">Cost Head</span>
+                        <select
+                          className="h-6 text-[11px] border border-slate-200 rounded-md px-1.5 text-slate-600 bg-white focus:border-indigo-400 focus:outline-none min-w-[160px]"
+                          value={it.cost_head || ''}
+                          onChange={e => setItem(i, 'cost_head', e.target.value)}
+                        >
+                          <option value="">— Select cost head —</option>
+                          {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
                     </div>
                   </div>
                   );
