@@ -331,7 +331,6 @@ export default function IGNPage() {
   const { user } = useAuthStore();
   const isSuperAdmin = String(user?.role || '').toLowerCase() === 'super_admin';
   const [showForm, setShowForm]           = useState(() => !!new URLSearchParams(window.location.search).get('from_grs'));
-  const [showGateEntry, setShowGateEntry] = useState(false);
   const [receiveId, setReceiveId]         = useState(null);
   const [selectedId, setSelectedId]       = useState(null);
   const [search, setSearch]               = useState('');
@@ -340,7 +339,6 @@ export default function IGNPage() {
     return sp.get('status') || 'all';
   });
   const [projectFilter, setProjectFilter] = useState('');
-  const isGateRole = GATE_ROLES.includes(String(user?.role || '').toLowerCase());
 
   const { data: ignList = [], isLoading, refetch } = useQuery({
     queryKey: ['ign-list', projectFilter],
@@ -456,12 +454,6 @@ export default function IGNPage() {
               style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', color: '#fff' }}>
               <Download size={14} /> Export
             </button>
-            {isGateRole && (
-              <button onClick={() => setShowGateEntry(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm"
-                style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}>
-                <Truck size={14} /> Gate Entry
-              </button>
-            )}
             <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm"
               style={{ background: '#fff', color: Theme.navyDark, border: '1px solid rgba(255,255,255,0.4)' }}>
               <Plus size={14} /> New IGN
@@ -638,14 +630,6 @@ export default function IGNPage() {
             projects={projects}
             qc={qc}
             fromGrsId={new URLSearchParams(window.location.search).get('from_grs')}
-          />
-        )}
-
-        {showGateEntry && (
-          <GateEntryForm
-            onClose={() => setShowGateEntry(false)}
-            projects={projects}
-            qc={qc}
           />
         )}
 
@@ -1394,125 +1378,6 @@ function IGNForm({ onClose, projects, qc, fromGrsId }) {
               {createMutation.isPending ? 'Saving…' : 'Create IGN →'}
             </button>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Gate Entry Form (Security Guard) ────────────────────────────────────── */
-function GateEntryForm({ onClose, projects, qc }) {
-  const [form, setForm] = useState({
-    project_id: '', vehicle_no: '', date_time: dayjs().format('YYYY-MM-DDTHH:mm'),
-    security_incharge: '', remarks: '',
-  });
-  const [items, setItems] = useState([{ particulars: '', unit: 'Nos', quantity: '' }]);
-  const setField = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const mutation = useMutation({
-    mutationFn: (d) => ignAPI.gateEntry(d),
-    onSuccess: () => {
-      toast.success('Gate entry created');
-      qc.invalidateQueries({ queryKey: ['ign-list'] });
-      onClose();
-    },
-    onError: (e) => toast.error(e?.response?.data?.error || 'Failed'),
-  });
-
-  const submit = () => {
-    if (!form.project_id) return toast.error('Select a project');
-    const validItems = items.filter(it => it.particulars?.trim());
-    if (!validItems.length) return toast.error('Add at least one item');
-    mutation.mutate({ ...form, items: validItems });
-  };
-
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">New Gate Entry</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Security gate — record incoming materials</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16}/></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Project *</label>
-              <select value={form.project_id} onChange={e => setField('project_id', e.target.value)} className={Z_INP}>
-                <option value="">Select project…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Vehicle No.</label>
-              <input value={form.vehicle_no} onChange={e => setField('vehicle_no', e.target.value)} className={Z_INP} placeholder="KA-01-AB-1234" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Date & Time</label>
-              <input type="datetime-local" value={form.date_time} onChange={e => setField('date_time', e.target.value)} className={Z_INP} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Security In-charge</label>
-              <input value={form.security_incharge} onChange={e => setField('security_incharge', e.target.value)} className={Z_INP} placeholder="Guard name" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-500">Remarks</label>
-              <input value={form.remarks} onChange={e => setField('remarks', e.target.value)} className={Z_INP} placeholder="Optional notes" />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Items</h4>
-              <button onClick={() => setItems(p => [...p, { particulars: '', unit: 'Nos', quantity: '' }])}
-                className="text-xs text-blue-600 font-medium hover:underline">+ Add row</button>
-            </div>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600">Particulars *</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600 w-24">Unit</th>
-                    <th className="px-3 py-2 text-left font-medium text-slate-600 w-24">Qty</th>
-                    <th className="w-8"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {items.map((it, i) => (
-                    <tr key={i}>
-                      <td className="px-2 py-1.5">
-                        <input value={it.particulars} onChange={e => { const v = e.target.value; setItems(p => p.map((x, j) => j === i ? { ...x, particulars: v } : x)); }}
-                          className={Z_INP} placeholder="Material description" />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <select value={it.unit} onChange={e => { const v = e.target.value; setItems(p => p.map((x, j) => j === i ? { ...x, unit: v } : x)); }} className={Z_INP}>
-                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <input type="number" value={it.quantity} onChange={e => { const v = e.target.value; setItems(p => p.map((x, j) => j === i ? { ...x, quantity: v } : x)); }}
-                          className={Z_INP} placeholder="0" />
-                      </td>
-                      <td className="px-1">
-                        {items.length > 1 && (
-                          <button onClick={() => setItems(p => p.filter((_, j) => j !== i))} className="text-slate-300 hover:text-red-500"><X size={14}/></button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-          <button onClick={submit} disabled={mutation.isPending}
-            className="px-5 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-50 transition">
-            {mutation.isPending ? 'Saving…' : 'Create Gate Entry'}
-          </button>
         </div>
       </div>
     </div>
