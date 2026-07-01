@@ -632,34 +632,167 @@ router.get('/reports/esi-return', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Form 16 / TDS Summary
+// Form 16 / TDS Summary — annual salary & TDS per employee for a financial year
+// FY runs April–March; pass year=2025 for FY 2024-25
 router.get('/reports/form16', async (req, res) => {
   try {
-    const { year, user_id } = req.query;
-    const fy_start = `${parseInt(year)-1}-04-01`;
-    const fy_end   = `${year}-03-31`;
-    const conds = [`p.company_id=$1`, `p.pay_period_start>=$2`, `p.pay_period_end<=$3`, `p.status='approved'`];
-    const params = [req.user.company_id, fy_start, fy_end]; let i=4;
-    if (user_id) { conds.push(`p.user_id=$${i++}`); params.push(user_id); }
-    const { rows } = await query(
-      `SELECT p.user_id, u.name AS full_name, u.employee_code AS emp_code, ep.pan_number,
-              SUM(p.basic_pay) as total_basic,
-              SUM(p.hra) as total_hra,
-              SUM(p.gross_pay) as total_gross,
-              SUM(COALESCE(p.pf_employee,0)) as total_pf,
-              SUM(COALESCE(p.professional_tax,0)) as total_pt,
-              SUM(COALESCE(p.tds,0)) as total_tds,
-              SUM(p.net_pay) as total_net,
-              COUNT(*) as months_paid
-       FROM hr_payroll_runs p
-       JOIN users u ON u.id=p.user_id
-       LEFT JOIN employee_profiles ep ON ep.user_id=p.user_id
-       WHERE ${conds.join(' AND ')}
-       GROUP BY p.user_id, u.name, u.employee_code, ep.pan_number
-       ORDER BY u.name`,
-      params
+    const fy = parseInt(req.query.year) || new Date().getFullYear();
+    const { user_id } = req.query;
+    // FY April(fy-1) to March(fy)
+    const fyStart = { month: 4, year: fy - 1 };
+    const fyEnd   = { month: 3, year: fy };
+
+    // Month range condition on (year, month) integers — no date casting needed
+    const params = [req.user.company_id]; let idx = 2;
+    let extraCond = '';
+    if (user_id) { extraCond = ` AND p.user_id=$${idx++}`; params.push(user_id); }
+
+    const { rows } = await query(`
+      SELECT
+        p.user_id,
+        u.name          AS full_name,
+        u.employee_code AS emp_code,
+        ep.pan_number,
+        ep.uan_number,
+        dep.name        AS department,
+        des.name        AS designation,
+        -- earnings
+        SUM(p.basic)             AS total_basic,
+        SUM(p.hra)               AS total_hra,
+        SUM(p.conveyance)        AS total_conveyance,
+        SUM(p.medical)           AS total_medical,
+        SUM(p.special_allowance) AS total_special,
+        SUM(p.other_earnings)    AS total_other_earnings,
+        SUM(p.gross_earnings)    AS total_gross,
+        -- deductions
+        SUM(p.pf_employee)       AS total_pf_employee,
+        SUM(p.esi_employee)      AS total_esi_employee,
+        SUM(p.pt)                AS total_pt,
+        SUM(p.tds)               AS total_tds,
+        SUM(p.loan_deduction)    AS total_loan_deduction,
+        SUM(p.total_deductions)  AS total_deductions,
+        SUM(p.net_pay)           AS total_net_pay,
+        -- employer
+        SUM(p.pf_employer)       AS total_pf_employer,
+        SUM(p.esi_employer)      AS total_esi_employer,
+        -- attendance
+        SUM(p.working_days)      AS total_working_days,
+        SUM(p.paid_days)         AS total_paid_days,
+        SUM(p.lop_days)          AS total_lop_days,
+        COUNT(*)::int            AS months_processed
+      FROM hr_monthly_payroll p
+      JOIN users u ON u.id = p.user_id
+      LEFT JOIN employee_profiles ep ON ep.user_id = p.user_id
+      LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+      LEFT JOIN hr_designations des ON des.id = ep.designation_id
+      WHERE p.company_id = $1
+        AND p.status IN ('approved','paid')
+        AND (
+          (p.year = ${ idx } AND p.month >= 4) OR
+          (p.year = ${ idx + 1 } AND p.month <= 3)
+        )
+        ${extraCond}
+      GROUP BY p.user_id, u.name, u.employee_code, ep.pan_number, ep.uan_number, dep.name, des.name
+      ORDER BY u.name`,
+      [...params, fyStart.year, fyEnd.year]
     );
-    res.json({ data: rows, financial_year: `${parseInt(year)-1}-${year}` });
+
+    // Compute derived TDS fields
+    const STANDARD_DEDUCTION = 50000;
+    const data = rows.map(r => {
+      const gross         = parseFloat(r.total_gross || 0);
+      const pfDed         = parseFloat(r.total_pf_employee || 0);
+      const taxableIncome = Math.max(0, gross - pfDed - STANDARD_DEDUCTION);
+      const estimatedTax  = parseFloat(r.total_tds || 0);
+      return {
+        ...r,
+        taxable_income:    Math.round(taxableIncome),
+        estimated_tax:     Math.round(estimatedTax),
+        standard_deduction: STANDARD_DEDUCTION,
+        financial_year:   `${fyStart.year}-${String(fyEnd.year).slice(-2)}`,
+      };
+    });
+
+    res.json({ data, financial_year: `${fyStart.year}-${String(fyEnd.year).slice(-2)}`, fy_year: fy });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Bank Transfer File — NEFT/RTGS format for salary disbursement
+// Returns CSV/text suitable for bank portal upload for a given month/year
+router.get('/reports/bank-transfer', async (req, res) => {
+  try {
+    const month = parseInt(req.query.month) || new Date().getMonth() + 1;
+    const year  = parseInt(req.query.year)  || new Date().getFullYear();
+    const fmt   = (req.query.format || 'csv').toLowerCase(); // csv | text
+
+    const { rows } = await query(`
+      SELECT
+        u.name          AS employee_name,
+        u.employee_code AS emp_code,
+        ep.bank_name,
+        ep.bank_account_number AS account_number,
+        ep.bank_ifsc    AS ifsc_code,
+        ep.pan_number,
+        p.net_pay,
+        p.basic, p.gross_earnings, p.total_deductions,
+        p.payment_mode, p.payment_ref, p.status
+      FROM hr_monthly_payroll p
+      JOIN users u ON u.id = p.user_id
+      LEFT JOIN employee_profiles ep ON ep.user_id = p.user_id
+      WHERE p.company_id = $1 AND p.month = $2 AND p.year = $3
+        AND p.status IN ('approved','paid')
+        AND ep.bank_account_number IS NOT NULL
+        AND ep.bank_account_number != ''
+        AND ep.bank_ifsc IS NOT NULL
+        AND ep.bank_ifsc != ''
+      ORDER BY u.name`,
+      [req.user.company_id, month, year]
+    );
+
+    if (!rows.length) return res.status(404).json({ error: 'No payroll records with bank details found for this period' });
+
+    const totalAmount = rows.reduce((s, r) => s + parseFloat(r.net_pay || 0), 0);
+    const monthName   = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1];
+
+    if (fmt === 'text') {
+      // Generic NEFT bulk payment text format (tab-delimited, widely accepted)
+      const header = `NEFT BULK SALARY TRANSFER\tMonth: ${monthName} ${year}\tTotal: ${totalAmount.toFixed(2)}\tCount: ${rows.length}`;
+      const lines  = [
+        header,
+        'Sr No\tBeneficiary Name\tAccount Number\tIFSC Code\tAmount\tRemarks',
+        ...rows.map((r, i) => [
+          i + 1,
+          r.employee_name,
+          r.account_number,
+          r.ifsc_code,
+          parseFloat(r.net_pay || 0).toFixed(2),
+          `Salary ${monthName} ${year} - ${r.emp_code}`,
+        ].join('\t')),
+        `\t\t\t\tTOTAL: ${totalAmount.toFixed(2)}\t`,
+      ];
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="salary_neft_${monthName}_${year}.txt"`);
+      return res.send(lines.join('\n'));
+    }
+
+    // Default: CSV (works with most bank portals — SBI, HDFC, ICICI, Axis)
+    const csvHeader = 'Sr No,Beneficiary Name,Account Number,IFSC Code,Amount,Remittance Info,Bank Name,Employee Code,PAN';
+    const csvRows   = rows.map((r, i) => [
+      i + 1,
+      `"${r.employee_name}"`,
+      r.account_number,
+      r.ifsc_code,
+      parseFloat(r.net_pay || 0).toFixed(2),
+      `"Salary ${monthName} ${year}"`,
+      `"${r.bank_name || ''}"`,
+      r.emp_code || '',
+      r.pan_number || '',
+    ].join(','));
+    const totalRow  = `,,,,${totalAmount.toFixed(2)},"TOTAL (${rows.length} employees)",,`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="salary_transfer_${monthName}_${year}.csv"`);
+    res.send([csvHeader, ...csvRows, totalRow].join('\n'));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

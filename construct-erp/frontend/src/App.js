@@ -300,6 +300,8 @@ const HRImportPage          = lazy(() => import('./pages/hr-admin/HRImportPage')
 const HRReportsPage         = lazy(() => import('./pages/hr-admin/HRReportsPage'));
 const HRAdvancedPage        = lazy(() => import('./pages/hr-admin/HRAdvancedPage'));
 const HRProjectStaffPage    = lazy(() => import('./pages/hr-admin/HRProjectStaffPage'));
+const HRChecklistPage       = lazy(() => import('./pages/hr-admin/HRChecklistPage'));
+const HRPayrollReportsPage  = lazy(() => import('./pages/hr-admin/PayrollReportsPage'));
 const ESSPortalPage           = lazy(() => import('./pages/hr-admin/ESSPortalPage'));
 const HRShiftManagementPage   = lazy(() => import('./pages/hr-admin/ShiftManagementPage'));
 const HRFnFSettlementPage     = lazy(() => import('./pages/hr-admin/FnFSettlementPage'));
@@ -797,6 +799,8 @@ export default function App() {
                 <Route path="hr-admin/reports/confirmation" element={<RequireModule module="HR & Admin"><HRConfirmationReportPage /></RequireModule>} />
                 <Route path="hr-admin/employees" element={<RequireModule module="HR & Admin"><HREmployeeListPage /></RequireModule>} />
                 <Route path="hr-admin/project-staff" element={<RequireModule module="HR & Admin"><HRProjectStaffPage /></RequireModule>} />
+                <Route path="hr-admin/checklist" element={<RequireModule module="HR & Admin"><HRChecklistPage /></RequireModule>} />
+                <Route path="hr-admin/payroll-reports" element={<RequireModule module="HR & Admin"><HRPayrollReportsPage /></RequireModule>} />
                 <Route path="hr-admin/employees/new" element={<RequireModule module="HR & Admin"><HREmployeeFormPage /></RequireModule>} />
                 <Route path="hr-admin/employees/:id" element={<RequireModule module="HR & Admin"><HREmployeeDetailPage /></RequireModule>} />
                 <Route path="hr-admin/employees/:id/edit" element={<RequireModule module="HR & Admin"><HREmployeeFormPage /></RequireModule>} />

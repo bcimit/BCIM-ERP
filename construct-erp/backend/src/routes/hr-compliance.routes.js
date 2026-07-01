@@ -1083,4 +1083,160 @@ router.get('/clra-register', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ═══════════════════════════════════════════════════════
+   GET /compliance/hr-checklist
+   Aggregated HR Admin checklist — payroll, compliance, employee alerts, expiry
+══════════════════════════════════════════════════════ */
+router.get('/hr-checklist', async (req, res) => {
+  try {
+    const companyId = req.user.company_id;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const month = today.getMonth() + 1;
+    const year  = today.getFullYear();
+    const prevM = month === 1 ? 12 : month - 1;
+    const prevY = month === 1 ? year - 1 : year;
+
+    const [
+      payrollStatus, probation, lifecyclePending,
+      licenseExpiry, docExpiry, leavesPending,
+      expensesPending, newJoiners, exitsPending,
+    ] = await Promise.all([
+      // 1. Payroll status for current month
+      query(`
+        SELECT status, COUNT(*)::int AS count, SUM(net_pay)::numeric AS total_net
+        FROM hr_monthly_payroll
+        WHERE company_id=$1 AND month=$2 AND year=$3
+        GROUP BY status`, [companyId, month, year]),
+
+      // 2. Probation reviews due within 30 days
+      query(`
+        SELECT u.id, u.name, u.employee_code, ep.probation_end_date,
+               dep.name AS department_name, des.name AS designation_name,
+               (ep.probation_end_date - CURRENT_DATE) AS days_left
+        FROM users u
+        JOIN employee_profiles ep ON ep.user_id = u.id
+        LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+        LEFT JOIN hr_designations des ON des.id = ep.designation_id
+        WHERE u.company_id=$1 AND COALESCE(ep.employment_status,'active')='active'
+          AND ep.probation_end_date IS NOT NULL
+          AND ep.probation_end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
+        ORDER BY ep.probation_end_date`, [companyId]),
+
+      // 3. Pending lifecycle checklist items (onboarding/exit)
+      query(`
+        SELECT elc.stage, elc.title, elc.owner_department, elc.status,
+               u.name AS employee_name, u.employee_code
+        FROM employee_lifecycle_checklist elc
+        JOIN users u ON u.id = elc.user_id
+        WHERE u.company_id=$1 AND elc.status='pending'
+        ORDER BY elc.stage, u.name
+        LIMIT 50`, [companyId]),
+
+      // 4. Labour licence expiry within 60 days
+      query(`
+        SELECT licence_type, licence_number, expiry_date, authority,
+               (expiry_date - CURRENT_DATE) AS days_left
+        FROM hr_labour_licenses
+        WHERE company_id=$1 AND expiry_date IS NOT NULL
+          AND expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 60
+        ORDER BY expiry_date`, [companyId]).catch(() => ({ rows: [] })),
+
+      // 5. Employee document expiry within 30 days
+      query(`
+        SELECT u.name AS employee_name, u.employee_code, d.doc_type, d.doc_name, d.expiry_date,
+               (d.expiry_date - CURRENT_DATE) AS days_left
+        FROM employee_documents d
+        JOIN users u ON u.id = d.user_id
+        WHERE u.company_id=$1 AND d.expiry_date IS NOT NULL
+          AND d.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
+        ORDER BY d.expiry_date`, [companyId]).catch(() => ({ rows: [] })),
+
+      // 6. Pending leave requests
+      query(`
+        SELECT COUNT(*)::int AS count
+        FROM hr_leave_requests lr
+        JOIN users u ON u.id = lr.user_id
+        WHERE u.company_id=$1 AND lr.status='pending'`, [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
+
+      // 7. Pending expense claims
+      query(`
+        SELECT COUNT(*)::int AS count
+        FROM hr_expense_claims ec
+        JOIN users u ON u.id = ec.user_id
+        WHERE u.company_id=$1 AND ec.status='submitted'`, [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
+
+      // 8. New joiners this month (no profile or incomplete onboarding)
+      query(`
+        SELECT u.id, u.name, u.employee_code, ep.date_of_joining,
+               dep.name AS department_name
+        FROM users u
+        JOIN employee_profiles ep ON ep.user_id = u.id
+        LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+        WHERE u.company_id=$1
+          AND ep.date_of_joining >= DATE_TRUNC('month', CURRENT_DATE)
+          AND ep.date_of_joining <= CURRENT_DATE
+        ORDER BY ep.date_of_joining DESC`, [companyId]),
+
+      // 9. Exit pending (resigned but not fully settled)
+      query(`
+        SELECT u.id, u.name, u.employee_code, ep.date_of_leaving,
+               dep.name AS department_name, ep.leaving_reason
+        FROM users u
+        JOIN employee_profiles ep ON ep.user_id = u.id
+        LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+        WHERE u.company_id=$1 AND ep.employment_status IN ('resigned','terminated')
+          AND (ep.date_of_leaving IS NULL OR ep.date_of_leaving >= CURRENT_DATE - 30)
+        ORDER BY ep.date_of_leaving`, [companyId]),
+    ]);
+
+    // Compliance calendar for this month
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const prevMonthName = MONTH_NAMES[prevM - 1];
+    const complianceTasks = [
+      { id:1, category:'TDS',   task:`TDS Challan — ${prevMonthName}`,         due_day:7,  description:'Deposit TDS on salary (Form 281)' },
+      { id:2, category:'WAGES', task:`Wage Payment — ${MONTH_NAMES[month-1]}`, due_day:7,  description:'Monthly salary disbursement' },
+      { id:3, category:'PF',    task:`EPF Challan — ${prevMonthName}`,         due_day:15, description:'PF contributions via EPFO portal' },
+      { id:4, category:'PT',    task:`Prof. Tax — ${prevMonthName}`,           due_day:20, description:'PT payment to Commercial Taxes Dept' },
+      { id:5, category:'ESI',   task:`ESI Challan — ${prevMonthName}`,         due_day:21, description:'ESI contributions via ESIC portal' },
+    ].map(t => {
+      const due = new Date(year, month - 1, t.due_day);
+      const diff = Math.ceil((due - today) / 86400000);
+      return { ...t, due_date: due.toISOString().split('T')[0], days_remaining: diff, overdue: diff < 0, due_soon: diff >= 0 && diff <= 3 };
+    });
+
+    // Payroll summary
+    const payrollRows = payrollStatus.rows;
+    const totalEmp   = payrollRows.reduce((s, r) => s + r.count, 0);
+    const paid       = payrollRows.find(r => r.status === 'paid');
+    const approved   = payrollRows.find(r => r.status === 'approved');
+    const pending    = payrollRows.find(r => ['draft','pending_approval'].includes(r.status));
+
+    res.json({
+      month, year, month_name: MONTH_NAMES[month - 1],
+      payroll: {
+        total_employees: totalEmp,
+        paid_count:     paid?.count || 0,
+        approved_count: approved?.count || 0,
+        pending_count:  pending?.count || 0,
+        net_pay_total:  parseFloat(paid?.total_net || approved?.total_net || 0),
+        status: totalEmp === 0 ? 'not_run'
+               : paid?.count === totalEmp ? 'paid'
+               : approved?.count >= 1 ? 'approved'
+               : 'pending',
+      },
+      compliance_tasks: complianceTasks,
+      probation_due:    probation.rows,
+      lifecycle_pending: lifecyclePending.rows,
+      license_expiry:   licenseExpiry.rows,
+      doc_expiry:       docExpiry.rows,
+      leaves_pending:   leavesPending.rows[0]?.count || 0,
+      expenses_pending: expensesPending.rows[0]?.count || 0,
+      new_joiners:      newJoiners.rows,
+      exits_pending:    exitsPending.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

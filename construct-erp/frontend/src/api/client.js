@@ -572,8 +572,9 @@ export const hrLeaveExtAPI = {
 };
 
 export const hrPayrollExtAPI = {
-  form16:    (p) => api.get('/hr-admin/payroll/reports/form16', { params: p }),
-  attrition: (p) => api.get('/hr-admin/payroll/reports/attrition', { params: p }),
+  form16:       (p) => api.get('/hr-admin/payroll/reports/form16', { params: p }),
+  attrition:    (p) => api.get('/hr-admin/payroll/reports/attrition', { params: p }),
+  bankTransfer: (p) => api.get('/hr-admin/payroll/reports/bank-transfer', { params: p, responseType: 'blob' }),
 };
 
 export const materialTrackerAPI = {
@@ -1953,6 +1954,7 @@ export const hrComplianceAPI = {
   updateChallan:       (id, d)    => api.put(`/hr-admin/compliance/challan-filings/${id}`, d),
   deleteChallan:       (id)       => api.delete(`/hr-admin/compliance/challan-filings/${id}`),
   clraRegister:        (p)        => api.get('/hr-admin/compliance/clra-register',  { params: p }),
+  hrChecklist:         ()         => api.get('/hr-admin/compliance/hr-checklist'),
 };
 
 export const mailAPI = {

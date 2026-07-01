@@ -197,6 +197,7 @@ const navGroups = [
   ]},
   { label: 'HR & Admin', items: [
     { to: '/hr-admin',                   icon: LayoutDashboard, label: 'HR Dashboard' },
+    { to: '/hr-admin/checklist',         icon: ClipboardList,   label: 'HR Checklist' },
     { to: '/hr-admin/analytics',         icon: BarChart2,       label: 'Analytics Hub' },
     { to: '/hr-admin/directory',         icon: Users,           label: 'Employee Directory' },
     { to: '/hr-admin/org-chart',         icon: GitBranch,       label: 'Organization Chart' },
@@ -206,6 +207,7 @@ const navGroups = [
     { to: '/hr-admin/leaves',            icon: CalendarOff,     label: 'Leave Management' },
     { to: '/hr-admin/holidays',          icon: CalendarDays,    label: 'Holiday Calendar' },
     { to: '/hr-admin/payroll',           icon: CreditCard,      label: 'Payroll' },
+    { to: '/hr-admin/payroll-reports',   icon: FileText,        label: 'Payroll Reports' },
     { to: '/hr-admin/salary-structures', icon: Banknote,        label: 'Salary Structures' },
     { to: '/hr-admin/employee-salaries',  icon: IndianRupee,     label: 'Employee Salaries' },
     { to: '/hr-admin/loans',             icon: Wallet,          label: 'Loans & Advances' },
@@ -434,7 +436,7 @@ const NAV_SECTIONS = {
   'HR & Admin': [
     { label: 'People',       paths: ['/hr-admin','/hr-admin/analytics','/hr-admin/directory','/hr-admin/org-chart','/hr-admin/employees','/hr-admin/project-staff','/ess'] },
     { label: 'Time',         paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays'] },
-    { label: 'Payroll',      paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses','/hr-admin/lop-days','/hr-admin/stop-salary'] },
+    { label: 'Payroll',      paths: ['/hr-admin/payroll','/hr-admin/payroll-reports','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses','/hr-admin/lop-days','/hr-admin/stop-salary'] },
     { label: 'Admin',        paths: ['/hr-admin/departments','/hr-admin/appraisals','/hr-admin/performance','/hr-admin/advanced'] },
     { label: 'Setup',        paths: ['/hr-admin/letters','/hr-admin/policies','/hr-admin/segments','/hr-admin/emp-filters'] },
     { label: 'Talent',       paths: ['/hr-admin/shifts','/hr-admin/fnf','/hr-admin/letters','/hr-admin/training','/hr-admin/emp-assets','/hr-admin/travel','/hr-admin/recruitment'] },
