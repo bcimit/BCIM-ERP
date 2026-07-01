@@ -202,7 +202,7 @@ async function ensureLifecycleChecklist(companyId, userId) {
 // ═══════════════════════════════════════════════════════════
 router.get('/', async (req, res) => {
   try {
-    const { search, department_id, employment_status, employment_type, no_profile } = req.query;
+    const { search, department_id, employment_status, employment_type, no_profile, project_id } = req.query;
     let sql = `${employeeSelect} WHERE u.company_id = $1`;
     const params = [req.user.company_id];
     let idx = 2;
@@ -229,6 +229,12 @@ router.get('/', async (req, res) => {
       if (req.query.employee_category) {
         sql += ` AND ep.employee_category = $${idx}`;
         params.push(req.query.employee_category); idx++;
+      }
+      if (project_id === 'unassigned') {
+        sql += ` AND ep.project_id IS NULL`;
+      } else if (project_id) {
+        sql += ` AND ep.project_id = $${idx}`;
+        params.push(project_id); idx++;
       }
     }
     sql += ' ORDER BY u.name';

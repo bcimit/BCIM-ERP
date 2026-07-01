@@ -15,7 +15,7 @@ import {
   CalendarOff, FileBarChart, Star, UserCheck, Fingerprint, PackageCheck, ArrowLeftRight,
   Landmark, FileSignature, CircleSlash, ShieldCheck, Clock3, Lightbulb,
   Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, UserRound,
-  Cog, Fuel, Gauge, BarChart2, History, GitBranch, MinusCircle
+  Cog, Fuel, Gauge, BarChart2, History, GitBranch, MinusCircle, FolderKanban
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
@@ -201,6 +201,7 @@ const navGroups = [
     { to: '/hr-admin/directory',         icon: Users,           label: 'Employee Directory' },
     { to: '/hr-admin/org-chart',         icon: GitBranch,       label: 'Organization Chart' },
     { to: '/hr-admin/employees',         icon: Users,           label: 'Employees' },
+    { to: '/hr-admin/project-staff',     icon: FolderKanban,    label: 'Project-wise Staff' },
     { to: '/hr-admin/attendance',        icon: Clock,           label: 'Attendance' },
     { to: '/hr-admin/leaves',            icon: CalendarOff,     label: 'Leave Management' },
     { to: '/hr-admin/holidays',          icon: CalendarDays,    label: 'Holiday Calendar' },
@@ -431,7 +432,7 @@ const NAV_SECTIONS = {
     { label: 'Settings',    paths: ['/accounts/settings'] },
   ],
   'HR & Admin': [
-    { label: 'People',       paths: ['/hr-admin','/hr-admin/analytics','/hr-admin/directory','/hr-admin/org-chart','/hr-admin/employees','/ess'] },
+    { label: 'People',       paths: ['/hr-admin','/hr-admin/analytics','/hr-admin/directory','/hr-admin/org-chart','/hr-admin/employees','/hr-admin/project-staff','/ess'] },
     { label: 'Time',         paths: ['/hr-admin/attendance','/hr-admin/leaves','/hr-admin/holidays'] },
     { label: 'Payroll',      paths: ['/hr-admin/payroll','/hr-admin/salary-structures','/hr-admin/employee-salaries','/hr-admin/loans','/hr-admin/expenses','/hr-admin/lop-days','/hr-admin/stop-salary'] },
     { label: 'Admin',        paths: ['/hr-admin/departments','/hr-admin/appraisals','/hr-admin/performance','/hr-admin/advanced'] },
