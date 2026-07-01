@@ -1103,12 +1103,12 @@ router.get('/hr-checklist', async (req, res) => {
       lopCount, stopSalaryCount, activeLoansCount,
       payslipsSent, totalActiveEmp, salaryMissingCount,
     ] = await Promise.all([
-      // 1. Payroll status for current month
+      // 1. Payroll status for PREVIOUS month (in July we process June payroll)
       query(`
         SELECT status, COUNT(*)::int AS count, SUM(net_pay)::numeric AS total_net
         FROM hr_monthly_payroll
         WHERE company_id=$1 AND month=$2 AND year=$3
-        GROUP BY status`, [companyId, month, year]),
+        GROUP BY status`, [companyId, prevM, prevY]),
 
       // 2. Probation reviews due within 30 days
       query(`
@@ -1190,12 +1190,12 @@ router.get('/hr-checklist', async (req, res) => {
           AND (ep.date_of_leaving IS NULL OR ep.date_of_leaving >= CURRENT_DATE - 30)
         ORDER BY ep.date_of_leaving`, [companyId]),
 
-      // 10. LOP entries recorded for current month
+      // 10. LOP entries recorded for PREVIOUS month
       query(`
         SELECT COUNT(*)::int AS count, SUM(lop_days)::numeric AS total_lop
         FROM hr_lop_days
         WHERE company_id=$1 AND month=$2 AND year=$3`,
-        [companyId, month, year]).catch(() => ({ rows: [{ count: 0, total_lop: 0 }] })),
+        [companyId, prevM, prevY]).catch(() => ({ rows: [{ count: 0, total_lop: 0 }] })),
 
       // 11. Employees on stop-salary
       query(`
@@ -1209,12 +1209,12 @@ router.get('/hr-checklist', async (req, res) => {
         WHERE company_id=$1 AND status='approved' AND balance_amount > 0`,
         [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
 
-      // 13. Payslips already generated/sent this month
+      // 13. Payslips already generated/sent for PREVIOUS month
       query(`
         SELECT COUNT(*)::int AS count
         FROM hr_monthly_payroll
         WHERE company_id=$1 AND month=$2 AND year=$3 AND payslip_generated=TRUE`,
-        [companyId, month, year]).catch(() => ({ rows: [{ count: 0 }] })),
+        [companyId, prevM, prevY]).catch(() => ({ rows: [{ count: 0 }] })),
 
       // 14. Total active employees (for checklist completeness checks)
       query(`
@@ -1260,6 +1260,7 @@ router.get('/hr-checklist', async (req, res) => {
 
     res.json({
       month, year, month_name: MONTH_NAMES[month - 1],
+      payroll_month: prevM, payroll_year: prevY, payroll_month_name: MONTH_NAMES[prevM - 1],
       payroll: {
         total_employees:     totalEmp,
         total_active:        totalActive,
