@@ -30,12 +30,15 @@ runSchemaInit('project_costhead_budgets', async () => {
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       cost_head TEXT NOT NULL,
       budget_amount NUMERIC(16,2) DEFAULT 0,
+      boq_amount NUMERIC(16,2) DEFAULT 0,
       created_by UUID,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE (project_id, cost_head)
     )
   `);
+  // Add boq_amount to existing tables (idempotent)
+  await query(`ALTER TABLE project_costhead_budgets ADD COLUMN IF NOT EXISTS boq_amount NUMERIC(16,2) DEFAULT 0`).catch(() => {});
 });
 
 router.use(authenticate);
@@ -354,9 +357,9 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
     if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
 
-    // Saved budgets
+    // Saved budgets and manually-set BOQ allocations
     const budgets = await query(
-      `SELECT cost_head, budget_amount FROM project_costhead_budgets WHERE project_id=$1`,
+      `SELECT cost_head, budget_amount, COALESCE(boq_amount, 0) AS boq_amount FROM project_costhead_budgets WHERE project_id=$1`,
       [project_id]
     );
 
@@ -425,7 +428,11 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     }
 
     const budgetMap = {};
-    for (const b of budgets.rows) budgetMap[b.cost_head] = parseFloat(b.budget_amount || 0);
+    const boqManualMap = {};
+    for (const b of budgets.rows) {
+      budgetMap[b.cost_head] = parseFloat(b.budget_amount || 0);
+      boqManualMap[b.cost_head] = parseFloat(b.boq_amount || 0);
+    }
 
     // Total BOQ value (contract value) — used for Contingency calculation
     const boqTotalR = await query(
@@ -476,7 +483,13 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     const DERIVED_HEADS = new Set(['Profit', CONTINGENCY_HEAD]);
     const data = [...allHeads].map(head => ({
       cost_head: head,
-      boq_value: boqValueMap[head] > 0 ? boqValueMap[head] : (budgetMap[head] || 0),
+      boq_value: boqValueMap[head] > 0 ? boqValueMap[head]
+               : boqManualMap[head] > 0 ? boqManualMap[head]
+               : (budgetMap[head] || 0),
+      boq_source: boqValueMap[head] > 0 ? 'breakdown'
+                : boqManualMap[head] > 0 ? 'manual'
+                : budgetMap[head] > 0 ? 'budget'
+                : 'none',
       budget: budgetMap[head] || 0,
       actual: actualMap[head] || 0,
       balance: (budgetMap[head] || 0) - (actualMap[head] || 0),
@@ -719,20 +732,24 @@ router.get('/:project_id/costhead-monthly', async (req, res) => {
 router.put('/:project_id/costhead-budget', async (req, res) => {
   try {
     const { project_id } = req.params;
-    const { cost_head, budget_amount } = req.body;
+    const { cost_head, budget_amount, boq_amount } = req.body;
     if (!cost_head) return res.status(400).json({ error: 'cost_head is required' });
 
     const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
     if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
     if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
 
+    const bAmt = budget_amount != null ? parseFloat(budget_amount) || 0 : null;
+    const bBoq = boq_amount    != null ? parseFloat(boq_amount)    || 0 : null;
     const r = await query(`
-      INSERT INTO project_costhead_budgets (project_id, cost_head, budget_amount, created_by)
-      VALUES ($1,$2,$3,$4)
-      ON CONFLICT (project_id, cost_head)
-      DO UPDATE SET budget_amount=$3, updated_at=NOW()
+      INSERT INTO project_costhead_budgets (project_id, cost_head, budget_amount, boq_amount, created_by)
+      VALUES ($1, $2, COALESCE($3, 0), COALESCE($4, 0), $5)
+      ON CONFLICT (project_id, cost_head) DO UPDATE SET
+        budget_amount = CASE WHEN $3 IS NOT NULL THEN $3 ELSE project_costhead_budgets.budget_amount END,
+        boq_amount    = CASE WHEN $4 IS NOT NULL THEN $4 ELSE project_costhead_budgets.boq_amount    END,
+        updated_at    = NOW()
       RETURNING *`,
-      [project_id, cost_head, parseFloat(budget_amount) || 0, req.user.id]
+      [project_id, cost_head, bAmt, bBoq, req.user.id]
     );
     res.json({ data: r.rows[0] });
   } catch (err) {

@@ -894,6 +894,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
   const qc = useQueryClient();
   const [editingHead, setEditingHead] = useState(null);
   const [editVal, setEditVal] = useState('');
+  const [editingBoqHead, setEditingBoqHead] = useState(null);
+  const [editBoqVal, setEditBoqVal] = useState('');
   const [expandedHead, setExpandedHead] = useState(null);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState(DEFAULT_BULK_TEXT);
@@ -942,6 +944,12 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
     const n = parseFloat(editVal);
     if (isNaN(n) || n < 0) { toast.error('Enter a valid amount'); return; }
     saveMutation.mutate({ cost_head, budget_amount: n });
+  };
+
+  const commitBoq = (cost_head) => {
+    const n = parseFloat(editBoqVal);
+    if (isNaN(n) || n < 0) { toast.error('Enter a valid amount'); return; }
+    saveMutation.mutate({ cost_head, boq_amount: n });
   };
 
   const rows = data || [];
@@ -1112,8 +1120,43 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
                       <span>{r.cost_head}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-right text-slate-600 font-medium text-sm tabular-nums">
-                    {r.boq_value > 0 ? `₹${Math.round(r.boq_value).toLocaleString('en-IN')}` : <span className="text-slate-300">—</span>}
+                  <td className="px-2 py-1 group/boq">
+                    {r.derived ? (
+                      <div className="text-right px-2 text-sm font-semibold text-slate-600 tabular-nums">
+                        {r.boq_value > 0 ? `₹${Math.round(r.boq_value).toLocaleString('en-IN')}` : <span className="text-slate-300">—</span>}
+                      </div>
+                    ) : editingBoqHead === r.cost_head ? (
+                      <div className="flex items-center gap-1">
+                        <input autoFocus type="number" value={editBoqVal}
+                          onChange={e => setEditBoqVal(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') commitBoq(r.cost_head); if (e.key === 'Escape') setEditingBoqHead(null); }}
+                          className="flex-1 min-w-0 border border-teal-400 rounded-lg px-2 py-1 text-xs text-right focus:outline-none"
+                        />
+                        <button onClick={() => commitBoq(r.cost_head)} disabled={saveMutation.isPending}
+                          className="shrink-0 px-2 py-1 bg-teal-600 text-white text-[10px] font-bold rounded-lg hover:bg-teal-500 disabled:opacity-50">Save</button>
+                        <button onClick={() => setEditingBoqHead(null)}
+                          className="shrink-0 px-2 py-1 bg-slate-100 text-slate-600 text-[10px] rounded-lg hover:bg-slate-200">✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1 px-2">
+                        <span className={clsx('text-sm font-semibold tabular-nums', r.boq_value > 0 ? 'text-slate-700' : 'text-slate-300 italic text-xs')}>
+                          {r.boq_value > 0 ? `₹${Math.round(r.boq_value).toLocaleString('en-IN')}` : '— set'}
+                        </span>
+                        {r.boq_source !== 'breakdown' && (
+                          <button
+                            onClick={() => { setEditingBoqHead(r.cost_head); setEditBoqVal(r.boq_value > 0 && r.boq_source !== 'budget' ? String(r.boq_value) : ''); setEditingHead(null); }}
+                            className="opacity-0 group-hover/boq:opacity-100 transition-opacity w-5 h-5 rounded hover:bg-teal-100 flex items-center justify-center flex-shrink-0"
+                            title="Edit BOQ Value">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        )}
+                        {r.boq_source === 'breakdown' && (
+                          <span className="opacity-0 group-hover/boq:opacity-100 text-[9px] text-teal-600 bg-teal-50 border border-teal-200 rounded px-1 py-0.5 ml-1 flex-shrink-0">BOQ</span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-1">
                     {r.derived ? (
