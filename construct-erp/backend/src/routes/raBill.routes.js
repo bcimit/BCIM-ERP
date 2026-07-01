@@ -121,14 +121,15 @@ router.get('/boq-item-billed', async (req, res) => {
         rbi.boq_item_id,
         bi.chapter_no,
         bi.chapter_name,
-        SUM(rbi.amount)                                                                      AS total_billed,
+        SUM(rbi.amount)                                                                          AS total_billed,
         (array_agg(rb.bill_number ORDER BY rb.bill_date DESC NULLS LAST, rb.created_at DESC))[1] AS last_bill_number,
         (array_agg(rb.status      ORDER BY rb.bill_date DESC NULLS LAST, rb.created_at DESC))[1] AS last_bill_status
       FROM ra_bill_items rbi
       JOIN ra_bills  rb ON rbi.ra_bill_id  = rb.id
+      JOIN projects  p  ON rb.project_id   = p.id
       JOIN boq_items bi ON rbi.boq_item_id = bi.id
       WHERE rb.project_id = $1
-        AND rb.company_id = $2
+        AND p.company_id  = $2
         AND rb.status NOT IN ('draft','rejected')
       GROUP BY rbi.boq_item_id, bi.chapter_no, bi.chapter_name
     `, [project_id, req.user.company_id]);
