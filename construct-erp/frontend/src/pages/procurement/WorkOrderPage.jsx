@@ -611,7 +611,9 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
     ).then(r => r.data?.data || []),
     staleTime: 30_000,
   });
-  const activeMrsList = projectMrsList.filter(m => m.status !== 'rejected');
+  const hasBalance = (m) =>
+    !m.items?.length || m.items.some(it => (parseFloat(it.quantity) || 0) > (parseFloat(it.ordered_qty) || 0));
+  const activeMrsList = projectMrsList.filter(m => m.status !== 'rejected' && hasBalance(m));
   const mrLabel = (m) => m ? `${m.mrs_number || m.id?.slice(0, 8)} — ${m.project_name || 'Project'} — ${(m.status || 'pending').replaceAll('_', ' ')}` : '';
   const linkedMr = activeMrsList.find(m => String(m.id) === String(form.mrs_id))
     || (mrsList || []).find(m => String(m.id) === String(form.mrs_id));

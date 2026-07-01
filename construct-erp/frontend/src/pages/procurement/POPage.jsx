@@ -438,7 +438,12 @@ function NewPOModal({ onClose, vendors, projects, mrsList = [], onCreate, onUpda
   const setItem = (i, k, v) => setItems(p => p.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
   const addItem = () => setItems(p => [...p, { material_name: '', make_model: '', quantity: '', unit: 'Nos', rate: '', gst_rate: '18', hsn_code: '', req_date: '', item_code: '', discount_pct: '0', boq_item_id: '', boq_chapter: '', cost_head: '' }]);
   const removeItem = i => setItems(p => p.filter((_, idx) => idx !== i));
-  const activeMrsList = mrsList.filter(m => m.status !== 'rejected');
+  // Show an MR only if at least one item still has unordered quantity remaining.
+  // Fully-covered MRs (all items ordered_qty >= quantity) are hidden.
+  // MRs with no items are kept — they may be text-only or data is still loading.
+  const hasBalance = (m) =>
+    !m.items?.length || m.items.some(it => (parseFloat(it.quantity) || 0) > (parseFloat(it.ordered_qty) || 0));
+  const activeMrsList = mrsList.filter(m => m.status !== 'rejected' && hasBalance(m));
 
   const mrLabel = (m) => m ? (m.serial_no_formatted || m.mrs_number || m.id?.slice(0, 8)) : '';
   const refsFor = (ids) => ids
