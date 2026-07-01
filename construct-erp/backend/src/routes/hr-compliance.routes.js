@@ -1100,6 +1100,8 @@ router.get('/hr-checklist', async (req, res) => {
       payrollStatus, probation, lifecyclePending,
       licenseExpiry, docExpiry, leavesPending,
       expensesPending, newJoiners, exitsPending,
+      lopCount, stopSalaryCount, activeLoansCount,
+      payslipsSent, totalActiveEmp, salaryMissingCount,
     ] = await Promise.all([
       // 1. Payroll status for current month
       query(`
@@ -1187,6 +1189,50 @@ router.get('/hr-checklist', async (req, res) => {
         WHERE u.company_id=$1 AND ep.employment_status IN ('resigned','terminated')
           AND (ep.date_of_leaving IS NULL OR ep.date_of_leaving >= CURRENT_DATE - 30)
         ORDER BY ep.date_of_leaving`, [companyId]),
+
+      // 10. LOP entries recorded for current month
+      query(`
+        SELECT COUNT(*)::int AS count, SUM(lop_days)::numeric AS total_lop
+        FROM hr_lop_days
+        WHERE company_id=$1 AND month=$2 AND year=$3`,
+        [companyId, month, year]).catch(() => ({ rows: [{ count: 0, total_lop: 0 }] })),
+
+      // 11. Employees on stop-salary
+      query(`
+        SELECT COUNT(*)::int AS count FROM hr_stop_salary WHERE company_id=$1`,
+        [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
+
+      // 12. Active loans with pending balance
+      query(`
+        SELECT COUNT(DISTINCT user_id)::int AS count
+        FROM hr_loans
+        WHERE company_id=$1 AND status='approved' AND balance_amount > 0`,
+        [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
+
+      // 13. Payslips already generated/sent this month
+      query(`
+        SELECT COUNT(*)::int AS count
+        FROM hr_monthly_payroll
+        WHERE company_id=$1 AND month=$2 AND year=$3 AND payslip_generated=TRUE`,
+        [companyId, month, year]).catch(() => ({ rows: [{ count: 0 }] })),
+
+      // 14. Total active employees (for checklist completeness checks)
+      query(`
+        SELECT COUNT(*)::int AS count
+        FROM users u
+        JOIN employee_profiles ep ON ep.user_id = u.id
+        WHERE u.company_id=$1 AND COALESCE(ep.employment_status,'active')='active'`,
+        [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
+
+      // 15. Active employees without a salary structure assigned
+      query(`
+        SELECT COUNT(*)::int AS count
+        FROM users u
+        JOIN employee_profiles ep ON ep.user_id = u.id
+        LEFT JOIN hr_employee_salaries es ON es.user_id = u.id AND es.is_current = TRUE
+        WHERE u.company_id=$1 AND COALESCE(ep.employment_status,'active')='active'
+          AND es.id IS NULL`,
+        [companyId]).catch(() => ({ rows: [{ count: 0 }] })),
     ]);
 
     // Compliance calendar for this month
@@ -1210,15 +1256,23 @@ router.get('/hr-checklist', async (req, res) => {
     const paid       = payrollRows.find(r => r.status === 'paid');
     const approved   = payrollRows.find(r => r.status === 'approved');
     const pending    = payrollRows.find(r => ['draft','pending_approval'].includes(r.status));
+    const totalActive = totalActiveEmp.rows[0]?.count || 0;
 
     res.json({
       month, year, month_name: MONTH_NAMES[month - 1],
       payroll: {
-        total_employees: totalEmp,
-        paid_count:     paid?.count || 0,
-        approved_count: approved?.count || 0,
-        pending_count:  pending?.count || 0,
-        net_pay_total:  parseFloat(paid?.total_net || approved?.total_net || 0),
+        total_employees:     totalEmp,
+        total_active:        totalActive,
+        paid_count:          paid?.count || 0,
+        approved_count:      approved?.count || 0,
+        pending_count:       pending?.count || 0,
+        net_pay_total:       parseFloat(paid?.total_net || approved?.total_net || 0),
+        lop_entries:         lopCount.rows[0]?.count || 0,
+        lop_total_days:      parseFloat(lopCount.rows[0]?.total_lop || 0),
+        stop_salary_count:   stopSalaryCount.rows[0]?.count || 0,
+        active_loans_count:  activeLoansCount.rows[0]?.count || 0,
+        payslips_sent:       payslipsSent.rows[0]?.count || 0,
+        salary_missing:      salaryMissingCount.rows[0]?.count || 0,
         status: totalEmp === 0 ? 'not_run'
                : paid?.count === totalEmp ? 'paid'
                : approved?.count >= 1 ? 'approved'

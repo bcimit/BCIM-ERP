@@ -213,37 +213,149 @@ export default function HRChecklistPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* ── 1. Payroll Checklist ── */}
-          <SectionCard icon={CreditCard} title={`Payroll — ${month_name} ${year}`}
-            color={payroll.status === 'paid' ? 'emerald' : 'amber'}>
+          <SectionCard icon={CreditCard} title={`Payroll Checklist — ${month_name} ${year}`}
+            color={payroll.status === 'paid' ? 'emerald' : 'amber'}
+            badge={payroll.status === 'paid'
+              ? { label: 'COMPLETE', cls: 'bg-emerald-100 text-emerald-700' }
+              : { label: 'IN PROGRESS', cls: 'bg-amber-100 text-amber-700' }}>
+
+            {/* PRE-PAYROLL */}
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Step 1 — Pre-Payroll Preparation</p>
+            </div>
+            <CheckRow
+              status={payroll.salary_missing === 0 ? 'done' : 'danger'}
+              label="Assign salary structure to all employees"
+              sub={payroll.salary_missing === 0
+                ? 'All active employees have a salary structure'
+                : `${payroll.salary_missing} employee${payroll.salary_missing > 1 ? 's' : ''} missing salary structure`}
+              action={payroll.salary_missing > 0 ? 'Fix' : undefined}
+              onClick={() => navigate('/hr-admin/employee-salaries')}
+            />
+            <CheckRow
+              status={payroll.lop_entries > 0 ? 'done' : 'info'}
+              label="Update LOP (Loss of Pay) days"
+              sub={payroll.lop_entries > 0
+                ? `${payroll.lop_entries} employee${payroll.lop_entries > 1 ? 's' : ''} marked · ${payroll.lop_total_days} total LOP days`
+                : 'Mark absent/unpaid days before running payroll'}
+              action="LOP Days"
+              onClick={() => navigate('/hr-admin/lop-days')}
+            />
+            <CheckRow
+              status={payroll.stop_salary_count === 0 ? 'done' : 'warning'}
+              label="Review stop-salary list"
+              sub={payroll.stop_salary_count === 0
+                ? 'No employees on salary hold'
+                : `${payroll.stop_salary_count} employee${payroll.stop_salary_count > 1 ? 's' : ''} on salary hold — verify before running`}
+              action={payroll.stop_salary_count > 0 ? 'Review' : undefined}
+              onClick={() => navigate('/hr-admin/stop-salary')}
+            />
+            <CheckRow
+              status={payroll.active_loans_count > 0 ? 'info' : 'done'}
+              label="Verify loan & advance deductions"
+              sub={payroll.active_loans_count > 0
+                ? `${payroll.active_loans_count} employee${payroll.active_loans_count > 1 ? 's' : ''} with active loans — deductions auto-applied in payroll`
+                : 'No active loans / advances'}
+              action={payroll.active_loans_count > 0 ? 'Loans' : undefined}
+              onClick={() => navigate('/hr-admin/loans')}
+            />
+            <CheckRow
+              status="info"
+              label="Update new joiner & exit salary adjustments"
+              sub={`${new_joiners.length} new joiner${new_joiners.length !== 1 ? 's' : ''} this month · ${exits_pending.length} exit${exits_pending.length !== 1 ? 's' : ''} pending FnF`}
+              action="Employees"
+              onClick={() => navigate('/hr-admin/employees')}
+            />
+
+            {/* RUN PAYROLL */}
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Step 2 — Run &amp; Verify Payroll</p>
+            </div>
             <CheckRow
               status={payroll.total_employees > 0 ? 'done' : 'danger'}
-              label="Run payroll for all employees"
-              sub={payroll.total_employees > 0 ? `${payroll.total_employees} employees processed` : 'Payroll not yet generated'}
-              action={payroll.total_employees === 0 ? 'Run Payroll' : undefined}
+              label="Generate payroll for all employees"
+              sub={payroll.total_employees > 0
+                ? `${payroll.total_employees} of ${payroll.total_active} employees processed`
+                : `${payroll.total_active} active employees — payroll not yet generated`}
+              action={payroll.total_employees === 0 ? 'Run Now' : 'View'}
               onClick={() => navigate('/hr-admin/payroll')}
             />
             <CheckRow
-              status={['approved','paid'].includes(payroll.status) ? 'done' : 'pending'}
-              label="Approve payroll"
-              sub={payroll.approved_count > 0 ? `${payroll.approved_count} approved` : 'Pending manager/HR approval'}
+              status={payroll.total_employees > 0 ? 'info' : 'pending'}
+              label="Verify gross pay & deductions"
+              sub="Cross-check basic, HRA, PF, ESI, TDS, LOP for each employee"
               action="Payroll"
               onClick={() => navigate('/hr-admin/payroll')}
             />
             <CheckRow
-              status={payroll.status === 'paid' ? 'done' : 'pending'}
-              label="Disburse salaries"
-              sub={payroll.status === 'paid'
-                ? `₹${fmt(payroll.net_pay_total)} disbursed`
-                : 'Mark as paid after bank transfer'}
-              action="Disburse"
+              status={payroll.total_employees > 0 ? 'info' : 'pending'}
+              label="Check TDS calculations"
+              sub="Ensure TDS is calculated correctly for employees with taxable income"
+              action="Payroll Reports"
+              onClick={() => navigate('/hr-admin/payroll-reports')}
+            />
+
+            {/* APPROVAL */}
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Step 3 — Approval</p>
+            </div>
+            <CheckRow
+              status={['approved','paid'].includes(payroll.status) ? 'done' : payroll.total_employees > 0 ? 'warning' : 'pending'}
+              label="HR review & approve payroll"
+              sub={payroll.approved_count > 0
+                ? `${payroll.approved_count} records approved`
+                : 'Pending HR approval — review and approve all records'}
+              action="Approve"
               onClick={() => navigate('/hr-admin/payroll')}
+            />
+
+            {/* DISBURSEMENT */}
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Step 4 — Disbursement</p>
+            </div>
+            <CheckRow
+              status={payroll.status === 'paid' ? 'done' : ['approved'].includes(payroll.status) ? 'warning' : 'pending'}
+              label="Download bank transfer file"
+              sub="Export NEFT/RTGS CSV file for bulk salary upload to bank portal"
+              action="Download"
+              onClick={() => navigate('/hr-admin/payroll-reports')}
             />
             <CheckRow
               status={payroll.status === 'paid' ? 'done' : 'pending'}
+              label="Upload to bank & disburse salaries"
+              sub={payroll.status === 'paid'
+                ? `₹${fmt(payroll.net_pay_total)} disbursed to ${payroll.paid_count} employees`
+                : 'Upload CSV to your bank portal, then mark as paid here'}
+              action={payroll.status !== 'paid' ? 'Mark Paid' : undefined}
+              onClick={() => navigate('/hr-admin/payroll')}
+            />
+
+            {/* POST-PAYROLL */}
+            <div className="px-5 pt-3 pb-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Step 5 — Post-Payroll</p>
+            </div>
+            <CheckRow
+              status={payroll.payslips_sent > 0 ? 'done' : payroll.status === 'paid' ? 'warning' : 'pending'}
               label="Send payslips to employees"
-              sub="Email payslips via payroll page"
+              sub={payroll.payslips_sent > 0
+                ? `${payroll.payslips_sent} payslips generated`
+                : 'Generate and email payslips after disbursement'}
               action="Payslips"
               onClick={() => navigate('/hr-admin/payroll')}
+            />
+            <CheckRow
+              status={payroll.status === 'paid' ? 'info' : 'pending'}
+              label="Update wage register"
+              sub="Download monthly wage register for statutory records"
+              action="Reports"
+              onClick={() => navigate('/hr-admin/reports')}
+            />
+            <CheckRow
+              status={payroll.status === 'paid' ? 'info' : 'pending'}
+              label="Generate Form 16 data"
+              sub="Annual TDS summary — available in Payroll Reports once paid"
+              action="Form 16"
+              onClick={() => navigate('/hr-admin/payroll-reports')}
             />
           </SectionCard>
 
