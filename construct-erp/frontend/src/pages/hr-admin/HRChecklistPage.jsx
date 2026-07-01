@@ -1,13 +1,15 @@
 // src/pages/hr-admin/HRChecklistPage.jsx — HR Admin Monthly Checklist
-import React, { useRef } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useReactToPrint } from 'react-to-print';
+import jsPDF from 'jspdf';
 import {
   CheckCircle2, Clock, AlertTriangle, XCircle, ChevronRight,
   IndianRupee, Users, FileText, Calendar, ShieldCheck, BadgeCheck,
   UserCheck, Briefcase, Receipt, RefreshCw, AlertCircle,
   ClipboardList, CreditCard, BookOpen, Fingerprint,
-  ArrowUpRight, Bell, Printer, Download,
+  ArrowUpRight, Bell, Printer, Download, Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { hrComplianceAPI } from '../../api/client';
@@ -100,8 +102,9 @@ function CheckRow({ status, label, sub, action, onClick, rightLabel }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function HRChecklistPage() {
-  const navigate = useNavigate();
-  const printRef = useRef();
+  const navigate    = useNavigate();
+  const printRef    = useRef();
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr-checklist'],
@@ -109,7 +112,242 @@ export default function HRChecklistPage() {
     staleTime: 2 * 60 * 1000,
   });
 
-  const handlePrint = () => window.print();
+  // ── Print via react-to-print (browser print dialog) ──
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `HR_Checklist_${data?.payroll_month_name || ''}_${data?.payroll_year || ''}`,
+    pageStyle: `
+      @page { size: A4; margin: 15mm; }
+      @media print {
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; }
+        .no-print { display: none !important; }
+        .print-section { break-inside: avoid; margin-bottom: 12px; }
+        .print-row { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid #f1f5f9; }
+        .print-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+        .badge-done    { background: #d1fae5; color: #065f46; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger  { background: #fee2e2; color: #991b1b; }
+        .badge-pending { background: #f1f5f9; color: #64748b; }
+        .badge-info    { background: #dbeafe; color: #1e40af; }
+        .print-label { font-weight: 600; font-size: 11px; }
+        .print-sub { font-size: 9.5px; color: #64748b; margin-top: 1px; }
+        .print-step { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding: 8px 0 3px; }
+        .print-section-title { font-size: 13px; font-weight: 700; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 8px; }
+        .print-right { margin-left: auto; font-size: 9.5px; color: #64748b; white-space: nowrap; padding-left: 8px; }
+        .done-text { color: #94a3b8; text-decoration: line-through; }
+        .print-header { border-bottom: 2px solid #6366f1; padding-bottom: 10px; margin-bottom: 16px; }
+        .print-kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 16px; }
+        .print-kpi { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
+        .print-kpi-val { font-size: 15px; font-weight: 700; }
+        .print-kpi-lbl { font-size: 9px; color: #64748b; margin-top: 2px; }
+        .kpi-emerald { color: #059669; } .kpi-red { color: #dc2626; } .kpi-amber { color: #d97706; } .kpi-blue { color: #2563eb; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .one-col { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      }
+    `,
+  });
+
+  // ── Download PDF via jsPDF (direct file save, no dialog) ──
+  const handleDownloadPDF = useCallback(async () => {
+    if (!data) return;
+    setPdfLoading(true);
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const PAGE_W = 210; const PAGE_H = 297;
+      const ML = 14; const MR = 14; const MT = 14;
+      const CW = PAGE_W - ML - MR;
+      let y = MT;
+
+      const COLORS = {
+        indigo: [99,102,241], emerald: [16,185,129], amber: [245,158,11],
+        red: [239,68,68], slate: [100,116,139], blue: [59,130,246],
+      };
+
+      const checkNewPage = (needed = 8) => {
+        if (y + needed > PAGE_H - 14) { doc.addPage(); y = MT; }
+      };
+
+      const statusMark = (s) => ({ done:'✓', warning:'!', danger:'✗', pending:'○', info:'i' }[s] || '○');
+      const statusColor = (s) => ({
+        done:[5,150,105], warning:[180,83,9], danger:[185,28,28],
+        pending:[100,116,139], info:[37,99,235],
+      }[s] || [100,116,139]);
+
+      // ── Header ──
+      doc.setFillColor(...COLORS.indigo);
+      doc.rect(0, 0, PAGE_W, 22, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(16); doc.setFont('helvetica','bold');
+      doc.text(`HR Checklist — ${data.payroll_month_name} ${data.payroll_year}`, ML, 10);
+      doc.setFontSize(9); doc.setFont('helvetica','normal');
+      doc.text(`Running ${data.payroll_month_name} payroll · Compliance due in ${data.month_name} ${data.year}`, ML, 16);
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')}`, PAGE_W - MR - 40, 16);
+      y = 30;
+
+      // ── KPI strip ──
+      const kpis = [
+        { label:'Payroll Status', value: data.payroll?.status === 'paid' ? 'Paid' : data.payroll?.status === 'approved' ? 'Approved' : data.payroll?.status === 'not_run' ? 'Not Run' : 'Pending', color: data.payroll?.status === 'paid' ? COLORS.emerald : COLORS.amber },
+        { label:'Compliance Overdue', value: String((data.compliance_tasks||[]).filter(t=>t.overdue).length), color: COLORS.red },
+        { label:'HR Alerts', value: String((data.probation_due?.length||0)+(data.lifecycle_pending?.length||0)+(data.license_expiry?.length||0)+(data.doc_expiry?.length||0)+(data.exits_pending?.length||0)), color: COLORS.amber },
+        { label:'New Joiners', value: String(data.new_joiners?.length||0), color: COLORS.blue },
+      ];
+      const kpiW = CW / 4 - 2;
+      kpis.forEach((k, i) => {
+        const kx = ML + i * (kpiW + 2.5);
+        doc.setDrawColor(226,232,240); doc.setLineWidth(0.3);
+        doc.roundedRect(kx, y, kpiW, 14, 2, 2, 'S');
+        doc.setTextColor(...k.color); doc.setFontSize(13); doc.setFont('helvetica','bold');
+        doc.text(k.value, kx + 3, y + 8);
+        doc.setTextColor(100,116,139); doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+        doc.text(k.label, kx + 3, y + 12.5);
+      });
+      y += 20;
+
+      // ── Section renderer ──
+      const drawSection = (title, color, rows) => {
+        checkNewPage(20);
+        doc.setFillColor(...(COLORS[color] || COLORS.indigo));
+        doc.rect(ML, y, 3, 7, 'F');
+        doc.setTextColor(...(COLORS[color] || COLORS.indigo));
+        doc.setFontSize(11); doc.setFont('helvetica','bold');
+        doc.text(title, ML + 5, y + 5.5);
+        doc.setDrawColor(226,232,240); doc.setLineWidth(0.2);
+        doc.line(ML, y + 8, ML + CW, y + 8);
+        y += 11;
+
+        rows.forEach(row => {
+          if (!row) return;
+          if (row.type === 'header') {
+            checkNewPage(7);
+            doc.setTextColor(148,163,184); doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+            doc.text(row.label.toUpperCase(), ML + 2, y + 4);
+            y += 6;
+            return;
+          }
+          checkNewPage(9);
+          const sc = statusColor(row.status);
+          // Status circle
+          doc.setFillColor(...sc);
+          doc.circle(ML + 2.5, y + 3.5, 2, 'F');
+          doc.setTextColor(255,255,255); doc.setFontSize(7); doc.setFont('helvetica','bold');
+          doc.text(statusMark(row.status), ML + 1.3, y + 4.3);
+          // Label
+          const isDone = row.status === 'done';
+          doc.setTextColor(isDone ? 148 : 30, isDone ? 163 : 41, isDone ? 184 : 59);
+          doc.setFontSize(9); doc.setFont('helvetica', isDone ? 'normal' : 'bold');
+          const labelLines = doc.splitTextToSize(row.label, CW - 30);
+          doc.text(labelLines, ML + 7, y + 4);
+          // Sub
+          if (row.sub) {
+            const subY = y + 4 + (labelLines.length - 1) * 3.5 + 3.5;
+            doc.setTextColor(100,116,139); doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+            const subLines = doc.splitTextToSize(row.sub, CW - 30);
+            doc.text(subLines, ML + 7, subY);
+            y += 3 * (subLines.length - 1);
+          }
+          // Right label
+          if (row.rightLabel) {
+            doc.setTextColor(100,116,139); doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+            doc.text(row.rightLabel, PAGE_W - MR - doc.getTextWidth(row.rightLabel) - 1, y + 4);
+          }
+          y += 9;
+          // Divider
+          doc.setDrawColor(241,245,249); doc.setLineWidth(0.1);
+          doc.line(ML + 6, y, ML + CW, y);
+        });
+        y += 4;
+      };
+
+      const p = data.payroll || {};
+      const ct = data.compliance_tasks || [];
+
+      // ── Payroll section ──
+      drawSection(`Payroll Checklist — ${data.payroll_month_name} ${data.payroll_year}`, 'amber', [
+        { type:'header', label:'Step 1 — Pre-Payroll Preparation' },
+        { status: p.salary_missing===0?'done':'danger', label:'Assign salary structure to all employees', sub: p.salary_missing===0?'All active employees have a salary structure':`${p.salary_missing} employees missing salary structure` },
+        { status:'info', label:'Collect & sync attendance from biometric / ESSL', sub:'Import punch data before calculating LOP' },
+        { status: p.lop_entries>0?'done':'warning', label:'Update LOP (Loss of Pay) days', sub: p.lop_entries>0?`${p.lop_entries} employees marked · ${p.lop_total_days} total LOP days`:'No LOP entries yet' },
+        { status:'info', label:'Process overtime hours (if applicable)', sub:'Verify overtime claims before payroll run' },
+        { status: p.stop_salary_count===0?'done':'warning', label:'Review stop-salary list', sub: p.stop_salary_count===0?'No employees on salary hold':`${p.stop_salary_count} employees on hold` },
+        { status: p.active_loans_count>0?'info':'done', label:'Verify loan & advance deductions', sub: p.active_loans_count>0?`${p.active_loans_count} employees with active loans`:'No active loans' },
+        { status:'info', label:'Process arrears / salary revision backlog', sub:'Add arrears for any pending salary revisions' },
+        { status:'info', label:'Update new joiner & exit prorations', sub:`${data.new_joiners?.length||0} new joiners · ${data.exits_pending?.length||0} exits pending FnF` },
+        { type:'header', label:'Step 2 — Run & Verify Payroll' },
+        { status: p.total_employees>0?'done':'danger', label:'Generate payroll for all employees', sub: p.total_employees>0?`${p.total_employees} of ${p.total_active} employees processed`:`${p.total_active} active employees — not yet generated` },
+        { status: p.total_employees>0?'info':'pending', label:'Verify basic, HRA, allowances & gross pay', sub:'Compare with previous month for unexpected changes' },
+        { status: p.total_employees>0?'info':'pending', label:'Verify PF, ESI, PT & TDS deductions', sub:'Confirm statutory deductions are correctly calculated' },
+        { status: p.total_employees>0?'info':'pending', label:'Cross-check net pay totals', sub:'Total net pay should match bank transfer amount' },
+        { type:'header', label:'Step 3 — Approval' },
+        { status: ['approved','paid'].includes(p.status)?'done':p.total_employees>0?'warning':'pending', label:'HR review & approve payroll', sub: p.approved_count>0?`${p.approved_count} records approved`:'Pending HR approval' },
+        { status: ['approved','paid'].includes(p.status)?'done':'pending', label:'Accounts / Management approval', sub:'Get sign-off before disbursing salaries' },
+        { type:'header', label:'Step 4 — Disbursement' },
+        { status: p.status==='paid'?'done':p.status==='approved'?'warning':'pending', label:'Download bank transfer file (NEFT/RTGS)', sub:'Export CSV from Payroll Reports → upload to bank portal' },
+        { status: p.status==='paid'?'done':'pending', label:'Upload to bank portal & disburse salaries', sub: p.status==='paid'?`₹${Number(p.net_pay_total||0).toLocaleString('en-IN')} disbursed to ${p.paid_count} employees`:'Upload CSV → get UTR → mark paid' },
+        { type:'header', label:'Step 5 — Post-Payroll Tasks' },
+        { status: p.payslips_sent>0?'done':p.status==='paid'?'warning':'pending', label:'Generate & send payslips to employees', sub: p.payslips_sent>0?`${p.payslips_sent} payslips generated`:'Send after salary disbursement' },
+        { status: p.status==='paid'?'info':'pending', label:'Update loan repayment tracker', sub:'Mark EMI deductions paid, update outstanding balances' },
+        { status: p.status==='paid'?'info':'pending', label:'Download & file monthly wage register', sub:'Mandatory record under Payment of Wages Act' },
+        { type:'header', label:'Step 6 — Statutory Filing' },
+        { status: ct.find(t=>t.category==='TDS')?.overdue?'danger':ct.find(t=>t.category==='TDS')?.due_soon?'warning':'pending', label:`Deposit TDS challan — ${data.payroll_month_name} (by 7th ${data.month_name})`, sub:'Form 281 on TIN NSDL / Income Tax portal', rightLabel: ct.find(t=>t.category==='TDS') ? `${ct.find(t=>t.category==='TDS').days_remaining}d left` : '' },
+        { status: ct.find(t=>t.category==='PF')?.overdue?'danger':ct.find(t=>t.category==='PF')?.due_soon?'warning':'pending', label:`Upload PF ECR & deposit — ${data.payroll_month_name} (by 15th ${data.month_name})`, sub:'EPFO Unified Portal', rightLabel: ct.find(t=>t.category==='PF') ? `${ct.find(t=>t.category==='PF').days_remaining}d left` : '' },
+        { status: ct.find(t=>t.category==='PT')?.overdue?'danger':ct.find(t=>t.category==='PT')?.due_soon?'warning':'pending', label:`Pay Professional Tax — ${data.payroll_month_name} (by 20th ${data.month_name})`, sub:'Commercial Taxes Department', rightLabel: ct.find(t=>t.category==='PT') ? `${ct.find(t=>t.category==='PT').days_remaining}d left` : '' },
+        { status: ct.find(t=>t.category==='ESI')?.overdue?'danger':ct.find(t=>t.category==='ESI')?.due_soon?'warning':'pending', label:`Upload ESI contribution — ${data.payroll_month_name} (by 21st ${data.month_name})`, sub:'ESIC portal', rightLabel: ct.find(t=>t.category==='ESI') ? `${ct.find(t=>t.category==='ESI').days_remaining}d left` : '' },
+        { status:'pending', label:`Pay contract worker wages by 7th ${data.month_name}`, sub:'Wages for site/daily workers must be paid within 7 days' },
+      ]);
+
+      // ── Compliance section ──
+      drawSection('Compliance Filings', 'indigo', [
+        ...ct.map(t => ({ status: t.overdue?'danger':t.due_soon?'warning':'pending', label: t.task, sub: t.description, rightLabel: t.overdue ? `${Math.abs(t.days_remaining)}d overdue` : `Due ${new Date(t.due_date).toLocaleDateString('en-IN')} (${t.days_remaining}d)` })),
+        { type:'header', label:'Quarterly / Annual' },
+        { status:'pending', label:'Form 24Q — Quarterly TDS Return', sub:'File on TRACES portal each quarter' },
+        { status:'pending', label:'PF Annual Return (Form 3A / 6A)', sub:'Due annually in April' },
+        { status:'pending', label:'ESI Half-Yearly Return', sub:'Due Apr & Oct on ESIC portal' },
+      ]);
+
+      // ── Employee Actions ──
+      if ((data.new_joiners?.length||0) + (data.probation_due?.length||0) + (data.exits_pending?.length||0) > 0) {
+        const empRows = [];
+        if (data.new_joiners?.length) {
+          empRows.push({ type:'header', label:'New Joiners' });
+          data.new_joiners.forEach(e => empRows.push({ status:'info', label: e.name, sub:`${e.employee_code||'—'} · ${e.department_name||''}` }));
+        }
+        if (data.probation_due?.length) {
+          empRows.push({ type:'header', label:'Probation Reviews Due' });
+          data.probation_due.forEach(e => empRows.push({ status: e.days_left<=7?'warning':'pending', label: e.name, sub:`${e.employee_code||'—'} · ${e.designation_name||''}`, rightLabel:`Ends ${new Date(e.probation_end_date).toLocaleDateString('en-IN')}` }));
+        }
+        if (data.exits_pending?.length) {
+          empRows.push({ type:'header', label:'Exit / FnF Pending' });
+          data.exits_pending.forEach(e => empRows.push({ status:'warning', label: e.name, sub:`${e.employee_code||'—'} · ${e.leaving_reason||'Resigned'}` }));
+        }
+        drawSection('Employee Actions', 'blue', empRows);
+      }
+
+      // ── Expiry Alerts ──
+      if ((data.license_expiry?.length||0) + (data.doc_expiry?.length||0) > 0) {
+        const exRows = [];
+        data.license_expiry?.forEach(l => exRows.push({ status: l.days_left<=15?'danger':'warning', label: l.licence_type, sub:`${l.authority||''} · ${l.licence_number||''}`, rightLabel:`Expires ${new Date(l.expiry_date).toLocaleDateString('en-IN')}` }));
+        data.doc_expiry?.forEach(d => exRows.push({ status: d.days_left<=7?'danger':'warning', label:`${d.employee_name} — ${d.doc_type||d.doc_name}`, sub:`${d.employee_code||'—'}`, rightLabel:`Expires ${new Date(d.expiry_date).toLocaleDateString('en-IN')}` }));
+        drawSection('Expiry Alerts', 'red', exRows);
+      }
+
+      // ── Footer on each page ──
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFillColor(248,250,252);
+        doc.rect(0, PAGE_H - 10, PAGE_W, 10, 'F');
+        doc.setTextColor(148,163,184); doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+        doc.text(`HR Checklist — ${data.payroll_month_name} ${data.payroll_year} · BCIM Construction`, ML, PAGE_H - 4);
+        doc.text(`Page ${i} of ${pageCount}`, PAGE_W - MR - 18, PAGE_H - 4);
+      }
+
+      doc.save(`HR_Checklist_${data.payroll_month_name}_${data.payroll_year}.pdf`);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [data]);
 
   if (isLoading) return (
     <div className="h-full flex flex-col overflow-hidden bg-[#f5f6fa]">
@@ -226,13 +464,18 @@ export default function HRChecklistPage() {
           breadcrumbs={[{ label:'HR & Admin' }, { label:'Checklist' }]}
           actions={
             <div className="flex gap-2">
-              <button onClick={handlePrint}
-                className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium flex items-center gap-2">
-                <Printer className="w-3.5 h-3.5" /> Print / PDF
-              </button>
               <button onClick={() => refetch()}
                 className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-xs font-medium flex items-center gap-2 hover:bg-slate-50">
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </button>
+              <button onClick={handlePrint}
+                className="h-9 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-2">
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
+              <button onClick={handleDownloadPDF} disabled={pdfLoading}
+                className="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-medium flex items-center gap-2">
+                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                Download PDF
               </button>
             </div>
           }
