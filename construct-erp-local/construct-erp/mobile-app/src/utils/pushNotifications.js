@@ -1,7 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import { notificationsAPI } from '../api/client';
 
 Notifications.setNotificationHandler({
@@ -12,8 +11,18 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Registers this device for push notifications and hands the token to the
-// backend (POST /notifications/devices, table: notification_device_tokens).
+// IMPORTANT: the backend (backend/src/services/fcm.service.js) sends push via
+// the Firebase Admin SDK directly to raw FCM/APNs device tokens — it does NOT
+// go through Expo's push relay. So this MUST request the native device token
+// (getDevicePushTokenAsync), not an Expo push token (getExpoPushTokenAsync) —
+// those are a different, incompatible token format and Firebase Admin will
+// reject them. On Android this requires google-services.json for the same
+// Firebase project as the backend's FIREBASE_SERVICE_ACCOUNT to be present
+// (see mobile-app/app.json — googleServicesFile) and an EAS/dev build (this
+// does not work inside Expo Go).
+//
+// Registers this device and hands the token to the backend
+// (POST /notifications/devices, table: notification_device_tokens).
 // Call after a successful login. Safe to call repeatedly — the backend
 // upserts on (user_id, token).
 export async function registerForPushNotifications() {
@@ -29,18 +38,18 @@ export async function registerForPushNotifications() {
     if (status !== 'granted') return;
 
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
+      // Channel id must match the one fcm.service.js sends with (`erp-alerts`)
+      // or the notification may not display with the right priority/sound.
+      await Notifications.setNotificationChannelAsync('erp-alerts', {
+        name: 'ERP Alerts',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#2563EB',
       });
     }
 
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    const { data } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
-
-    await notificationsAPI.registerDevice(data, Platform.OS);
+    const { data: token } = await Notifications.getDevicePushTokenAsync();
+    await notificationsAPI.registerDevice(token, Platform.OS);
   } catch (err) {
     // Push registration must never block login/app usage.
     console.warn('[push] registration failed:', err.message);

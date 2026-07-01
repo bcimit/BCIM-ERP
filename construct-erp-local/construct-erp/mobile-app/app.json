@@ -8,7 +8,8 @@
     "splash": { "resizeMode": "contain", "backgroundColor": "#0F172A" },
     "android": {
       "adaptiveIcon": { "backgroundColor": "#0F172A" },
-      "package": "com.bcimengineering.erp"
+      "package": "com.bcimengineering.erp",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-secure-store",

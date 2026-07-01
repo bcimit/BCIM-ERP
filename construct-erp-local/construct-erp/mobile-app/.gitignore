@@ -10,3 +10,5 @@ android/local.properties
 *.jks
 .env
 *.log
+google-services.json
+GoogleService-Info.plist
