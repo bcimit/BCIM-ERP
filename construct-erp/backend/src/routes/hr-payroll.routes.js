@@ -645,10 +645,16 @@ router.get('/reports/form16', async (req, res) => {
     const fyStart = { month: 4, year: fy - 1 };
     const fyEnd   = { month: 3, year: fy };
 
-    // Month range condition on (year, month) integers — no date casting needed
-    const params = [req.user.company_id]; let idx = 2;
+    const { project_id } = req.query;
+
+    // Build params array: $1=company_id, then optional filters, then $N/$N+1 for FY years
+    const params = [req.user.company_id];
     let extraCond = '';
-    if (user_id) { extraCond = ` AND p.user_id=$${idx++}`; params.push(user_id); }
+    if (user_id)    { params.push(user_id);    extraCond += ` AND p.user_id=$${params.length}`;       }
+    if (project_id) { params.push(project_id); extraCond += ` AND ep.project_id=$${params.length}`;   }
+    params.push(fyStart.year, fyEnd.year);
+    const fyStartIdx = params.length - 1;  // index of fyStart.year (1-based)
+    const fyEndIdx   = params.length;      // index of fyEnd.year   (1-based)
 
     const { rows } = await query(`
       SELECT
@@ -691,13 +697,13 @@ router.get('/reports/form16', async (req, res) => {
       WHERE p.company_id = $1
         AND p.status IN ('approved','paid')
         AND (
-          (p.year = ${ idx } AND p.month >= 4) OR
-          (p.year = ${ idx + 1 } AND p.month <= 3)
+          (p.year = $${fyStartIdx} AND p.month >= 4) OR
+          (p.year = $${fyEndIdx}   AND p.month <= 3)
         )
         ${extraCond}
       GROUP BY p.user_id, u.name, u.employee_code, ep.pan_number, ep.uan_number, dep.name, des.name
       ORDER BY u.name`,
-      [...params, fyStart.year, fyEnd.year]
+      params
     );
 
     // Compute derived TDS fields
