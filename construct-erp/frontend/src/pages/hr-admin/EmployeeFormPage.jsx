@@ -324,7 +324,7 @@ export default function EmployeeFormPage() {
                   set('project_id', pid);
                   const proj = projects.find(p=>p.id===pid);
                   if(proj) set('work_location', proj.name);
-                  else if(!pid) set('work_location','');
+                  else if(!pid) set('work_location','Head Office');
                 }}>
                   <option value="">— No Project / Head Office —</option>
                   {projects.map(p=><option key={p.id} value={p.id}>{p.project_code ? `[${p.project_code}] ` : ''}{p.name}</option>)}
