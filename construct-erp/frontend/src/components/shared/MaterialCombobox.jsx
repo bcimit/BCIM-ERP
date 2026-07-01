@@ -2,14 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, ChevronDown, Package, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 
-/**
- * Searchable material/item dropdown sourced from the store ledger.
- * Shared across MRS, PO, Work Order and other item-entry screens.
- */
 export default function MaterialCombobox({ value, inventoryItems = [], onChange, onNewItem, placeholder = 'Search store ledger…' }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState(value || '');
   const ref = useRef(null);
+  // Prevents the value→q sync effect from running when we just changed value ourselves,
+  // which would reset the cursor position and make typing feel broken.
+  const skipSyncRef = useRef(false);
 
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -17,7 +16,12 @@ export default function MaterialCombobox({ value, inventoryItems = [], onChange,
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => { setQ(value || ''); }, [value]);
+  // Sync q from parent (e.g. pre-fill from MRS, editing existing PO).
+  // Skipped when the change came from our own handleInputChange / handleSelect.
+  useEffect(() => {
+    if (skipSyncRef.current) { skipSyncRef.current = false; return; }
+    setQ(value || '');
+  }, [value]);
 
   const filtered = inventoryItems
     .filter(i => !q || i.material_name.toLowerCase().includes(q.toLowerCase()))
@@ -33,12 +37,14 @@ export default function MaterialCombobox({ value, inventoryItems = [], onChange,
   const hasResults = filtered.length > 0;
 
   const handleSelect = (item) => {
+    skipSyncRef.current = true;
     setQ(item.material_name);
     onChange(item.material_name, item.unit);
     setOpen(false);
   };
 
   const handleInputChange = (e) => {
+    skipSyncRef.current = true;
     const v = e.target.value;
     setQ(v);
     onChange(v, '');
@@ -54,20 +60,27 @@ export default function MaterialCombobox({ value, inventoryItems = [], onChange,
         <input
           type="text"
           placeholder={placeholder}
-          className="h-10 w-full border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] rounded-lg pl-8 pr-8 text-sm text-slate-900 placeholder:text-slate-500 font-medium outline-none focus:border-[#2569b3] transition-all border"
+          className="h-9 w-full border-[#378ADD] bg-[#E6F1FB] shadow-[0_0_0_3px_rgba(55,138,221,0.15)] rounded-lg pl-8 pr-8 text-sm text-slate-900 placeholder:text-slate-500 font-medium outline-none focus:border-[#2569b3] transition-all border"
           value={q}
           onChange={handleInputChange}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { if (q.trim()) setOpen(true); }}
         />
-        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+        <button
+          type="button"
+          tabIndex={-1}
+          onMouseDown={(e) => { e.preventDefault(); setOpen(o => !o); }}
+          className="absolute right-0 top-0 h-full px-2 flex items-center text-slate-400 hover:text-slate-600"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
       </div>
       {selectedItem?.category && !open && (
         <div className="text-xs text-slate-500 px-1 mt-0.5 truncate">{selectedItem.category}</div>
       )}
       {open && (
-        <div className="absolute z-[80] top-11 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-72 overflow-y-auto p-1.5">
+        <div className="absolute z-[80] top-10 left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-72 overflow-y-auto p-1.5">
           {!hasResults && q ? (
-            <div className="px-3 py-3 text-xs text-slate-500 italic text-center">No match for "{q}"</div>
+            <div className="px-3 py-3 text-xs text-slate-500 italic text-center">No match for "{q}" — type freely or add to store ledger</div>
           ) : !hasResults ? (
             <div className="px-3 py-3 text-xs text-slate-600 font-semibold text-center">Store ledger is empty — add items below</div>
           ) : (
