@@ -111,6 +111,31 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /ra-bills/boq-item-billed?project_id=X  — per-BOQ-item RA billing summary
+router.get('/boq-item-billed', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    if (!project_id) return res.status(400).json({ error: 'project_id required' });
+    const result = await query(`
+      SELECT
+        rbi.boq_item_id,
+        bi.chapter_no,
+        bi.chapter_name,
+        SUM(rbi.amount)                                                                      AS total_billed,
+        (array_agg(rb.bill_number ORDER BY rb.bill_date DESC NULLS LAST, rb.created_at DESC))[1] AS last_bill_number,
+        (array_agg(rb.status      ORDER BY rb.bill_date DESC NULLS LAST, rb.created_at DESC))[1] AS last_bill_status
+      FROM ra_bill_items rbi
+      JOIN ra_bills  rb ON rbi.ra_bill_id  = rb.id
+      JOIN boq_items bi ON rbi.boq_item_id = bi.id
+      WHERE rb.project_id = $1
+        AND rb.company_id = $2
+        AND rb.status NOT IN ('draft','rejected')
+      GROUP BY rbi.boq_item_id, bi.chapter_no, bi.chapter_name
+    `, [project_id, req.user.company_id]);
+    res.json({ data: result.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /ra-bills/previous-stats
 router.get('/previous-stats', async (req, res) => {
   try {

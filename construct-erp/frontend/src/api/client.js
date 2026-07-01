@@ -289,6 +289,7 @@ export const raBillAPI = {
   pay:           (id, d)  => api.patch(`/ra-bills/${id}/pay`, d),
   delete:        (id)     => api.delete(`/ra-bills/${id}`),
   getPrevStats:  (params) => api.get('/ra-bills/previous-stats', { params }),
+  boqItemBilled: (projectId) => api.get('/ra-bills/boq-item-billed', { params: { project_id: projectId } }),
 };
 
 export const clientAdvanceAPI = {

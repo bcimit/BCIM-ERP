@@ -15,7 +15,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
-import { boqBudgetAPI, projectAPI } from '../../api/client';
+import { boqBudgetAPI, projectAPI, raBillAPI } from '../../api/client';
 import BOQSummaryPrintTemplate from './BOQSummaryPrintTemplate';
 import bcimLogo from '../../assets/bcim-logo.png';
 
@@ -1370,6 +1370,19 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
   const allItems = data?.data || [];
   const costHeads = data?.cost_heads || [];
 
+  const { data: raBilledRaw = [] } = useQuery({
+    queryKey: ['ra-billed-boq', projectId],
+    queryFn: () => raBillAPI.boqItemBilled(projectId).then(r => r.data?.data || []).catch(() => []),
+    enabled: !!projectId,
+  });
+
+  // Map boq_item_id → { total_billed, last_bill_number, last_bill_status }
+  const raByItemId = useMemo(() => {
+    const m = {};
+    raBilledRaw.forEach(r => { m[r.boq_item_id] = r; });
+    return m;
+  }, [raBilledRaw]);
+
   const updateMutation = useMutation({
     mutationFn: ({ boqItemId, entries }) => boqBudgetAPI.updateItem(boqItemId, entries),
     onSuccess: (res) => {
@@ -1727,15 +1740,17 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                 </button>
               </div>
               {/* Column header */}
-              <div className="grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <div className="grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 <span className="w-4" />
                 <span>S.No</span>
                 <span>Chapter / Description</span>
                 <span className="text-right">BOQ Value</span>
                 <span className="text-right">Budget</span>
+                <span className="text-right text-violet-600">RA Billed</span>
                 <span className="text-right">Spent</span>
                 <span className="text-right">Balance</span>
                 <span className="text-right">Status</span>
+                <span className="text-left pl-2">Remarks</span>
               </div>
 
               <div className="divide-y divide-slate-100">
@@ -1753,10 +1768,15 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                   const chOver     = chSpent > chBoq + 0.01;
                   const chAllocated = chBudgeted > 0;
                   const isOpen     = expanded[`ch-${ch.key}`];
+                  const chRaBilled = ch.items.reduce((s, i) => s + parseFloat(raByItemId[i.id]?.total_billed || 0), 0);
+                  const chLastBill = ch.items
+                    .map(i => raByItemId[i.id])
+                    .filter(Boolean)
+                    .sort((a, b) => (b.last_bill_number || '').localeCompare(a.last_bill_number || ''))[0];
                   return (
                     <div key={ch.key}>
                       <button onClick={() => toggle(`ch-${ch.key}`)}
-                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
+                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
                           isOpen && 'bg-indigo-50/40')}>
                         <span className="w-4 text-slate-400">
                           {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -1766,6 +1786,9 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                         <span className="text-right font-semibold text-slate-800">{inr(chBoq)}</span>
                         <span className={clsx('text-right font-semibold', chOver ? 'text-rose-600' : chAllocated ? 'text-indigo-700' : 'text-slate-300')}>
                           {chBudgeted > 0 ? inr(chBudgeted) : '—'}
+                        </span>
+                        <span className="text-right font-semibold text-violet-700">
+                          {chRaBilled > 0 ? inr(chRaBilled) : <span className="text-slate-300">—</span>}
                         </span>
                         <span className="text-right font-medium text-amber-600">{chSpent > 0 ? inr(chSpent) : <span className="text-slate-300">—</span>}</span>
                         <span className={clsx('text-right font-bold', chBalance < 0 ? 'text-rose-600' : chAllocated ? 'text-emerald-600' : 'text-slate-300')}>
@@ -1778,6 +1801,18 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                               ? <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full"><AlertTriangle size={10} /> Over</span>
                               : <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">OK</span>}
                         </span>
+                        <span className="pl-2">
+                          {chLastBill ? (
+                            <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap',
+                              chLastBill.last_bill_status === 'paid'       ? 'bg-emerald-100 text-emerald-700' :
+                              chLastBill.last_bill_status === 'certified'  ? 'bg-blue-100 text-blue-700' :
+                              chLastBill.last_bill_status === 'verified'   ? 'bg-indigo-100 text-indigo-700' :
+                              chLastBill.last_bill_status === 'submitted'  ? 'bg-amber-100 text-amber-700' :
+                              'bg-slate-100 text-slate-500')}>
+                              {chLastBill.last_bill_number ? `${chLastBill.last_bill_number} · ` : ''}{chLastBill.last_bill_status}
+                            </span>
+                          ) : <span className="text-slate-300">—</span>}
+                        </span>
                       </button>
                       {isOpen && (
                         <div className="bg-slate-50 border-t border-slate-200">
@@ -1785,8 +1820,11 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                             const itemOpen = expanded[item.id];
                             return (
                               <div key={item.id}>
+                                {(() => {
+                                  const ra = raByItemId[item.id];
+                                  return (
                                 <button onClick={() => toggle(item.id)}
-                                  className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-2 text-xs text-left hover:bg-white/60 transition pl-10',
+                                  className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-2 text-xs text-left hover:bg-white/60 transition pl-10',
                                     itemOpen && 'bg-indigo-50/40')}>
                                   <span className="w-4 text-slate-300">
                                     {itemOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -1797,12 +1835,29 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                                   <span className={clsx(item.allocated ? 'text-indigo-600' : 'text-slate-400')}>
                                     <EditableTotal value={item.budgeted} onSave={total => saveItemTotal(item, total)} />
                                   </span>
+                                  <span className="text-right text-violet-700">
+                                    {ra?.total_billed > 0 ? inr(ra.total_billed) : <span className="text-slate-300">—</span>}
+                                  </span>
                                   <span className="text-right text-amber-600">{item.spent > 0 ? inr(item.spent) : <span className="text-slate-300">—</span>}</span>
                                   <span className={clsx('text-right', item.balance < 0 ? 'text-rose-600' : item.allocated ? 'text-emerald-600' : 'text-slate-300')}>
                                     {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
                                   </span>
                                   <span />
+                                  <span className="pl-2">
+                                    {ra ? (
+                                      <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap',
+                                        ra.last_bill_status === 'paid'      ? 'bg-emerald-100 text-emerald-700' :
+                                        ra.last_bill_status === 'certified' ? 'bg-blue-100 text-blue-700' :
+                                        ra.last_bill_status === 'verified'  ? 'bg-indigo-100 text-indigo-700' :
+                                        ra.last_bill_status === 'submitted' ? 'bg-amber-100 text-amber-700' :
+                                        'bg-slate-100 text-slate-500')}>
+                                        {ra.last_bill_number ? `${ra.last_bill_number} · ` : ''}{ra.last_bill_status}
+                                      </span>
+                                    ) : <span className="text-slate-300">—</span>}
+                                  </span>
                                 </button>
+                                  );
+                                })()}
                                 {itemOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
                               </div>
                             );
@@ -1820,7 +1875,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                   return (
                     <div key={item.id}>
                       <button onClick={() => toggle(item.id)}
-                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition italic bg-slate-50/60',
+                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition italic bg-slate-50/60',
                           isOpen && 'bg-indigo-50/40')}>
                         <span className="w-4 text-slate-400">
                           {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -1829,9 +1884,11 @@ export default function BOQBudgetBreakdownPage({ embedded = false }) {
                         <span className="text-slate-700 font-medium">Unlinked Spend</span>
                         <span className="text-right font-semibold text-slate-300">—</span>
                         <span className="text-slate-300 text-right">—</span>
+                        <span className="text-slate-300 text-right">—</span>
                         <span className="text-right font-medium text-amber-600">{item.spent > 0 ? inr(item.spent) : <span className="text-slate-300">—</span>}</span>
                         <span className="text-slate-300 text-right">—</span>
                         <span className="text-right"><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Unlinked</span></span>
+                        <span />
                       </button>
                       {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
                     </div>
