@@ -1561,7 +1561,7 @@ export default function BOQBudgetBreakdownPage() {
       <PageHeader
         title="BOQ Budget Breakdown"
         subtitle="Allocate each BOQ item's budget across cost heads and track advance, invoiced & balance"
-        breadcrumbs={[{ label: 'QS & Billing' }, { label: 'Budget Breakdown' }]}
+        breadcrumbs={[{ label: 'Procurement' }, { label: 'BOQ Budget Breakdown' }]}
         actions={
           <div className="flex items-center gap-2">
             {mode !== undefined && view === 'breakdown' && (

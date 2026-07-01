@@ -741,6 +741,7 @@ export default function App() {
                 <Route path="procurement/bid-opportunities" element={<RequireModule module="Procurement"><BidOpportunityPage /></RequireModule>} />
                 <Route path="procurement/bid-opportunities/:id" element={<RequireModule module="Procurement"><BidOpportunityDetailPage /></RequireModule>} />
                 <Route path="procurement/budget-control" element={<RequireAnyModule modules={['Procurement', 'Finance']}><BudgetPage /></RequireAnyModule>} />
+                <Route path="procurement/boq-budget"    element={<RequireModule module="Procurement"><BOQBudgetBreakdownPage /></RequireModule>} />
 
                 {/* Stores */}
                 <Route path="stores" element={<RequireModule module="Stores"><StoresDashboard /></RequireModule>} />

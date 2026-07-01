@@ -194,7 +194,7 @@ const MENU_CONFIG = {
     { to:'/qs/boq',                    label:'BOQ & Estimation' },
     { to:'/qs/boq-mapping',            label:'BOQ SC Mapping' },
     { to:'/qs/boq-dashboard',          label:'BOQ Margin Dashboard' },
-    { to:'/qs/boq-budget-breakdown',   label:'BOQ Budget Breakdown' },
+    { to:'/procurement/boq-budget',    label:'BOQ Budget Breakdown' },
     { to:'/qs/measurements',           label:'Measurement Book' },
     { to:'/qs/ra-bills',               label:'RA Bills' },
     { to:'/qs/po',                     label:'Purchase Orders' },
