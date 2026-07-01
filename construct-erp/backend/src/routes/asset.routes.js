@@ -594,6 +594,17 @@ router.put('/:id', authorize('super_admin','admin'), async (req, res) => {
 // DELETE /assets/:id
 router.delete('/:id', authorize('super_admin','admin'), async (req, res) => {
   try {
+    // Block disposal while an open work order still references this asset —
+    // otherwise the WO is left pointing at an asset marked disposed with no
+    // way to see that its maintenance was never actually finished.
+    const openWO = await query(
+      `SELECT wo_number FROM asset_work_orders WHERE asset_id=$1 AND company_id=$2 AND status NOT IN ('completed','cancelled') LIMIT 1`,
+      [req.params.id, req.user.company_id]
+    ).catch(() => ({ rows: [] })); // table may not exist in older deployments
+    if (openWO.rows.length) {
+      return res.status(400).json({ error: `Cannot dispose — open work order ${openWO.rows[0].wo_number} still exists for this asset. Complete or cancel it first.` });
+    }
+
     // Soft-delete: mark as disposed rather than hard delete
     const r = await query(
       `UPDATE assets SET status='disposed', updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id`,

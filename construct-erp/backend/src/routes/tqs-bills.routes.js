@@ -3817,8 +3817,8 @@ router.delete('/:id', async (req, res) => {
     await getAccessibleBill(req, req.params.id);
     // Fetch bill + its advance_recovered before soft-deleting
     const billRes = await query(
-      `SELECT b.id, b.vendor_id, b.vendor_name, b.company_id,
-              COALESCE(u.advance_recovered, 0) AS advance_recovered
+      `SELECT b.id, b.vendor_id, b.vendor_name, b.company_id, b.workflow_status,
+              u.accts_jv_date, COALESCE(u.advance_recovered, 0) AS advance_recovered
        FROM tqs_bills b
        LEFT JOIN tqs_bill_updates u ON u.bill_id = b.id
        WHERE b.id=$1 AND b.company_id=$2 AND b.is_deleted=FALSE`,
@@ -3826,6 +3826,12 @@ router.delete('/:id', async (req, res) => {
     );
     if (!billRes.rows.length) return res.status(404).json({ error: 'Bill not found' });
     const bill = billRes.rows[0];
+
+    // Bills already booked to accounts (JV posted) or paid must not be deleted —
+    // doing so would leave the GL journal entry orphaned with no matching bill.
+    if (bill.accts_jv_date || bill.workflow_status === 'paid') {
+      return res.status(400).json({ error: 'This bill has been booked to accounts and cannot be deleted. Reverse the journal entry first.' });
+    }
 
     // Soft-delete the bill
     await query(

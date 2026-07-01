@@ -139,7 +139,7 @@ router.get('/pending', async (req, res) => {
           WHERE lr.company_id = $1 AND lr.status = 'pending'
           ORDER BY lr.created_at ASC`, [cid]);
         hrItems.push(...lr.rows);
-      } catch (_) {}
+      } catch (e) { console.error('[approvals/pending] leave requests feed failed:', e.message); }
 
       // Expense claims pending approval
       try {
@@ -155,7 +155,7 @@ router.get('/pending', async (req, res) => {
           WHERE e.company_id = $1 AND e.status = 'pending'
           ORDER BY e.created_at ASC`, [cid]);
         hrItems.push(...ec.rows);
-      } catch (_) {}
+      } catch (e) { console.error('[approvals/pending] expense claims feed failed:', e.message); }
 
       hrItems.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       const summary = hrItems.reduce((acc, item) => { acc[item.doc_type] = (acc[item.doc_type] || 0) + 1; return acc; }, {});
@@ -282,7 +282,7 @@ router.get('/pending', async (req, res) => {
           AND n.status IN ('open','in_progress')
         ORDER BY n.created_at ASC`, [cid]);
       items.push(...r.rows);
-    } catch (_) { /* table may not exist */ }
+    } catch (e) { console.error('[approvals/pending] NCR feed failed:', e.message); }
 
     // ── 6. Quality Submittals (pending review) ────────────────────────────────
     if (['qs_engineer','project_manager','admin','super_admin'].includes(role)) {
@@ -304,7 +304,7 @@ router.get('/pending', async (req, res) => {
             AND s.status='pending'
           ORDER BY s.created_at ASC`, [cid]);
         items.push(...r.rows);
-      } catch (_) { /* table may not exist */ }
+      } catch (e) { console.error('[approvals/pending] submittals feed failed:', e.message); }
     }
 
     // ── 7. Purchase Orders — two-stage approval feed ─────────────────────────
@@ -420,7 +420,7 @@ router.get('/pending', async (req, res) => {
           ORDER BY mr.created_at ASC`, [cid, ...mrsStatuses]);
         items.push(...r.rows);
       }
-    } catch (_) { /* table may not exist in some environments */ }
+    } catch (e) { console.error('[approvals/pending] MRS feed failed:', e.message); }
 
     // ── 9. Stores Petty Cash entries pending project head approval ───────────────
     if (['project_head','project_manager','pm','admin','super_admin'].includes(role)) {
@@ -446,7 +446,7 @@ router.get('/pending', async (req, res) => {
           ORDER BY e.created_at ASC
           LIMIT 100`, [cid]);
         items.push(...r.rows);
-      } catch (_) { /* table may not exist */ }
+      } catch (e) { console.error('[approvals/pending] petty cash feed failed:', e.message); }
     }
 
     // ── Sort all by created_at (oldest first — most urgent) ───────────────────
@@ -724,7 +724,7 @@ router.post('/action', async (req, res) => {
               entryDate: fe.entry_date, projectId: fe.project_id || undefined,
               reference: ref, narration: `Stores petty cash — ${fe.supplier}`,
               source: 'auto_stores_petty_cash', lines,
-            }).catch(() => {});
+            }).catch((e) => console.error('[approvals] petty cash auto-journal failed:', ref, e.message));
           }
         } else {
           await query(

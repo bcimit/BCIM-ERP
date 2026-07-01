@@ -106,7 +106,7 @@ async function safeCount(sql, params) {
   try {
     const r = await query(sql, params);
     return parseInt(r.rows[0]?.count || 0);
-  } catch (_) { return 0; }
+  } catch (e) { console.error('[notifications] safeCount failed:', e.message); return 0; }
 }
 
 // Helper: safe rows query
@@ -114,7 +114,7 @@ async function safeRows(sql, params) {
   try {
     const r = await query(sql, params);
     return r.rows;
-  } catch (_) { return []; }
+  } catch (e) { console.error('[notifications] safeRows failed:', e.message); return []; }
 }
 
 // GET /notifications  — live alert feed for the logged-in company

@@ -476,7 +476,8 @@ router.get('/stats', async (req, res) => {
     const baseProj   = `project_id IN (SELECT id FROM projects WHERE company_id=$1)`;
 
     const safe = async (sql, params = projParam) => {
-      try { return (await query(sql, params)).rows; } catch { return []; }
+      try { return (await query(sql, params)).rows; }
+      catch (e) { console.error('[quality/stats] sub-query failed:', e.message); return []; }
     };
 
     // RFI
