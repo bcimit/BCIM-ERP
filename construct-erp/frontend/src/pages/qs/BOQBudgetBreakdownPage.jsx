@@ -241,10 +241,92 @@ function ChapterBudgetCell({ value, onSave, saving }) {
   );
 }
 
+// ─── Pool of untagged transactions behind a pro-rated cost head ──────────────
+// Shows the actual bills that make up the project-wide "pool" for one cost
+// head (transactions never tagged to a specific BOQ item), plus this
+// chapter's estimated share of that pool.
+function ProratedPoolPanel({ projectId, costHead, chapterShare, poolTotal }) {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['prorated-pool', projectId, costHead],
+    queryFn: () => boqBudgetAPI.proratedPool(projectId, costHead).then(r => r.data?.data || []),
+    enabled: !!projectId && !!costHead,
+    retry: 1,
+  });
+
+  const fmt = (n) => `₹${Math.round(parseFloat(n) || 0).toLocaleString('en-IN')}`;
+  const rows = data || [];
+  const total = rows.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  const sharePct = poolTotal > 0 ? (chapterShare / poolTotal) * 100 : 0;
+
+  return (
+    <div className="mx-4 my-2 rounded-lg border border-amber-200 overflow-hidden bg-white">
+      <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-800">
+        This chapter's estimated share of <strong>{costHead}</strong>'s untagged pool is{' '}
+        <strong>{fmt(chapterShare)}</strong> — that's <strong>{sharePct.toFixed(1)}%</strong> of the{' '}
+        <strong>{fmt(poolTotal)}</strong> pool below, split by budget proportion across every item that
+        has a budget under {costHead}.
+      </div>
+      {isLoading && (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-indigo-500">
+          <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+          Loading pool transactions…
+        </div>
+      )}
+      {isError && (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-red-600">
+          <AlertCircle className="w-3.5 h-3.5" />
+          {error?.response?.data?.error || error?.message || 'Failed to load'}
+        </div>
+      )}
+      {!isLoading && !isError && !rows.length && (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-400 italic">
+          <AlertCircle className="w-3.5 h-3.5" />
+          No pool transactions found for {costHead}.
+        </div>
+      )}
+      {rows.length > 0 && (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 font-bold border-b border-slate-100">
+              <th className="px-4 py-1.5 text-left w-28">Date</th>
+              <th className="px-4 py-1.5 text-left w-36">Reference</th>
+              <th className="px-4 py-1.5 text-left">Description</th>
+              <th className="px-4 py-1.5 text-center w-32">Source</th>
+              <th className="px-4 py-1.5 text-right w-28">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map((r, idx) => (
+              <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-1.5 text-slate-500 font-mono text-[11px]">
+                  {r.date ? new Date(r.date).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'}
+                </td>
+                <td className="px-4 py-1.5 font-mono text-indigo-700 text-[11px]">{r.reference || '—'}</td>
+                <td className="px-4 py-1.5 text-slate-700 max-w-xs truncate" title={r.description}>{r.description || '—'}</td>
+                <td className="px-4 py-1.5 text-center">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">{r.source}</span>
+                </td>
+                <td className="px-4 py-1.5 text-right font-semibold text-slate-800 font-mono">{fmt(r.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 border-t-2 border-slate-200">
+              <td colSpan={4} className="px-4 py-1.5 text-right font-bold text-slate-600 text-xs">Pool total (whole project) — {costHead}</td>
+              <td className="px-4 py-1.5 text-right font-bold text-emerald-700 font-mono">{fmt(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ─── Chapter-wise spend drilldown — every transaction across every cost head ──
 // for the BOQ items in one chapter. Rendered under a chapter row when its
 // Spent amount is clicked.
-function ChapterDrilldownInline({ projectId, chapterName, itemIds, expectedTotal }) {
+function ChapterDrilldownInline({ projectId, chapterName, itemIds, expectedTotal, proratedByHead, poolTotalByHead }) {
+  const [openPoolHead, setOpenPoolHead] = useState(null);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['items-drilldown', projectId, itemIds],
     queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds).then(r => r.data?.data || []),
@@ -292,14 +374,41 @@ function ChapterDrilldownInline({ projectId, chapterName, itemIds, expectedTotal
       </div>
 
       {hasGap && (
-        <div className="flex items-start gap-2 px-4 py-2.5 text-xs text-amber-700 bg-amber-50 border-b border-amber-100">
-          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-          <span>
-            Chapter Spent shows <strong>{fmt(expectedTotal)}</strong>, but the bills listed below total{' '}
-            <strong>{fmt(total)}</strong> — the remaining <strong>{fmt(gap)}</strong> is <strong>pro-rated</strong> cost-head
-            spend that wasn't tagged to a specific BOQ item anywhere in the project. It's distributed across chapters/items
-            by budget share, so no individual bill can be shown for it.
-          </span>
+        <div className="border-b border-amber-100">
+          <div className="flex items-start gap-2 px-4 py-2.5 text-xs text-amber-700 bg-amber-50">
+            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span>
+              Chapter Spent shows <strong>{fmt(expectedTotal)}</strong>, but the bills listed below total{' '}
+              <strong>{fmt(total)}</strong> — the remaining <strong>{fmt(gap)}</strong> is <strong>pro-rated</strong> cost-head
+              spend that wasn't tagged to a specific BOQ item anywhere in the project. Click a cost head below to see the
+              actual bills it came from.
+            </span>
+          </div>
+          {proratedByHead && Object.entries(proratedByHead).filter(([, amt]) => amt > 1).map(([head, amt]) => {
+            const isOpen = openPoolHead === head;
+            return (
+              <div key={head}>
+                <button
+                  onClick={() => setOpenPoolHead(isOpen ? null : head)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-xs bg-amber-50/50 hover:bg-amber-100/60 transition-colors border-t border-amber-100"
+                >
+                  <span className="flex items-center gap-1.5 font-semibold text-amber-800">
+                    <ChevronDown className={clsx('w-3 h-3 transition-transform duration-200', isOpen && 'rotate-180')} />
+                    {head}
+                  </span>
+                  <span className="font-mono font-bold text-amber-700">≈ {fmt(amt)}</span>
+                </button>
+                {isOpen && (
+                  <ProratedPoolPanel
+                    projectId={projectId}
+                    costHead={head}
+                    chapterShare={amt}
+                    poolTotal={poolTotalByHead?.[head] || 0}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -2067,14 +2176,29 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                           ) : <span className="text-slate-300">—</span>}
                         </span>
                       </div>
-                      {spendOpen && projectId && (
-                        <ChapterDrilldownInline
-                          projectId={projectId}
-                          chapterName={ch.name}
-                          itemIds={ch.items.map(i => i.id)}
-                          expectedTotal={chSpent}
-                        />
-                      )}
+                      {spendOpen && projectId && (() => {
+                        // This chapter's estimated share of each cost head's pro-rated pool,
+                        // plus the total pool for that head across the whole project (conservation:
+                        // the sum of every item's prorated amount for a head equals that head's
+                        // total untagged pool, since pro-rata distributes 100% of it).
+                        const proratedByHead = {};
+                        const poolTotalByHead = {};
+                        costHeads.forEach(h => {
+                          const chAmt = ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.prorated), 0);
+                          if (chAmt > 1) proratedByHead[h] = chAmt;
+                          poolTotalByHead[h] = allItems.reduce((s, i) => s + num(i.breakdown?.[h]?.prorated), 0);
+                        });
+                        return (
+                          <ChapterDrilldownInline
+                            projectId={projectId}
+                            chapterName={ch.name}
+                            itemIds={ch.items.map(i => i.id)}
+                            expectedTotal={chSpent}
+                            proratedByHead={proratedByHead}
+                            poolTotalByHead={poolTotalByHead}
+                          />
+                        );
+                      })()}
                     </div>
                   );
                 })}

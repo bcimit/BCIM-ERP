@@ -897,6 +897,80 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
   }
 });
 
+// GET /boq-budget/:project_id/prorated-pool?cost_head=Sub+Con
+// Returns the actual project-wide transactions that were never tagged to a
+// specific BOQ item under this cost head — the "pool" that the pro-rata
+// engine splits across BOQ items by budget share. This lets a user trace
+// where their item/chapter's estimated (≈) spend actually originated from.
+router.get('/:project_id/prorated-pool', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const { cost_head } = req.query;
+    if (!cost_head) return res.status(400).json({ error: 'cost_head is required' });
+    const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
+    if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
+    if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
+
+    let rows = [];
+
+    // TQS bill line items tagged only to a cost head, never a specific BOQ item
+    const tqs = await query(`
+      SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
+             li.item_name AS description, li.basic_amount AS amount, 'TQS Bill' AS source
+      FROM tqs_bill_line_items li
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE
+        AND li.cost_head=$2 AND li.boq_item_id IS NULL
+      ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, cost_head]);
+    rows.push(...tqs.rows);
+
+    // RA bill items — rare to be untagged, but defensive
+    const ra = await query(`
+      SELECT rb.bill_number AS reference, rb.bill_date AS date,
+             rb.bill_number AS description, rbi.current_qty * rbi.rate AS amount, 'RA Bill' AS source
+      FROM ra_bill_items rbi
+      JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+      WHERE rb.project_id=$1 AND rb.status IN ('certified','paid')
+        AND rbi.cost_head=$2 AND rbi.boq_item_id IS NULL
+      ORDER BY rb.bill_date`, [project_id, cost_head]);
+    rows.push(...ra.rows);
+
+    // Stores petty cash — always project-level (no boq_item_id column at all)
+    const spc = await query(`
+      SELECT COALESCE(se.je_reference, CAST(se.sl_no AS TEXT)) AS reference,
+             se.entry_date AS date, COALESCE(si.item_name, se.supplier, 'Petty cash item') AS description,
+             si.total_amount AS amount, 'Petty Cash' AS source
+      FROM stores_petty_cash_items si
+      JOIN stores_petty_cash_entries se ON se.id = si.entry_id
+      WHERE se.project_id=$1 AND se.status='Approved' AND si.cost_head=$2
+      ORDER BY se.entry_date`, [project_id, cost_head]).catch(() => ({ rows: [] }));
+    rows.push(...spc.rows);
+
+    // PO line items tagged only to a cost head, never a specific BOQ item —
+    // only the invoiced (billed) portion counts
+    const po = await query(`
+      SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+             tb.inv_date AS date,
+             COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+             li.basic_amount AS amount, 'Purchase Order' AS source
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.project_id=$1 AND po.status NOT IN ('rejected','cancelled')
+        AND pi.cost_head=$2 AND pi.boq_item_id IS NULL AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+      ORDER BY tb.inv_date`, [project_id, cost_head]);
+    rows.push(...po.rows);
+
+    rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /boq-budget/:project_id/costhead-monthly
 // Returns monthly expenditure broken down by cost head for project analysis.
 // Response: { months: ['2025-01','2025-02',...], data: [{ month, breakdown: { [cost_head]: amount } }] }
