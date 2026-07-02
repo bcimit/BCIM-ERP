@@ -6,8 +6,8 @@ import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import {
   Percent, IndianRupee, AlertTriangle, AlertCircle, ChevronRight, ChevronDown,
-  Search, Layers, CheckCircle2, Wallet, Printer, LayoutList, FileText, BarChart2, Download,
-  Bell, TrendingUp, Activity,
+  Search, Layers, CheckCircle2, Wallet, Wallet2, Printer, LayoutList, FileText, BarChart2, Download,
+  Bell, TrendingUp, Activity, Building2,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -1196,7 +1196,47 @@ function CostHeadMonthlyTab({ projectId, projectName, projectAddress, clientName
 }
 
 // ─── Cost Head Budget Tab ─────────────────────────────────────────────────────
-function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName }) {
+function ClientBillingSummary({ projectId, contractValue }) {
+  const { data: bills = [] } = useQuery({
+    queryKey: ['ra-bills-client-summary', projectId],
+    queryFn: () => raBillAPI.list({ project_id: projectId }).then(r => r.data?.data || []).catch(() => []),
+    enabled: !!projectId,
+  });
+
+  const certifiedBills = bills.filter(b => ['certified', 'paid'].includes(b.status));
+  // ra-bills list is ordered bill_date DESC, created_at DESC — first certified/paid bill is the latest
+  const currentBill = certifiedBills[0];
+  const cumulativeBilled = certifiedBills.reduce((s, b) => s + parseFloat(b.net_payable || 0), 0);
+  const cumulativeReceived = bills.reduce((s, b) => s + parseFloat(b.amount_received || 0), 0);
+  const workOrderValue = parseFloat(contractValue) || 0;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <ClientKPI label="Client Work Order Value" value={workOrderValue} icon={Building2} color="#0B2E59" />
+      <ClientKPI label="Current RA Bill Certified" value={currentBill?.net_payable} sub={currentBill?.bill_number} icon={CheckCircle2} color="#059669" />
+      <ClientKPI label="Cumulative RA Bill Value" value={cumulativeBilled} sub={`${certifiedBills.length} bill${certifiedBills.length !== 1 ? 's' : ''}`} icon={TrendingUp} color="#4F46E5" />
+      <ClientKPI label="Received from Client" value={cumulativeReceived} sub={workOrderValue > 0 ? `${((cumulativeReceived / workOrderValue) * 100).toFixed(1)}% of WO value` : null} icon={Wallet2} color="#D97706" />
+    </div>
+  );
+}
+
+function ClientKPI({ label, value, sub, icon: Icon, color }) {
+  const n = parseFloat(value);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 px-3.5 py-2.5 shadow-sm flex items-start gap-2.5">
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}1A` }}>
+        <Icon className="w-4 h-4" style={{ color }} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wide leading-tight">{label}</div>
+        <div className="text-[13px] font-bold text-slate-800 mt-0.5 truncate">{n > 0 ? `₹${Math.round(n).toLocaleString('en-IN')}` : '—'}</div>
+        {sub ? <div className="text-[9.5px] text-slate-400 mt-0.5 truncate">{sub}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName, contractValue }) {
   const qc = useQueryClient();
   const [editingHead, setEditingHead] = useState(null);
   const [editVal, setEditVal] = useState('');
@@ -1285,20 +1325,25 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName 
 
   return (
     <div className="space-y-3">
-      {/* Sub-tabs: Summary vs Monthly */}
-      <div className="flex gap-2">
-        {[
-          { id: 'summary', label: 'Budget vs Actual' },
-          { id: 'monthly', label: 'Monthly Analysis' },
-        ].map(t => (
-          <button key={t.id} onClick={() => setCostheadView(t.id)}
-            className={clsx('px-4 py-1.5 text-xs font-bold rounded-lg border transition',
-              costheadView === t.id
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
-            {t.label}
-          </button>
-        ))}
+      {/* Sub-tabs: Summary vs Monthly + Client Billing Summary */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-2">
+          {[
+            { id: 'summary', label: 'Budget vs Actual' },
+            { id: 'monthly', label: 'Monthly Analysis' },
+          ].map(t => (
+            <button key={t.id} onClick={() => setCostheadView(t.id)}
+              className={clsx('px-4 py-1.5 text-xs font-bold rounded-lg border transition',
+                costheadView === t.id
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 min-w-[420px]">
+          <ClientBillingSummary projectId={projectId} contractValue={contractValue} />
+        </div>
       </div>
 
       {costheadView === 'monthly' && <CostHeadMonthlyTab projectId={projectId} projectName={projectName} projectAddress={projectAddress} clientName={clientName} />}
@@ -1951,7 +1996,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
 
             {/* ── COST HEAD BUDGET VIEW ── */}
             {view === 'costhead' && (
-              <CostHeadBudgetTab projectId={projectId} projectName={selectedProject?.name || ''} projectAddress={projectAddress} clientName={clientName} />
+              <CostHeadBudgetTab projectId={projectId} projectName={selectedProject?.name || ''} projectAddress={projectAddress} clientName={clientName} contractValue={selectedProject?.contract_value} />
             )}
 
             {/* ── BUDGET BREAKDOWN VIEW (existing) ── */}
