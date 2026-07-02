@@ -165,15 +165,25 @@ router.get('/:project_id', async (req, res) => {
       GROUP BY si.cost_head
     `, [project_id]);
 
-    // Purchase Order line items tagged with boq_item_id + cost_head
-    // Rows without a boq_item_id (cost_head tagged at header level) go to project-level pro-rata.
+    // Purchase Order spend — only the portion actually INVOICED against each PO
+    // line item counts as "spent" (not the full committed order value). Invoiced
+    // amount comes from TQS bill line items linked back via po_item_id; the
+    // boq_item_id/cost_head tag is taken from the PO item itself (set at PO entry).
+    // li.cost_head IS NULL guards against double-counting: bills whose line items
+    // carry their own cost_head tag are already counted via tqsActuals above —
+    // this only picks up the fallback case where the bill line wasn't tagged.
     const poActuals = await query(`
-      SELECT pi.boq_item_id, pi.cost_head, SUM(pi.quantity * pi.rate) AS actual
+      SELECT pi.boq_item_id, pi.cost_head, SUM(li.basic_amount) AS actual
       FROM po_items pi
       JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
       WHERE po.project_id = $1
         AND po.status NOT IN ('rejected', 'cancelled')
         AND pi.cost_head IS NOT NULL
+        AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE
+        AND tb.workflow_status NOT IN ('rejected')
       GROUP BY pi.boq_item_id, pi.cost_head
     `, [project_id]);
 
@@ -664,19 +674,22 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         rows.push(...storePCAdv.rows);
       } catch (_) {}
 
-      // POs tagged as Sub Con
+      // POs tagged as Sub Con — only the invoiced (billed) portion, not full order value
       const poSubCon = await query(`
         SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
-               po.po_date AS date,
-               COALESCE(v.name, po.vendor_name, pi.material_name, 'Vendor') AS description,
-               SUM(pi.quantity * pi.rate) AS amount, 'Purchase Order' AS source
+               tb.inv_date AS date,
+               COALESCE(v.name, po.vendor_name, pi.material_name, 'Vendor') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+               li.basic_amount AS amount, 'Purchase Order' AS source
         FROM po_items pi
         JOIN purchase_orders po ON po.id = pi.po_id
+        JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+        JOIN tqs_bills tb ON tb.id = li.bill_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
         WHERE po.project_id=$1 AND pi.cost_head='Sub Con'
           AND po.status NOT IN ('rejected','cancelled')
-        GROUP BY po.id, po.po_ref_no, po.po_number, po.po_date, v.name, po.vendor_name, pi.material_name
-        ORDER BY po.po_date`, [project_id]);
+          AND li.cost_head IS NULL
+          AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+        ORDER BY tb.inv_date`, [project_id]);
       rows.push(...poSubCon.rows);
 
     } else if (cost_head === 'Petty Cash') {
@@ -717,18 +730,22 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         ORDER BY rb.bill_date`, [project_id, cost_head]);
       rows.push(...ra.rows);
 
-      // PO line items tagged to this cost head
+      // PO line items tagged to this cost head — only the invoiced (billed) portion
       const poDrill = await query(`
         SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
-               po.po_date AS date,
-               COALESCE(pi.material_name, v.name, 'PO Item') AS description,
-               pi.quantity * pi.rate AS amount, 'Purchase Order' AS source
+               tb.inv_date AS date,
+               COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+               li.basic_amount AS amount, 'Purchase Order' AS source
         FROM po_items pi
         JOIN purchase_orders po ON po.id = pi.po_id
+        JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+        JOIN tqs_bills tb ON tb.id = li.bill_id
         LEFT JOIN vendors v ON v.id = po.vendor_id
         WHERE po.project_id=$1 AND pi.cost_head=$2
           AND po.status NOT IN ('rejected','cancelled')
-        ORDER BY po.po_date`, [project_id, cost_head]);
+          AND li.cost_head IS NULL
+          AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+        ORDER BY tb.inv_date`, [project_id, cost_head]);
       rows.push(...poDrill.rows);
     }
 
