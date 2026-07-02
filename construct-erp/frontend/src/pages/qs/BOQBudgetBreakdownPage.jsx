@@ -242,22 +242,9 @@ function ChapterBudgetCell({ value, onSave, saving }) {
 }
 
 // ─── Invoice/advance chips for one cost head inside the chapter split ────────
-// Uses item-tagged transactions when available; otherwise falls back to the
-// cost head's own transaction list so real invoice numbers always show.
-function HeadInvoiceChips({ projectId, head, taggedTxns, taggedLoading }) {
-  const needFallback = !taggedLoading && (!taggedTxns || taggedTxns.length === 0);
-  const { data: fallbackData, isLoading: fbLoading } = useQuery({
-    queryKey: ['costhead-drilldown', projectId, head, null],
-    queryFn: () => boqBudgetAPI.costheadDrilldown(projectId, head).then(r => r.data?.data || []),
-    enabled: !!projectId && !!head && needFallback,
-    retry: 1,
-  });
-
-  if (taggedLoading || (needFallback && fbLoading)) {
-    return <span className="text-slate-300 italic">Loading…</span>;
-  }
-  const txns = (taggedTxns && taggedTxns.length > 0) ? taggedTxns : (fallbackData || []);
-  if (!txns.length) return <span className="text-slate-300">—</span>;
+function HeadInvoiceChips({ txns, loading }) {
+  if (loading) return <span className="text-slate-300 italic">Loading…</span>;
+  if (!txns?.length) return <span className="text-slate-300">—</span>;
   return (
     <div className="flex flex-wrap gap-1">
       {txns.map((t, idx) => (
@@ -271,18 +258,24 @@ function HeadInvoiceChips({ projectId, head, taggedTxns, taggedLoading }) {
   );
 }
 
+// Shared fetch: all transactions counted in one chapter's Spent — item-tagged
+// plus chapter-tagged (resolved through the PO linkage on the server).
+function useChapterTxns(projectId, ch) {
+  const itemIds = ch.items.map(i => i.id);
+  return useQuery({
+    queryKey: ['items-drilldown', projectId, itemIds, ch.name],
+    queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds, ch.name).then(r => r.data?.data || []),
+    enabled: !!projectId && itemIds.length > 0,
+    retry: 1,
+  });
+}
+
 // ─── Chapter Spent split by cost head ─────────────────────────────────────────
 // Shown under a chapter row when its Spent amount is clicked. Amounts per cost
 // head come from the item breakdown data; the invoice / advance reference
 // numbers next to each head show which bills the money went out on.
 function ChapterCostHeadSplit({ projectId, chapterName, ch, costHeads }) {
-  const itemIds = ch.items.map(i => i.id);
-  const { data: txnData, isLoading: txnLoading } = useQuery({
-    queryKey: ['items-drilldown', projectId, itemIds],
-    queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds).then(r => r.data?.data || []),
-    enabled: !!projectId && itemIds.length > 0,
-    retry: 1,
-  });
+  const { data: txnData, isLoading: txnLoading } = useChapterTxns(projectId, ch);
 
   const rows = costHeads
     .map(h => {
@@ -318,7 +311,7 @@ function ChapterCostHeadSplit({ projectId, chapterName, ch, costHeads }) {
               <tr key={r.head} className="hover:bg-slate-50 transition-colors align-top">
                 <td className="px-4 py-1.5 text-slate-700 font-medium whitespace-nowrap">{r.head}</td>
                 <td className="px-4 py-1.5 text-slate-600">
-                  <HeadInvoiceChips projectId={projectId} head={r.head} taggedTxns={r.txns} taggedLoading={txnLoading} />
+                  <HeadInvoiceChips txns={r.txns} loading={txnLoading} />
                 </td>
                 <td className="px-4 py-1.5 text-right font-semibold text-amber-600 font-mono">{inr(r.amt)}</td>
               </tr>
@@ -333,6 +326,46 @@ function ChapterCostHeadSplit({ projectId, chapterName, ch, costHeads }) {
         </table>
       )}
     </div>
+  );
+}
+
+// ─── Print version of the chapter split (inline styles, no Tailwind) ─────────
+// Mounted inside the hidden print zone so its query resolves while the user is
+// on the page — by the time they hit Print, the invoice refs are in cache.
+function ChapterPrintSplit({ projectId, ch, costHeads }) {
+  const { data: txnData } = useChapterTxns(projectId, ch);
+  const splitRows = costHeads
+    .map(h => ({
+      head: h,
+      amt: ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.advance) + num(i.breakdown?.[h]?.invoiced) + num(i.breakdown?.[h]?.prorated), 0),
+      txns: (txnData || []).filter(t => t.cost_head === h),
+    }))
+    .filter(r => r.amt > 1)
+    .sort((a, b) => b.amt - a.amt);
+  if (!splitRows.length) return null;
+  return (
+    <table style={{ width: '100%', maxWidth: 560, borderCollapse: 'collapse', fontSize: 8, border: '1px solid #e2e8f0' }}>
+      <thead>
+        <tr style={{ background: '#eef2ff' }}>
+          <th style={{ padding: '3px 8px', textAlign: 'left', color: '#4338ca', fontWeight: 700, width: 120 }}>Cost Head</th>
+          <th style={{ padding: '3px 8px', textAlign: 'left', color: '#4338ca', fontWeight: 700 }}>Invoice / Advance No.</th>
+          <th style={{ padding: '3px 8px', textAlign: 'right', color: '#4338ca', fontWeight: 700, width: 85 }}>Spent</th>
+        </tr>
+      </thead>
+      <tbody>
+        {splitRows.map(r => (
+          <tr key={r.head} style={{ verticalAlign: 'top' }}>
+            <td style={{ padding: '2px 8px', color: '#475569', whiteSpace: 'nowrap' }}>{r.head}</td>
+            <td style={{ padding: '2px 8px', color: '#4338ca', fontFamily: 'monospace' }}>
+              {r.txns.length > 0
+                ? r.txns.map((t, idx) => `${t.reference || '—'} (${inr(t.amount)})`).join('  ·  ')
+                : '—'}
+            </td>
+            <td style={{ padding: '2px 8px', textAlign: 'right', color: '#b45309', fontWeight: 600 }}>{inr(r.amt)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -2178,22 +2211,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                       <tr style={{ background: ci % 2 === 0 ? '#fff' : '#f8fafc' }}>
                         <td />
                         <td colSpan={7} style={{ padding: '0 8px 8px 24px' }}>
-                          <table style={{ width: '100%', maxWidth: 320, borderCollapse: 'collapse', fontSize: 8, border: '1px solid #e2e8f0' }}>
-                            <thead>
-                              <tr style={{ background: '#eef2ff' }}>
-                                <th style={{ padding: '3px 8px', textAlign: 'left', color: '#4338ca', fontWeight: 700 }}>Cost Head</th>
-                                <th style={{ padding: '3px 8px', textAlign: 'right', color: '#4338ca', fontWeight: 700, width: 85 }}>Spent</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {splitRows.map(r => (
-                                <tr key={r.head}>
-                                  <td style={{ padding: '2px 8px', color: '#475569' }}>{r.head}</td>
-                                  <td style={{ padding: '2px 8px', textAlign: 'right', color: '#b45309', fontWeight: 600 }}>{inr(r.amt)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <ChapterPrintSplit projectId={projectId} ch={ch} costHeads={costHeads} />
                         </td>
                       </tr>
                     )}
