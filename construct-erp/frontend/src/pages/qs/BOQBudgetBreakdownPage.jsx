@@ -241,16 +241,27 @@ function ChapterBudgetCell({ value, onSave, saving }) {
   );
 }
 
-// ─── Chapter Spent split by cost head — plain client-side breakdown ──────────
-// Shown under a chapter row when its Spent amount is clicked. Purely computed
-// from already-fetched item breakdown data (no extra API calls), so it always
-// sums exactly to the chapter's Spent figure.
-function ChapterCostHeadSplit({ chapterName, ch, costHeads }) {
+// ─── Chapter Spent split by cost head ─────────────────────────────────────────
+// Shown under a chapter row when its Spent amount is clicked. Amounts per cost
+// head are computed from already-fetched item breakdown data; the invoice /
+// advance reference numbers underneath each head are fetched separately so
+// the user can see exactly which bill each amount came from.
+function ChapterCostHeadSplit({ projectId, chapterName, ch, costHeads }) {
+  const itemIds = ch.items.map(i => i.id);
+  const { data: txnData, isLoading: txnLoading } = useQuery({
+    queryKey: ['items-drilldown', projectId, itemIds],
+    queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds).then(r => r.data?.data || []),
+    enabled: !!projectId && itemIds.length > 0,
+    retry: 1,
+  });
+
   const rows = costHeads
-    .map(h => ({
-      head: h,
-      amt: ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.advance) + num(i.breakdown?.[h]?.invoiced) + num(i.breakdown?.[h]?.prorated), 0),
-    }))
+    .map(h => {
+      const amt = ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.advance) + num(i.breakdown?.[h]?.invoiced) + num(i.breakdown?.[h]?.prorated), 0);
+      const prorated = ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.prorated), 0);
+      const txns = (txnData || []).filter(t => t.cost_head === h);
+      return { head: h, amt, prorated, txns };
+    })
     .filter(r => r.amt > 1)
     .sort((a, b) => b.amt - a.amt);
   const total = rows.reduce((s, r) => s + r.amt, 0);
@@ -270,20 +281,49 @@ function ChapterCostHeadSplit({ chapterName, ch, costHeads }) {
           <thead>
             <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 font-bold border-b border-slate-100">
               <th className="px-4 py-1.5 text-left">Cost Head</th>
+              <th className="px-4 py-1.5 text-left">Invoice / Advance No.</th>
               <th className="px-4 py-1.5 text-right w-32">Spent</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {rows.map(r => (
-              <tr key={r.head} className="hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-1.5 text-slate-700 font-medium">{r.head}</td>
+              <tr key={r.head} className="hover:bg-slate-50 transition-colors align-top">
+                <td className="px-4 py-1.5 text-slate-700 font-medium whitespace-nowrap">{r.head}</td>
+                <td className="px-4 py-1.5 text-slate-600">
+                  {txnLoading ? (
+                    <span className="text-slate-300 italic">Loading…</span>
+                  ) : r.txns.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {r.txns.map((t, idx) => (
+                        <span key={idx} title={`${t.description || ''} — ${t.source}`}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-[10px] font-mono text-indigo-700">
+                          {t.reference || '—'}
+                          <span className="text-slate-400 font-sans">({inr(t.amount)})</span>
+                        </span>
+                      ))}
+                      {r.prorated > 1 && (
+                        <span title="Estimated — pro-rated by budget share, not tied to a specific bill"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-mono text-amber-700">
+                          ≈ pro-rated <span className="text-amber-500 font-sans">({inr(r.prorated)})</span>
+                        </span>
+                      )}
+                    </div>
+                  ) : r.prorated > 1 ? (
+                    <span title="Estimated — pro-rated by budget share, not tied to a specific bill"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-mono text-amber-700">
+                      ≈ pro-rated <span className="text-amber-500 font-sans">({inr(r.prorated)})</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-300">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-1.5 text-right font-semibold text-amber-600 font-mono">{inr(r.amt)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 border-t-2 border-slate-200">
-              <td className="px-4 py-1.5 text-right font-bold text-slate-600 text-xs">Total — {chapterName}</td>
+              <td colSpan={2} className="px-4 py-1.5 text-right font-bold text-slate-600 text-xs">Total — {chapterName}</td>
               <td className="px-4 py-1.5 text-right font-bold text-emerald-700 font-mono">{inr(total)}</td>
             </tr>
           </tfoot>
@@ -1986,7 +2026,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                         </span>
                       </div>
                       {spendOpen && (
-                        <ChapterCostHeadSplit chapterName={ch.name} ch={ch} costHeads={costHeads} />
+                        <ChapterCostHeadSplit projectId={projectId} chapterName={ch.name} ch={ch} costHeads={costHeads} />
                       )}
                     </div>
                   );
