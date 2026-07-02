@@ -1649,7 +1649,8 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
     spent:    t.spent + it.spent,
     balance:  t.balance + it.balance,
     allocated: t.allocated + (it.allocated ? 1 : 0),
-  }), { boq: 0, budgeted: 0, advance: 0, invoiced: 0, prorated: 0, spent: 0, balance: 0, allocated: 0 }), [items]);
+    raBilled: t.raBilled + parseFloat(raByItemId[it.id]?.total_billed || 0),
+  }), { boq: 0, budgeted: 0, advance: 0, invoiced: 0, prorated: 0, spent: 0, balance: 0, allocated: 0, raBilled: 0 }), [items, raByItemId]);
 
   const toggle = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
 
@@ -2062,13 +2063,17 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
 
               {/* Grand total footer */}
               {items.length > 0 && (
-                <div className="grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-900 text-xs">
+                <div className="grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 bg-slate-900 text-xs">
                   <span className="w-4" />
                   <span className="font-bold text-white uppercase tracking-wide col-span-2">Grand Total</span>
                   <span className="text-right font-bold text-white">{inr(totals.boq)}</span>
                   <span className="text-right font-bold text-indigo-300">{inr(totals.budgeted)}</span>
+                  <span className="text-right font-bold text-violet-300">
+                    {totals.raBilled > 0 ? inr(totals.raBilled) : <span className="text-slate-500">—</span>}
+                  </span>
                   <span className="text-right font-bold text-amber-300">{inr(totals.spent)}</span>
                   <span className={clsx('text-right font-bold', totals.balance < 0 ? 'text-rose-400' : 'text-emerald-300')}>{inr(totals.balance)}</span>
+                  <span />
                   <span />
                 </div>
               )}
