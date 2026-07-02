@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 import { raBillAPI } from '../api/client';
@@ -15,6 +16,7 @@ import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
 export default function RABillsScreen() {
+  const navigation = useNavigation();
   const { selectedProject } = useAuth();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['ra-bills-list', selectedProject?.id],
@@ -39,20 +41,22 @@ export default function RABillsScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
           renderItem={({ item }) => (
-            <Card>
-              <View style={styles.rowTop}>
-                <View style={styles.refWrap}>
-                  <MaterialCommunityIcons name="receipt" size={16} color={theme.colors.primary} />
-                  <Text style={styles.ref}>RA Bill #{item.bill_number || item.id}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('RABillDetail', { id: item.id })}>
+              <Card>
+                <View style={styles.rowTop}>
+                  <View style={styles.refWrap}>
+                    <MaterialCommunityIcons name="receipt" size={16} color={theme.colors.primary} />
+                    <Text style={styles.ref}>RA Bill #{item.bill_number || item.id}</Text>
+                  </View>
+                  <StatusBadge status={item.status} />
                 </View>
-                <StatusBadge status={item.status} />
-              </View>
-              <Text style={styles.date}>{item.bill_date ? dayjs(item.bill_date).format('DD MMM YYYY') : '—'}</Text>
-              <View style={styles.metaRow}>
-                {!!item.gross_amount && <Text style={styles.amount}>₹{Number(item.gross_amount).toLocaleString('en-IN')}</Text>}
-                {item.certified_by_name ? <Text style={styles.meta}>Certified by {item.certified_by_name}</Text> : null}
-              </View>
-            </Card>
+                <Text style={styles.date}>{item.bill_date ? dayjs(item.bill_date).format('DD MMM YYYY') : '—'}</Text>
+                <View style={styles.metaRow}>
+                  {!!item.gross_amount && <Text style={styles.amount}>₹{Number(item.gross_amount).toLocaleString('en-IN')}</Text>}
+                  {item.certified_by_name ? <Text style={styles.meta}>Certified by {item.certified_by_name}</Text> : null}
+                </View>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

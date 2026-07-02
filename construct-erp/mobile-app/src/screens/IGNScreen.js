@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -41,17 +41,19 @@ export default function IGNScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10, paddingBottom: 90 }}
           renderItem={({ item }) => (
-            <Card>
-              <View style={styles.rowTop}>
-                <View style={styles.refWrap}>
-                  <MaterialCommunityIcons name="clipboard-check-outline" size={16} color={theme.colors.primary} />
-                  <Text style={styles.ref}>{item.ign_number || item.reference || `IGN-${item.id}`}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('IGNDetail', { id: item.id })}>
+              <Card>
+                <View style={styles.rowTop}>
+                  <View style={styles.refWrap}>
+                    <MaterialCommunityIcons name="clipboard-check-outline" size={16} color={theme.colors.primary} />
+                    <Text style={styles.ref}>{item.ign_number || item.reference || `IGN-${item.id}`}</Text>
+                  </View>
+                  <StatusBadge status={item.status} />
                 </View>
-                <StatusBadge status={item.status} />
-              </View>
-              <Text style={styles.vendor}>{item.vendor_name || item.supplier_name || '—'}</Text>
-              <Text style={styles.date}>{item.date || item.created_at?.slice(0, 10)}</Text>
-            </Card>
+                <Text style={styles.vendor}>{item.vendor_name || item.supplier_name || '—'}</Text>
+                <Text style={styles.date}>{item.date || item.created_at?.slice(0, 10)}</Text>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { materialTrackerAPI } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +15,7 @@ import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
 export default function MaterialTrackerScreen() {
+  const navigation = useNavigation();
   const { selectedProject } = useAuth();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['material-tracker', selectedProject?.id],
@@ -38,21 +40,23 @@ export default function MaterialTrackerScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
           renderItem={({ item }) => (
-            <Card>
-              <View style={styles.rowTop}>
-                <View style={styles.refWrap}>
-                  <MaterialCommunityIcons name="truck-delivery-outline" size={16} color={theme.colors.primary} />
-                  <Text style={styles.ref}>{item.material_name || item.reference || `MT-${item.id}`}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('MaterialTrackerDetail', { id: item.id })}>
+              <Card>
+                <View style={styles.rowTop}>
+                  <View style={styles.refWrap}>
+                    <MaterialCommunityIcons name="truck-delivery-outline" size={16} color={theme.colors.primary} />
+                    <Text style={styles.ref}>{item.material_name || item.reference || `MT-${item.id}`}</Text>
+                  </View>
+                  <StatusBadge status={item.status} />
                 </View>
-                <StatusBadge status={item.status} />
-              </View>
-              <Text style={styles.sub}>Vendor: {item.vendor_name || '—'}</Text>
-              <View style={styles.metaRow}>
-                <Text style={styles.meta}>Ordered: {item.ordered_qty ?? 0}</Text>
-                <Text style={styles.metaDot}>•</Text>
-                <Text style={styles.meta}>Received: {item.received_qty ?? 0}</Text>
-              </View>
-            </Card>
+                <Text style={styles.sub}>Vendor: {item.vendor_name || '—'}</Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.meta}>Ordered: {item.ordered_qty ?? 0}</Text>
+                  <Text style={styles.metaDot}>•</Text>
+                  <Text style={styles.meta}>Received: {item.received_qty ?? 0}</Text>
+                </View>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

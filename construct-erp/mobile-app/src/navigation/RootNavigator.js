@@ -12,6 +12,18 @@ import StoresScreen from '../screens/StoresScreen';
 import IGNScreen from '../screens/IGNScreen';
 import GRSScreen from '../screens/GRSScreen';
 import GRSDetailScreen from '../screens/GRSDetailScreen';
+import MRSDetailScreen from '../screens/MRSDetailScreen';
+import IGNDetailScreen from '../screens/IGNDetailScreen';
+import PODetailScreen from '../screens/PODetailScreen';
+import WorkOrderDetailScreen from '../screens/WorkOrderDetailScreen';
+import RABillDetailScreen from '../screens/RABillDetailScreen';
+import VariationDetailScreen from '../screens/VariationDetailScreen';
+import InvoiceDetailScreen from '../screens/InvoiceDetailScreen';
+import TenderDetailScreen from '../screens/TenderDetailScreen';
+import BillDetailScreen from '../screens/BillDetailScreen';
+import AssetDetailScreen from '../screens/AssetDetailScreen';
+import VendorDetailScreen from '../screens/VendorDetailScreen';
+import MaterialTrackerDetailScreen from '../screens/MaterialTrackerDetailScreen';
 import MaterialTrackerScreen from '../screens/MaterialTrackerScreen';
 import MaterialRequestScreen from '../screens/MaterialRequestScreen';
 import VendorsScreen from '../screens/VendorsScreen';
@@ -114,6 +126,18 @@ export default function RootNavigator() {
       <Stack.Screen name="IGN" component={IGNScreen} />
       <Stack.Screen name="GRS" component={GRSScreen} />
       <Stack.Screen name="GRSDetail" component={GRSDetailScreen} />
+      <Stack.Screen name="MRSDetail" component={MRSDetailScreen} />
+      <Stack.Screen name="IGNDetail" component={IGNDetailScreen} />
+      <Stack.Screen name="PODetail" component={PODetailScreen} />
+      <Stack.Screen name="WorkOrderDetail" component={WorkOrderDetailScreen} />
+      <Stack.Screen name="RABillDetail" component={RABillDetailScreen} />
+      <Stack.Screen name="VariationDetail" component={VariationDetailScreen} />
+      <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
+      <Stack.Screen name="TenderDetail" component={TenderDetailScreen} />
+      <Stack.Screen name="BillDetail" component={BillDetailScreen} />
+      <Stack.Screen name="AssetDetail" component={AssetDetailScreen} />
+      <Stack.Screen name="VendorDetail" component={VendorDetailScreen} />
+      <Stack.Screen name="MaterialTrackerDetail" component={MaterialTrackerDetailScreen} />
       <Stack.Screen name="MaterialTracker" component={MaterialTrackerScreen} />
       <Stack.Screen name="MaterialRequest" component={MaterialRequestScreen} />
       <Stack.Screen name="Vendors" component={VendorsScreen} />

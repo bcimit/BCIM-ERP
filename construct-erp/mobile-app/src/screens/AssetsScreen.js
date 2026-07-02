@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { assetAPI } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +14,7 @@ import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
 export default function AssetsScreen() {
+  const navigation = useNavigation();
   const { selectedProject } = useAuth();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['assets-list', selectedProject?.id],
@@ -37,15 +39,17 @@ export default function AssetsScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
           renderItem={({ item }) => (
-            <Card style={styles.row}>
-              <View style={styles.iconWrap}>
-                <MaterialCommunityIcons name="tools" size={18} color={theme.colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.asset_name || item.name}</Text>
-                <Text style={styles.sub}>{item.asset_code || item.code || ''}</Text>
-              </View>
-            </Card>
+            <TouchableOpacity onPress={() => navigation.navigate('AssetDetail', { id: item.id })}>
+              <Card style={styles.row}>
+                <View style={styles.iconWrap}>
+                  <MaterialCommunityIcons name="tools" size={18} color={theme.colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{item.asset_name || item.name}</Text>
+                  <Text style={styles.sub}>{item.asset_code || item.code || ''}</Text>
+                </View>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

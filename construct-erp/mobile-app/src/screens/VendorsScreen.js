@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TextInput, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { vendorAPI } from '../api/client';
 import Screen from '../components/Screen';
@@ -12,6 +13,7 @@ import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
 export default function VendorsScreen() {
+  const navigation = useNavigation();
   const [search, setSearch] = useState('');
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['vendors-list', search],
@@ -46,16 +48,18 @@ export default function VendorsScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
           renderItem={({ item }) => (
-            <Card style={styles.row}>
-              <View style={styles.iconWrap}>
-                <MaterialCommunityIcons name="account-tie-outline" size={18} color={theme.colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.sub}>{item.vendor_code || ''}{item.vendor_type ? ` · ${item.vendor_type}` : ''}</Text>
-                {item.contact_person ? <Text style={styles.contact}>{item.contact_person}{item.phone ? ` · ${item.phone}` : ''}</Text> : null}
-              </View>
-            </Card>
+            <TouchableOpacity onPress={() => navigation.navigate('VendorDetail', { vendor: item })}>
+              <Card style={styles.row}>
+                <View style={styles.iconWrap}>
+                  <MaterialCommunityIcons name="account-tie-outline" size={18} color={theme.colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{item.name}</Text>
+                  <Text style={styles.sub}>{item.vendor_code || ''}{item.vendor_type ? ` · ${item.vendor_type}` : ''}</Text>
+                  {item.contact_person ? <Text style={styles.contact}>{item.contact_person}{item.phone ? ` · ${item.phone}` : ''}</Text> : null}
+                </View>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

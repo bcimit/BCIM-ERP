@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
 import { invoiceAPI } from '../api/client';
@@ -15,6 +16,7 @@ import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
 export default function InvoicesScreen() {
+  const navigation = useNavigation();
   const { selectedProject } = useAuth();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['invoices-list', selectedProject?.id],
@@ -39,20 +41,22 @@ export default function InvoicesScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
           renderItem={({ item }) => (
-            <Card>
-              <View style={styles.rowTop}>
-                <View style={styles.refWrap}>
-                  <MaterialCommunityIcons name="file-document-outline" size={16} color={theme.colors.primary} />
-                  <Text style={styles.ref}>{item.invoice_number || `INV-${item.id}`}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('InvoiceDetail', { id: item.id })}>
+              <Card>
+                <View style={styles.rowTop}>
+                  <View style={styles.refWrap}>
+                    <MaterialCommunityIcons name="file-document-outline" size={16} color={theme.colors.primary} />
+                    <Text style={styles.ref}>{item.invoice_number || `INV-${item.id}`}</Text>
+                  </View>
+                  <StatusBadge status={item.status} />
                 </View>
-                <StatusBadge status={item.status} />
-              </View>
-              <Text style={styles.vendor}>{item.vendor_name || '—'}</Text>
-              <View style={styles.metaRow}>
-                <Text style={styles.date}>{item.invoice_date ? dayjs(item.invoice_date).format('DD MMM YYYY') : '—'}</Text>
-                {!!item.total_amount && <Text style={styles.amount}>₹{Number(item.total_amount).toLocaleString('en-IN')}</Text>}
-              </View>
-            </Card>
+                <Text style={styles.vendor}>{item.vendor_name || '—'}</Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.date}>{item.invoice_date ? dayjs(item.invoice_date).format('DD MMM YYYY') : '—'}</Text>
+                  {!!item.total_amount && <Text style={styles.amount}>₹{Number(item.total_amount).toLocaleString('en-IN')}</Text>}
+                </View>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

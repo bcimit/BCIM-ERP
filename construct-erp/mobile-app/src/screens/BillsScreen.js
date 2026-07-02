@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { billsAPI } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +15,7 @@ import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
 export default function BillsScreen() {
+  const navigation = useNavigation();
   const { selectedProject } = useAuth();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['bills-list', selectedProject?.id],
@@ -38,17 +40,19 @@ export default function BillsScreen() {
           keyExtractor={(item, i) => String(item.id ?? i)}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
           renderItem={({ item }) => (
-            <Card>
-              <View style={styles.rowTop}>
-                <View style={styles.refWrap}>
-                  <MaterialCommunityIcons name="receipt" size={16} color={theme.colors.primary} />
-                  <Text style={styles.ref}>{item.bill_number || item.reference || `BILL-${item.id}`}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('BillDetail', { id: item.id })}>
+              <Card>
+                <View style={styles.rowTop}>
+                  <View style={styles.refWrap}>
+                    <MaterialCommunityIcons name="receipt" size={16} color={theme.colors.primary} />
+                    <Text style={styles.ref}>{item.bill_number || item.reference || `BILL-${item.id}`}</Text>
+                  </View>
+                  <StatusBadge status={item.status} />
                 </View>
-                <StatusBadge status={item.status} />
-              </View>
-              <Text style={styles.vendor}>{item.vendor_name || '—'}</Text>
-              <Text style={styles.amount}>₹{Number(item.amount || item.total_amount || 0).toLocaleString('en-IN')}</Text>
-            </Card>
+                <Text style={styles.vendor}>{item.vendor_name || '—'}</Text>
+                <Text style={styles.amount}>₹{Number(item.amount || item.total_amount || 0).toLocaleString('en-IN')}</Text>
+              </Card>
+            </TouchableOpacity>
           )}
         />
       )}

@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import Screen from '../../components/Screen';
@@ -23,9 +24,11 @@ import { theme } from '../../theme';
 //   primary(item) -> string, secondary(item) -> string,
 //   meta(item) -> string | null,
 //   status(item) -> string | null,
+//   detailScreen: string (optional — route name to push with { id: item.id } on tap),
 // }
 export default function makeListScreen(config) {
   return function GenericListScreen() {
+    const navigation = useNavigation();
     const { selectedProject } = useAuth();
     const projectId = config.projectScoped === false ? undefined : selectedProject?.id;
 
@@ -54,7 +57,7 @@ export default function makeListScreen(config) {
             renderItem={({ item }) => {
               const status = config.status ? config.status(item) : null;
               const meta = config.meta ? config.meta(item) : null;
-              return (
+              const cardBody = (
                 <Card>
                   <View style={styles.rowTop}>
                     <View style={styles.refWrap}>
@@ -67,6 +70,11 @@ export default function makeListScreen(config) {
                   {meta ? <Text style={styles.meta}>{meta}</Text> : null}
                 </Card>
               );
+              return config.detailScreen ? (
+                <TouchableOpacity onPress={() => navigation.navigate(config.detailScreen, { id: item.id })}>
+                  {cardBody}
+                </TouchableOpacity>
+              ) : cardBody;
             }}
           />
         )}

@@ -11,4 +11,5 @@ export default makeListScreen({
   secondary: (item) => item.title || item.description,
   meta: (item) => item.due_date ? `Due: ${item.due_date}` : null,
   status: (item) => item.status,
+  detailScreen: 'TenderDetail',
 });

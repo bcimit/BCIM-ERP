@@ -74,7 +74,7 @@ router.get('/gst-summary', require('../controllers/invoice.controller').getGSTSu
 router.get('/:id([0-9a-fA-F-]{36})', async (req, res) => {
   try {
     const invRes = await query(
-      `SELECT i.*, p.name as project_name, v.name as vendor_name, po.po_number, g.gr_number
+      `SELECT i.*, p.name as project_name, v.name as vendor_name, po.po_number, g.grn_number
        FROM invoices i
        JOIN projects p ON i.project_id = p.id
        JOIN vendors v ON i.vendor_id = v.id
