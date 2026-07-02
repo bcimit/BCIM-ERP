@@ -50,7 +50,11 @@ function StatusBadge({ status }) {
 
 function DNForm({ onClose }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ ...EMPTY_FORM });
+  // Default to whatever project is currently selected in the top project
+  // filter — the list view is scoped to it, so a note saved against a
+  // different (or no) project would immediately vanish from view otherwise.
+  const { selectedProjectId } = useAuthStore();
+  const [form, setForm] = useState({ ...EMPTY_FORM, project_id: selectedProjectId || '' });
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
