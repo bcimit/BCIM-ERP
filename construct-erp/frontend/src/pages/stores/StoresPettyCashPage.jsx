@@ -1742,10 +1742,16 @@ function AttachOnlyModal({ entry, onClose, onSaved }) {
         voucher_file_name: voucherName || null,
         bill_file_url:    billUrl     || null,
         bill_file_name:   billName    || null,
+        // This modal only touches attachments — the invoice number is
+        // unchanged, so the duplicate-invoice guard (meant for edits that
+        // change invoice_no) must not block it.
+        force: true,
       });
       toast.success('Attachments saved');
       onSaved();
-    } catch (err) { toast.error(err?.response?.data?.error || 'Failed to save'); }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || err?.response?.data?.errorCode || 'Failed to save');
+    }
     finally { setSaving(false); }
   };
 
@@ -2171,7 +2177,9 @@ export default function StoresPettyCashPage() {
         </div>
       </div>
 
-      <div className="px-6 py-6 max-w-7xl mx-auto">
+      {/* Full width — the Local Purchase table has 11 columns and gets its
+          Balance/Actions columns clipped under a max-w-7xl constraint. */}
+      <div className="px-6 py-6 max-w-[1800px] mx-auto">
 
         {/* ══ DASHBOARD ══ */}
         {tab === 'dashboard' && (
@@ -2517,7 +2525,9 @@ export default function StoresPettyCashPage() {
                   </button>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                // Compact cell padding — 11 columns must fit a ~1366px laptop
+                // without clipping Balance/Actions behind a horizontal scroll
+                <div className="overflow-x-auto [&_th]:!px-2 [&_td]:!px-2">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">

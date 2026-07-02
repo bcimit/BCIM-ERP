@@ -54,6 +54,8 @@ const router = express.Router();
     )
   `);
 
+  await safe(`ALTER TABLE debit_notes ADD COLUMN IF NOT EXISTS bill_id UUID`);
+
   await safe(`CREATE INDEX IF NOT EXISTS idx_dn_vendor  ON debit_notes(vendor_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_dn_project ON debit_notes(project_id)`);
   await safe(`CREATE INDEX IF NOT EXISTS idx_dn_status  ON debit_notes(status)`);
@@ -137,6 +139,7 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const {
       dn_date, vendor_id, vendor_name, project_id,
+      bill_id,
       invoice_number, invoice_date, reason,
       tax_mode = 'intrastate',
       basic_amount = 0,
@@ -156,15 +159,15 @@ router.post('/', authenticate, async (req, res) => {
       const dn_number = await nextDNNumber(client, req.user.company_id);
       const r = await client.query(
         `INSERT INTO debit_notes (
-          dn_number, dn_date, vendor_id, vendor_name, project_id,
+          dn_number, dn_date, vendor_id, vendor_name, project_id, bill_id,
           invoice_number, invoice_date, reason, tax_mode,
           basic_amount, cgst_pct, cgst_amt, sgst_pct, sgst_amt,
           igst_pct, igst_amt, gst_amount, total_amount,
           status, remarks, created_by, company_id
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'pending',$19,$20,$21)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'pending',$20,$21,$22)
         RETURNING *`,
         [
-          dn_number, dn_date, vendor_id || null, vendor_name, project_id || null,
+          dn_number, dn_date, vendor_id || null, vendor_name, project_id || null, bill_id || null,
           invoice_number || null, invoice_date || null, reason || null, tax_mode,
           n(basic_amount), n(cgst_pct), n(cgst_amt), n(sgst_pct), n(sgst_amt),
           n(igst_pct), n(igst_amt), gst_amount, total_amount,

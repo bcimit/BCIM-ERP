@@ -1,5 +1,5 @@
 // src/pages/stores/CreditNotePage.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -155,17 +155,36 @@ function CNForm({ initial, onClose, onSaved }) {
     ).slice(0, 40);
   }, [billList, billSearch]);
 
-  const applyBill = (bill) => {
+  const applyBill = async (bill) => {
     set('bill_id',       bill.id);
     set('bill_sl',       bill.sl_number || '');
     set('invoice_number',bill.inv_number || '');
     set('invoice_date',  bill.inv_date ? bill.inv_date.slice(0, 10) : '');
-    set('basic_amount',  bill.total_amount ? String(parseFloat(bill.total_amount).toFixed(2)) : form.basic_amount);
+    // Basic amount is not the full invoice total — a credit note is usually
+    // partial (e.g. QC-rejected quantity), so leave it for the user/items to
+    // determine rather than pre-filling the whole invoice value.
+    set('basic_amount', '');
     if (!form.vendor_id && bill.vendor_id) {
       set('vendor_id',   bill.vendor_id);
       set('vendor_name', bill.vendor_name || '');
     }
     setBillSearch('');
+
+    // Load the invoice's actual line items so the user can pick the rejected
+    // item and just enter the credited quantity, instead of free-typing it.
+    try {
+      const res = await tqsBillsAPI.get(bill.id);
+      const lineItems = res.data?.data?.line_items || [];
+      if (lineItems.length) {
+        setItems(lineItems.map(li => ({
+          material_name: li.item_name || '',
+          unit: li.unit || 'Nos',
+          quantity: '',
+          rate: li.rate != null ? String(li.rate) : '',
+          amount: '',
+        })));
+      }
+    } catch (_) { /* best-effort — user can still add items manually */ }
   };
 
   // ── item helpers ────────────────────────────────────────────────────────────
@@ -182,6 +201,25 @@ function CNForm({ initial, onClose, onSaved }) {
     });
   const addItem = () => setItems(p => [...p, { ...EMPTY_ITEM }]);
   const removeItem = (idx) => setItems(p => p.filter((_, i) => i !== idx));
+
+  // Keep Basic / Taxable Amount (and GST) in sync with the sum of item rows —
+  // so entering the credited/rejected quantity per item is all that's needed.
+  const itemsBasicSum = useMemo(
+    () => items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0),
+    [items]
+  );
+  useEffect(() => {
+    if (itemsBasicSum <= 0) return;
+    set('basic_amount', itemsBasicSum.toFixed(2));
+    if (form.tax_mode === 'intrastate' && form.cgst_pct) {
+      const h = parseFloat(form.cgst_pct) || 0;
+      set('cgst_amt', (h * itemsBasicSum / 100).toFixed(2));
+      set('sgst_amt', (h * itemsBasicSum / 100).toFixed(2));
+    } else if (form.igst_pct) {
+      set('igst_amt', ((parseFloat(form.igst_pct) || 0) * itemsBasicSum / 100).toFixed(2));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsBasicSum]);
 
   // ── GST auto-calc ──────────────────────────────────────────────────────────
   const basicAmt = parseFloat(form.basic_amount) || 0;

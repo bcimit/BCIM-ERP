@@ -241,10 +241,255 @@ function ChapterBudgetCell({ value, onSave, saving }) {
   );
 }
 
+// ─── Invoice/advance chips for one cost head inside the chapter split ────────
+function HeadInvoiceChips({ txns, loading }) {
+  if (loading) return <span className="text-slate-300 italic">Loading…</span>;
+  if (!txns?.length) return <span className="text-slate-300">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {txns.map((t, idx) => (
+        <span key={idx} title={`${t.description || ''} — ${t.source}`}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-[10px] font-mono text-indigo-700">
+          {t.reference || '—'}
+          <span className="text-slate-400 font-sans">({inr(t.amount)})</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Shared fetch: all transactions counted in one chapter's Spent — item-tagged
+// plus chapter-tagged (resolved through the PO linkage on the server).
+function useChapterTxns(projectId, ch) {
+  const itemIds = ch.items.map(i => i.id);
+  return useQuery({
+    queryKey: ['items-drilldown', projectId, itemIds, ch.name],
+    queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds, ch.name).then(r => r.data?.data || []),
+    enabled: !!projectId && itemIds.length > 0,
+    retry: 1,
+  });
+}
+
+// ─── Chapter Spent split by cost head ─────────────────────────────────────────
+// Shown under a chapter row when its Spent amount is clicked. Amounts per cost
+// head come from the item breakdown data; the invoice / advance reference
+// numbers next to each head show which bills the money went out on.
+function ChapterCostHeadSplit({ projectId, chapterName, ch, costHeads }) {
+  const { data: txnData, isLoading: txnLoading } = useChapterTxns(projectId, ch);
+
+  const rows = costHeads
+    .map(h => {
+      const amt = ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.advance) + num(i.breakdown?.[h]?.invoiced) + num(i.breakdown?.[h]?.prorated), 0);
+      const txns = (txnData || []).filter(t => t.cost_head === h);
+      return { head: h, amt, txns };
+    })
+    .filter(r => r.amt > 1)
+    .sort((a, b) => b.amt - a.amt);
+  const total = rows.reduce((s, r) => s + r.amt, 0);
+
+  return (
+    <div className="mx-4 my-2 rounded-xl border border-indigo-200 overflow-hidden shadow-sm bg-white">
+      <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-[10px] font-bold text-indigo-700 uppercase tracking-wide">
+        Spent Split — {chapterName}
+      </div>
+      {rows.length === 0 ? (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-400 italic">
+          <AlertCircle className="w-3.5 h-3.5" />
+          No spend recorded for this chapter yet.
+        </div>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 font-bold border-b border-slate-100">
+              <th className="px-4 py-1.5 text-left">Cost Head</th>
+              <th className="px-4 py-1.5 text-left">Invoice / Advance No.</th>
+              <th className="px-4 py-1.5 text-right w-32">Spent</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map(r => (
+              <tr key={r.head} className="hover:bg-slate-50 transition-colors align-top">
+                <td className="px-4 py-1.5 text-slate-700 font-medium whitespace-nowrap">{r.head}</td>
+                <td className="px-4 py-1.5 text-slate-600">
+                  <HeadInvoiceChips txns={r.txns} loading={txnLoading} />
+                </td>
+                <td className="px-4 py-1.5 text-right font-semibold text-amber-600 font-mono">{inr(r.amt)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 border-t-2 border-slate-200">
+              <td colSpan={2} className="px-4 py-1.5 text-right font-bold text-slate-600 text-xs">Total — {chapterName}</td>
+              <td className="px-4 py-1.5 text-right font-bold text-emerald-700 font-mono">{inr(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// ─── Print version of the chapter split (inline styles, no Tailwind) ─────────
+// Mounted inside the hidden print zone so its query resolves while the user is
+// on the page — by the time they hit Print, the invoice refs are in cache.
+function ChapterPrintSplit({ projectId, ch, costHeads }) {
+  const { data: txnData } = useChapterTxns(projectId, ch);
+  const splitRows = costHeads
+    .map(h => ({
+      head: h,
+      amt: ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.advance) + num(i.breakdown?.[h]?.invoiced) + num(i.breakdown?.[h]?.prorated), 0),
+      txns: (txnData || []).filter(t => t.cost_head === h),
+    }))
+    .filter(r => r.amt > 1)
+    .sort((a, b) => b.amt - a.amt);
+  if (!splitRows.length) return null;
+  return (
+    <table style={{ width: '100%', maxWidth: 560, borderCollapse: 'collapse', fontSize: 8, border: '1px solid #e2e8f0' }}>
+      <thead>
+        <tr style={{ background: '#eef2ff' }}>
+          <th style={{ padding: '3px 8px', textAlign: 'left', color: '#4338ca', fontWeight: 700, width: 120 }}>Cost Head</th>
+          <th style={{ padding: '3px 8px', textAlign: 'left', color: '#4338ca', fontWeight: 700 }}>Invoice / Advance No.</th>
+          <th style={{ padding: '3px 8px', textAlign: 'right', color: '#4338ca', fontWeight: 700, width: 85 }}>Spent</th>
+        </tr>
+      </thead>
+      <tbody>
+        {splitRows.map(r => (
+          <tr key={r.head} style={{ verticalAlign: 'top' }}>
+            <td style={{ padding: '2px 8px', color: '#475569', whiteSpace: 'nowrap' }}>{r.head}</td>
+            <td style={{ padding: '2px 8px', color: '#4338ca', fontFamily: 'monospace' }}>
+              {r.txns.length > 0
+                ? r.txns.map((t, idx) => `${t.reference || '—'} (${inr(t.amount)})`).join('  ·  ')
+                : '—'}
+            </td>
+            <td style={{ padding: '2px 8px', textAlign: 'right', color: '#b45309', fontWeight: 600 }}>{inr(r.amt)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ─── Inline drilldown (div-based, sits inside a <td>) ────────────────────────
+// itemInfo (optional): { estimated, spent, prorated } — when the row being drilled into
+// is a per-BOQ-item pro-rated estimate (no direct tag), we explain the math instead of
+// showing the whole project's transactions under this cost head.
+function CostHeadDrilldownInline({ projectId, costHead, boqItemId, itemInfo }) {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['costhead-drilldown', projectId, costHead, boqItemId],
+    queryFn: () => boqBudgetAPI.costheadDrilldown(projectId, costHead, boqItemId).then(r => r.data?.data || []),
+    enabled: !!projectId && !!costHead,
+    retry: 1,
+  });
+
+  const fmt = (n) => `₹${Math.round(parseFloat(n) || 0).toLocaleString('en-IN')}`;
+  const SOURCE_COLORS = {
+    'SC Bill':          'bg-blue-50 text-blue-700 border border-blue-200',
+    'SC Payment':       'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    'SC Advance':       'bg-violet-50 text-violet-700 border border-violet-200',
+    'Stores PC Advance':'bg-purple-50 text-purple-700 border border-purple-200',
+    'Advance Tracker':  'bg-amber-50 text-amber-700 border border-amber-200',
+    'TQS Bill':         'bg-sky-50 text-sky-700 border border-sky-200',
+    'RA Bill':          'bg-teal-50 text-teal-700 border border-teal-200',
+    'Petty Cash':       'bg-orange-50 text-orange-700 border border-orange-200',
+    'Purchase Order':   'bg-rose-50 text-rose-700 border border-rose-200',
+  };
+
+  const rows = data || [];
+  const total = rows.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  const bySource = rows.reduce((acc, r) => { acc[r.source] = (acc[r.source] || 0) + parseFloat(r.amount || 0); return acc; }, {});
+
+  return (
+    <div className="mx-3 my-2 rounded-xl border border-indigo-200 overflow-hidden shadow-sm bg-white">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+        <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wide">Spend Sources — {costHead}</span>
+        {!isLoading && !isError && rows.length > 0 && (
+          <>
+            <span className="mx-1 text-indigo-200">·</span>
+            {Object.entries(bySource).map(([src, amt]) => (
+              <span key={src} className={clsx('flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold', SOURCE_COLORS[src] || 'bg-slate-100 text-slate-500')}>
+                {src} <span className="font-mono font-bold">{fmt(amt)}</span>
+              </span>
+            ))}
+            <span className="ml-auto text-[11px] font-bold text-indigo-800 font-mono">Total: {fmt(total)}</span>
+          </>
+        )}
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-indigo-500">
+          <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+          Loading transactions…
+        </div>
+      )}
+      {isError && (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-red-600">
+          <AlertCircle className="w-3.5 h-3.5" />
+          {error?.response?.data?.error || error?.message || 'Failed to load'}
+        </div>
+      )}
+      {!isLoading && !isError && !rows.length && itemInfo?.estimated && (
+        <div className="flex items-start gap-2 px-4 py-3 text-xs text-amber-700 bg-amber-50">
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            No bill or PO was tagged directly to <strong>this BOQ item</strong> for {costHead}.
+            The <strong>{fmt(itemInfo.spent)}</strong> shown is an <strong>estimated pro-rata share</strong> —
+            {costHead}'s total untagged project spend is distributed across all items with a budget in this
+            cost head, in proportion to each item's budget share. It is not tied to a specific invoice.
+          </span>
+        </div>
+      )}
+      {!isLoading && !isError && !rows.length && !itemInfo?.estimated && (
+        <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-400 italic">
+          <AlertCircle className="w-3.5 h-3.5" />
+          No direct transactions found — amount may be pro-rated from project-level spend.
+        </div>
+      )}
+      {rows.length > 0 && (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 font-bold border-b border-slate-100">
+              <th className="px-4 py-1.5 text-left w-28">Date</th>
+              <th className="px-4 py-1.5 text-left w-36">Reference</th>
+              <th className="px-4 py-1.5 text-left">Description</th>
+              <th className="px-4 py-1.5 text-center w-32">Source</th>
+              <th className="px-4 py-1.5 text-right w-28">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map((r, idx) => (
+              <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-1.5 text-slate-500 font-mono text-[11px]">
+                  {r.date ? new Date(r.date).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—'}
+                </td>
+                <td className="px-4 py-1.5 font-mono text-indigo-700 text-[11px]">{r.reference || '—'}</td>
+                <td className="px-4 py-1.5 text-slate-700 max-w-xs truncate" title={r.description}>{r.description || '—'}</td>
+                <td className="px-4 py-1.5 text-center">
+                  <span className={clsx('px-2 py-0.5 rounded-full text-[10px] font-bold', SOURCE_COLORS[r.source] || 'bg-slate-100 text-slate-500')}>
+                    {r.source}
+                  </span>
+                </td>
+                <td className="px-4 py-1.5 text-right font-semibold text-slate-800 font-mono">{fmt(r.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 border-t-2 border-slate-200">
+              <td colSpan={4} className="px-4 py-1.5 text-right font-bold text-slate-600 text-xs">Total — {costHead}</td>
+              <td className="px-4 py-1.5 text-right font-bold text-emerald-700 font-mono">{fmt(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ─── Cost-head detail table (shown when a BOQ item is expanded) ────────────────
-function CostHeadDetail({ item, costHeads, mode, onSave }) {
+function CostHeadDetail({ item, costHeads, mode, onSave, projectId, readOnlyOverride }) {
   const itemAmount = num(item.amount);
-  const readOnly = isUnlinkedRow(item);
+  const readOnly = readOnlyOverride || isUnlinkedRow(item);
+  const [drillHead, setDrillHead] = useState(null);
 
   // Split rows into "active" (has budget or actuals) and "empty" for clarity
   const rows = costHeads.map(h => {
@@ -265,38 +510,66 @@ function CostHeadDetail({ item, costHeads, mode, onSave }) {
   const active = rows.filter(r => r.active);
   const empty  = rows.filter(r => !r.active);
 
-  const Row = ({ r, dim }) => (
-    <tr className={clsx('border-b border-slate-100', dim && 'opacity-60', r.over && 'bg-rose-50/40')}>
-      <td className="px-3 py-2 font-medium text-slate-700">{r.h}</td>
-      <td className="px-3 py-2 text-right">
-        {readOnly ? (
-          <span className="w-28 inline-block text-right text-xs text-slate-300">—</span>
-        ) : (
-          <EditableBudget
-            value={mode === 'pct' ? r.cell.pct : r.cell.amount}
-            mode={mode} itemAmount={itemAmount}
-            onSave={v => onSave(item, r.h, mode, v)}
-          />
+  const Row = ({ r, dim }) => {
+    const isOpen = drillHead === r.h;
+    return (
+      <React.Fragment>
+        <tr className={clsx('border-b border-slate-100', dim && 'opacity-60', r.over && 'bg-rose-50/40', isOpen && 'bg-indigo-50/30')}>
+          <td className="px-3 py-2 font-medium text-slate-700">{r.h}</td>
+          <td className="px-3 py-2 text-right">
+            {readOnly ? (
+              <span className="w-28 inline-block text-right text-xs text-slate-300">—</span>
+            ) : (
+              <EditableBudget
+                value={mode === 'pct' ? r.cell.pct : r.cell.amount}
+                mode={mode} itemAmount={itemAmount}
+                onSave={v => onSave(item, r.h, mode, v)}
+              />
+            )}
+          </td>
+          <td className="px-3 py-2 text-right font-semibold text-slate-700">
+            {r.spent > 0 ? (
+              <button
+                onClick={() => setDrillHead(isOpen ? null : r.h)}
+                title="Click to see source transactions"
+                className="inline-flex items-center gap-1 justify-end hover:text-indigo-700 transition-colors group"
+              >
+                {r.estimated && <span title="Estimated — pro-rated by budget share" className="text-[9px] font-bold text-amber-500">≈</span>}
+                <span className="underline decoration-dotted underline-offset-2 decoration-indigo-300">{inr(r.spent)}</span>
+                <ChevronDown className={clsx('w-3 h-3 text-indigo-400 transition-transform duration-200', isOpen && 'rotate-180')} />
+              </button>
+            ) : <span className="text-slate-300">—</span>}
+          </td>
+          <td className={clsx('px-3 py-2 text-right font-bold', r.balance < 0 ? 'text-rose-600' : r.budget > 0 ? 'text-emerald-600' : 'text-slate-300')}>
+            {r.budget > 0 || r.spent > 0 ? inr(r.balance) : '—'}
+            {r.over && !readOnly && <div className="text-[9px] text-rose-500 font-bold">⚠ over budget</div>}
+          </td>
+        </tr>
+        {isOpen && projectId && (
+          <tr>
+            <td colSpan={4} className="p-0 bg-indigo-50/20">
+              <CostHeadDrilldownInline
+                projectId={projectId}
+                costHead={r.h}
+                boqItemId={readOnlyOverride ? undefined : item.id}
+                itemInfo={{ estimated: r.estimated, spent: r.spent, prorated: r.prorated }}
+              />
+            </td>
+          </tr>
         )}
-      </td>
-      <td className="px-3 py-2 text-right font-semibold text-slate-700">
-        {r.spent > 0 ? (
-          <span className="inline-flex items-center gap-1 justify-end">
-            {r.estimated && <span title="Estimated — pro-rated by budget share" className="text-[9px] font-bold text-amber-500">≈</span>}
-            {inr(r.spent)}
-          </span>
-        ) : <span className="text-slate-300">—</span>}
-      </td>
-      <td className={clsx('px-3 py-2 text-right font-bold', r.balance < 0 ? 'text-rose-600' : r.budget > 0 ? 'text-emerald-600' : 'text-slate-300')}>
-        {r.budget > 0 || r.spent > 0 ? inr(r.balance) : '—'}
-        {r.over && !readOnly && <div className="text-[9px] text-rose-500 font-bold">⚠ over budget</div>}
-      </td>
-    </tr>
-  );
+      </React.Fragment>
+    );
+  };
 
   return (
     <div className="bg-slate-50 px-4 py-4">
-      {readOnly && (
+      {readOnlyOverride && (
+        <div className="mb-2 flex items-center gap-2 text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
+          <Layers size={13} />
+          Chapter-level totals — aggregated across all line items in this chapter. Edit budgets on individual items instead.
+        </div>
+      )}
+      {readOnly && !readOnlyOverride && (
         <div className="mb-2 flex items-center gap-2 text-[11px] text-slate-500 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
           <Layers size={13} />
           Cost-head spend from POs/bills not linked to a specific BOQ item — no budget to set here, totals only.
@@ -372,6 +645,7 @@ function CostHeadDrilldown({ projectId, costHead }) {
     'TQS Bill':         'bg-sky-50 text-sky-700 border border-sky-200',
     'RA Bill':          'bg-teal-50 text-teal-700 border border-teal-200',
     'Petty Cash':       'bg-orange-50 text-orange-700 border border-orange-200',
+    'Purchase Order':   'bg-rose-50 text-rose-700 border border-rose-200',
   };
 
   if (isLoading) return (
@@ -469,57 +743,6 @@ function CostHeadDrilldown({ projectId, costHead }) {
         </div>
       </td>
     </tr>
-  );
-}
-
-// ─── RA Bill-wise breakdown panel (shown inside expanded chapter/item rows) ───
-function RaBillsPanel({ bills }) {
-  const STATUS_COLORS = {
-    paid:      'bg-emerald-100 text-emerald-700 border border-emerald-200',
-    certified: 'bg-blue-100 text-blue-700 border border-blue-200',
-    verified:  'bg-indigo-100 text-indigo-700 border border-indigo-200',
-    submitted: 'bg-amber-100 text-amber-700 border border-amber-200',
-  };
-  const total = bills.reduce((s, b) => s + parseFloat(b.amount || 0), 0);
-  return (
-    <div className="mx-4 my-2 rounded-xl border border-violet-200 overflow-hidden bg-white shadow-sm">
-      <div className="px-4 py-2 bg-violet-50 border-b border-violet-100 flex items-center justify-between">
-        <span className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">RA Bill — Wise Breakup</span>
-        <span className="text-xs font-bold text-violet-700">{`₹${Math.round(total).toLocaleString('en-IN')}`}</span>
-      </div>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="bg-slate-50 text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
-            <th className="px-4 py-2 text-left">Bill No</th>
-            <th className="px-4 py-2 text-left">Date</th>
-            <th className="px-4 py-2 text-center">Status</th>
-            <th className="px-4 py-2 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bills.map((b, i) => (
-            <tr key={b.ra_bill_id || i} className="border-b border-slate-100 hover:bg-violet-50/30 transition-colors">
-              <td className="px-4 py-2 font-mono font-bold text-indigo-700">{b.bill_number || '—'}</td>
-              <td className="px-4 py-2 text-slate-500">
-                {b.bill_date ? new Date(b.bill_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-              </td>
-              <td className="px-4 py-2 text-center">
-                <span className={clsx('px-2 py-0.5 rounded-full text-[10px] font-bold', STATUS_COLORS[b.status] || 'bg-slate-100 text-slate-500 border border-slate-200')}>
-                  {b.status}
-                </span>
-              </td>
-              <td className="px-4 py-2 text-right font-semibold text-violet-700">{`₹${Math.round(parseFloat(b.amount || 0)).toLocaleString('en-IN')}`}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="bg-violet-50 border-t-2 border-violet-200">
-            <td colSpan={3} className="px-4 py-2 text-right font-bold text-violet-700 text-xs">Total RA Billed</td>
-            <td className="px-4 py-2 text-right font-bold text-violet-700">{`₹${Math.round(total).toLocaleString('en-IN')}`}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
   );
 }
 
@@ -1462,7 +1685,8 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
     spent:    t.spent + it.spent,
     balance:  t.balance + it.balance,
     allocated: t.allocated + (it.allocated ? 1 : 0),
-  }), { boq: 0, budgeted: 0, advance: 0, invoiced: 0, prorated: 0, spent: 0, balance: 0, allocated: 0 }), [items]);
+    raBilled: t.raBilled + parseFloat(raByItemId[it.id]?.total_billed || 0),
+  }), { boq: 0, budgeted: 0, advance: 0, invoiced: 0, prorated: 0, spent: 0, balance: 0, allocated: 0, raBilled: 0 }), [items, raByItemId]);
 
   const toggle = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
 
@@ -1782,20 +2006,18 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                   const chBalance  = chBudgeted - chSpent;
                   const chOver     = chSpent > chBoq + 0.01;
                   const chAllocated = chBudgeted > 0;
-                  const isOpen     = expanded[`ch-${ch.key}`];
                   const chRaBilled = ch.items.reduce((s, i) => s + parseFloat(raByItemId[i.id]?.total_billed || 0), 0);
                   const chLastBill = ch.items
                     .map(i => raByItemId[i.id])
                     .filter(Boolean)
                     .sort((a, b) => (b.last_bill_number || '').localeCompare(a.last_bill_number || ''))[0];
+                  const spendKey = `spend-${ch.key}`;
+                  const spendOpen = expanded[spendKey];
                   return (
                     <div key={ch.key}>
-                      <button onClick={() => toggle(`ch-${ch.key}`)}
-                        className={clsx('w-full grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 text-xs text-left hover:bg-slate-50 transition',
-                          isOpen && 'bg-indigo-50/40')}>
-                        <span className="w-4 text-slate-400">
-                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        </span>
+                      <div
+                        className="w-full grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 text-xs">
+                        <span className="w-4" />
                         <span className="font-bold text-slate-500">{ci + 1}</span>
                         <span className="font-semibold text-slate-800">{ch.name}</span>
                         <span className="text-right font-semibold text-slate-800">{inr(chBoq)}</span>
@@ -1805,7 +2027,18 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                         <span className="text-right font-semibold text-violet-700">
                           {chRaBilled > 0 ? inr(chRaBilled) : <span className="text-slate-300">—</span>}
                         </span>
-                        <span className="text-right font-medium text-amber-600">{chSpent > 0 ? inr(chSpent) : <span className="text-slate-300">—</span>}</span>
+                        <span className="text-right font-medium text-amber-600">
+                          {chSpent > 0 ? (
+                            <button
+                              onClick={() => toggle(spendKey)}
+                              title="Click to see the bills that make up this spend"
+                              className="inline-flex items-center gap-1 justify-end hover:text-indigo-700 transition-colors"
+                            >
+                              <span className="underline decoration-dotted underline-offset-2 decoration-indigo-300">{inr(chSpent)}</span>
+                              <ChevronDown className={clsx('w-3 h-3 text-indigo-400 transition-transform duration-200', spendOpen && 'rotate-180')} />
+                            </button>
+                          ) : <span className="text-slate-300">—</span>}
+                        </span>
                         <span className={clsx('text-right font-bold', chBalance < 0 ? 'text-rose-600' : chAllocated ? 'text-emerald-600' : 'text-slate-300')}>
                           {chAllocated || chSpent > 0 ? inr(chBalance) : '—'}
                         </span>
@@ -1828,71 +2061,9 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                             </span>
                           ) : <span className="text-slate-300">—</span>}
                         </span>
-                      </button>
-                      {isOpen && (
-                        <div className="bg-slate-50 border-t border-slate-200">
-                          {/* Chapter-level RA bill-wise breakdown panel */}
-                          {chRaBilled > 0 && (() => {
-                            const billMap = {};
-                            ch.items.forEach(i => {
-                              (raBillsDetailByItemId[i.id] || []).forEach(b => {
-                                if (!billMap[b.bill_number]) billMap[b.bill_number] = { ...b, amount: 0 };
-                                billMap[b.bill_number].amount += parseFloat(b.amount || 0);
-                              });
-                            });
-                            const chBills = Object.values(billMap).sort((a, bv) => (a.bill_number || '').localeCompare(bv.bill_number || ''));
-                            return chBills.length > 0 ? <RaBillsPanel bills={chBills} /> : null;
-                          })()}
-                          {ch.items.map(item => {
-                            const itemOpen = expanded[item.id];
-                            return (
-                              <div key={item.id}>
-                                {(() => {
-                                  const ra = raByItemId[item.id];
-                                  return (
-                                <button onClick={() => toggle(item.id)}
-                                  className={clsx('w-full grid grid-cols-[auto_90px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-2 text-xs text-left hover:bg-white/60 transition pl-10',
-                                    itemOpen && 'bg-indigo-50/40')}>
-                                  <span className="w-4 text-slate-300">
-                                    {itemOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                  </span>
-                                  <span className="font-mono text-[10px] text-indigo-600 truncate">{item.item_no}</span>
-                                  <span className="text-slate-600 truncate pr-2" title={item.description}>{item.description}</span>
-                                  <span className="text-right text-slate-700">{inr(item.amount)}</span>
-                                  <span className={clsx(item.allocated ? 'text-indigo-600' : 'text-slate-400')}>
-                                    <EditableTotal value={item.budgeted} onSave={total => saveItemTotal(item, total)} />
-                                  </span>
-                                  <span className="text-right text-violet-700">
-                                    {ra?.total_billed > 0 ? inr(ra.total_billed) : <span className="text-slate-300">—</span>}
-                                  </span>
-                                  <span className="text-right text-amber-600">{item.spent > 0 ? inr(item.spent) : <span className="text-slate-300">—</span>}</span>
-                                  <span className={clsx('text-right', item.balance < 0 ? 'text-rose-600' : item.allocated ? 'text-emerald-600' : 'text-slate-300')}>
-                                    {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
-                                  </span>
-                                  <span />
-                                  <span className="pl-2">
-                                    {ra ? (
-                                      <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap',
-                                        ra.last_bill_status === 'paid'      ? 'bg-emerald-100 text-emerald-700' :
-                                        ra.last_bill_status === 'certified' ? 'bg-blue-100 text-blue-700' :
-                                        ra.last_bill_status === 'verified'  ? 'bg-indigo-100 text-indigo-700' :
-                                        ra.last_bill_status === 'submitted' ? 'bg-amber-100 text-amber-700' :
-                                        'bg-slate-100 text-slate-500')}>
-                                        {ra.last_bill_number ? `${ra.last_bill_number} · ` : ''}{ra.last_bill_status}
-                                      </span>
-                                    ) : <span className="text-slate-300">—</span>}
-                                  </span>
-                                </button>
-                                  );
-                                })()}
-                                {itemOpen && (raBillsDetailByItemId[item.id] || []).length > 0 && (
-                                  <RaBillsPanel bills={raBillsDetailByItemId[item.id]} />
-                                )}
-                                {itemOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
-                              </div>
-                            );
-                          })}
-                        </div>
+                      </div>
+                      {spendOpen && (
+                        <ChapterCostHeadSplit projectId={projectId} chapterName={ch.name} ch={ch} costHeads={costHeads} />
                       )}
                     </div>
                   );
@@ -1920,7 +2091,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                         <span className="text-right"><span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Unlinked</span></span>
                         <span />
                       </button>
-                      {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} />}
+                      {isOpen && <CostHeadDetail item={item} costHeads={costHeads} mode={mode} onSave={saveCell} projectId={projectId} />}
                     </div>
                   );
                 })()}
@@ -1928,13 +2099,17 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
 
               {/* Grand total footer */}
               {items.length > 0 && (
-                <div className="grid grid-cols-[auto_40px_1fr_repeat(4,minmax(0,1fr))_90px] gap-2 items-center px-4 py-3 bg-slate-900 text-xs">
+                <div className="grid grid-cols-[auto_40px_1fr_repeat(5,minmax(0,1fr))_90px_110px] gap-2 items-center px-4 py-3 bg-slate-900 text-xs">
                   <span className="w-4" />
                   <span className="font-bold text-white uppercase tracking-wide col-span-2">Grand Total</span>
                   <span className="text-right font-bold text-white">{inr(totals.boq)}</span>
                   <span className="text-right font-bold text-indigo-300">{inr(totals.budgeted)}</span>
+                  <span className="text-right font-bold text-violet-300">
+                    {totals.raBilled > 0 ? inr(totals.raBilled) : <span className="text-slate-500">—</span>}
+                  </span>
                   <span className="text-right font-bold text-amber-300">{inr(totals.spent)}</span>
                   <span className={clsx('text-right font-bold', totals.balance < 0 ? 'text-rose-400' : 'text-emerald-300')}>{inr(totals.balance)}</span>
+                  <span />
                   <span />
                 </div>
               )}
@@ -1960,12 +2135,12 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
         </div>
       </div>
 
-      {/* Hidden print zone — Budget Breakdown (item-level) */}
+      {/* Hidden print zone — Budget Breakdown (chapter-wise) */}
       <div style={{ display: 'none' }}>
         <div ref={breakdownPrintRef} style={{ fontFamily: 'Arial, sans-serif', padding: 4 }}>
           <BOQPrintHeader
             title="BOQ Budget Breakdown Report"
-            subtitle="Item-level budget vs spend and balance · spend not line-tagged to a BOQ item is pro-rated by budget share"
+            subtitle="Chapter-wise budget vs spend and balance, with cost-head split · spend not tagged to a BOQ item is pro-rated by budget share"
             projectName={selectedProject?.name || ''}
             projectAddress={projectAddress}
             clientName={clientName}
@@ -1973,63 +2148,73 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
               ['Total BOQ Value', inr(totals.boq)],
               ['Total Budgeted', totals.budgeted > 0 ? inr(totals.budgeted) : 'Not set'],
               ['Total Balance', inr(totals.balance)],
-              ['Items', String(items.length)],
+              ['Chapters', String(itemsByChapter.length)],
             ]}
           />
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9 }}>
             <thead>
               <tr style={{ background: '#0B2E59', color: '#fff' }}>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: 70 }}>Item No</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Description of Works</th>
+                <th style={{ padding: '6px 8px', textAlign: 'center', width: 30 }}>S.No</th>
+                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Chapter / Description</th>
                 <th style={{ padding: '6px 8px', textAlign: 'right', width: 95 }}>BOQ Value</th>
                 <th style={{ padding: '6px 8px', textAlign: 'right', width: 95 }}>Budget</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right', width: 85 }}>RA Billed</th>
                 <th style={{ padding: '6px 8px', textAlign: 'right', width: 95 }}>Spent</th>
                 <th style={{ padding: '6px 8px', textAlign: 'right', width: 95 }}>Balance</th>
                 <th style={{ padding: '6px 8px', textAlign: 'center', width: 55 }}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {itemsByChapter.map((ch) => {
-                const chBoq      = ch.items.reduce((s, i) => s + i.amount,    0);
-                const chBudgeted = ch.items.reduce((s, i) => s + i.budgeted,  0);
-                const chSpent    = ch.items.reduce((s, i) => s + i.spent,     0);
-                const chBalance  = ch.items.reduce((s, i) => s + i.balance,   0);
+              {itemsByChapter.map((ch, ci) => {
+                const chBoq       = ch.items.reduce((s, i) => s + i.amount, 0);
+                const chBudgeted  = ch.items.reduce((s, i) => s + i.budgeted, 0);
+                const chSpent     = ch.items.reduce((s, i) => s + i.spent, 0);
+                const chBalance   = chBudgeted - chSpent;
+                const chOver      = chSpent > chBoq + 0.01;
+                const chAllocated = chBudgeted > 0;
+                const chRaBilled  = ch.items.reduce((s, i) => s + parseFloat(raByItemId[i.id]?.total_billed || 0), 0);
+
+                // Cost-head split for this chapter — same computation as the on-screen panel
+                const splitRows = costHeads
+                  .map(h => ({ head: h, amt: ch.items.reduce((s, i) => s + num(i.breakdown?.[h]?.advance) + num(i.breakdown?.[h]?.invoiced) + num(i.breakdown?.[h]?.prorated), 0) }))
+                  .filter(r => r.amt > 1)
+                  .sort((a, b) => b.amt - a.amt);
+
                 return (
                   <React.Fragment key={ch.key}>
-                    {/* Chapter header row */}
-                    <tr style={{ background: '#1e4d8c', color: '#fff' }}>
-                      <td colSpan={2} style={{ padding: '5px 8px', fontWeight: 700, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.4 }}>{ch.name}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700 }}>{inr(chBoq)}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{chBudgeted > 0 ? inr(chBudgeted) : '—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#fcd34d' }}>{chSpent > 0 ? inr(chSpent) : '—'}</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right' }}>{chBudgeted > 0 || chSpent > 0 ? inr(chBalance) : '—'}</td>
-                      <td />
+                    <tr style={{ background: ci % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '5px 8px', textAlign: 'center', fontWeight: 700, color: '#64748b' }}>{ci + 1}</td>
+                      <td style={{ padding: '5px 8px', fontWeight: 700, color: '#1e293b' }}>{ch.name}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{inr(chBoq)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: chOver ? '#dc2626' : chAllocated ? '#4338ca' : '#94a3b8' }}>
+                        {chBudgeted > 0 ? inr(chBudgeted) : '—'}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#7c3aed' }}>
+                        {chRaBilled > 0 ? inr(chRaBilled) : '—'}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#b45309' }}>
+                        {chSpent > 0 ? inr(chSpent) : '—'}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, color: chBalance < 0 ? '#dc2626' : chAllocated ? '#059669' : '#94a3b8' }}>
+                        {chAllocated || chSpent > 0 ? inr(chBalance) : '—'}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+                        {!chAllocated
+                          ? <span style={{ background: '#fef3c7', color: '#b45309', padding: '1px 5px', borderRadius: 10, fontWeight: 700, fontSize: 8 }}>Not set</span>
+                          : chOver
+                            ? <span style={{ background: '#fee2e2', color: '#dc2626', padding: '1px 5px', borderRadius: 10, fontWeight: 700, fontSize: 8 }}>Over</span>
+                            : <span style={{ background: '#dcfce7', color: '#059669', padding: '1px 5px', borderRadius: 10, fontWeight: 700, fontSize: 8 }}>OK</span>
+                        }
+                      </td>
                     </tr>
-                    {/* Item rows */}
-                    {ch.items.map((item, ii) => (
-                      <tr key={item.id} style={{ background: ii % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <td style={{ padding: '4px 8px', fontFamily: 'monospace', color: '#4338ca', fontWeight: 700 }}>{item.item_no}</td>
-                        <td style={{ padding: '4px 8px', color: '#334155' }}>{item.description}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{inr(item.amount)}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', color: item.over ? '#dc2626' : item.allocated ? '#4338ca' : '#94a3b8' }}>
-                          {item.budgeted > 0 ? inr(item.budgeted) : '—'}
-                        </td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', color: '#b45309' }}>
-                          {item.spent > 0 ? inr(item.spent) : '—'}
-                        </td>
-                        <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: item.balance < 0 ? '#dc2626' : item.allocated ? '#059669' : '#94a3b8' }}>
-                          {item.allocated || item.spent > 0 ? inr(item.balance) : '—'}
-                        </td>
-                        <td style={{ padding: '4px 8px', textAlign: 'center' }}>
-                          {!item.allocated
-                            ? <span style={{ background: '#fef3c7', color: '#b45309', padding: '1px 5px', borderRadius: 10, fontWeight: 700, fontSize: 8 }}>Not set</span>
-                            : item.over
-                              ? <span style={{ background: '#fee2e2', color: '#dc2626', padding: '1px 5px', borderRadius: 10, fontWeight: 700, fontSize: 8 }}>Over</span>
-                              : <span style={{ background: '#dcfce7', color: '#059669', padding: '1px 5px', borderRadius: 10, fontWeight: 700, fontSize: 8 }}>OK</span>
-                          }
+                    {splitRows.length > 0 && (
+                      <tr style={{ background: ci % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                        <td />
+                        <td colSpan={7} style={{ padding: '0 8px 8px 24px' }}>
+                          <ChapterPrintSplit projectId={projectId} ch={ch} costHeads={costHeads} />
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </React.Fragment>
                 );
               })}
@@ -2038,6 +2223,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
                 <td colSpan={2} style={{ padding: '7px 8px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Grand Total</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right' }}>{inr(totals.boq)}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', color: '#a5b4fc' }}>{inr(totals.budgeted)}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', color: '#c4b5fd' }}>{totals.raBilled > 0 ? inr(totals.raBilled) : '—'}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', color: '#fcd34d' }}>{inr(totals.spent)}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', color: totals.balance < 0 ? '#fca5a5' : '#6ee7b7' }}>{inr(totals.balance)}</td>
                 <td />

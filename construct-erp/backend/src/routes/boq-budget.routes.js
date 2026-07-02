@@ -148,12 +148,27 @@ router.get('/:project_id', async (req, res) => {
     // dozens of items), so unlike RA/SC actuals this is NOT filtered to
     // boq_item_id IS NOT NULL — lines with a cost_head but no specific BOQ
     // item still come through and get rolled up at the project level below.
+    // Chapter inheritance: a bill line linked to a PO line (po_item_id) takes
+    // that PO line's chapter; otherwise, if the bill's header PO has all its
+    // items under ONE chapter, that chapter is used. Keeps cost-head-tagged
+    // invoices inside the chapter chosen on the PO instead of pro-rating them
+    // across the whole project.
     const tqsActuals = await query(`
-      SELECT li.boq_item_id, li.cost_head, SUM(li.basic_amount) AS actual
+      SELECT li.boq_item_id, li.cost_head,
+             COALESCE(pi.boq_chapter, po_single.chapter) AS boq_chapter,
+             SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li
       JOIN tqs_bills tb ON tb.id = li.bill_id
+      LEFT JOIN po_items pi ON pi.id = li.po_item_id
+      LEFT JOIN (
+        SELECT pi2.po_id, MIN(pi2.boq_chapter) AS chapter
+        FROM po_items pi2
+        WHERE pi2.boq_chapter IS NOT NULL
+        GROUP BY pi2.po_id
+        HAVING COUNT(DISTINCT pi2.boq_chapter) = 1
+      ) po_single ON po_single.po_id = tb.po_id
       WHERE tb.project_id = $1 AND tb.is_deleted = FALSE
-      GROUP BY li.boq_item_id, li.cost_head
+      GROUP BY li.boq_item_id, li.cost_head, COALESCE(pi.boq_chapter, po_single.chapter)
     `, [project_id]);
 
     // Stores petty cash approved purchases — rolled up by cost_head at project level
@@ -163,6 +178,28 @@ router.get('/:project_id', async (req, res) => {
       JOIN stores_petty_cash_entries se ON se.id = si.entry_id
       WHERE se.project_id = $1 AND se.status = 'Approved' AND si.cost_head IS NOT NULL
       GROUP BY si.cost_head
+    `, [project_id]);
+
+    // Purchase Order spend — only the portion actually INVOICED against each PO
+    // line item counts as "spent" (not the full committed order value). Invoiced
+    // amount comes from TQS bill line items linked back via po_item_id; the
+    // boq_item_id/cost_head tag is taken from the PO item itself (set at PO entry).
+    // li.cost_head IS NULL guards against double-counting: bills whose line items
+    // carry their own cost_head tag are already counted via tqsActuals above —
+    // this only picks up the fallback case where the bill line wasn't tagged.
+    const poActuals = await query(`
+      SELECT pi.boq_item_id, pi.boq_chapter, pi.cost_head, SUM(li.basic_amount) AS actual
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE po.project_id = $1
+        AND po.status NOT IN ('rejected', 'cancelled')
+        AND pi.cost_head IS NOT NULL
+        AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE
+        AND tb.workflow_status NOT IN ('rejected')
+      GROUP BY pi.boq_item_id, pi.boq_chapter, pi.cost_head
     `, [project_id]);
 
     const byItem = {};
@@ -201,9 +238,65 @@ router.get('/:project_id', async (req, res) => {
     };
     addActual(raActuals.rows, false);
     addActual(scActuals.rows, false);
-    addActual(tqsActuals.rows, false);
     addActual(spcActuals.rows, false);
     addActual(advanceActuals.rows, true);
+
+    // TQS-bill and PO spend: item-tagged rows attach directly; chapter-tagged
+    // rows (chapter known from the PO line, or the bill's single-chapter PO)
+    // are pooled per chapter so the amount lands ONLY in that chapter — never
+    // spread across other chapters. Rows with neither tag fall through to the
+    // project-level pro-rata pool.
+    const chapterPools = {}; // chapterName -> { costHead -> amount }
+    const routeRow = (row) => {
+      const amt = parseFloat(row.actual) || 0;
+      if (!row.cost_head || !BOQ_COST_HEADS.includes(row.cost_head)) {
+        if (row.boq_item_id) unallocated[row.boq_item_id] = (unallocated[row.boq_item_id] || 0) + amt;
+        return;
+      }
+      if (row.boq_item_id) {
+        addActual([row], false);
+      } else if (row.boq_chapter) {
+        const pool = (chapterPools[row.boq_chapter] ||= {});
+        pool[row.cost_head] = (pool[row.cost_head] || 0) + amt;
+      } else {
+        addActual([row], false);
+      }
+    };
+    tqsActuals.rows.forEach(routeRow);
+    poActuals.rows.forEach(routeRow);
+
+    // Distribute each chapter pool among that chapter's own items — by budget
+    // share in the same cost head within the chapter, else by BOQ value share.
+    // Chapters that match no item fall back to the project-level pool.
+    for (const [chapName, pool] of Object.entries(chapterPools)) {
+      const chapItems = items.rows.filter(r =>
+        (r.chapter_name && r.chapter_name === chapName) || String(r.chapter_no) === chapName);
+      for (const [head, amt] of Object.entries(pool)) {
+        if (!chapItems.length) {
+          if (!projectLevel[head]) projectLevel[head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
+          projectLevel[head].invoiced += amt;
+          projectLevel[head].actual += amt;
+          continue;
+        }
+        let headBudget = 0;
+        for (const it of chapItems) headBudget += parseFloat(byItem[it.id]?.[head]?.amount) || 0;
+        const boqBasis = chapItems.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+        const basisFn = headBudget > 0
+          ? (it) => parseFloat(byItem[it.id]?.[head]?.amount) || 0
+          : (it) => parseFloat(it.amount) || 0;
+        const totalBasis = headBudget > 0 ? headBudget : boqBasis;
+        if (totalBasis <= 0) continue;
+        for (const it of chapItems) {
+          const basis = basisFn(it);
+          if (basis <= 0) continue;
+          if (!byItem[it.id]) byItem[it.id] = {};
+          if (!byItem[it.id][head]) byItem[it.id][head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
+          const share = amt * (basis / totalBasis);
+          byItem[it.id][head].invoiced += share;
+          byItem[it.id][head].actual += share;
+        }
+      }
+    }
 
     // ── Pro-rata attribution (Option A) ──────────────────────────────────────
     // Spend that isn't tied to a specific BOQ item (material POs / TQS bills
@@ -584,7 +677,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
 router.get('/:project_id/costhead-drilldown', async (req, res) => {
   try {
     const { project_id } = req.params;
-    const { cost_head } = req.query;
+    const { cost_head, boq_item_id } = req.query;
     if (!cost_head) return res.status(400).json({ error: 'cost_head is required' });
     const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
     if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
@@ -651,6 +744,24 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         rows.push(...storePCAdv.rows);
       } catch (_) {}
 
+      // POs tagged as Sub Con — only the invoiced (billed) portion, not full order value
+      const poSubCon = await query(`
+        SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+               tb.inv_date AS date,
+               COALESCE(v.name, po.vendor_name, pi.material_name, 'Vendor') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+               li.basic_amount AS amount, 'Purchase Order' AS source
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+        JOIN tqs_bills tb ON tb.id = li.bill_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        WHERE po.project_id=$1 AND pi.cost_head='Sub Con'
+          AND po.status NOT IN ('rejected','cancelled')
+          AND li.cost_head IS NULL
+          AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+        ORDER BY tb.inv_date`, [project_id]);
+      rows.push(...poSubCon.rows);
+
     } else if (cost_head === 'Petty Cash') {
       // Stores petty cash entries
       const pc = await query(`
@@ -663,6 +774,12 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
       rows.push(...pc.rows);
 
     } else {
+      // When boq_item_id is supplied (drilling in from a specific BOQ item's row),
+      // restrict every query to that item so the total matches the item's own
+      // "spent" figure instead of the whole project's spend under this cost head.
+      const itemFilter = boq_item_id ? ' AND li.boq_item_id=$3' : '';
+      const itemParams = boq_item_id ? [project_id, cost_head, boq_item_id] : [project_id, cost_head];
+
       // TQS bill line items for this cost head — only paid bills or accounts-approved
       const tqs = await query(`
         SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
@@ -672,10 +789,12 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         JOIN tqs_bills tb ON tb.id = li.bill_id
         WHERE tb.project_id=$1 AND li.cost_head=$2
           AND tb.is_deleted = FALSE
-        ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, cost_head]);
+          ${itemFilter}
+        ORDER BY COALESCE(tb.inv_date, tb.created_at)`, itemParams);
       rows.push(...tqs.rows);
 
       // RA bill items for this cost head
+      const raFilter = boq_item_id ? ' AND rbi.boq_item_id=$3' : '';
       const ra = await query(`
         SELECT rb.bill_number AS reference, rb.bill_date AS date,
                COALESCE(bi.description, rb.bill_number, 'RA Bill Item') AS description,
@@ -686,11 +805,279 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         LEFT JOIN boq_items bi ON bi.id = rbi.boq_item_id
         WHERE rb.project_id=$1 AND rbi.cost_head=$2
           AND rb.status IN ('certified','paid')
-        ORDER BY rb.bill_date`, [project_id, cost_head]);
+          ${raFilter}
+        ORDER BY rb.bill_date`, itemParams);
       rows.push(...ra.rows);
+
+      // PO line items tagged to this cost head — only the invoiced (billed) portion
+      const poFilter = boq_item_id ? ' AND pi.boq_item_id=$3' : '';
+      const poDrill = await query(`
+        SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+               tb.inv_date AS date,
+               COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+               li.basic_amount AS amount, 'Purchase Order' AS source
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+        JOIN tqs_bills tb ON tb.id = li.bill_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        WHERE po.project_id=$1 AND pi.cost_head=$2
+          AND po.status NOT IN ('rejected','cancelled')
+          AND li.cost_head IS NULL
+          AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+          ${poFilter}
+        ORDER BY tb.inv_date`, itemParams);
+      rows.push(...poDrill.rows);
     }
 
     // Sort all by date
+    rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /boq-budget/:project_id/items-drilldown?item_ids=uuid1,uuid2,...
+// Returns every transaction (across all cost heads) tagged to any of the given
+// BOQ items — used for the chapter-wise "Spent" drilldown, which spans however
+// many cost heads a chapter's items happen to be tagged with.
+router.get('/:project_id/items-drilldown', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const { item_ids, chapter } = req.query;
+    if (!item_ids) return res.status(400).json({ error: 'item_ids is required' });
+    const ids = String(item_ids).split(',').map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return res.json({ data: [] });
+
+    const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
+    if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
+    if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
+
+    let rows = [];
+
+    // Chapter-tagged spend (no BOQ item on the bill line): bill lines whose
+    // chapter — resolved via the linked PO line, or the bill's single-chapter
+    // PO — matches this chapter. Mirrors the attribution in the breakdown, so
+    // the drilldown shows exactly the invoices counted in this chapter's Spent.
+    if (chapter) {
+      const chTqs = await query(`
+        SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
+               li.item_name AS description, li.cost_head, li.basic_amount AS amount,
+               'TQS Bill' AS source
+        FROM tqs_bill_line_items li
+        JOIN tqs_bills tb ON tb.id = li.bill_id
+        LEFT JOIN po_items pi ON pi.id = li.po_item_id
+        LEFT JOIN (
+          SELECT pi2.po_id, MIN(pi2.boq_chapter) AS chapter
+          FROM po_items pi2
+          WHERE pi2.boq_chapter IS NOT NULL
+          GROUP BY pi2.po_id
+          HAVING COUNT(DISTINCT pi2.boq_chapter) = 1
+        ) po_single ON po_single.po_id = tb.po_id
+        WHERE tb.project_id=$1 AND tb.is_deleted = FALSE
+          AND li.boq_item_id IS NULL AND li.cost_head IS NOT NULL
+          AND COALESCE(pi.boq_chapter, po_single.chapter) = $2
+        ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, chapter]);
+      rows.push(...chTqs.rows);
+
+      // PO lines tagged to this chapter (no item) — invoiced portion where the
+      // bill line itself carries no cost head (counted under the PO's tag)
+      const chPo = await query(`
+        SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+               tb.inv_date AS date,
+               COALESCE(pi.material_name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+               pi.cost_head, li.basic_amount AS amount, 'Purchase Order' AS source
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+        JOIN tqs_bills tb ON tb.id = li.bill_id
+        WHERE po.project_id=$1 AND po.status NOT IN ('rejected','cancelled')
+          AND pi.boq_item_id IS NULL AND pi.boq_chapter = $2
+          AND pi.cost_head IS NOT NULL AND li.cost_head IS NULL
+          AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+        ORDER BY tb.inv_date`, [project_id, chapter]);
+      rows.push(...chPo.rows);
+    }
+
+    // TQS bill line items tagged directly to any of these BOQ items
+    const tqs = await query(`
+      SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
+             li.item_name AS description, li.cost_head, li.basic_amount AS amount,
+             'TQS Bill' AS source
+      FROM tqs_bill_line_items li
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.boq_item_id = ANY($2::uuid[])
+      ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, ids]);
+    rows.push(...tqs.rows);
+
+    // RA bill items tagged to any of these BOQ items
+    const ra = await query(`
+      SELECT rb.bill_number AS reference, rb.bill_date AS date,
+             COALESCE(bi.description, rb.bill_number, 'RA Bill Item') AS description,
+             rbi.cost_head, rbi.current_qty * rbi.rate AS amount, 'RA Bill' AS source
+      FROM ra_bill_items rbi
+      JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+      LEFT JOIN boq_items bi ON bi.id = rbi.boq_item_id
+      WHERE rb.project_id=$1 AND rb.status IN ('certified','paid') AND rbi.boq_item_id = ANY($2::uuid[])
+      ORDER BY rb.bill_date`, [project_id, ids]);
+    rows.push(...ra.rows);
+
+    // SC bills — via work-order items linked to these BOQ items (Sub Con)
+    const scBills = await query(`
+      SELECT sb.bill_number AS reference, sb.bill_date AS date,
+             COALESCE(sc.name, sb.bill_number, 'Subcontractor') AS description,
+             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS amount, 'SC Bill' AS source
+      FROM sc_bill_items bi
+      JOIN sc_bills sb ON sb.id = bi.bill_id
+      JOIN sc_wo_items swi ON swi.id = bi.wo_item_id
+      LEFT JOIN sc_subcontractors sc ON sc.id = sb.sc_id
+      WHERE sb.project_id=$1 AND sb.status NOT IN ('draft','rejected','queried') AND swi.boq_item_id = ANY($2::uuid[])
+      GROUP BY sb.id, sb.bill_number, sb.bill_date, sc.name
+      ORDER BY sb.bill_date`, [project_id, ids]);
+    rows.push(...scBills.rows);
+
+    // Advance Tracker vouchers — same wo_linked/sc_linked share logic as the main
+    // breakdown query, but returning one row per voucher (share amount) filtered
+    // to these BOQ items, so the drilldown lists the actual advance vouchers.
+    const advTrk = await query(`
+      WITH wo_linked AS (
+        SELECT av.id AS advance_id, av.voucher_number, av.pay_date, av.vendor_name,
+               wi.boq_item_id,
+               av.paid_amount * (wi.qty * wi.rate) / NULLIF(tot.total_amount, 0) AS share
+        FROM tqs_advance_vouchers av
+        JOIN sc_work_orders wo ON wo.wo_number = av.wo_number AND wo.project_id = $1
+        JOIN sc_wo_items wi ON wi.wo_id = wo.id AND wi.boq_item_id IS NOT NULL
+        JOIN (
+          SELECT wo2.wo_number, SUM(wi2.qty * wi2.rate) AS total_amount
+          FROM sc_work_orders wo2
+          JOIN sc_wo_items wi2 ON wi2.wo_id = wo2.id AND wi2.boq_item_id IS NOT NULL
+          WHERE wo2.project_id = $1
+          GROUP BY wo2.wo_number
+        ) tot ON tot.wo_number = wo.wo_number
+        WHERE av.project_id = $1 AND av.status IN ('issued','partial','recovered')
+          AND av.is_deleted = false AND av.paid_amount > 0
+      ),
+      sc_linked AS (
+        SELECT av.id AS advance_id, av.voucher_number, av.pay_date, av.vendor_name,
+               m.boq_item_id,
+               av.paid_amount * m.sc_amount / NULLIF(tot2.total_sc, 0) AS share
+        FROM tqs_advance_vouchers av
+        JOIN boq_sc_mapping m ON m.sc_id = av.vendor_id AND m.project_id = $1 AND m.status != 'cancelled'
+        JOIN (
+          SELECT m2.sc_id, SUM(m2.sc_amount) AS total_sc
+          FROM boq_sc_mapping m2
+          WHERE m2.project_id = $1 AND m2.status != 'cancelled'
+          GROUP BY m2.sc_id
+        ) tot2 ON tot2.sc_id = m.sc_id
+        WHERE av.project_id = $1 AND av.status IN ('issued','partial','recovered')
+          AND av.is_deleted = false AND av.paid_amount > 0 AND av.vendor_id IS NOT NULL
+          AND av.id NOT IN (SELECT DISTINCT advance_id FROM wo_linked)
+      )
+      SELECT voucher_number AS reference, pay_date AS date, vendor_name AS description,
+             'Sub Con' AS cost_head, share AS amount, 'Advance Tracker' AS source
+      FROM (
+        SELECT * FROM wo_linked
+        UNION ALL
+        SELECT * FROM sc_linked
+      ) combined
+      WHERE boq_item_id = ANY($2::uuid[])
+      ORDER BY pay_date`, [project_id, ids]);
+    rows.push(...advTrk.rows);
+
+    // PO line items — only the invoiced (billed) portion, tagged directly to these
+    // BOQ items. li.cost_head IS NULL guards against double-counting bills that
+    // already carry their own cost_head tag (picked up by the TQS query above).
+    const poDrill = await query(`
+      SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+             tb.inv_date AS date,
+             COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+             pi.cost_head, li.basic_amount AS amount, 'Purchase Order' AS source
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.project_id=$1 AND po.status NOT IN ('rejected','cancelled')
+        AND pi.boq_item_id = ANY($2::uuid[]) AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+      ORDER BY tb.inv_date`, [project_id, ids]);
+    rows.push(...poDrill.rows);
+
+    rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /boq-budget/:project_id/prorated-pool?cost_head=Sub+Con
+// Returns the actual project-wide transactions that were never tagged to a
+// specific BOQ item under this cost head — the "pool" that the pro-rata
+// engine splits across BOQ items by budget share. This lets a user trace
+// where their item/chapter's estimated (≈) spend actually originated from.
+router.get('/:project_id/prorated-pool', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const { cost_head } = req.query;
+    if (!cost_head) return res.status(400).json({ error: 'cost_head is required' });
+    const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
+    if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
+    if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
+
+    let rows = [];
+
+    // TQS bill line items tagged only to a cost head, never a specific BOQ item
+    const tqs = await query(`
+      SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
+             li.item_name AS description, li.basic_amount AS amount, 'TQS Bill' AS source
+      FROM tqs_bill_line_items li
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE
+        AND li.cost_head=$2 AND li.boq_item_id IS NULL
+      ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, cost_head]);
+    rows.push(...tqs.rows);
+
+    // RA bill items — rare to be untagged, but defensive
+    const ra = await query(`
+      SELECT rb.bill_number AS reference, rb.bill_date AS date,
+             rb.bill_number AS description, rbi.current_qty * rbi.rate AS amount, 'RA Bill' AS source
+      FROM ra_bill_items rbi
+      JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+      WHERE rb.project_id=$1 AND rb.status IN ('certified','paid')
+        AND rbi.cost_head=$2 AND rbi.boq_item_id IS NULL
+      ORDER BY rb.bill_date`, [project_id, cost_head]);
+    rows.push(...ra.rows);
+
+    // Stores petty cash — always project-level (no boq_item_id column at all)
+    const spc = await query(`
+      SELECT COALESCE(se.je_reference, CAST(se.sl_no AS TEXT)) AS reference,
+             se.entry_date AS date, COALESCE(si.item_name, se.supplier, 'Petty cash item') AS description,
+             si.total_amount AS amount, 'Petty Cash' AS source
+      FROM stores_petty_cash_items si
+      JOIN stores_petty_cash_entries se ON se.id = si.entry_id
+      WHERE se.project_id=$1 AND se.status='Approved' AND si.cost_head=$2
+      ORDER BY se.entry_date`, [project_id, cost_head]).catch(() => ({ rows: [] }));
+    rows.push(...spc.rows);
+
+    // PO line items tagged only to a cost head, never a specific BOQ item —
+    // only the invoiced (billed) portion counts
+    const po = await query(`
+      SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+             tb.inv_date AS date,
+             COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+             li.basic_amount AS amount, 'Purchase Order' AS source
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.project_id=$1 AND po.status NOT IN ('rejected','cancelled')
+        AND pi.cost_head=$2 AND pi.boq_item_id IS NULL AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+      ORDER BY tb.inv_date`, [project_id, cost_head]);
+    rows.push(...po.rows);
+
     rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
     res.json({ data: rows });
   } catch (err) {

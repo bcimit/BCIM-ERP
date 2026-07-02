@@ -1,11 +1,11 @@
 // src/pages/accounts/DebitNotesPage.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { ArrowUpRight, Building2, ChevronRight, FileText, Package, Plus, Search, Trash2, X } from 'lucide-react';
-import { debitNoteAPI, projectAPI, vendorAPI } from '../../api/client';
+import { debitNoteAPI, projectAPI, vendorAPI, tqsBillsAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
 import ProjectFilter from '../../components/ProjectFilter';
 
@@ -22,6 +22,7 @@ const EMPTY_FORM = {
   dn_date: dayjs().format('YYYY-MM-DD'),
   vendor_id: '', vendor_name: '',
   project_id: '',
+  bill_id: '', bill_sl: '',
   invoice_number: '', invoice_date: '',
   reason: '',
   tax_mode: 'intrastate',
@@ -49,7 +50,11 @@ function StatusBadge({ status }) {
 
 function DNForm({ onClose }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ ...EMPTY_FORM });
+  // Default to whatever project is currently selected in the top project
+  // filter — the list view is scoped to it, so a note saved against a
+  // different (or no) project would immediately vanish from view otherwise.
+  const { selectedProjectId } = useAuthStore();
+  const [form, setForm] = useState({ ...EMPTY_FORM, project_id: selectedProjectId || '' });
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -64,6 +69,55 @@ function DNForm({ onClose }) {
     staleTime: 60000,
   });
 
+  // Bill Tracker bills for selected vendor — lets you link the debit note to
+  // the original invoice and pull in its line items (e.g. to raise a debit
+  // note for the shortfall between a vendor's credit note and the actual
+  // QC-rejected quantity).
+  const [billSearch, setBillSearch] = useState('');
+  const { data: billList = [] } = useQuery({
+    queryKey: ['bills-for-dn', form.vendor_id, form.project_id],
+    queryFn: () => tqsBillsAPI.list({ vendor_id: form.vendor_id, project_id: form.project_id || undefined, limit: 300 })
+      .then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    enabled: !!form.vendor_id,
+    staleTime: 30000,
+  });
+  const filteredBills = useMemo(() => {
+    const q = billSearch.toLowerCase();
+    return billList.filter(b =>
+      !q ||
+      (b.inv_number || '').toLowerCase().includes(q) ||
+      (b.sl_number  || '').toLowerCase().includes(q) ||
+      (b.vendor_name|| '').toLowerCase().includes(q)
+    ).slice(0, 40);
+  }, [billList, billSearch]);
+
+  const applyBill = async (bill) => {
+    set('bill_id',       bill.id);
+    set('bill_sl',       bill.sl_number || '');
+    set('invoice_number',bill.inv_number || '');
+    set('invoice_date',  bill.inv_date ? bill.inv_date.slice(0, 10) : '');
+    set('basic_amount', '');
+    if (!form.vendor_id && bill.vendor_id) {
+      set('vendor_id',   bill.vendor_id);
+      set('vendor_name', bill.vendor_name || '');
+    }
+    setBillSearch('');
+
+    try {
+      const res = await tqsBillsAPI.get(bill.id);
+      const lineItems = res.data?.data?.line_items || [];
+      if (lineItems.length) {
+        setItems(lineItems.map(li => ({
+          material_name: li.item_name || '',
+          unit: li.unit || 'Nos',
+          quantity: '',
+          rate: li.rate != null ? String(li.rate) : '',
+          amount: '',
+        })));
+      }
+    } catch (_) { /* best-effort — user can still add items manually */ }
+  };
+
   const updateItem = (idx, key, val) => setItems(prev => {
     const next = [...prev];
     next[idx] = { ...next[idx], [key]: val };
@@ -76,6 +130,25 @@ function DNForm({ onClose }) {
   });
   const addItem = () => setItems(p => [...p, { ...EMPTY_ITEM }]);
   const removeItem = (idx) => setItems(p => p.filter((_, i) => i !== idx));
+
+  // Keep Basic Amount (and GST) in sync with the sum of item rows, so entering
+  // the shortfall/rejected quantity per item is all that's needed.
+  const itemsBasicSum = useMemo(
+    () => items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0),
+    [items]
+  );
+  useEffect(() => {
+    if (itemsBasicSum <= 0) return;
+    set('basic_amount', itemsBasicSum.toFixed(2));
+    if (form.tax_mode === 'intrastate' && form.cgst_pct) {
+      const h = parseFloat(form.cgst_pct) || 0;
+      set('cgst_amt', (h * itemsBasicSum / 100).toFixed(2));
+      set('sgst_amt', (h * itemsBasicSum / 100).toFixed(2));
+    } else if (form.igst_pct) {
+      set('igst_amt', ((parseFloat(form.igst_pct) || 0) * itemsBasicSum / 100).toFixed(2));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsBasicSum]);
 
   const basicAmt = parseFloat(form.basic_amount) || 0;
 
@@ -176,6 +249,58 @@ function DNForm({ onClose }) {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <Lbl>Link Bill Tracker Invoice</Lbl>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                className={clsx(F, 'pl-8')}
+                placeholder={form.vendor_id ? 'Search by invoice no. or bill ref…' : 'Select a vendor first to search bills'}
+                disabled={!form.vendor_id}
+                value={billSearch}
+                onChange={e => setBillSearch(e.target.value)}
+              />
+            </div>
+            {billSearch && filteredBills.length > 0 && (
+              <div className="mt-1 border border-slate-200 rounded-md bg-white shadow-lg max-h-52 overflow-y-auto z-10 relative">
+                {filteredBills.map(b => (
+                  <button key={b.id} type="button"
+                    onClick={() => applyBill(b)}
+                    className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-50 last:border-0 transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-semibold text-slate-800">{b.inv_number || '—'}</span>
+                        <span className="ml-2 text-[10px] text-slate-400 font-mono">{b.sl_number}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-shrink-0">
+                        {b.inv_date && <span>{dayjs(b.inv_date).format('DD-MM-YYYY')}</span>}
+                        <span className="font-semibold text-emerald-700">
+                          ₹{Number(b.total_amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {billSearch && filteredBills.length === 0 && billList.length > 0 && (
+              <p className="mt-1 text-[11px] text-slate-400 pl-1">No matching bills for "{billSearch}"</p>
+            )}
+            {form.bill_id && (
+              <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
+                <FileText className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                <span className="text-xs font-medium text-blue-700">
+                  Linked: {form.bill_sl} — {form.invoice_number}
+                  {form.invoice_date && ` · ${dayjs(form.invoice_date).format('DD-MM-YYYY')}`}
+                </span>
+                <button type="button" onClick={() => { set('bill_id',''); set('bill_sl',''); }}
+                  className="ml-auto text-blue-400 hover:text-blue-700">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
