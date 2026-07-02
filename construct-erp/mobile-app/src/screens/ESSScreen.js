@@ -11,7 +11,7 @@ import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
-const TABS = ['Summary', 'Attendance', 'Leave', 'Payslips'];
+const TABS = ['Summary', 'Attendance', 'Leave', 'Payslips', 'Documents'];
 
 export default function ESSScreen() {
   const navigation = useNavigation();
@@ -25,6 +25,11 @@ export default function ESSScreen() {
   const { data: attendance } = useQuery({
     queryKey: ['ess-attendance'],
     queryFn: () => essAPI.attendance().then(r => r.data?.data ?? r.data ?? []),
+    enabled: tab === 'Attendance',
+  });
+  const { data: corrections } = useQuery({
+    queryKey: ['ess-corrections'],
+    queryFn: () => essAPI.attendanceCorrections().then(r => r.data?.data ?? r.data ?? []),
     enabled: tab === 'Attendance',
   });
   const { data: leaveBalances } = useQuery({
@@ -41,6 +46,11 @@ export default function ESSScreen() {
     queryKey: ['ess-payslips'],
     queryFn: () => essAPI.payslips().then(r => r.data?.data ?? r.data ?? []),
     enabled: tab === 'Payslips',
+  });
+  const { data: documents } = useQuery({
+    queryKey: ['ess-documents'],
+    queryFn: () => essAPI.documents().then(r => r.data?.data ?? r.data ?? []),
+    enabled: tab === 'Documents',
   });
 
   const cancelMutation = useMutation({
@@ -60,14 +70,23 @@ export default function ESSScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="ESS Portal" subtitle="Employee Self Service" />
-      <View style={styles.tabs}>
+      <ScreenHeader
+        title="ESS Portal"
+        subtitle="Employee Self Service"
+        right={
+          <TouchableOpacity onPress={() => navigation.navigate('HRRequests')} style={styles.hrReqBtn}>
+            <MaterialCommunityIcons name="account-question-outline" size={14} color={theme.colors.primary} />
+            <Text style={styles.hrReqBtnText}>HR Requests</Text>
+          </TouchableOpacity>
+        }
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabs}>
         {TABS.map(t => (
           <TouchableOpacity key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabActive]}>
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <ScrollView contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}>
         {tab === 'Summary' && (
@@ -85,10 +104,25 @@ export default function ESSScreen() {
 
         {tab === 'Attendance' && (
           <>
+            <View style={styles.statsRow}>
+              {[
+                ['Present', summary?.present_days ?? summary?.present ?? '—'],
+                ['Absent', summary?.absent ?? '—'],
+                ['Late', summary?.late ?? '—'],
+                ['On Leave', summary?.on_leave ?? '—'],
+              ].map(([label, val]) => (
+                <View key={label} style={styles.statItem}>
+                  <Text style={styles.statValue}>{val}</Text>
+                  <Text style={styles.statLabel}>{label}</Text>
+                </View>
+              ))}
+            </View>
+
             <TouchableOpacity style={styles.applyBtn} onPress={() => navigation.navigate('AttendanceCorrection')}>
               <MaterialCommunityIcons name="pencil-outline" size={16} color="#fff" />
               <Text style={styles.applyBtnText}>Request Correction</Text>
             </TouchableOpacity>
+
             {(attendance || []).length === 0
               ? <EmptyState icon="calendar-blank-outline" title="No attendance records" />
               : attendance.map((a, i) => (
@@ -101,6 +135,22 @@ export default function ESSScreen() {
                   <Text style={[styles.rowStatus, a.status === 'present' ? styles.statusOk : styles.statusWarn]}>{a.status}</Text>
                 </Card>
               ))}
+
+            {(corrections || []).length > 0 && (
+              <>
+                <Text style={styles.subheading}>Correction Requests</Text>
+                {corrections.map((c, i) => (
+                  <Card key={i}>
+                    <View style={styles.rowTop}>
+                      <Text style={styles.rowTitle}>{String(c.attendance_date || '').slice(0, 10)}</Text>
+                      <StatusBadge status={c.status} />
+                    </View>
+                    <Text style={styles.rowSub}>Requested: {c.requested_status}</Text>
+                    {c.reason ? <Text style={styles.reason}>{c.reason}</Text> : null}
+                  </Card>
+                ))}
+              </>
+            )}
           </>
         )}
 
@@ -158,13 +208,30 @@ export default function ESSScreen() {
               </TouchableOpacity>
             ))
         )}
+
+        {tab === 'Documents' && (
+          (documents || []).length === 0
+            ? <EmptyState icon="folder-outline" title="No documents uploaded" />
+            : documents.map((d, i) => (
+              <Card key={i} style={styles.listRow}>
+                <MaterialCommunityIcons name="file-document-outline" size={18} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle}>{d.doc_name || d.doc_type}</Text>
+                  <Text style={styles.rowSub}>{d.doc_type}{d.uploaded_at ? ` · ${String(d.uploaded_at).slice(0, 10)}` : ''}</Text>
+                </View>
+              </Card>
+            ))
+        )}
       </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', paddingHorizontal: theme.spacing.md, gap: 8, paddingVertical: 10, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  hrReqBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  hrReqBtnText: { fontSize: 11, fontWeight: '700', color: theme.colors.primary },
+  tabsScroll: { flexGrow: 0, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  tabs: { paddingHorizontal: theme.spacing.md, gap: 8, paddingVertical: 10 },
   tab: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: theme.colors.surface },
   tabActive: { backgroundColor: theme.colors.primary },
   tabText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
@@ -173,6 +240,10 @@ const styles = StyleSheet.create({
   kpiCard: { flex: 1 },
   kpiValue: { fontSize: 24, fontWeight: '800', color: theme.colors.text },
   kpiLabel: { fontSize: 12, color: theme.colors.muted, marginTop: 2 },
+  statsRow: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: 12 },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 18, fontWeight: '800', color: theme.colors.text },
+  statLabel: { fontSize: 10, color: theme.colors.muted, marginTop: 3 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowTitle: { fontSize: 14, fontWeight: '600', color: theme.colors.text },

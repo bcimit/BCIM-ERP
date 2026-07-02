@@ -82,6 +82,7 @@ import CreateMaterialRequestScreen from '../screens/CreateMaterialRequestScreen'
 import CreateIGNScreen from '../screens/CreateIGNScreen';
 import CreateDPRScreen from '../screens/CreateDPRScreen';
 import AttendanceCorrectionScreen from '../screens/AttendanceCorrectionScreen';
+import HRRequestsScreen from '../screens/HRRequestsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -198,6 +199,7 @@ export default function RootNavigator() {
       <Stack.Screen name="CreateIGN" component={CreateIGNScreen} />
       <Stack.Screen name="CreateDPR" component={CreateDPRScreen} />
       <Stack.Screen name="AttendanceCorrection" component={AttendanceCorrectionScreen} />
+      <Stack.Screen name="HRRequests" component={HRRequestsScreen} />
     </Stack.Navigator>
   );
 }

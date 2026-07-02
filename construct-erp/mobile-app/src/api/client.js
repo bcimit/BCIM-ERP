@@ -273,6 +273,7 @@ export const dmsAPI = {
 export const essAPI = {
   summary:       () => api.get('/ess/summary'),
   attendance:    () => api.get('/ess/attendance'),
+  attendanceCorrections: () => api.get('/ess/attendance/corrections'),
   leaveBalances: () => api.get('/ess/leave/balances'),
   leaveRequests: () => api.get('/ess/leave/requests'),
   applyLeave:    (data) => api.post('/ess/leave/requests', data),
@@ -280,6 +281,12 @@ export const essAPI = {
   cancelLeave:   (id)   => api.patch(`/ess/leave/requests/${id}/cancel`),
   payslips:      ()     => api.get('/ess/payslips'),
   payslipDetail: (id)   => api.get(`/ess/payslips/${id}`),
+  documents:     ()     => api.get('/ess/documents'),
+};
+
+export const hrServiceRequestAPI = {
+  list:   (params) => api.get('/hr-admin/advanced/service-requests', { params }),
+  create: (data)    => api.post('/hr-admin/advanced/service-requests', data),
 };
 
 export const dprAPI = {
