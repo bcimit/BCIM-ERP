@@ -11,4 +11,5 @@ export default makeListScreen({
   secondary: (item) => item.designation || item.department,
   meta: (item) => item.employee_code || null,
   status: (item) => item.status,
+  avatar: true,
 });

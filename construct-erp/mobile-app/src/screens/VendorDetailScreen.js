@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import Screen from '../components/Screen';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
+import Avatar from '../components/Avatar';
 import { theme } from '../theme';
 
 // There is no GET /vendors/:id endpoint on the backend, so unlike the other
@@ -25,6 +26,13 @@ export default function VendorDetailScreen({ route }) {
     <Screen>
       <ScreenHeader title={vendor.name || 'Vendor'} subtitle={vendor.vendor_code} showBack />
       <ScrollView contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}>
+        <Card style={styles.identityCard}>
+          <Avatar name={vendor.name} size={56} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.vendorName} numberOfLines={2}>{vendor.name || 'Vendor'}</Text>
+            {vendor.vendor_type ? <Text style={styles.vendorType}>{vendor.vendor_type}</Text> : null}
+          </View>
+        </Card>
         <Card>
           {fields.map((f, i) => (
             <View key={f.label} style={[styles.row, i < fields.length - 1 && styles.rowBorder]}>
@@ -39,6 +47,9 @@ export default function VendorDetailScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
+  identityCard: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  vendorName: { fontSize: 16, fontWeight: '800', color: theme.colors.text },
+  vendorType: { fontSize: 12, color: theme.colors.muted, marginTop: 2 },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9, gap: 12 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   label: { fontSize: 12, color: theme.colors.muted, flexShrink: 0 },

@@ -7,11 +7,12 @@ import Screen from '../components/Screen';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
 import ErrorState from '../components/ErrorState';
+import ListSkeleton from '../components/ListSkeleton';
 import { theme } from '../theme';
 
 export default function PayslipDetailScreen({ route }) {
   const { id } = route.params;
-  const { data: slip, isError, refetch } = useQuery({
+  const { data: slip, isLoading, isError, refetch } = useQuery({
     queryKey: ['payslip-detail', id],
     queryFn: () => essAPI.payslipDetail(id).then(r => r.data?.data ?? null),
   });
@@ -59,6 +60,7 @@ export default function PayslipDetailScreen({ route }) {
           </TouchableOpacity>
         )}
       />
+      {isLoading && <ListSkeleton rows={4} />}
       {slip && (
         <ScrollView contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}>
           <Card style={styles.netCard}>

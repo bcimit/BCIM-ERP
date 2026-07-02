@@ -11,4 +11,5 @@ export default makeListScreen({
   secondary: (item) => item.trade_type || item.contractor_type,
   meta: (item) => item.contact_person || null,
   status: (item) => item.status,
+  avatar: true,
 });

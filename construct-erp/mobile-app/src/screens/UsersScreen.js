@@ -11,4 +11,5 @@ export default makeListScreen({
   secondary: (item) => item.email,
   meta: (item) => item.role || null,
   status: (item) => item.is_active === false ? 'inactive' : 'active',
+  avatar: true,
 });

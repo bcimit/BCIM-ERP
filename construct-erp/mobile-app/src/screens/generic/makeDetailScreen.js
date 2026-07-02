@@ -6,6 +6,8 @@ import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
 import ErrorState from '../../components/ErrorState';
+import ListSkeleton from '../../components/ListSkeleton';
+import EmptyState from '../../components/EmptyState';
 import { theme } from '../../theme';
 
 // Factory for a standard "header fields + optional item table" detail
@@ -48,6 +50,7 @@ export default function makeDetailScreen(config) {
           showBack
           right={!isLoading && data && config.status ? <StatusBadge status={config.status(data)} /> : null}
         />
+        {isLoading && <ListSkeleton rows={4} />}
         {!isLoading && data && (
           <ScrollView contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}>
             <Card>
@@ -63,7 +66,7 @@ export default function makeDetailScreen(config) {
               <>
                 <Text style={styles.sectionTitle}>Items ({items.length})</Text>
                 {items.length === 0 ? (
-                  <Card><Text style={styles.empty}>No items</Text></Card>
+                  <EmptyState icon="format-list-bulleted" title="No items" />
                 ) : items.map((item, idx) => (
                   <Card key={idx}>
                     {config.itemFields.map((f, i) => (
@@ -89,5 +92,4 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, color: theme.colors.muted, flexShrink: 0 },
   value: { fontSize: 13, fontWeight: '600', color: theme.colors.text, flexShrink: 1, textAlign: 'right' },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.text, marginTop: 4 },
-  empty: { fontSize: 12, color: theme.colors.muted, textAlign: 'center', paddingVertical: 8 },
 });

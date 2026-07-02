@@ -8,6 +8,7 @@ import Screen from '../components/Screen';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import Avatar from '../components/Avatar';
 import ListSkeleton from '../components/ListSkeleton';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -192,7 +193,12 @@ export default function ApprovalsScreen() {
 
                   <View style={styles.metaRow}>
                     {item.project_name ? <Text style={styles.meta}>{item.project_name}</Text> : null}
-                    {item.submitted_by ? <Text style={styles.meta}>by {item.submitted_by}</Text> : null}
+                    {item.submitted_by ? (
+                      <View style={styles.submittedByWrap}>
+                        <Avatar name={item.submitted_by} size={16} style={styles.submittedByAvatar} />
+                        <Text style={styles.meta}>{item.submitted_by}</Text>
+                      </View>
+                    ) : null}
                     <Text style={styles.meta}>{daysAgoLabel(item.created_at)}</Text>
                   </View>
 
@@ -280,8 +286,10 @@ const styles = StyleSheet.create({
   amount: { fontSize: 13, fontWeight: '800', color: theme.colors.primary },
   title: { fontSize: 14, fontWeight: '700', color: theme.colors.text, marginTop: 10 },
   sub: { fontSize: 12, color: theme.colors.muted, marginTop: 2 },
-  metaRow: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' },
+  metaRow: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' },
   meta: { fontSize: 11, color: theme.colors.muted, fontWeight: '600' },
+  submittedByWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  submittedByAvatar: { marginRight: 0 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 38, borderRadius: theme.radius.sm },
   rejectBtn: { borderWidth: 1.5, borderColor: theme.colors.danger },

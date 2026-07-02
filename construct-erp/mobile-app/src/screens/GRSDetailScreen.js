@@ -10,6 +10,7 @@ import Card from '../components/Card';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
 import ErrorState from '../components/ErrorState';
+import ListSkeleton from '../components/ListSkeleton';
 import { theme } from '../theme';
 
 export default function GRSDetailScreen({ route }) {
@@ -63,6 +64,7 @@ export default function GRSDetailScreen({ route }) {
   return (
     <Screen>
       <ScreenHeader title={grs?.grs_number || 'GRS'} subtitle={grs?.project_name} showBack right={grs && <StatusBadge status={grs.status} />} />
+      {isLoading && <ListSkeleton rows={4} />}
       {!isLoading && grs && (
         <ScrollView contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}>
           <Card>

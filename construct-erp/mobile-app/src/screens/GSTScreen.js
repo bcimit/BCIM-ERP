@@ -7,15 +7,25 @@ import Screen from '../components/Screen';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
 import ErrorState from '../components/ErrorState';
+import ListSkeleton from '../components/ListSkeleton';
 import { theme } from '../theme';
 
 export default function GSTScreen() {
   const { selectedProject } = useAuth();
-  const { data: summary, isError, refetch } = useQuery({
+  const { data: summary, isLoading, isError, refetch } = useQuery({
     queryKey: ['gst-summary', selectedProject?.id],
     queryFn: () => invoiceAPI.gstSummary(selectedProject?.id).then(r => r.data?.data ?? r.data ?? {}),
     enabled: !!selectedProject?.id,
   });
+
+  if (isLoading) {
+    return (
+      <Screen>
+        <ScreenHeader title="GST" subtitle={selectedProject?.name} showBack />
+        <ListSkeleton rows={3} />
+      </Screen>
+    );
+  }
 
   if (isError) {
     return (

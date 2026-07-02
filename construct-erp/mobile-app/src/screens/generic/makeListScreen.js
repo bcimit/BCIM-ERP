@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import Screen from '../../components/Screen';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
+import Avatar from '../../components/Avatar';
 import StatusBadge from '../../components/StatusBadge';
 import ListSkeleton from '../../components/ListSkeleton';
 import ErrorState from '../../components/ErrorState';
@@ -57,7 +58,19 @@ export default function makeListScreen(config) {
             renderItem={({ item }) => {
               const status = config.status ? config.status(item) : null;
               const meta = config.meta ? config.meta(item) : null;
-              const cardBody = (
+              const cardBody = config.avatar ? (
+                <Card style={styles.avatarRow}>
+                  <Avatar name={config.primary(item)} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.rowTop}>
+                      <Text style={styles.primary} numberOfLines={1}>{config.primary(item)}</Text>
+                      {status ? <StatusBadge status={status} /> : null}
+                    </View>
+                    {config.secondary ? <Text style={styles.secondary} numberOfLines={2}>{config.secondary(item)}</Text> : null}
+                    {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+                  </View>
+                </Card>
+              ) : (
                 <Card>
                   <View style={styles.rowTop}>
                     <View style={styles.refWrap}>
@@ -84,6 +97,7 @@ export default function makeListScreen(config) {
 }
 
 const styles = StyleSheet.create({
+  avatarRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   refWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   primary: { fontSize: 13, fontWeight: '700', color: theme.colors.text, flexShrink: 1 },

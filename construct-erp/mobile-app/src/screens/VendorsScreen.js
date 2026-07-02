@@ -7,6 +7,7 @@ import { vendorAPI } from '../api/client';
 import Screen from '../components/Screen';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
+import Avatar from '../components/Avatar';
 import ListSkeleton from '../components/ListSkeleton';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
@@ -50,9 +51,7 @@ export default function VendorsScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity onPress={() => navigation.navigate('VendorDetail', { vendor: item })}>
               <Card style={styles.row}>
-                <View style={styles.iconWrap}>
-                  <MaterialCommunityIcons name="account-tie-outline" size={18} color={theme.colors.primary} />
-                </View>
+                <Avatar name={item.name} size={40} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{item.name}</Text>
                   <Text style={styles.sub}>{item.vendor_code || ''}{item.vendor_type ? ` · ${item.vendor_type}` : ''}</Text>
@@ -75,7 +74,6 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.colors.text },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
   sub: { fontSize: 12, color: theme.colors.muted, marginTop: 2 },
   contact: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 },

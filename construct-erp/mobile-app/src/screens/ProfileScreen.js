@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Screen from '../components/Screen';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
+import Avatar from '../components/Avatar';
 import { theme } from '../theme';
 
 export default function ProfileScreen() {
@@ -29,9 +30,7 @@ export default function ProfileScreen() {
       <ScreenHeader title="Profile" />
       <View style={{ padding: theme.spacing.md }}>
         <Card style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(user?.name || user?.full_name || 'U').charAt(0).toUpperCase()}</Text>
-          </View>
+          <Avatar name={user?.name || user?.full_name} size={56} />
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user?.name || user?.full_name || 'User'}</Text>
             <Text style={styles.email}>{user?.email}</Text>
@@ -67,11 +66,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarText: { color: '#fff', fontSize: 22, fontWeight: '800' },
   name: { fontSize: 17, fontWeight: '700', color: theme.colors.text },
   email: { fontSize: 13, color: theme.colors.muted, marginTop: 2 },
   role: { fontSize: 11, color: theme.colors.primary, fontWeight: '700', marginTop: 4, textTransform: 'capitalize' },

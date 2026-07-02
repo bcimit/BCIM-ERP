@@ -11,4 +11,5 @@ export default makeListScreen({
   secondary: (item) => item.review_period || item.cycle,
   meta: (item) => item.rating ? `Rating: ${item.rating}` : null,
   status: (item) => item.status,
+  avatar: true,
 });
