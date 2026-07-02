@@ -768,6 +768,135 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
   }
 });
 
+// GET /boq-budget/:project_id/items-drilldown?item_ids=uuid1,uuid2,...
+// Returns every transaction (across all cost heads) tagged to any of the given
+// BOQ items — used for the chapter-wise "Spent" drilldown, which spans however
+// many cost heads a chapter's items happen to be tagged with.
+router.get('/:project_id/items-drilldown', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const { item_ids } = req.query;
+    if (!item_ids) return res.status(400).json({ error: 'item_ids is required' });
+    const ids = String(item_ids).split(',').map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return res.json({ data: [] });
+
+    const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
+    if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
+    if (!userCanAccessProject(req, project_id)) return res.status(403).json({ error: 'Access denied' });
+
+    let rows = [];
+
+    // TQS bill line items tagged directly to any of these BOQ items
+    const tqs = await query(`
+      SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
+             li.item_name AS description, li.cost_head, li.basic_amount AS amount,
+             'TQS Bill' AS source
+      FROM tqs_bill_line_items li
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.boq_item_id = ANY($2::uuid[])
+      ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, ids]);
+    rows.push(...tqs.rows);
+
+    // RA bill items tagged to any of these BOQ items
+    const ra = await query(`
+      SELECT rb.bill_number AS reference, rb.bill_date AS date,
+             COALESCE(bi.description, rb.bill_number, 'RA Bill Item') AS description,
+             rbi.cost_head, rbi.current_qty * rbi.rate AS amount, 'RA Bill' AS source
+      FROM ra_bill_items rbi
+      JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+      LEFT JOIN boq_items bi ON bi.id = rbi.boq_item_id
+      WHERE rb.project_id=$1 AND rb.status IN ('certified','paid') AND rbi.boq_item_id = ANY($2::uuid[])
+      ORDER BY rb.bill_date`, [project_id, ids]);
+    rows.push(...ra.rows);
+
+    // SC bills — via work-order items linked to these BOQ items (Sub Con)
+    const scBills = await query(`
+      SELECT sb.bill_number AS reference, sb.bill_date AS date,
+             COALESCE(sc.name, sb.bill_number, 'Subcontractor') AS description,
+             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS amount, 'SC Bill' AS source
+      FROM sc_bill_items bi
+      JOIN sc_bills sb ON sb.id = bi.bill_id
+      JOIN sc_wo_items swi ON swi.id = bi.wo_item_id
+      LEFT JOIN sc_subcontractors sc ON sc.id = sb.sc_id
+      WHERE sb.project_id=$1 AND sb.status NOT IN ('draft','rejected','queried') AND swi.boq_item_id = ANY($2::uuid[])
+      GROUP BY sb.id, sb.bill_number, sb.bill_date, sc.name
+      ORDER BY sb.bill_date`, [project_id, ids]);
+    rows.push(...scBills.rows);
+
+    // Advance Tracker vouchers — same wo_linked/sc_linked share logic as the main
+    // breakdown query, but returning one row per voucher (share amount) filtered
+    // to these BOQ items, so the drilldown lists the actual advance vouchers.
+    const advTrk = await query(`
+      WITH wo_linked AS (
+        SELECT av.id AS advance_id, av.voucher_number, av.pay_date, av.vendor_name,
+               wi.boq_item_id,
+               av.paid_amount * (wi.qty * wi.rate) / NULLIF(tot.total_amount, 0) AS share
+        FROM tqs_advance_vouchers av
+        JOIN sc_work_orders wo ON wo.wo_number = av.wo_number AND wo.project_id = $1
+        JOIN sc_wo_items wi ON wi.wo_id = wo.id AND wi.boq_item_id IS NOT NULL
+        JOIN (
+          SELECT wo2.wo_number, SUM(wi2.qty * wi2.rate) AS total_amount
+          FROM sc_work_orders wo2
+          JOIN sc_wo_items wi2 ON wi2.wo_id = wo2.id AND wi2.boq_item_id IS NOT NULL
+          WHERE wo2.project_id = $1
+          GROUP BY wo2.wo_number
+        ) tot ON tot.wo_number = wo.wo_number
+        WHERE av.project_id = $1 AND av.status IN ('issued','partial','recovered')
+          AND av.is_deleted = false AND av.paid_amount > 0
+      ),
+      sc_linked AS (
+        SELECT av.id AS advance_id, av.voucher_number, av.pay_date, av.vendor_name,
+               m.boq_item_id,
+               av.paid_amount * m.sc_amount / NULLIF(tot2.total_sc, 0) AS share
+        FROM tqs_advance_vouchers av
+        JOIN boq_sc_mapping m ON m.sc_id = av.vendor_id AND m.project_id = $1 AND m.status != 'cancelled'
+        JOIN (
+          SELECT m2.sc_id, SUM(m2.sc_amount) AS total_sc
+          FROM boq_sc_mapping m2
+          WHERE m2.project_id = $1 AND m2.status != 'cancelled'
+          GROUP BY m2.sc_id
+        ) tot2 ON tot2.sc_id = m.sc_id
+        WHERE av.project_id = $1 AND av.status IN ('issued','partial','recovered')
+          AND av.is_deleted = false AND av.paid_amount > 0 AND av.vendor_id IS NOT NULL
+          AND av.id NOT IN (SELECT DISTINCT advance_id FROM wo_linked)
+      )
+      SELECT voucher_number AS reference, pay_date AS date, vendor_name AS description,
+             'Sub Con' AS cost_head, share AS amount, 'Advance Tracker' AS source
+      FROM (
+        SELECT * FROM wo_linked
+        UNION ALL
+        SELECT * FROM sc_linked
+      ) combined
+      WHERE boq_item_id = ANY($2::uuid[])
+      ORDER BY pay_date`, [project_id, ids]);
+    rows.push(...advTrk.rows);
+
+    // PO line items — only the invoiced (billed) portion, tagged directly to these
+    // BOQ items. li.cost_head IS NULL guards against double-counting bills that
+    // already carry their own cost_head tag (picked up by the TQS query above).
+    const poDrill = await query(`
+      SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+             tb.inv_date AS date,
+             COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
+             pi.cost_head, li.basic_amount AS amount, 'Purchase Order' AS source
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      LEFT JOIN vendors v ON v.id = po.vendor_id
+      WHERE po.project_id=$1 AND po.status NOT IN ('rejected','cancelled')
+        AND pi.boq_item_id = ANY($2::uuid[]) AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+      ORDER BY tb.inv_date`, [project_id, ids]);
+    rows.push(...poDrill.rows);
+
+    rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /boq-budget/:project_id/costhead-monthly
 // Returns monthly expenditure broken down by cost head for project analysis.
 // Response: { months: ['2025-01','2025-02',...], data: [{ month, breakdown: { [cost_head]: amount } }] }
