@@ -242,10 +242,13 @@ function ChapterBudgetCell({ value, onSave, saving }) {
 }
 
 // ─── Inline drilldown (div-based, sits inside a <td>) ────────────────────────
-function CostHeadDrilldownInline({ projectId, costHead }) {
+// itemInfo (optional): { estimated, spent, prorated } — when the row being drilled into
+// is a per-BOQ-item pro-rated estimate (no direct tag), we explain the math instead of
+// showing the whole project's transactions under this cost head.
+function CostHeadDrilldownInline({ projectId, costHead, boqItemId, itemInfo }) {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['costhead-drilldown', projectId, costHead],
-    queryFn: () => boqBudgetAPI.costheadDrilldown(projectId, costHead).then(r => r.data?.data || []),
+    queryKey: ['costhead-drilldown', projectId, costHead, boqItemId],
+    queryFn: () => boqBudgetAPI.costheadDrilldown(projectId, costHead, boqItemId).then(r => r.data?.data || []),
     enabled: !!projectId && !!costHead,
     retry: 1,
   });
@@ -297,7 +300,18 @@ function CostHeadDrilldownInline({ projectId, costHead }) {
           {error?.response?.data?.error || error?.message || 'Failed to load'}
         </div>
       )}
-      {!isLoading && !isError && !rows.length && (
+      {!isLoading && !isError && !rows.length && itemInfo?.estimated && (
+        <div className="flex items-start gap-2 px-4 py-3 text-xs text-amber-700 bg-amber-50">
+          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            No bill or PO was tagged directly to <strong>this BOQ item</strong> for {costHead}.
+            The <strong>{fmt(itemInfo.spent)}</strong> shown is an <strong>estimated pro-rata share</strong> —
+            {costHead}'s total untagged project spend is distributed across all items with a budget in this
+            cost head, in proportion to each item's budget share. It is not tied to a specific invoice.
+          </span>
+        </div>
+      )}
+      {!isLoading && !isError && !rows.length && !itemInfo?.estimated && (
         <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-400 italic">
           <AlertCircle className="w-3.5 h-3.5" />
           No direct transactions found — amount may be pro-rated from project-level spend.
@@ -406,7 +420,12 @@ function CostHeadDetail({ item, costHeads, mode, onSave, projectId }) {
         {isOpen && projectId && (
           <tr>
             <td colSpan={4} className="p-0 bg-indigo-50/20">
-              <CostHeadDrilldownInline projectId={projectId} costHead={r.h} />
+              <CostHeadDrilldownInline
+                projectId={projectId}
+                costHead={r.h}
+                boqItemId={item.id}
+                itemInfo={{ estimated: r.estimated, spent: r.spent, prorated: r.prorated }}
+              />
             </td>
           </tr>
         )}

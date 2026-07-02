@@ -607,7 +607,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
 router.get('/:project_id/costhead-drilldown', async (req, res) => {
   try {
     const { project_id } = req.params;
-    const { cost_head } = req.query;
+    const { cost_head, boq_item_id } = req.query;
     if (!cost_head) return res.status(400).json({ error: 'cost_head is required' });
     const proj = await query(`SELECT id FROM projects WHERE id=$1 AND company_id=$2`, [project_id, req.user.company_id]);
     if (!proj.rows.length) return res.status(404).json({ error: 'Project not found' });
@@ -704,6 +704,12 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
       rows.push(...pc.rows);
 
     } else {
+      // When boq_item_id is supplied (drilling in from a specific BOQ item's row),
+      // restrict every query to that item so the total matches the item's own
+      // "spent" figure instead of the whole project's spend under this cost head.
+      const itemFilter = boq_item_id ? ' AND li.boq_item_id=$3' : '';
+      const itemParams = boq_item_id ? [project_id, cost_head, boq_item_id] : [project_id, cost_head];
+
       // TQS bill line items for this cost head — only paid bills or accounts-approved
       const tqs = await query(`
         SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
@@ -713,10 +719,12 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         JOIN tqs_bills tb ON tb.id = li.bill_id
         WHERE tb.project_id=$1 AND li.cost_head=$2
           AND tb.is_deleted = FALSE
-        ORDER BY COALESCE(tb.inv_date, tb.created_at)`, [project_id, cost_head]);
+          ${itemFilter}
+        ORDER BY COALESCE(tb.inv_date, tb.created_at)`, itemParams);
       rows.push(...tqs.rows);
 
       // RA bill items for this cost head
+      const raFilter = boq_item_id ? ' AND rbi.boq_item_id=$3' : '';
       const ra = await query(`
         SELECT rb.bill_number AS reference, rb.bill_date AS date,
                COALESCE(bi.description, rb.bill_number, 'RA Bill Item') AS description,
@@ -727,10 +735,12 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         LEFT JOIN boq_items bi ON bi.id = rbi.boq_item_id
         WHERE rb.project_id=$1 AND rbi.cost_head=$2
           AND rb.status IN ('certified','paid')
-        ORDER BY rb.bill_date`, [project_id, cost_head]);
+          ${raFilter}
+        ORDER BY rb.bill_date`, itemParams);
       rows.push(...ra.rows);
 
       // PO line items tagged to this cost head — only the invoiced (billed) portion
+      const poFilter = boq_item_id ? ' AND pi.boq_item_id=$3' : '';
       const poDrill = await query(`
         SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
                tb.inv_date AS date,
@@ -745,7 +755,8 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
           AND po.status NOT IN ('rejected','cancelled')
           AND li.cost_head IS NULL
           AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
-        ORDER BY tb.inv_date`, [project_id, cost_head]);
+          ${poFilter}
+        ORDER BY tb.inv_date`, itemParams);
       rows.push(...poDrill.rows);
     }
 
