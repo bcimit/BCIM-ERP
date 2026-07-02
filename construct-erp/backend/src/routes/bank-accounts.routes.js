@@ -1,6 +1,9 @@
 // src/routes/bank-accounts.routes.js
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
+
+// Bank account master data — writes restricted to accounts staff.
+const BANK_WRITERS = ['super_admin', 'admin', 'accountant', 'finance_manager'];
 const { query } = require('../config/database');
 const router = express.Router();
 
@@ -46,7 +49,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // ── CREATE ───────────────────────────────────────────────────────────────────
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, authorize(...BANK_WRITERS), async (req, res) => {
   try {
     const { account_name, bank_name, account_number, ifsc_code, branch, account_type, opening_balance } = req.body;
     if (!account_name || !bank_name) return res.status(400).json({ error: 'account_name and bank_name are required' });
@@ -63,7 +66,7 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 // ── UPDATE ───────────────────────────────────────────────────────────────────
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, authorize(...BANK_WRITERS), async (req, res) => {
   try {
     const { account_name, bank_name, account_number, ifsc_code, branch, account_type, opening_balance, is_active } = req.body;
     const result = await query(
@@ -84,7 +87,7 @@ router.put('/:id', authenticate, async (req, res) => {
 });
 
 // ── DELETE (soft) ────────────────────────────────────────────────────────────
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, authorize(...BANK_WRITERS), async (req, res) => {
   try {
     const result = await query(
       `UPDATE bank_accounts SET is_active = false, updated_at = NOW() WHERE id = $1 AND company_id = $2`,

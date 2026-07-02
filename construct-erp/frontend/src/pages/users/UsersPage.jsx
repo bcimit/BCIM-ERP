@@ -399,7 +399,6 @@ const MENU_CONFIG = {
     { to:'/hire-rental/reports',         label:'Reports' },
     { to:'/plant/masters',               label:'Settings' },
     { to:'/hire-rental/crane-log',       label:'Crane Log Sheet' },
-    { to:'/hire-rental/rental-invoice/new', label:'New Rental Invoice' },
   ],
   'DMS': [
     { to:'/dms',         label:'Document Repository' },

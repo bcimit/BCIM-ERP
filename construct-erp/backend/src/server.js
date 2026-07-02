@@ -442,13 +442,18 @@ app.use(`${API}/hr-admin/import`,      hrImportRoutes);
 app.use(`${API}/hr-admin/essl`,        hrEsslRoutes);
 app.use(`${API}/hr-admin/advanced`,    hrAdvancedRoutes);
 app.use(`${API}/hr-admin/compliance`, hrComplianceRoutes);
-app.use(`${API}/hr-admin/shifts`,      hrShiftsRoutes);
 app.use(`${API}/hr-admin/fnf`,         hrFnfRoutes);
 app.use(`${API}/hr-admin/letters`,     hrLettersRoutes);
 app.use(`${API}/hr-admin/training`,    hrTrainingRoutes);
 app.use(`${API}/hr-admin/emp-assets`,  hrEmpAssetsRoutes);
 app.use(`${API}/hr-admin/travel`,      hrTravelRoutes);
 app.use(`${API}/hr-admin/recruitment`, hrRecruitmentRoutes);
+// Shifts router defines its paths as /shifts, /employee-shifts, /overtime,
+// /comp-off — mounting it at /hr-admin/shifts produced /hr-admin/shifts/shifts
+// etc., so every frontend call (which uses /hr-admin/shifts, /hr-admin/overtime,
+// ...) 404'd. Mounted last among hr-admin routers so the specific mounts above
+// keep first match.
+app.use(`${API}/hr-admin`,             hrShiftsRoutes);
 app.use(`${API}/ess`,                  essRoutes);
 
 // Tender Management

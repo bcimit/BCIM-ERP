@@ -38,6 +38,11 @@ router.post('/', async (req, res) => {
     if (!project_id || !client_name || !agreement_value) {
       return res.status(400).json({ error: 'project_id, client_name and agreement_value are required' });
     }
+    // The project_id comes from the request body — verify it belongs to the
+    // caller's company, otherwise a user could book units (and post journal
+    // entries) against another company's project.
+    const projCheck = await query(`SELECT 1 FROM projects WHERE id = $1 AND company_id = $2`, [project_id, req.user.company_id]);
+    if (!projCheck.rows.length) return res.status(403).json({ error: 'Invalid project for this company' });
     const r = await query(
       `INSERT INTO unit_bookings
          (project_id, unit_number, flat_type, area_sqft, floor_number,

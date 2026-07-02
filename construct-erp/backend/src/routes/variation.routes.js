@@ -34,7 +34,8 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/v1/variations/:id — Get detail with items
-router.get('/:id', async (req, res) => {
+// UUID-constrained so it doesn't swallow the static /approved-items and /amendments routes below
+router.get('/:id([0-9a-fA-F-]{36})', async (req, res) => {
   try {
     const voRes = await query(
       `SELECT vo.*, p.name as project_name, p.company_id, u.name as requested_by_name

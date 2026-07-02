@@ -728,7 +728,8 @@ router.get('/', async (req, res) => {
 });
 
 // GET /stores/mrs/:id
-router.get('/:id', async (req, res) => {
+// UUID-constrained so it doesn't swallow the static /workflow-config route below
+router.get('/:id([0-9a-fA-F-]{36})', async (req, res) => {
   try {
     const mrs = await query(
       `SELECT mr.*,

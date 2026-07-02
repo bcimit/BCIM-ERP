@@ -7,12 +7,15 @@ const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 
-// Public verification endpoint (no auth — QR scan)
+// Public verification endpoint (no auth — QR scan).
+// Deliberately returns NO salary amounts: this URL is printed on every payslip
+// as a QR code, so anyone the paper passes through (bank clerk, landlord,
+// visa office) can open it. Verification only needs to confirm the document
+// is genuine — identity + period + issuing company — not expose pay figures.
 router.get('/public/verify/:id', async (req, res) => {
   try {
     const result = await query(
-      `SELECT mp.id, mp.month, mp.year, mp.employee_code, mp.basic, mp.hra,
-              mp.gross_earnings, mp.total_deductions, mp.net_pay, mp.status,
+      `SELECT mp.id, mp.month, mp.year, mp.employee_code, mp.status,
               e.name AS employee_name, d.name AS department_name, des.name AS designation_name,
               c.name AS company_name
        FROM hr_monthly_payroll mp
@@ -23,7 +26,7 @@ router.get('/public/verify/:id', async (req, res) => {
        WHERE mp.id = $1`, [req.params.id]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Payslip not found' });
-    res.json({ data: result.rows[0] });
+    res.json({ data: { ...result.rows[0], verified: true } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -191,8 +194,10 @@ router.get('/', async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════
 // GET SINGLE (payslip data)
+// UUID-constrained so it no longer swallows the static /lop and /stop-salary
+// routes registered below it (Express matches in registration order).
 // ═══════════════════════════════════════════════════════════
-router.get('/:id', async (req, res) => {
+router.get('/:id([0-9a-fA-F-]{36})', async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT p.*, u.name as employee_name, u.employee_code, u.email,

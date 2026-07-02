@@ -79,7 +79,8 @@ router.get('/', authorize(...HR_ALL), async (req, res) => {
   res.json({ data: rows });
 });
 
-router.get('/:id', authorize(...HR_ALL), async (req, res) => {
+// UUID-constrained so it doesn't swallow the static /calculate-gratuity route below
+router.get('/:id([0-9a-fA-F-]{36})', authorize(...HR_ALL), async (req, res) => {
   const { rows } = await query(
     `SELECT f.*, e.name AS full_name, e.employee_code AS emp_code, e.designation, e.department,
             ep.date_of_joining, es.gross_monthly AS basic_salary, es.pf_applicable, es.esi_applicable

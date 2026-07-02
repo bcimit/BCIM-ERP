@@ -7,6 +7,12 @@ const { postAutoJournalStandalone } = require('../services/journalAutoPost');
 const router = express.Router();
 router.use(authenticate);
 
+// RBAC: creating/submitting requests & expenses stays open to all authenticated
+// users (site staff raise them), but master data and every approval/issue/verify
+// action is role-gated — previously any user could approve their own expense.
+const PC_ADMINS    = ['super_admin', 'admin', 'accountant', 'finance_manager'];
+const PC_APPROVERS = ['super_admin', 'admin', 'accountant', 'finance_manager', 'project_manager'];
+
 // ── Schema Init ────────────────────────────────────────────────────────────────
 runSchemaInit('petty_cash_v2', async () => {
   const safe = sql => query(sql).catch(e => console.warn('[pc-schema]', e.message));
@@ -386,7 +392,7 @@ router.get('/accounts', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/accounts', async (req, res) => {
+router.post('/accounts', authorize(...PC_ADMINS), async (req, res) => {
   try {
     const { account_name, account_code, project_id, site_location, initial_balance, credit_limit, gl_account_code, custodian_id } = req.body;
     if (!account_name) return res.status(400).json({ error: 'account_name required' });
@@ -400,7 +406,7 @@ router.post('/accounts', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/accounts/:id', async (req, res) => {
+router.patch('/accounts/:id', authorize(...PC_ADMINS), async (req, res) => {
   try {
     const { account_name, site_location, credit_limit, custodian_id, status } = req.body;
     const { rows: [row] } = await query(
@@ -449,7 +455,7 @@ router.get('/custodians', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/custodians', async (req, res) => {
+router.post('/custodians', authorize(...PC_ADMINS), async (req, res) => {
   try {
     let { custodian_name, employee_code, designation, project_id, site_location, spending_limit, contact_number, user_id } = req.body;
 
@@ -477,7 +483,7 @@ router.post('/custodians', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/custodians/:id', async (req, res) => {
+router.patch('/custodians/:id', authorize(...PC_ADMINS), async (req, res) => {
   try {
     const { custodian_name, designation, site_location, spending_limit, status, user_id, employee_code, contact_number } = req.body;
     const { rows: [row] } = await query(
@@ -514,7 +520,7 @@ router.get('/categories', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/categories', async (req, res) => {
+router.post('/categories', authorize(...PC_ADMINS), async (req, res) => {
   try {
     const { category_code, category_name, construction_type, gl_account, requires_receipt } = req.body;
     if (!category_name) return res.status(400).json({ error: 'category_name required' });
@@ -527,7 +533,7 @@ router.post('/categories', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/categories/:id', async (req, res) => {
+router.patch('/categories/:id', authorize(...PC_ADMINS), async (req, res) => {
   try {
     const { category_name, category_code, construction_type, gl_account, requires_receipt, is_active } = req.body;
     const { rows: [row] } = await query(
@@ -550,7 +556,7 @@ router.patch('/categories/:id', async (req, res) => {
 });
 
 // Topup a cash account balance directly (admin action)
-router.post('/accounts/:id/topup', async (req, res) => {
+router.post('/accounts/:id/topup', authorize(...PC_ADMINS), async (req, res) => {
   try {
     const { amount, remarks } = req.body;
     if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'amount required' });
@@ -636,7 +642,7 @@ router.post('/requests/:id/submit', async (req, res) => {
 });
 
 // Approve / Reject request
-router.post('/requests/:id/approve', async (req, res) => {
+router.post('/requests/:id/approve', authorize(...PC_APPROVERS), async (req, res) => {
   try {
     const { action, amount_approved, remarks } = req.body; // action: 'approve' | 'reject'
     if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'action must be approve or reject' });
@@ -656,7 +662,7 @@ router.post('/requests/:id/approve', async (req, res) => {
 });
 
 // Issue cash against approved request
-router.post('/requests/:id/issue', async (req, res) => {
+router.post('/requests/:id/issue', authorize(...PC_APPROVERS), async (req, res) => {
   try {
     const { amount_issued, payment_mode, reference_number, remarks } = req.body;
     if (!amount_issued) return res.status(400).json({ error: 'amount_issued required' });
@@ -760,7 +766,7 @@ router.post('/expenses/:id/submit', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/expenses/:id/approve', async (req, res) => {
+router.post('/expenses/:id/approve', authorize(...PC_APPROVERS), async (req, res) => {
   try {
     const { action, remarks } = req.body;
     if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'invalid action' });
@@ -859,7 +865,7 @@ router.post('/settlements', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/settlements/:id/verify', async (req, res) => {
+router.post('/settlements/:id/verify', authorize(...PC_APPROVERS), async (req, res) => {
   try {
     const { remarks } = req.body;
     const { rows: [row] } = await query(
@@ -906,7 +912,7 @@ router.post('/transfers', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/transfers/:id/approve', async (req, res) => {
+router.post('/transfers/:id/approve', authorize(...PC_APPROVERS), async (req, res) => {
   try {
     const { rows: [row] } = await query(
       `UPDATE pc_transfers SET status='approved',approved_by=$1,approved_at=NOW()
@@ -954,7 +960,7 @@ router.post('/adjustments', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/adjustments/:id/approve', async (req, res) => {
+router.post('/adjustments/:id/approve', authorize(...PC_APPROVERS), async (req, res) => {
   try {
     const { rows: [row] } = await query(
       `UPDATE pc_adjustments SET status='approved',approved_by=$1,approved_at=NOW()

@@ -64,8 +64,14 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /invoices/gst-summary — GST output vs ITC summary for the GST page.
+// Handler existed in invoice.controller.js but was never wired into the router,
+// so the frontend call fell through into GET /:id and errored.
+router.get('/gst-summary', require('../controllers/invoice.controller').getGSTSummary);
+
 // GET /invoices/:id — Detail with items
-router.get('/:id', async (req, res) => {
+// UUID-constrained so it doesn't swallow the static /finance-summary route below
+router.get('/:id([0-9a-fA-F-]{36})', async (req, res) => {
   try {
     const invRes = await query(
       `SELECT i.*, p.name as project_name, v.name as vendor_name, po.po_number, g.gr_number

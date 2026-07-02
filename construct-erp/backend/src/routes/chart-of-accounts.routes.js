@@ -224,7 +224,7 @@ router.get('/tax/monthly-summary', authenticate, async (req, res) => {
 });
 
 // ── SEED standard COA (only if empty) ─────────────────────────────────────────
-router.post('/seed', authenticate, async (req, res) => {
+router.post('/seed', authenticate, authorize('super_admin','admin','accountant','finance_manager'), async (req, res) => {
   try {
     const existing = await query(`SELECT COUNT(*) FROM chart_of_accounts WHERE company_id = $1`, [req.user.company_id]);
     if (parseInt(existing.rows[0].count) > 0) {
@@ -245,7 +245,7 @@ router.post('/seed', authenticate, async (req, res) => {
 });
 
 // ── CREATE ───────────────────────────────────────────────────────────────────
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, authorize('super_admin','admin','accountant','finance_manager'), async (req, res) => {
   try {
     const { code, name, account_type, sub_type, opening_balance } = req.body;
     if (!code || !name || !account_type) {
@@ -268,7 +268,7 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 // ── UPDATE ───────────────────────────────────────────────────────────────────
-router.put('/:id', authenticate, async (req, res) => {
+router.put('/:id', authenticate, authorize('super_admin','admin','accountant','finance_manager'), async (req, res) => {
   try {
     const { code, name, account_type, sub_type, opening_balance, is_active } = req.body;
     const result = await query(
@@ -312,7 +312,7 @@ router.post('/opening-balances', authenticate, authorize('super_admin','admin','
 });
 
 // ── DELETE ───────────────────────────────────────────────────────────────────
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, authorize('super_admin','admin','accountant','finance_manager'), async (req, res) => {
   try {
     const used = await query(`SELECT 1 FROM journal_entry_lines WHERE account_id = $1 LIMIT 1`, [req.params.id]);
     if (used.rows.length) return res.status(400).json({ error: 'Account has journal entries and cannot be deleted' });

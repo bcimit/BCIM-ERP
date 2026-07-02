@@ -1,6 +1,11 @@
 // src/routes/journal-entries.routes.js
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
+
+// Only accounts staff may create/edit/post/delete journal entries — these
+// write directly to the general ledger. Reads stay open to all authenticated
+// users (reports/dashboards consume them).
+const JE_WRITERS = ['super_admin', 'admin', 'accountant', 'finance_manager'];
 const { query, withTransaction } = require('../config/database');
 const { postAutoJournal, nextEntryNo } = require('../services/journalAutoPost');
 const router = express.Router();
@@ -207,7 +212,7 @@ router.get('/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) => {
 });
 
 // ── CREATE ───────────────────────────────────────────────────────────────────
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const { entry_date, project_id, reference, narration, status = 'draft', lines = [] } = req.body;
     if (!entry_date) return res.status(400).json({ error: 'entry_date is required' });
@@ -254,7 +259,7 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 // ── UPDATE (draft only) ────────────────────────────────────────────────────
-router.patch('/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) => {
+router.patch('/:id([0-9a-fA-F-]{36})', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const existing = await getJE(req.params.id, req.user.company_id);
     if (!existing) return res.status(404).json({ error: 'Journal entry not found' });
@@ -300,7 +305,7 @@ router.patch('/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) => {
 });
 
 // ── POST / UNPOST ────────────────────────────────────────────────────────────
-router.patch('/:id/status', authenticate, async (req, res) => {
+router.patch('/:id/status', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const { status } = req.body;
     if (!['draft', 'posted'].includes(status)) return res.status(400).json({ error: 'status must be draft or posted' });
@@ -316,7 +321,7 @@ router.patch('/:id/status', authenticate, async (req, res) => {
 });
 
 // ── DELETE (draft only) ────────────────────────────────────────────────────────
-router.delete('/:id', authenticate, async (req, res) => {
+router.delete('/:id', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const existing = await getJE(req.params.id, req.user.company_id);
     if (!existing) return res.status(404).json({ error: 'Journal entry not found' });
@@ -392,7 +397,7 @@ router.get('/templates/:id([0-9a-fA-F-]{36})', authenticate, async (req, res) =>
 });
 
 // Create template
-router.post('/templates', authenticate, async (req, res) => {
+router.post('/templates', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const { template_name, narration, frequency, day_of_month, next_run_date, auto_post, lines = [] } = req.body;
     if (!template_name) return res.status(400).json({ error: 'template_name required' });
@@ -424,7 +429,7 @@ router.post('/templates', authenticate, async (req, res) => {
 });
 
 // Update template
-router.patch('/templates/:id', authenticate, async (req, res) => {
+router.patch('/templates/:id', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const { template_name, narration, frequency, day_of_month, next_run_date, is_active, auto_post } = req.body;
     const { rows: [row] } = await query(
@@ -446,7 +451,7 @@ router.patch('/templates/:id', authenticate, async (req, res) => {
 });
 
 // Delete template
-router.delete('/templates/:id', authenticate, async (req, res) => {
+router.delete('/templates/:id', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const { rowCount } = await query(
       `DELETE FROM jv_templates WHERE id = $1 AND company_id = $2`, [req.params.id, req.user.company_id]
@@ -457,7 +462,7 @@ router.delete('/templates/:id', authenticate, async (req, res) => {
 });
 
 // Execute template now (manual trigger or scheduled run)
-router.post('/templates/:id/execute', authenticate, async (req, res) => {
+router.post('/templates/:id/execute', authenticate, authorize(...JE_WRITERS), async (req, res) => {
   try {
     const { entry_date } = req.body;
     const execDate = entry_date || new Date().toISOString().slice(0, 10);
