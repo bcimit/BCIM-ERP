@@ -88,6 +88,14 @@ export default function VendorPaymentsPage() {
     queryFn: () => tqsBillsAPI.list().then(r => asArray(r.data)).catch(() => []),
   });
 
+  // Per-vendor outstanding balance + aging (0-30/31-60/61-90/90+), scoped to
+  // material/PO bills only (excludes subcontractor WO bills) — reuses the same
+  // liability-summary logic already relied on by Accounts/Finance.
+  const vendorLedgerQuery = useQuery({
+    queryKey: ['procurement-vendor-payments-ledger'],
+    queryFn: () => tqsBillsAPI.getVendorLedger({ bill_type: 'po' }).then(r => asArray(r.data)).catch(() => []),
+  });
+
   const paymentMut = useMutation({
     mutationFn: payload => paymentAPI.create(payload),
     onSuccess: () => {
@@ -104,6 +112,7 @@ export default function VendorPaymentsPage() {
   const invoices = invoiceQuery.data || [];
   const payments = paymentQuery.data || [];
   const tqsBills = tqsQuery.data || [];
+  const vendorLedger = vendorLedgerQuery.data || [];
 
   const vendorLookup = useMemo(() => {
     const map = new Map();
@@ -203,8 +212,15 @@ export default function VendorPaymentsPage() {
     const totalPaid = paymentLedger.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0);
     const totalBalance = paymentLedger.reduce((sum, inv) => sum + Number(inv.balance || 0), 0);
     const overdue = invoicesWithPayments.filter(inv => inv.status_view === 'Overdue').length;
-    return { totalInvoice, totalPaid, totalBalance, overdue };
-  }, [paymentLedger, invoicesWithPayments]);
+    const critical90 = vendorLedger.reduce((sum, v) => sum + Number(v.payable_90_plus || 0), 0);
+    return { totalInvoice, totalPaid, totalBalance, overdue, critical90 };
+  }, [paymentLedger, invoicesWithPayments, vendorLedger]);
+
+  const vendorLedgerSorted = useMemo(() => {
+    return [...vendorLedger]
+      .filter(v => Number(v.net_balance || 0) > 0.5)
+      .sort((a, b) => Number(b.net_balance || 0) - Number(a.net_balance || 0));
+  }, [vendorLedger]);
 
   const paymentRows = useMemo(() => {
     return [...payments]
@@ -213,7 +229,7 @@ export default function VendorPaymentsPage() {
   }, [payments]);
 
   const refresh = async () => {
-    await Promise.all([vendorQuery.refetch(), invoiceQuery.refetch(), paymentQuery.refetch()]);
+    await Promise.all([vendorQuery.refetch(), invoiceQuery.refetch(), paymentQuery.refetch(), vendorLedgerQuery.refetch()]);
     toast.success('Vendor payment data refreshed');
   };
 
@@ -255,6 +271,7 @@ export default function VendorPaymentsPage() {
   };
 
   const loading = invoiceQuery.isLoading || paymentQuery.isLoading || vendorQuery.isLoading || tqsQuery.isLoading;
+  const ledgerLoading = vendorLedgerQuery.isLoading;
 
   return (
     <div className="p-6 md:p-7 max-w-7xl mx-auto min-h-screen bg-[#f4f6f9]">
@@ -278,11 +295,64 @@ export default function VendorPaymentsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <StatCard label="Invoice Value" value={money(totals.totalInvoice)} sub="Total billed from invoices" icon={Wallet} tone="indigo" />
         <StatCard label="Paid Value" value={money(totals.totalPaid)} sub="Total payments recorded" icon={IndianRupee} tone="emerald" />
         <StatCard label="Outstanding" value={money(totals.totalBalance)} sub="Remaining payable balance" icon={AlertTriangle} tone="amber" />
         <StatCard label="Overdue" value={totals.overdue} sub="Invoices past due date" icon={CheckCircle2} tone="rose" />
+        <StatCard label="90+ Days Critical" value={money(totals.critical90)} sub="Procurement bills unpaid 90+ days" icon={AlertTriangle} tone="rose" />
+      </div>
+
+      {/* Vendor Outstanding Summary — per-vendor balance + aging, procurement bills only */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-5">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-medium text-slate-900">Vendor Outstanding Summary</h2>
+            <p className="text-xs text-slate-900 font-medium mt-0.5">Net payable balance per vendor, aged from bill date — procurement/material bills only</p>
+          </div>
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+            {vendorLedgerSorted.length} vendor{vendorLedgerSorted.length === 1 ? '' : 's'} owed
+          </span>
+        </div>
+        {ledgerLoading ? (
+          <div className="p-5 space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-xl bg-slate-100 animate-pulse" />)}
+          </div>
+        ) : vendorLedgerSorted.length === 0 ? (
+          <div className="p-10 text-center">
+            <CheckCircle2 className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
+            <p className="text-sm font-medium text-slate-600">No outstanding balance on procurement bills</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr className="text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                  <th className="text-left font-medium px-4 py-2.5">Vendor</th>
+                  <th className="text-right font-medium px-3 py-2.5">Net Balance</th>
+                  <th className="text-right font-medium px-3 py-2.5">0-30d</th>
+                  <th className="text-right font-medium px-3 py-2.5">31-60d</th>
+                  <th className="text-right font-medium px-3 py-2.5">61-90d</th>
+                  <th className="text-right font-medium px-3 py-2.5 text-rose-500">90+ d</th>
+                  <th className="text-right font-medium px-4 py-2.5">Unpaid Bills</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {vendorLedgerSorted.map(v => (
+                  <tr key={v.vendor_id || v.vendor_name} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="px-4 py-2.5 text-sm font-medium text-slate-800">{v.vendor_name}</td>
+                    <td className="px-3 py-2.5 text-right text-sm font-medium text-slate-900">{money(v.net_balance)}</td>
+                    <td className="px-3 py-2.5 text-right text-xs text-slate-500">{Number(v.payable_0_30) > 0 ? money(v.payable_0_30) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-xs text-amber-600">{Number(v.payable_31_60) > 0 ? money(v.payable_31_60) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-xs text-orange-600">{Number(v.payable_61_90) > 0 ? money(v.payable_61_90) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right text-xs font-semibold text-rose-600">{Number(v.payable_90_plus) > 0 ? money(v.payable_90_plus) : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-xs text-slate-500">{v.unpaid_bill_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl p-3 md:p-4 shadow-sm mb-5">

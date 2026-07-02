@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   ChevronRight, FileBarChart, Search, X, Truck, LayoutDashboard,
   ClipboardList, Send, FileText, ShoppingCart, PackageCheck, Users,
-  IndianRupee, TrendingUp, Clock, CheckCircle2, Sparkles,
+  IndianRupee, TrendingUp, Clock, CheckCircle2, Sparkles, AlertTriangle,
 } from 'lucide-react';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
@@ -49,13 +49,15 @@ function ProcurementOverview({ onSelectReport }) {
       api.get('/quotations/rfqs'),
       api.get('/vendors'),
       api.get('/quotations/cs-summary'),
-    ]).then(([poRes, rfqRes, vendorRes, csRes]) => {
+      api.get('/tqs/bills/vendor-ledger', { params: { bill_type: 'po' } }),
+    ]).then(([poRes, rfqRes, vendorRes, csRes, ledgerRes]) => {
       if (cancelled) return;
 
       const pos = poRes.status === 'fulfilled' ? (poRes.value.data?.data || []) : [];
       const rfqs = rfqRes.status === 'fulfilled' ? (rfqRes.value.data?.data || rfqRes.value.data?.rows || []) : [];
       const vendors = vendorRes.status === 'fulfilled' ? (vendorRes.value.data?.data || []) : [];
       const cs = csRes.status === 'fulfilled' ? (csRes.value.data?.data || []) : [];
+      const vendorLedger = ledgerRes.status === 'fulfilled' ? (ledgerRes.value.data?.data || []) : [];
 
       const totalPoValue = pos.reduce((s, p) => s + (parseFloat(p.grand_total) || 0), 0);
       const poStatusCounts = {};
@@ -79,6 +81,9 @@ function ProcurementOverview({ onSelectReport }) {
       });
       const monthlyTrend = Object.values(monthly).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
 
+      const totalPayable = vendorLedger.reduce((s, v) => s + (parseFloat(v.net_balance) || 0), 0);
+      const critical90 = vendorLedger.reduce((s, v) => s + (parseFloat(v.payable_90_plus) || 0), 0);
+
       setStats({
         poCount: pos.length,
         totalPoValue,
@@ -89,6 +94,8 @@ function ProcurementOverview({ onSelectReport }) {
         csCount: csWithL1.length,
         totalSavings,
         monthlyTrend,
+        totalPayable,
+        critical90,
       });
       setLoading(false);
     });
@@ -121,6 +128,11 @@ function ProcurementOverview({ onSelectReport }) {
         sub: `Across ${stats.csCount} requisitions`,
         icon: TrendingUp, color: '#059669', bg: '#ecfdf5',
         onClick: () => onSelectReport('procurement-negotiation-savings'),
+      },
+      {
+        label: 'Payables Outstanding', value: `₹${stats.totalPayable.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`,
+        sub: stats.critical90 > 0 ? `₹${stats.critical90.toLocaleString('en-IN', { maximumFractionDigits: 0 })} unpaid 90+ days` : 'Nothing overdue 90+ days',
+        icon: AlertTriangle, color: stats.critical90 > 0 ? '#dc2626' : '#b45309', bg: stats.critical90 > 0 ? '#fef2f2' : '#fffbeb',
       },
     ];
   }, [stats, onSelectReport]);
@@ -167,20 +179,26 @@ function ProcurementOverview({ onSelectReport }) {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {cards.map(card => {
           const Icon = card.icon;
           return (
             <button
               key={card.label}
               onClick={card.onClick}
-              className="group text-left bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-4 overflow-hidden relative"
+              disabled={!card.onClick}
+              className={clsx(
+                'group text-left bg-white rounded-2xl border border-slate-200 shadow-sm transition-all duration-200 p-4 overflow-hidden relative',
+                card.onClick ? 'hover:shadow-md hover:-translate-y-0.5' : 'cursor-default'
+              )}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: card.bg }}>
                   <Icon className="w-5 h-5" style={{ color: card.color }} />
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+                {card.onClick && (
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+                )}
               </div>
               <p className="text-2xl font-bold text-slate-900 tabular-nums leading-tight">{card.value}</p>
               <p className="text-xs font-semibold text-slate-600 mt-1">{card.label}</p>

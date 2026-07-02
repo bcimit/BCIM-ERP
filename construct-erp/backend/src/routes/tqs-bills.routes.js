@@ -1216,12 +1216,14 @@ router.get('/ap-aging', async (req, res) => {
 // MUST be defined before /:id routes so Express doesn't swallow it as a param
 router.get('/vendor-ledger', async (req, res) => {
   try {
-    const { project_id, vendor_id } = req.query;
+    const { project_id, vendor_id, bill_type, source_type } = req.query;
     const rows = await getVendorLiabilitySummary({
       companyId: req.user.company_id,
       projectId: project_id,
       projectIds: scopedProjectIds(req, project_id),
       vendorId: vendor_id,
+      billType: bill_type,
+      sourceType: source_type,
     });
     res.json({
       data: rows.map(row => ({
