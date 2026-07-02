@@ -148,12 +148,27 @@ router.get('/:project_id', async (req, res) => {
     // dozens of items), so unlike RA/SC actuals this is NOT filtered to
     // boq_item_id IS NOT NULL — lines with a cost_head but no specific BOQ
     // item still come through and get rolled up at the project level below.
+    // Chapter inheritance: a bill line linked to a PO line (po_item_id) takes
+    // that PO line's chapter; otherwise, if the bill's header PO has all its
+    // items under ONE chapter, that chapter is used. Keeps cost-head-tagged
+    // invoices inside the chapter chosen on the PO instead of pro-rating them
+    // across the whole project.
     const tqsActuals = await query(`
-      SELECT li.boq_item_id, li.cost_head, SUM(li.basic_amount) AS actual
+      SELECT li.boq_item_id, li.cost_head,
+             COALESCE(pi.boq_chapter, po_single.chapter) AS boq_chapter,
+             SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li
       JOIN tqs_bills tb ON tb.id = li.bill_id
+      LEFT JOIN po_items pi ON pi.id = li.po_item_id
+      LEFT JOIN (
+        SELECT pi2.po_id, MIN(pi2.boq_chapter) AS chapter
+        FROM po_items pi2
+        WHERE pi2.boq_chapter IS NOT NULL
+        GROUP BY pi2.po_id
+        HAVING COUNT(DISTINCT pi2.boq_chapter) = 1
+      ) po_single ON po_single.po_id = tb.po_id
       WHERE tb.project_id = $1 AND tb.is_deleted = FALSE
-      GROUP BY li.boq_item_id, li.cost_head
+      GROUP BY li.boq_item_id, li.cost_head, COALESCE(pi.boq_chapter, po_single.chapter)
     `, [project_id]);
 
     // Stores petty cash approved purchases — rolled up by cost_head at project level
@@ -223,21 +238,20 @@ router.get('/:project_id', async (req, res) => {
     };
     addActual(raActuals.rows, false);
     addActual(scActuals.rows, false);
-    addActual(tqsActuals.rows, false);
     addActual(spcActuals.rows, false);
     addActual(advanceActuals.rows, true);
 
-    // PO spend: item-tagged rows attach directly; chapter-tagged rows (chapter
-    // chosen on the PO line but no specific item) are pooled per chapter so the
-    // amount lands ONLY in that chapter — never spread across other chapters.
-    // Rows with neither tag fall through to the project-level pro-rata pool.
+    // TQS-bill and PO spend: item-tagged rows attach directly; chapter-tagged
+    // rows (chapter known from the PO line, or the bill's single-chapter PO)
+    // are pooled per chapter so the amount lands ONLY in that chapter — never
+    // spread across other chapters. Rows with neither tag fall through to the
+    // project-level pro-rata pool.
     const chapterPools = {}; // chapterName -> { costHead -> amount }
-    const poProjectLevelRows = [];
-    for (const row of poActuals.rows) {
+    const routeRow = (row) => {
       const amt = parseFloat(row.actual) || 0;
       if (!row.cost_head || !BOQ_COST_HEADS.includes(row.cost_head)) {
         if (row.boq_item_id) unallocated[row.boq_item_id] = (unallocated[row.boq_item_id] || 0) + amt;
-        continue;
+        return;
       }
       if (row.boq_item_id) {
         addActual([row], false);
@@ -245,10 +259,11 @@ router.get('/:project_id', async (req, res) => {
         const pool = (chapterPools[row.boq_chapter] ||= {});
         pool[row.cost_head] = (pool[row.cost_head] || 0) + amt;
       } else {
-        poProjectLevelRows.push(row);
+        addActual([row], false);
       }
-    }
-    addActual(poProjectLevelRows, false);
+    };
+    tqsActuals.rows.forEach(routeRow);
+    poActuals.rows.forEach(routeRow);
 
     // Distribute each chapter pool among that chapter's own items — by budget
     // share in the same cost head within the chapter, else by BOQ value share.
