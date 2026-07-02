@@ -115,12 +115,12 @@ const getGSTSummary = async (req, res) => {
         SUM(igst_amount) as total_igst,
         SUM(cgst_amount + sgst_amount + igst_amount) as total_gst_collected,
         COUNT(*) as invoice_count,
-        gst_type
+        i.gst_type
        FROM invoices i
        JOIN projects p ON i.project_id = p.id
        WHERE p.company_id = $1
          AND EXTRACT(YEAR FROM invoice_date) = $2
-       GROUP BY gst_type`,
+       GROUP BY i.gst_type`,
       [req.user.company_id, year || new Date().getFullYear()]
     );
 

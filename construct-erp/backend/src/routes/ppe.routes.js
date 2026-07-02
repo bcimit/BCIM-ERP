@@ -5,16 +5,20 @@ const { authenticate } = require('../middleware/auth');
 const { query } = require('../config/database');
 router.use(authenticate);
 router.get('/', async (req, res) => {
-  const { project_id, worker_id, item_type } = req.query;
-  let sql = `SELECT pr.*,w.name as worker_name,w.bocw_number,w.skill_type,p.name as project_name
-             FROM ppe_records pr JOIN workers w ON pr.worker_id=w.id
-             JOIN projects p ON pr.project_id=p.id WHERE p.company_id=$1`;
-  const params=[req.user.company_id]; let i=2;
-  if (project_id) { sql+=` AND pr.project_id=$${i++}`; params.push(project_id); }
-  if (worker_id)  { sql+=` AND pr.worker_id=$${i++}`; params.push(worker_id); }
-  if (item_type)  { sql+=` AND pr.item_type=$${i++}`; params.push(item_type); }
-  sql+=' ORDER BY pr.issued_date DESC';
-  res.json({ data: (await query(sql,params)).rows });
+  try {
+    const { project_id, worker_id, item_type } = req.query;
+    let sql = `SELECT pr.*,w.name as worker_name,w.bocw_number,w.skill_type,p.name as project_name
+               FROM ppe_records pr JOIN workers w ON pr.worker_id=w.id
+               JOIN projects p ON pr.project_id=p.id WHERE p.company_id=$1`;
+    const params=[req.user.company_id]; let i=2;
+    if (project_id) { sql+=` AND pr.project_id=$${i++}`; params.push(project_id); }
+    if (worker_id)  { sql+=` AND pr.worker_id=$${i++}`; params.push(worker_id); }
+    if (item_type)  { sql+=` AND pr.item_type=$${i++}`; params.push(item_type); }
+    sql+=' ORDER BY pr.issued_date DESC';
+    res.json({ data: (await query(sql,params)).rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 router.post('/', async (req, res) => {
   const { project_id, worker_id, item_type, item_code, issued_date, expiry_date, condition } = req.body;
