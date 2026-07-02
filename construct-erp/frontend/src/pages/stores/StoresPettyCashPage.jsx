@@ -1742,10 +1742,16 @@ function AttachOnlyModal({ entry, onClose, onSaved }) {
         voucher_file_name: voucherName || null,
         bill_file_url:    billUrl     || null,
         bill_file_name:   billName    || null,
+        // This modal only touches attachments — the invoice number is
+        // unchanged, so the duplicate-invoice guard (meant for edits that
+        // change invoice_no) must not block it.
+        force: true,
       });
       toast.success('Attachments saved');
       onSaved();
-    } catch (err) { toast.error(err?.response?.data?.error || 'Failed to save'); }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || err?.response?.data?.errorCode || 'Failed to save');
+    }
     finally { setSaving(false); }
   };
 
