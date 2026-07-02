@@ -281,7 +281,7 @@ export const measurementAPI = {
 };
 
 export const raBillAPI = {
-  list:          (params) => api.get('/ra-bills', { params }),
+  list:          (params, config = {}) => api.get('/ra-bills', { ...config, params }),
   get:           (id)     => api.get(`/ra-bills/${id}`),
   create:        (data)   => api.post('/ra-bills', data),
   verify:        (id)     => api.patch(`/ra-bills/${id}/verify`),
