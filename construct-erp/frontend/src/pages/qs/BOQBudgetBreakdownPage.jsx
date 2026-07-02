@@ -260,6 +260,7 @@ function CostHeadDrilldownInline({ projectId, costHead }) {
     'TQS Bill':         'bg-sky-50 text-sky-700 border border-sky-200',
     'RA Bill':          'bg-teal-50 text-teal-700 border border-teal-200',
     'Petty Cash':       'bg-orange-50 text-orange-700 border border-orange-200',
+    'Purchase Order':   'bg-rose-50 text-rose-700 border border-rose-200',
   };
 
   const rows = data || [];
@@ -491,6 +492,7 @@ function CostHeadDrilldown({ projectId, costHead }) {
     'TQS Bill':         'bg-sky-50 text-sky-700 border border-sky-200',
     'RA Bill':          'bg-teal-50 text-teal-700 border border-teal-200',
     'Petty Cash':       'bg-orange-50 text-orange-700 border border-orange-200',
+    'Purchase Order':   'bg-rose-50 text-rose-700 border border-rose-200',
   };
 
   if (isLoading) return (

@@ -165,6 +165,18 @@ router.get('/:project_id', async (req, res) => {
       GROUP BY si.cost_head
     `, [project_id]);
 
+    // Purchase Order line items tagged with boq_item_id + cost_head
+    // Rows without a boq_item_id (cost_head tagged at header level) go to project-level pro-rata.
+    const poActuals = await query(`
+      SELECT pi.boq_item_id, pi.cost_head, SUM(pi.quantity * pi.rate) AS actual
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      WHERE po.project_id = $1
+        AND po.status NOT IN ('rejected', 'cancelled')
+        AND pi.cost_head IS NOT NULL
+      GROUP BY pi.boq_item_id, pi.cost_head
+    `, [project_id]);
+
     const byItem = {};
     for (const row of breakdown.rows) {
       if (!byItem[row.boq_item_id]) byItem[row.boq_item_id] = {};
@@ -203,6 +215,7 @@ router.get('/:project_id', async (req, res) => {
     addActual(scActuals.rows, false);
     addActual(tqsActuals.rows, false);
     addActual(spcActuals.rows, false);
+    addActual(poActuals.rows, false);
     addActual(advanceActuals.rows, true);
 
     // ── Pro-rata attribution (Option A) ──────────────────────────────────────
@@ -651,6 +664,21 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         rows.push(...storePCAdv.rows);
       } catch (_) {}
 
+      // POs tagged as Sub Con
+      const poSubCon = await query(`
+        SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+               po.po_date AS date,
+               COALESCE(v.name, po.vendor_name, pi.material_name, 'Vendor') AS description,
+               SUM(pi.quantity * pi.rate) AS amount, 'Purchase Order' AS source
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        WHERE po.project_id=$1 AND pi.cost_head='Sub Con'
+          AND po.status NOT IN ('rejected','cancelled')
+        GROUP BY po.id, po.po_ref_no, po.po_number, po.po_date, v.name, po.vendor_name, pi.material_name
+        ORDER BY po.po_date`, [project_id]);
+      rows.push(...poSubCon.rows);
+
     } else if (cost_head === 'Petty Cash') {
       // Stores petty cash entries
       const pc = await query(`
@@ -688,6 +716,20 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
           AND rb.status IN ('certified','paid')
         ORDER BY rb.bill_date`, [project_id, cost_head]);
       rows.push(...ra.rows);
+
+      // PO line items tagged to this cost head
+      const poDrill = await query(`
+        SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
+               po.po_date AS date,
+               COALESCE(pi.material_name, v.name, 'PO Item') AS description,
+               pi.quantity * pi.rate AS amount, 'Purchase Order' AS source
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        LEFT JOIN vendors v ON v.id = po.vendor_id
+        WHERE po.project_id=$1 AND pi.cost_head=$2
+          AND po.status NOT IN ('rejected','cancelled')
+        ORDER BY po.po_date`, [project_id, cost_head]);
+      rows.push(...poDrill.rows);
     }
 
     // Sort all by date
