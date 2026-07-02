@@ -114,6 +114,7 @@ export const boqAPI = {
 };
 
 export const boqBudgetAPI = {
+  list:              (projectId) => api.get(`/boq-budget/${projectId}`),
   costheadSummary:   (projectId) => api.get(`/boq-budget/${projectId}/costhead-summary`),
   costheadDrilldown: (projectId, costHead) => api.get(`/boq-budget/${projectId}/costhead-drilldown`, { params: { cost_head: costHead } }),
 };

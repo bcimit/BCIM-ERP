@@ -33,6 +33,7 @@ import PurchaseOrdersScreen from '../screens/PurchaseOrdersScreen';
 import WorkOrdersScreen from '../screens/WorkOrdersScreen';
 import BOQScreen from '../screens/BOQScreen';
 import BudgetControlScreen from '../screens/BudgetControlScreen';
+import BOQBudgetBreakdownScreen from '../screens/BOQBudgetBreakdownScreen';
 import RABillsScreen from '../screens/RABillsScreen';
 import VariationsScreen from '../screens/VariationsScreen';
 import InvoicesScreen from '../screens/InvoicesScreen';
@@ -154,6 +155,7 @@ export default function RootNavigator() {
       <Stack.Screen name="WorkOrders" component={WorkOrdersScreen} />
       <Stack.Screen name="BOQ" component={BOQScreen} />
       <Stack.Screen name="BudgetControl" component={BudgetControlScreen} />
+      <Stack.Screen name="BOQBudgetBreakdown" component={BOQBudgetBreakdownScreen} />
       <Stack.Screen name="RABills" component={RABillsScreen} />
       <Stack.Screen name="Variations" component={VariationsScreen} />
       <Stack.Screen name="Invoices" component={InvoicesScreen} />

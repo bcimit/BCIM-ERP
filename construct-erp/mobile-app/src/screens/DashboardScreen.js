@@ -19,7 +19,7 @@ const QUICK_LINKS = [
   { label: 'Material Req.', icon: 'clipboard-list-outline',  screen: 'MaterialRequest', color: '#EA580C' },
   { label: 'ESS Portal',    icon: 'account-circle-outline',  screen: 'ESS',       color: '#0891B2' },
   { label: 'Bills',         icon: 'receipt',                 screen: 'Bills',     color: '#DB2777' },
-  { label: 'BOQ Breakdown', icon: 'ruler-square',            screen: 'BOQ',       color: '#0369A1' },
+  { label: 'BOQ Breakdown', icon: 'ruler-square',            screen: 'BOQBudgetBreakdown', color: '#0369A1' },
   { label: 'Budget Control',icon: 'cash-multiple',           screen: 'BudgetControl', color: '#B45309' },
 ];
 
