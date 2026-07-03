@@ -1654,15 +1654,15 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
         />
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-[#0B2E59] text-white text-xs">
-            <th className="px-4 py-2.5 text-center w-12">Sl No</th>
-            <th className="px-4 py-2.5 text-left">Description of Works</th>
-            <th className="px-4 py-2.5 text-right w-52">Budget</th>
-            <th className="px-4 py-2.5 text-right w-36">Bills Received</th>
-            <th className="px-4 py-2.5 text-right w-36">Bills Paid</th>
-            <th className="px-4 py-2.5 text-right w-24">% Used</th>
-            <th className="px-4 py-2.5 text-right w-40">Provisional</th>
-            <th className="px-4 py-2.5 text-right w-44">Balance</th>
+          <tr className="bg-[#0B2E59] text-xs">
+            <th className="px-4 py-2.5 text-center w-12 text-white">Sl No</th>
+            <th className="px-4 py-2.5 text-left text-white">Description of Works</th>
+            <th className="px-4 py-2.5 text-right w-52 text-white">Budget</th>
+            <th className="px-4 py-2.5 text-right w-36 text-white">Bills Received</th>
+            <th className="px-4 py-2.5 text-right w-36 text-white">Bills Paid</th>
+            <th className="px-4 py-2.5 text-right w-24 text-white">% Used</th>
+            <th className="px-4 py-2.5 text-right w-40 text-white">Provisional</th>
+            <th className="px-4 py-2.5 text-right w-44 text-white">Balance</th>
           </tr>
         </thead>
         <tbody>
