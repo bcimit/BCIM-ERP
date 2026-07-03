@@ -17,11 +17,14 @@ const today = () => new Date().toISOString().slice(0,10);
 function SalaryModal({ employees, structures, onClose, onSave, saving, calculateBreakup, calculating }) {
   const [form, setForm] = useState({
     user_id:'', structure_id:structures[0]?.id||'',
-    ctc_monthly:'', pf_applicable:true, esi_applicable:false, pt_applicable:true,
+    ctc_monthly:'', mess_deduction:'', pf_applicable:true, esi_applicable:false, pt_applicable:true,
     effective_from:today(),
   });
   const [breakup, setBreakup] = useState(null);
   const update = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const messDeduction = Number(form.mess_deduction||0);
+  const netPayAfterMess = breakup ? breakup.net_pay_monthly - messDeduction : 0;
 
   const runCalculate = async () => {
     if (!form.ctc_monthly || Number(form.ctc_monthly) <= 0) return toast.error('Enter a monthly CTC to calculate');
@@ -51,7 +54,7 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
       transport_allowance:breakup.transport_allowance,
       employer_pf:breakup.employer_pf, employee_pf:breakup.employee_pf,
       gratuity:breakup.gratuity, pt_deduction:breakup.pt_deduction,
-      net_pay_monthly:breakup.net_pay_monthly,
+      mess_deduction:messDeduction, net_pay_monthly:netPayAfterMess,
     });
   };
 
@@ -141,6 +144,12 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
                     <div className="text-sm font-black text-gray-900">₹{fmt(v)}</div>
                   </div>
                 ))}
+                <div className="bg-white px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase">Mess Deduction</div>
+                  <input type="number" value={form.mess_deduction} onChange={e=>update('mess_deduction',e.target.value)}
+                    className="w-full text-sm font-black text-gray-900 border border-gray-200 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:border-blue-400"
+                    placeholder="0"/>
+                </div>
               </div>
             </div>
           )}
@@ -161,7 +170,8 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
             <strong className="text-gray-900">₹{fmt(breakup?.gross_monthly)}</strong>
             <span className="mx-3 text-gray-200">|</span>
             <span className="text-gray-500">Net Pay Monthly: </span>
-            <strong className="text-gray-900">₹{fmt(breakup?.net_pay_monthly)}</strong>
+            <strong className="text-gray-900">₹{fmt(netPayAfterMess)}</strong>
+            {messDeduction>0 && <span className="text-gray-400 text-xs ml-1">(after ₹{fmt(messDeduction)} mess)</span>}
             <span className="mx-3 text-gray-200">|</span>
             <span className="text-gray-500">Annual CTC: </span>
             <strong className="text-gray-900">₹{fmt(breakup?.ctc_annual)}</strong>

@@ -71,6 +71,7 @@ const initTables = async () => {
     ['gratuity', 'NUMERIC(12,2) DEFAULT 0'],
     ['pt_deduction', 'NUMERIC(12,2) DEFAULT 0'],
     ['net_pay_monthly', 'NUMERIC(12,2) DEFAULT 0'],
+    ['mess_deduction', 'NUMERIC(12,2) DEFAULT 0'],
   ];
   for (const [col, def] of breakupCols) {
     await query(`ALTER TABLE hr_employee_salaries ADD COLUMN IF NOT EXISTS ${col} ${def}`).catch(() => {});
@@ -275,7 +276,7 @@ router.post('/employee-salaries', async (req, res) => {
       pf_applicable, esi_applicable, pt_applicable, effective_from, effective_to,
       vda, lta, education_allowance, washing_allowance, mobile_allowance, project_allowance,
       accommodation_allowance, food_allowance, transport_allowance,
-      employer_pf, employee_pf, gratuity, pt_deduction, net_pay_monthly,
+      employer_pf, employee_pf, gratuity, pt_deduction, net_pay_monthly, mess_deduction,
     } = req.body;
 
     // Close any open salary record for this employee
@@ -294,16 +295,16 @@ router.post('/employee-salaries', async (req, res) => {
         pf_applicable, esi_applicable, pt_applicable, effective_from, effective_to,
         vda, lta, education_allowance, washing_allowance, mobile_allowance, project_allowance,
         accommodation_allowance, food_allowance, transport_allowance,
-        employer_pf, employee_pf, gratuity, pt_deduction, net_pay_monthly)
+        employer_pf, employee_pf, gratuity, pt_deduction, net_pay_monthly, mess_deduction)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-               $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
+               $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING *`,
       [user_id, structure_id || null, ctc_annual || null, basic || 0, hra || 0,
        conveyance || 0, medical || 0, special_allowance || 0, other_allowance || 0,
        gross_monthly || 0, pf_applicable ?? true, esi_applicable ?? true,
        pt_applicable ?? true, effective_from, effective_to || null,
        vda || 0, lta || 0, education_allowance || 0, washing_allowance || 0, mobile_allowance || 0, project_allowance || 0,
        accommodation_allowance || 0, food_allowance || 0, transport_allowance || 0,
-       employer_pf || 0, employee_pf || 0, gratuity || 0, pt_deduction || 0, net_pay_monthly || 0]
+       employer_pf || 0, employee_pf || 0, gratuity || 0, pt_deduction || 0, net_pay_monthly || 0, mess_deduction || 0]
     );
     res.status(201).json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
