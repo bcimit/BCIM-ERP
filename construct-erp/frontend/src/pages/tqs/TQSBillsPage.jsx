@@ -8,6 +8,7 @@ import { guessCostHead, guessBoqItem } from '../../utils/boqCostHeadGuess';
 import MaterialCombobox from '../../components/shared/MaterialCombobox';
 import SearchableSelect from '../../components/shared/SearchableSelect';
 import { FIELD_HL } from '../../constants/fieldStyles';
+import { Z_CARD, Z_HEAD } from '../../constants/zohoStyles';
 import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
@@ -130,6 +131,18 @@ function POWOWarningBanner({ warning }) {
 }
 
 export function NewBillModal({ onClose, projects, defaultProjectId }) {
+  // Local, calmer field styling for this form only — plain white/gray inputs
+  // with a blue focus ring (matches the New MR page's look), replacing the
+  // shared FIELD_HL "always-highlighted" style still used by Edit Bill /
+  // Record Advance below. Shadows the module-level FIELD_HL/F/Lbl so every
+  // input, label and table cell in this form picks it up automatically
+  // without touching Edit Bill or Record Advance.
+  const FIELD_HL = 'border-slate-300 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30';
+  const F = 'w-full h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30';
+  function Lbl({ children, req }) {
+    return <label className="block text-xs font-medium text-slate-500 mb-1">{children}{req && <span className="text-red-500 ml-0.5">*</span>}</label>;
+  }
+
   const qc = useQueryClient();
   const [form, setForm] = useState({ ...EMPTY_FORM, project_id: defaultProjectId || '' });
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
@@ -605,39 +618,29 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#eef2f9' }}>
+    <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
 
-      {/* ── Full-screen header ── */}
-      <div style={{ background: '#122d58', flexShrink: 0 }}
-        className="flex items-center justify-between px-5 py-3.5 shadow-lg">
+      {/* ── Breadcrumb header (matches New MR) ── */}
+      <div className="flex items-center justify-between px-6 py-3.5 flex-shrink-0 bg-white border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <div style={{ background: '#e8431a', borderRadius: 8, width: 36, height: 36 }}
-            className="flex items-center justify-center flex-shrink-0">
-            <FileText className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <div className="text-white font-medium text-[15px] leading-tight">New Invoice Entry</div>
-            <div className="text-blue-300 text-[11px] font-medium">Bill Tracker · Add new vendor invoice</div>
-          </div>
+          <div className="text-xs text-slate-400">Bill Tracker <span className="text-slate-300">›</span> Bills <span className="text-slate-300">›</span> <b className="text-slate-700">New Bill</b></div>
         </div>
-        <button onClick={onClose}
-          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8 }}
-          className="flex items-center gap-2 px-3 py-2 text-white hover:bg-white/20 transition-colors text-sm font-semibold">
-          <X className="w-4 h-4" /> Close
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+        >
+          <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1600px] mx-auto px-6 py-6 space-y-5">
 
           {/* ── SECTION 1: Vendor & PO Info ── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-4 rounded-full inline-block" style={{ background: '#e8431a' }} />
-              Vendor &amp; PO Information
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Vendor &amp; PO Information</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
               {/* Project */}
               <div>
                 <Lbl req>Project</Lbl>
@@ -887,16 +890,13 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
           </div>
 
           {/* ── SECTION 2: Invoice Materials (Line Items) ── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-1.5 h-4 rounded-full inline-block" style={{ background: '#1a3a6b' }} />
-                Invoice Materials
-              </p>
+          <div className={Z_CARD}>
+            <div className={clsx(Z_HEAD, 'flex items-center justify-between')}>
+              <span>Invoice Materials</span>
               <div className="flex items-center gap-3">
                 {/* Tax Mode */}
                 <select
-                  className={`text-xs h-9 rounded-lg px-2 text-slate-900 outline-none transition-all border ${FIELD_HL}`}
+                  className={`text-xs h-9 rounded-md px-2 text-slate-900 outline-none transition-colors border ${FIELD_HL}`}
                   value={form.tax_mode} onChange={e => set('tax_mode', e.target.value)}
                 >
                   <option value="intrastate">Intrastate (CGST + SGST)</option>
@@ -909,6 +909,7 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
               </div>
             </div>
 
+            <div className="p-4">
             {/* GST quick-select */}
             {(() => {
               const isIGST = form.tax_mode === 'interstate';
@@ -1106,15 +1107,13 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
                 </div>
               </div>
             )}
+            </div>
           </div>
 
           {/* ── SECTION 3: Additional Charges ── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-4 rounded-full inline-block bg-amber-500" />
-              Additional Charges
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Additional Charges</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4">
               <div>
                 <Lbl>Transport Description</Lbl>
                 <input className={F} placeholder="e.g. Freight, Delivery..."
@@ -1159,12 +1158,9 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
           </div>
 
           {/* ── SECTION 4: Credit Note ── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-4 rounded-full inline-block bg-violet-500" />
-              Credit Note (Optional)
-            </p>
-            <div className="grid grid-cols-2 gap-3">
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Credit Note <span className="text-slate-400 font-normal">(Optional)</span></h3>
+            <div className="grid grid-cols-2 gap-3 p-4">
               <div>
                 <Lbl>Credit Note Number</Lbl>
                 <input className={F} placeholder="CN-001"
@@ -1179,7 +1175,7 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
           </div>
 
           {/* ── SECTION 5: Invoice Totals (read-only) ── */}
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+          <div className="bg-blue-50 border border-blue-100 rounded-md p-5">
             <p className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-3">Invoice Totals</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
               <div className="text-center">
@@ -1221,11 +1217,14 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
           </div>
 
           {/* ── SECTION 6: Remarks ── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <Lbl>Remarks / Notes</Lbl>
-            <textarea rows={2} className={F + ' resize-none'}
-              placeholder="Any initial remarks..."
-              value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Remarks</h3>
+            <div className="p-4">
+              <Lbl>Remarks / Notes</Lbl>
+              <textarea rows={2} className={F + ' resize-none'}
+                placeholder="Any initial remarks..."
+                value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+            </div>
           </div>
 
         </div>{/* /max-w-5xl */}
@@ -1254,16 +1253,16 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
             </div>
           </div>
           {/* Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button type="button" onClick={onClose}
-              className="px-5 py-2.5 text-sm text-slate-600 font-semibold rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+              className="px-4 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
               Cancel
             </button>
             <button type="button" onClick={handleSubmit}
               disabled={mutation.isPending || poWarning?.type === 'closed'}
               title={poWarning?.type === 'closed' ? `PO ${poWarning.po_number} is fully billed — cannot create bill` : undefined}
-              style={{ background: poWarning?.type === 'closed' ? '#9ca3af' : '#1a3a6b' }}
-              className="px-7 py-2.5 text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity flex items-center gap-2">
+              className={clsx('inline-flex items-center gap-2 px-5 h-9 rounded-md text-white text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+                poWarning?.type === 'closed' ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700')}>
               {mutation.isPending
                 ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
                 : poWarning?.type === 'closed'
