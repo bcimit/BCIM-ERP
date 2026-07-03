@@ -695,24 +695,17 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       WHERE project_id=$1 AND is_deleted=false
         AND status IN ('issued','partial','recovered') AND paid_amount > 0`, [project_id]);
 
-    // Paid only: petty cash — item lines carry their own cost head (same
-    // attribution as the BOQ item view); whatever portion of approved entries
-    // has no cost-headed items stays under the extra 'Petty Cash' head so no
-    // money is hidden. Petty cash is cash already spent, so it's Paid, not
-    // a "bill received".
+    // Paid only: petty cash — on Budget Control, the WHOLE approved petty-cash
+    // total always shows under the single 'Petty Cash' row, regardless of any
+    // cost head tagged on individual items. (The BOQ Item Breakdown screen still
+    // traces tagged items to their specific cost head/BOQ item for that view —
+    // this is Budget Control-specific, per explicit request to keep Petty Cash
+    // as one bucket here.)
     const spcActuals = await query(`
-      SELECT si.cost_head, SUM(si.total_amount) AS actual
-      FROM stores_petty_cash_items si
-      JOIN stores_petty_cash_entries se ON se.id = si.entry_id
-      WHERE se.project_id=$1 AND se.status='Approved' AND si.cost_head IS NOT NULL
-      GROUP BY si.cost_head`, [project_id]);
-    const spcRemainder = await query(`
-      SELECT 'Petty Cash' AS cost_head, GREATEST(
-        COALESCE((SELECT SUM(amount) FROM stores_petty_cash_entries WHERE project_id=$1 AND status='Approved'), 0)
-        - COALESCE((SELECT SUM(si.total_amount) FROM stores_petty_cash_items si
-                    JOIN stores_petty_cash_entries se ON se.id = si.entry_id
-                    WHERE se.project_id=$1 AND se.status='Approved' AND si.cost_head IS NOT NULL), 0)
-      , 0) AS actual`, [project_id]);
+      SELECT 'Petty Cash' AS cost_head, COALESCE(SUM(amount), 0) AS actual
+      FROM stores_petty_cash_entries
+      WHERE project_id=$1 AND status='Approved'`, [project_id]);
+    const spcRemainder = { rows: [] };
 
     // Received: PO-tagged spend where the bill line itself wasn't cost-headed —
     // same fallback (and same dedup guard) as the BOQ item view.
@@ -970,40 +963,24 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
       rows.push(...poSubCon.rows);
 
     } else if (cost_head === 'Petty Cash') {
-      // "Petty Cash" here means the part of each approved entry NOT already
-      // tagged to a specific cost head (mirrors the spcRemainder calculation in
-      // the summary above: entry total minus whatever its items tag elsewhere,
-      // e.g. an entry with one item tagged "Materials / Consumables" is already
-      // counted in that head's Spent — showing the full entry amount again here
-      // double-counted it). Per entry, subtract only ITS OWN tagged items so the
-      // sum of these rows reconciles exactly to the summary's Petty Cash figure.
-      // Description prefers the untagged item names (material-level detail) and
-      // falls back to the supplier name only when an entry has no items at all.
+      // Budget Control shows the WHOLE approved petty-cash total under this one
+      // row (see spcActuals in costhead-summary above), so the drilldown lists
+      // every approved entry in full — no per-item cost-head subtraction.
       const pc = await query(`
-        WITH entry_untagged AS (
-          SELECT se.id AS entry_id, se.je_reference, se.sl_no, se.entry_date, se.supplier,
-                 se.amount - COALESCE((
-                   SELECT SUM(si2.total_amount) FROM stores_petty_cash_items si2
-                   WHERE si2.entry_id = se.id AND si2.cost_head IS NOT NULL
-                 ), 0) AS untagged_amount
-          FROM stores_petty_cash_entries se
-          WHERE se.project_id=$1 AND se.status='Approved'
-        ),
-        item_desc AS (
+        WITH item_desc AS (
           SELECT entry_id, STRING_AGG(material_name, ', ' ORDER BY sort_order) AS names
           FROM stores_petty_cash_items
-          WHERE cost_head IS NULL
           GROUP BY entry_id
         )
-        SELECT COALESCE(eu.je_reference, CAST(eu.sl_no AS TEXT)) AS reference,
-               eu.entry_date AS date,
-               COALESCE(d.names, eu.supplier) AS description,
-               GREATEST(eu.untagged_amount, 0) AS amount,
+        SELECT COALESCE(se.je_reference, CAST(se.sl_no AS TEXT)) AS reference,
+               se.entry_date AS date,
+               COALESCE(d.names, se.supplier) AS description,
+               se.amount AS amount,
                'Petty Cash' AS source
-        FROM entry_untagged eu
-        LEFT JOIN item_desc d ON d.entry_id = eu.entry_id
-        WHERE eu.untagged_amount > 0.01
-        ORDER BY eu.entry_date`, [project_id]);
+        FROM stores_petty_cash_entries se
+        LEFT JOIN item_desc d ON d.entry_id = se.id
+        WHERE se.project_id=$1 AND se.status='Approved'
+        ORDER BY se.entry_date`, [project_id]);
       rows.push(...pc.rows);
 
     } else {
