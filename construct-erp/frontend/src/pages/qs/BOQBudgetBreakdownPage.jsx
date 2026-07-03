@@ -1519,8 +1519,12 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
     contentRef: printBudgetRef,
     documentTitle: `Cost_Head_Budget_${projectName || projectId}`,
     pageStyle: `
-      @page { size: A4 portrait; margin: 10mm; }
-      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+      @page { size: A4 landscape; margin: 10mm; }
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        table { font-size: 9px; }
+        th, td { padding: 4px 6px !important; }
+      }
     `,
   });
 
