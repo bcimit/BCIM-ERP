@@ -202,6 +202,20 @@ function WOForm({ wo, projects, subcontractors, onClose }) {
     contract_amount:0, gst_pct:18, tds_pct:2, retention_pct:5, advance_amount:0,
     items:[{ item_code:'', description:'', unit:'Sqm', qty:0, rate:0, boq_item_id:'' }],
   });
+
+  // `wo` here is the row from the work-orders LIST endpoint, which only carries
+  // summary columns (no items, no sc_id) — that's why the edit form used to open
+  // blank. Fetch the full record and re-seed the form once it arrives.
+  const { data: fullWO } = useQuery({
+    queryKey: ['sc-wo-detail', wo?.id],
+    queryFn: () => scAPI.getWO(wo.id).then(r => r.data?.data),
+    enabled: isEdit,
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (fullWO) setForm({ ...fullWO, items: fullWO.items?.length ? fullWO.items : [{ item_code:'', description:'', unit:'Sqm', qty:0, rate:0, boq_item_id:'' }] });
+  }, [fullWO]);
+
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const setItem = (i,k,v) => setForm(f=>({...f, items: f.items.map((it,idx)=>idx===i?{...it,[k]:v}:it)}));
   const addItem = () => setForm(f=>({...f, items:[...f.items,{item_code:'',description:'',unit:'Sqm',qty:0,rate:0,boq_item_id:''}]}));
