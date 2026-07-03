@@ -1784,18 +1784,19 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
             ['Outstanding', (totalReceived - totalPaid) > 0.5 ? `₹${Math.round(totalReceived - totalPaid).toLocaleString('en-IN')}` : null],
           ]}
         />
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full text-sm min-w-[980px]">
         <thead>
           <tr className="bg-[#0B2E59] text-xs">
-            <th className="px-4 py-2.5 text-center w-12 text-white">Sl No</th>
+            <th className="px-2 py-2.5 text-center w-8 text-white">#</th>
             <th className="px-4 py-2.5 text-left text-white">Description of Works</th>
-            <SortableTh label="Budget" sortKey="budget" chSort={chSort} onSort={toggleSort} className="w-52" />
-            <SortableTh label="Bills Received" sortKey="received" chSort={chSort} onSort={toggleSort} className="w-36" />
-            <SortableTh label="Bills Paid" sortKey="paid" chSort={chSort} onSort={toggleSort} className="w-36" />
-            <SortableTh label="Outstanding" sortKey="outstanding" chSort={chSort} onSort={toggleSort} className="w-36" />
-            <SortableTh label="% Used" sortKey="pct" chSort={chSort} onSort={toggleSort} className="w-24" />
-            <th className="px-4 py-2.5 text-right w-40 text-white">Provisional</th>
-            <SortableTh label="Balance" sortKey="balance" chSort={chSort} onSort={toggleSort} className="w-44" />
+            <SortableTh label="Budget" sortKey="budget" chSort={chSort} onSort={toggleSort} className="w-44" />
+            <SortableTh label="Bills Received" sortKey="received" chSort={chSort} onSort={toggleSort} className="w-32" />
+            <SortableTh label="Bills Paid" sortKey="paid" chSort={chSort} onSort={toggleSort} className="w-32" />
+            <SortableTh label="Outstanding" sortKey="outstanding" chSort={chSort} onSort={toggleSort} className="w-32" />
+            <SortableTh label="% Used" sortKey="pct" chSort={chSort} onSort={toggleSort} className="w-20" />
+            <th className="px-3 py-2.5 text-right w-28 text-white">Provisional</th>
+            <SortableTh label="Balance" sortKey="balance" chSort={chSort} onSort={toggleSort} className="w-36" />
           </tr>
         </thead>
         <tbody>
@@ -1821,7 +1822,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                     : isContingency && contAbsorbed > 0 ? 'border-l-blue-300 bg-blue-50/20'
                     : 'border-l-transparent',
                   isExpanded && 'bg-indigo-50/40')}>
-                  <td className="px-4 py-2 text-center text-slate-500 font-bold">{i + 1}</td>
+                  <td className="px-2 py-2 text-center text-slate-500 font-bold">{i + 1}</td>
                   <td className="px-4 py-2 font-medium text-slate-700">
                     <div className="flex items-center gap-1.5">
                       {hasActual && (
@@ -1944,7 +1945,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       <UsageBar pct={(contAbsorbed / contBudget) * 100} status="slate" />
                     ) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-4 py-2 text-right text-xs tabular-nums">
+                  <td className="px-3 py-2 text-right text-xs tabular-nums">
                     {!isContingency && r.monthly_avg > 0 ? (
                       <div>
                         <div className={clsx('font-bold',
@@ -2006,6 +2007,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
           </tr>
         </tfoot>
       </table>
+      </div>
         <BOQPrintFooter />
       </div>
     </div>
