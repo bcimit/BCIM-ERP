@@ -122,7 +122,9 @@ function BOQPrintFooter() {
 // Synthetic row for cost-head spend (mainly material POs) that isn't tied to
 // one specific BOQ item — see boq-budget.routes.js. It has no real budget to
 // set, so its cells render read-only instead of going through the save API.
-const isUnlinkedRow = (item) => item.id === 'project-level-unlinked';
+// chapter-unlinked-* rows are the same idea, scoped to one chapter instead of
+// the whole project (PO/bill tagged to the chapter but not a specific item).
+const isUnlinkedRow = (item) => item.id === 'project-level-unlinked' || String(item.id || '').startsWith('chapter-unlinked-');
 
 // ─── Inline editable budget cell ──────────────────────────────────────────────
 function EditableBudget({ value, onSave, mode, itemAmount }) {
