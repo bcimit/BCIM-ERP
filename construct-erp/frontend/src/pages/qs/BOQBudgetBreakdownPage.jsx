@@ -122,7 +122,9 @@ function BOQPrintFooter() {
 // Synthetic row for cost-head spend (mainly material POs) that isn't tied to
 // one specific BOQ item — see boq-budget.routes.js. It has no real budget to
 // set, so its cells render read-only instead of going through the save API.
-const isUnlinkedRow = (item) => item.id === 'project-level-unlinked';
+// chapter-unlinked-* rows are the same idea, scoped to one chapter instead of
+// the whole project (PO/bill tagged to the chapter but not a specific item).
+const isUnlinkedRow = (item) => item.id === 'project-level-unlinked' || String(item.id || '').startsWith('chapter-unlinked-');
 
 // ─── Inline editable budget cell ──────────────────────────────────────────────
 function EditableBudget({ value, onSave, mode, itemAmount }) {
@@ -272,8 +274,12 @@ function HeadInvoiceChips({ txns, loading, estimated }) {
 
 // Shared fetch: all transactions counted in one chapter's Spent — item-tagged
 // plus chapter-tagged (resolved through the PO linkage on the server).
+// Synthetic unlinked rows (isUnlinkedRow) have string ids like
+// "chapter-unlinked-Blockwork", not real BOQ item UUIDs — sending one to the
+// backend's ::uuid[] cast 500s the whole request, wiping out every real
+// invoice reference for the chapter. Filter them out before building itemIds.
 function useChapterTxns(projectId, ch) {
-  const itemIds = ch.items.map(i => i.id);
+  const itemIds = ch.items.filter(i => !isUnlinkedRow(i)).map(i => i.id);
   return useQuery({
     queryKey: ['items-drilldown', projectId, itemIds, ch.name],
     queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds, ch.name).then(r => r.data?.data || []),

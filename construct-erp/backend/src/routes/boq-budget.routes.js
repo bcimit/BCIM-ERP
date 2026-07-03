@@ -317,12 +317,13 @@ router.get('/:project_id', async (req, res) => {
     // cost_heads list in the response below so the frontend renders it.
     bumpProjectOnly('Petty Cash', 'invoiced', spcRemainder.rows[0]?.actual);
 
-    // TQS-bill and PO spend: item-tagged rows attach directly; chapter-tagged
-    // rows (chapter known from the PO line, or the bill's single-chapter PO)
-    // are pooled per chapter so the amount lands ONLY in that chapter — never
-    // spread across other chapters. Rows with neither tag fall through to the
-    // project-level pro-rata pool.
-    const chapterPools = {}; // chapterName -> { costHead -> amount }
+    // TQS-bill and PO spend — NO pro-rata anywhere. Every rupee lands exactly
+    // where its PO/bill was tagged: a specific BOQ item, or (if only the PO's
+    // chapter is known) a dedicated "chapter unlinked" row that keeps the
+    // money inside the right chapter's total without guessing which specific
+    // item it belongs to. Untagged-to-anything spend goes to the project-level
+    // unlinked row. Nothing is estimated or distributed by budget/BOQ share.
+    const chapterUnlinked = {}; // chapterName -> { costHead -> amount }
     const routeRow = (row) => {
       const amt = parseFloat(row.actual) || 0;
       if (!row.cost_head || !BOQ_COST_HEADS.includes(row.cost_head)) {
@@ -332,7 +333,7 @@ router.get('/:project_id', async (req, res) => {
       if (row.boq_item_id) {
         addActual([row], false);
       } else if (row.boq_chapter) {
-        const pool = (chapterPools[row.boq_chapter] ||= {});
+        const pool = (chapterUnlinked[row.boq_chapter] ||= {});
         pool[row.cost_head] = (pool[row.cost_head] || 0) + amt;
       } else {
         addActual([row], false);
@@ -341,89 +342,16 @@ router.get('/:project_id', async (req, res) => {
     tqsActuals.rows.forEach(routeRow);
     poActuals.rows.forEach(routeRow);
 
-    // Distribute each chapter pool among that chapter's own items — by budget
-    // share in the same cost head within the chapter, else by BOQ value share.
-    // Chapters that match no item fall back to the project-level pool.
-    for (const [chapName, pool] of Object.entries(chapterPools)) {
-      const chapItems = items.rows.filter(r =>
-        (r.chapter_name && r.chapter_name === chapName) || String(r.chapter_no) === chapName);
-      for (const [head, amt] of Object.entries(pool)) {
-        if (!chapItems.length) {
-          if (!projectLevel[head]) projectLevel[head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
-          projectLevel[head].invoiced += amt;
-          projectLevel[head].actual += amt;
-          continue;
-        }
-        let headBudget = 0;
-        for (const it of chapItems) headBudget += parseFloat(byItem[it.id]?.[head]?.amount) || 0;
-        const boqBasis = chapItems.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
-        const basisFn = headBudget > 0
-          ? (it) => parseFloat(byItem[it.id]?.[head]?.amount) || 0
-          : (it) => parseFloat(it.amount) || 0;
-        const totalBasis = headBudget > 0 ? headBudget : boqBasis;
-        if (totalBasis <= 0) continue;
-        for (const it of chapItems) {
-          const basis = basisFn(it);
-          if (basis <= 0) continue;
-          if (!byItem[it.id]) byItem[it.id] = {};
-          if (!byItem[it.id][head]) byItem[it.id][head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
-          const share = amt * (basis / totalBasis);
-          byItem[it.id][head].invoiced += share;
-          byItem[it.id][head].actual += share;
-        }
-      }
-    }
-
-    // ── Pro-rata attribution (Option A) ──────────────────────────────────────
-    // Spend that isn't tied to a specific BOQ item (material POs / TQS bills
-    // tagged by cost head only) is distributed across BOQ items so the BOQ-wise
-    // view shows expenditure per item even when source transactions aren't
-    // line-tagged. Distribution basis, in order of preference:
-    //   1. each item's BUDGET in the SAME cost head (most precise), else
-    //   2. each item's TOTAL budget share (budgets are often all under one head
-    //      like "Sub Con" while spend lands under material heads), else
-    //   3. each item's BOQ value share (when no budgets exist at all).
-    // It is an estimate per item, but every cost head's total — and the project
-    // grand total — reconciles exactly (nothing is created or lost). Heads with
-    // no basis to distribute against stay in the unlinked row below.
-    const itemIds = items.rows.map(r => r.id);
-    const itemAmount = {};
-    items.rows.forEach(r => { itemAmount[r.id] = parseFloat(r.amount) || 0; });
-    const itemTotalBudget = {};
-    for (const id of itemIds) {
-      let t = 0;
-      const hb = byItem[id] || {};
-      for (const h of Object.keys(hb)) t += parseFloat(hb[h]?.amount) || 0;
-      itemTotalBudget[id] = t;
-    }
-    const grandBudget = itemIds.reduce((s, id) => s + itemTotalBudget[id], 0);
-    const grandAmount = itemIds.reduce((s, id) => s + itemAmount[id], 0);
-
+    // Merge the never-distributed sources (advances, petty-cash remainder, SC
+    // payments — from projectOnly above) with the truly-untagged TQS/PO spend
+    // (from projectLevel) into one project-level unlinked bucket.
     const remainderLevel = {};
     for (const [head, cell] of Object.entries(projectLevel)) {
-      const untagged = (parseFloat(cell.invoiced) || 0) + (parseFloat(cell.advance) || 0);
-      if (untagged <= 0) continue;
-      let totalHeadBudget = 0;
-      for (const id of itemIds) totalHeadBudget += parseFloat(byItem[id]?.[head]?.amount) || 0;
-
-      let basisFn, totalBasis;
-      if (totalHeadBudget > 0)      { basisFn = id => parseFloat(byItem[id]?.[head]?.amount) || 0; totalBasis = totalHeadBudget; }
-      else if (grandBudget > 0)     { basisFn = id => itemTotalBudget[id]; totalBasis = grandBudget; }
-      else if (grandAmount > 0)     { basisFn = id => itemAmount[id];      totalBasis = grandAmount; }
-      else { remainderLevel[head] = cell; continue; }
-
-      for (const id of itemIds) {
-        const basis = basisFn(id);
-        if (basis <= 0) continue;
-        if (!byItem[id]) byItem[id] = {};
-        if (!byItem[id][head]) byItem[id][head] = { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 };
-        byItem[id][head].prorated = (byItem[id][head].prorated || 0) + untagged * (basis / totalBasis);
-      }
+      const tgt = (remainderLevel[head] ||= { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 });
+      tgt.advance  += cell.advance;
+      tgt.invoiced += cell.invoiced;
+      tgt.actual   += cell.actual;
     }
-
-    // Merge the never-prorated sources (advances, petty-cash remainder, SC
-    // payments) into the unlinked row so they show up once, at project level,
-    // instead of being smeared across items/chapters that never had such spend.
     for (const [head, cell] of Object.entries(projectOnly)) {
       const tgt = (remainderLevel[head] ||= { pct: 0, amount: 0, actual: 0, advance: 0, invoiced: 0 });
       tgt.advance  += cell.advance;
@@ -436,6 +364,32 @@ router.get('/:project_id', async (req, res) => {
       breakdown: byItem[item.id] || {},
       unallocated_actual: unallocated[item.id] || 0,
     }));
+
+    // One synthetic row per chapter that has PO/bill spend tagged to the
+    // chapter but not to any specific item within it. Groups naturally under
+    // that chapter (same chapter_name/chapter_no as its real items) via the
+    // frontend's existing chapter-grouping — no distribution math involved.
+    for (const [chapName, pool] of Object.entries(chapterUnlinked)) {
+      const chapItems = items.rows.filter(r =>
+        (r.chapter_name && r.chapter_name === chapName) || String(r.chapter_no) === chapName);
+      const breakdown = {};
+      for (const [head, amt] of Object.entries(pool)) {
+        breakdown[head] = { pct: 0, amount: 0, actual: amt, advance: 0, invoiced: amt };
+      }
+      data.push({
+        id: `chapter-unlinked-${chapName}`,
+        chapter_no: chapItems[0]?.chapter_no ?? null,
+        chapter_name: chapItems.length ? chapItems[0].chapter_name : chapName,
+        item_no: '—',
+        description: `Unlinked chapter spend — tagged to "${chapName}" on the PO but not to a specific BOQ item`,
+        unit: null,
+        quantity: null,
+        rate: null,
+        amount: 0,
+        breakdown,
+        unallocated_actual: 0,
+      });
+    }
 
     if (Object.keys(remainderLevel).length) {
       data.push({
