@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import {
   Percent, IndianRupee, AlertTriangle, AlertCircle, ChevronRight, ChevronDown,
   Search, Layers, CheckCircle2, Wallet, Wallet2, Printer, LayoutList, FileText, BarChart2, Download,
-  Bell, TrendingUp, Activity, Building2,
+  Bell, TrendingUp, TrendingDown, Activity, Building2,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -15,7 +15,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
-import { boqBudgetAPI, projectAPI, raBillAPI, tqsBillsAPI } from '../../api/client';
+import { boqBudgetAPI, projectAPI, raBillAPI, tqsBillsAPI, clientAdvanceAPI } from '../../api/client';
 import BOQSummaryPrintTemplate from './BOQSummaryPrintTemplate';
 import bcimLogo from '../../assets/bcim-logo.png';
 
@@ -1369,6 +1369,16 @@ function ClientBillingSummary({ projectId, contractValue }) {
     enabled: !!projectId,
   });
 
+  // Client mobilization advance — requested/received tranches (Client Advance
+  // Requests module) and, separately, how much of it has been recovered back
+  // via deductions on certified RA bills (mobilization_advance_recovery +
+  // adhoc_advance_recovery per bill).
+  const { data: advanceStats } = useQuery({
+    queryKey: ['client-advance-stats', projectId],
+    queryFn: () => clientAdvanceAPI.stats({ project_id: projectId }).then(r => r.data?.data || {}).catch(() => ({})),
+    enabled: !!projectId,
+  });
+
   const certifiedBills = bills.filter(b => ['certified', 'paid'].includes(b.status));
   // ra-bills list is ordered bill_date DESC, created_at DESC — first certified/paid bill is the latest
   const currentBill = certifiedBills[0];
@@ -1376,12 +1386,21 @@ function ClientBillingSummary({ projectId, contractValue }) {
   const cumulativeReceived = bills.reduce((s, b) => s + parseFloat(b.amount_received || 0), 0);
   const workOrderValue = parseFloat(contractValue) || 0;
 
+  const advanceReceived  = parseFloat(advanceStats?.total_received || 0);
+  const advanceRequested = parseFloat(advanceStats?.total_requested || 0);
+  const advanceRecovered = certifiedBills.reduce((s, b) =>
+    s + parseFloat(b.mobilization_advance_recovery || 0) + parseFloat(b.adhoc_advance_recovery || 0), 0);
+  const advanceBalance = advanceReceived - advanceRecovered;
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
       <ClientKPI label="Client Work Order Value" value={workOrderValue} icon={Building2} color="#0B2E59" />
       <ClientKPI label="Current RA Bill Certified" value={currentBill?.net_payable} sub={currentBill?.bill_number} icon={CheckCircle2} color="#059669" />
       <ClientKPI label="Cumulative RA Bill Value" value={cumulativeBilled} sub={`${certifiedBills.length} bill${certifiedBills.length !== 1 ? 's' : ''}`} icon={TrendingUp} color="#4F46E5" />
       <ClientKPI label="Received from Client" value={cumulativeReceived} sub={workOrderValue > 0 ? `${((cumulativeReceived / workOrderValue) * 100).toFixed(1)}% of WO value` : null} icon={Wallet2} color="#D97706" />
+      <ClientKPI label="Advance Received from Client" value={advanceReceived} sub={advanceRequested > 0 ? `of ${inr(advanceRequested)} requested` : null} icon={Wallet} color="#0EA5E9" />
+      <ClientKPI label="Advance Recovered from Client" value={advanceRecovered} sub={advanceReceived > 0 ? `${((advanceRecovered / advanceReceived) * 100).toFixed(1)}% of advance received` : null} icon={TrendingDown} color="#DC2626" />
+      <ClientKPI label="Advance Balance (Unrecovered)" value={advanceBalance} sub="Received minus recovered so far" icon={Wallet2} color="#7C3AED" />
     </div>
   );
 }
