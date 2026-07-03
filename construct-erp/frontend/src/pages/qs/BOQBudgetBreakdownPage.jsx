@@ -1464,6 +1464,23 @@ function ProfitabilityAbstract({ projectId, totalSpent }) {
   );
 }
 
+// Clickable column header for the Cost Head Budget table — toggles asc/desc on
+// the given field, shows a chevron indicating current sort direction.
+function SortableTh({ label, sortKey, chSort, onSort, className }) {
+  const active = chSort.key === sortKey;
+  return (
+    <th className={clsx('px-4 py-2.5 text-right text-white cursor-pointer select-none hover:bg-white/10 transition', className)}
+      onClick={() => onSort(sortKey)}>
+      <span className="inline-flex items-center gap-1 justify-end">
+        {label}
+        <span className={clsx('text-[9px]', active ? 'opacity-100' : 'opacity-30')}>
+          {active && chSort.dir === 'desc' ? '▼' : '▲'}
+        </span>
+      </span>
+    </th>
+  );
+}
+
 function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName, contractValue }) {
   const qc = useQueryClient();
   const [editingHead, setEditingHead] = useState(null);
@@ -1474,6 +1491,9 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState(DEFAULT_BULK_TEXT);
   const [costheadView, setCostheadView] = useState('summary'); // 'summary' | 'monthly'
+  const [chSearch, setChSearch] = useState('');
+  const [chFilter, setChFilter] = useState('all'); // all | over | near | nobudget
+  const [chSort, setChSort] = useState({ key: null, dir: 'asc' });
   const printBudgetRef = useRef();
   const handlePrintBudget = useReactToPrint({
     contentRef: printBudgetRef,
@@ -1551,6 +1571,58 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
     setExpandedHead(prev => prev === cost_head ? null : cost_head);
   };
 
+  // Search + filter + sort applied only to what's rendered — footer totals above
+  // stay based on the full cost-head list so they don't look like partial sums
+  // while someone's mid-search.
+  const toggleSort = (key) => setChSort(s => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }));
+  const displayRows = rows
+    .filter(r => !chSearch || r.cost_head.toLowerCase().includes(chSearch.toLowerCase()))
+    .filter(r => {
+      if (chFilter === 'all') return true;
+      if (r.derived) return false;
+      const pct = r.budget > 0 ? r.actual / r.budget : 0;
+      if (chFilter === 'over') return r.budget > 0 && r.actual > r.budget;
+      if (chFilter === 'near') return r.budget > 0 && pct >= 0.8 && r.actual <= r.budget;
+      if (chFilter === 'nobudget') return r.budget === 0 && r.actual > 0;
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      if (!chSort.key) return 0;
+      const dir = chSort.dir === 'asc' ? 1 : -1;
+      if (chSort.key === 'pct') {
+        const pa = a.budget > 0 ? a.actual / a.budget : -1;
+        const pb = b.budget > 0 ? b.actual / b.budget : -1;
+        return (pa - pb) * dir;
+      }
+      if (chSort.key === 'balance') return ((a.budget - a.actual) - (b.budget - b.actual)) * dir;
+      return ((a[chSort.key] || 0) - (b[chSort.key] || 0)) * dir;
+    });
+
+  const exportCsv = () => {
+    const header = ['Sl No', 'Description of Works', 'Budget', 'Bills Received', 'Bills Paid', '% Used', 'Balance'];
+    const csvRows = [header, ...displayRows.map((r, i) => [
+      i + 1,
+      r.cost_head,
+      Math.round(r.budget),
+      Math.round(r.received || 0),
+      Math.round(r.paid || 0),
+      r.budget > 0 ? `${((r.actual / r.budget) * 100).toFixed(1)}%` : '',
+      Math.round(r.budget - r.actual),
+    ])];
+    const csv = csvRows.map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Cost_Head_Budget_${(projectName || projectId || 'project').replace(/\s+/g, '_')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading && costheadView === 'summary') return <div className="py-16 text-center text-slate-400 text-sm">Loading…</div>;
 
   return (
@@ -1623,7 +1695,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
       <div className="px-5 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-slate-700">Actual Expenditure — Cost Head Budget vs Actual</h3>
-          <p className="text-[11px] text-slate-400">Click Budget cell to enter amount · Click Actual amount to expand transaction details</p>
+          <p className="text-[11px] text-slate-400">Click Budget cell to enter amount · Click Actual amount to expand transaction details · Click a column header to sort</p>
         </div>
         <div className="flex items-center gap-3">
           {monthsElapsed > 1 && (
@@ -1632,11 +1704,48 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
               <div className="text-sm font-bold text-slate-700">{monthsElapsed} mo</div>
             </div>
           )}
+          <button onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">
+            <Download className="w-3.5 h-3.5" /> Export CSV
+          </button>
           <button onClick={handlePrintBudget}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition">
             <Printer className="w-3.5 h-3.5" /> Print
           </button>
         </div>
+      </div>
+      <div className="px-5 py-2.5 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <input
+            value={chSearch}
+            onChange={e => setChSearch(e.target.value)}
+            placeholder="Search cost heads…"
+            className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          {[
+            { key: 'all',      label: 'All' },
+            { key: 'over',     label: `Over Budget${overHeads.length ? ` (${overHeads.length})` : ''}` },
+            { key: 'near',     label: `Near Limit${nearHeads.length ? ` (${nearHeads.length})` : ''}` },
+            { key: 'nobudget', label: 'No Budget Set' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setChFilter(f.key)}
+              className={clsx('px-2.5 py-1 text-[10px] font-bold rounded-full border transition',
+                chFilter === f.key
+                  ? 'bg-indigo-600 border-indigo-600 text-white'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50')}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {(chSearch || chFilter !== 'all' || chSort.key) && (
+          <button onClick={() => { setChSearch(''); setChFilter('all'); setChSort({ key: null, dir: 'asc' }); }}
+            className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2">
+            Clear
+          </button>
+        )}
       </div>
       <div ref={printBudgetRef}>
         <BOQPrintHeader
@@ -1657,16 +1766,19 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
           <tr className="bg-[#0B2E59] text-xs">
             <th className="px-4 py-2.5 text-center w-12 text-white">Sl No</th>
             <th className="px-4 py-2.5 text-left text-white">Description of Works</th>
-            <th className="px-4 py-2.5 text-right w-52 text-white">Budget</th>
-            <th className="px-4 py-2.5 text-right w-36 text-white">Bills Received</th>
-            <th className="px-4 py-2.5 text-right w-36 text-white">Bills Paid</th>
-            <th className="px-4 py-2.5 text-right w-24 text-white">% Used</th>
+            <SortableTh label="Budget" sortKey="budget" chSort={chSort} onSort={toggleSort} className="w-52" />
+            <SortableTh label="Bills Received" sortKey="received" chSort={chSort} onSort={toggleSort} className="w-36" />
+            <SortableTh label="Bills Paid" sortKey="paid" chSort={chSort} onSort={toggleSort} className="w-36" />
+            <SortableTh label="% Used" sortKey="pct" chSort={chSort} onSort={toggleSort} className="w-24" />
             <th className="px-4 py-2.5 text-right w-40 text-white">Provisional</th>
-            <th className="px-4 py-2.5 text-right w-44 text-white">Balance</th>
+            <SortableTh label="Balance" sortKey="balance" chSort={chSort} onSort={toggleSort} className="w-44" />
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => {
+          {displayRows.length === 0 && (
+            <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">No cost heads match your search/filter.</td></tr>
+          )}
+          {displayRows.map((r, i) => {
             const isEditing = editingHead === r.cost_head;
             const isExpanded = expandedHead === r.cost_head;
             const over = !r.derived && r.actual > r.budget && r.budget > 0;
