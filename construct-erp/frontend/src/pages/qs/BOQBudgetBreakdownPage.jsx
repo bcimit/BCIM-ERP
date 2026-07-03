@@ -688,6 +688,15 @@ function CostHeadDetail({ item, costHeads, mode, onSave, projectId, readOnlyOver
         {isOpen && projectId && isProjectUnlinked && (
           <tr>
             <td colSpan={4} className="p-0 bg-indigo-50/20">
+              {/* What this unlinked amount is made of — invoice / bill / petty-cash
+                  entries with their reference numbers, dates and sources. */}
+              <CostHeadDrilldownInline
+                projectId={projectId}
+                costHead={r.h}
+                boqItemId={undefined}
+                itemInfo={{ estimated: false, spent: r.spent }}
+              />
+              {/* Still offer chapter-tagging for any taggable bill lines below. */}
               <UnlinkedLineTagger projectId={projectId} costHead={r.h} chapterNames={chapterNames || []} />
             </td>
           </tr>
