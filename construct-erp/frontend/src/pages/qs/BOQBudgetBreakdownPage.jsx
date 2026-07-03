@@ -1529,6 +1529,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
   const rows = data || [];
   const totalBudget = rows.filter(r => !r.derived).reduce((s, r) => s + r.budget, 0);
   const totalActual = rows.filter(r => !r.derived).reduce((s, r) => s + r.actual, 0);
+  const totalReceived = rows.filter(r => !r.derived).reduce((s, r) => s + (r.received || 0), 0);
+  const totalPaid = rows.filter(r => !r.derived).reduce((s, r) => s + (r.paid || 0), 0);
 
   // Contingency absorption: overages in non-derived heads draw from the contingency reserve.
   const totalNonDerivedOverage = rows
@@ -1646,7 +1648,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
           meta={[
             ['Total BOQ Value', totalBoqValue > 0 ? `₹${Math.round(totalBoqValue).toLocaleString('en-IN')}` : null],
             ['Total Budget', totalBudget > 0 ? `₹${Math.round(totalBudget).toLocaleString('en-IN')}` : null],
-            ['Total Actual', totalActual > 0 ? `₹${Math.round(totalActual).toLocaleString('en-IN')}` : null],
+            ['Bills Received', totalReceived > 0 ? `₹${Math.round(totalReceived).toLocaleString('en-IN')}` : null],
+            ['Bills Paid', totalPaid > 0 ? `₹${Math.round(totalPaid).toLocaleString('en-IN')}` : null],
           ]}
         />
       <table className="w-full text-sm">
@@ -1655,7 +1658,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
             <th className="px-4 py-2.5 text-center w-12">Sl No</th>
             <th className="px-4 py-2.5 text-left">Description of Works</th>
             <th className="px-4 py-2.5 text-right w-52">Budget</th>
-            <th className="px-4 py-2.5 text-right w-44">Actual Expenditure</th>
+            <th className="px-4 py-2.5 text-right w-36">Bills Received</th>
+            <th className="px-4 py-2.5 text-right w-36">Bills Paid</th>
             <th className="px-4 py-2.5 text-right w-24">% Used</th>
             <th className="px-4 py-2.5 text-right w-40">Provisional</th>
             <th className="px-4 py-2.5 text-right w-44">Balance</th>
@@ -1744,14 +1748,38 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       </div>
                     ) : r.derived ? (
                       <span className="font-semibold text-emerald-700">
-                        {r.actual > 0 ? `₹${Math.round(r.actual).toLocaleString('en-IN')}` : '—'}
+                        {r.received > 0 ? `₹${Math.round(r.received).toLocaleString('en-IN')}` : '—'}
                       </span>
-                    ) : hasActual ? (
+                    ) : r.received > 0 ? (
                       <button onClick={() => toggleExpand(r.cost_head, hasActual)}
                         className={clsx('font-semibold hover:underline underline-offset-2 transition-colors',
                           isExpanded ? 'text-indigo-600' : 'text-emerald-700 hover:text-indigo-600')}>
-                        ₹{Math.round(r.actual).toLocaleString('en-IN')}
+                        ₹{Math.round(r.received).toLocaleString('en-IN')}
                         <span className="ml-1 text-[10px] opacity-60">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right font-semibold">
+                    {isContingency ? (
+                      <div className="text-right">
+                        {contAbsorbed > 0 ? (
+                          <span className="font-semibold text-amber-700">₹{Math.round(contAbsorbed).toLocaleString('en-IN')}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </div>
+                    ) : r.derived ? (
+                      <span className="font-semibold text-indigo-700">
+                        {r.paid > 0 ? `₹${Math.round(r.paid).toLocaleString('en-IN')}` : '—'}
+                      </span>
+                    ) : r.paid > 0 ? (
+                      <button onClick={() => toggleExpand(r.cost_head, hasActual)}
+                        title="Cash actually disbursed — click to see the transactions counted under Bills Received"
+                        className={clsx('font-semibold hover:underline underline-offset-2 transition-colors',
+                          isExpanded ? 'text-indigo-600' : 'text-indigo-700 hover:text-indigo-500')}>
+                        ₹{Math.round(r.paid).toLocaleString('en-IN')}
                       </button>
                     ) : (
                       <span className="text-slate-300">—</span>
@@ -1817,7 +1845,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
             <td className="px-4 py-2.5" />
             <td className="px-4 py-2.5 text-sm font-bold text-slate-800">Total</td>
             <td className="px-4 py-2.5 text-right text-sm">₹{Math.round(totalBudget).toLocaleString('en-IN')}</td>
-            <td className="px-4 py-2.5 text-right text-sm text-emerald-700">₹{Math.round(totalActual).toLocaleString('en-IN')}</td>
+            <td className="px-4 py-2.5 text-right text-sm text-emerald-700">₹{Math.round(totalReceived).toLocaleString('en-IN')}</td>
+            <td className="px-4 py-2.5 text-right text-sm text-indigo-700">₹{Math.round(totalPaid).toLocaleString('en-IN')}</td>
             <td className="px-4 py-2.5 text-right text-xs font-bold text-slate-600">
               {totalBudget > 0 ? `${((totalActual / totalBudget) * 100).toFixed(1)}%` : '—'}
             </td>

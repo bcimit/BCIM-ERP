@@ -628,51 +628,78 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       [project_id]
     );
 
-    // Actuals: RA bills (certified/paid)
+    // ── "Bills Received" vs "Bills Paid" ────────────────────────────────────
+    // Received = value of bills logged into the system (certified/approved,
+    // or for TQS bills at any workflow stage — receiving a bill happens before
+    // it's reviewed/approved). Paid = cash actually disbursed. Advances and
+    // petty cash never had a "bill" to receive — they're cash paid out ahead
+    // of/without one — so they only ever count under Paid, never Received.
+    //
+    // SC "Paid" uses sc_bills.paid_amount (the stored running total kept in
+    // sync whenever a payment is recorded — see sc.routes.js) rather than
+    // summing sc_payments separately, so a paid bill's value is never counted
+    // twice (previously scActuals + scPayActuals both counted the same money).
+
+    // Received: RA bills (certified/paid)
     const raActuals = await query(`
       SELECT rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
       FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       WHERE rb.project_id=$1 AND rb.status IN ('certified','paid')
       GROUP BY rbi.cost_head`, [project_id]);
+    // Paid: RA bills fully paid only
+    const raPaid = await query(`
+      SELECT rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+      FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+      WHERE rb.project_id=$1 AND rb.status = 'paid'
+      GROUP BY rbi.cost_head`, [project_id]);
 
-    // Actuals: SC bills — same statuses and cost-head attribution as the BOQ
+    // Received: SC bills — same statuses and cost-head attribution as the BOQ
     // item view (untagged lines default to "Sub Con") so both screens agree.
     const scActuals = await query(`
       SELECT COALESCE(bi.cost_head, 'Sub Con') AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
       FROM sc_bill_items bi JOIN sc_bills sb ON sb.id = bi.bill_id
       WHERE sb.project_id=$1 AND sb.status IN ('approved','paid')
       GROUP BY COALESCE(bi.cost_head, 'Sub Con')`, [project_id]);
+    // Paid: actual cash paid against SC bills (mapped to "Sub Con" — SC bill
+    // items are essentially all Sub Con, and paid_amount isn't split by head)
+    const scPaid = await query(`
+      SELECT 'Sub Con' AS cost_head, SUM(paid_amount) AS actual
+      FROM sc_bills WHERE project_id=$1 AND paid_amount > 0`, [project_id]);
 
-    // Actuals: SC payments (actual money paid to subcontractors) — mapped to "Sub Con"
-    const scPayActuals = await query(`
-      SELECT 'Sub Con' AS cost_head, SUM(amount) AS actual
-      FROM sc_payments
-      WHERE project_id=$1`, [project_id]);
-
-    // Actuals: TQS material bills (paid) — grouped by cost_head on line items
+    // Received: TQS material bills — every logged bill, any workflow stage
     const tqsActuals = await query(`
       SELECT li.cost_head, SUM(li.basic_amount) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
       WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
       GROUP BY li.cost_head`, [project_id]);
+    // Paid: TQS bills marked fully paid only
+    const tqsPaid = await query(`
+      SELECT li.cost_head, SUM(li.basic_amount) AS actual
+      FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
+        AND tb.workflow_status = 'paid'
+      GROUP BY li.cost_head`, [project_id]);
 
-    // SC advances (dedicated SC module) — mapped to "Sub Con"
+    // Paid only: SC advances (dedicated SC module) — cash out, no bill yet
     const advActuals = await query(`
       SELECT 'Sub Con' AS cost_head, SUM(amount) AS actual
       FROM sc_advances
       WHERE project_id=$1 AND status NOT IN ('cancelled')`, [project_id]);
 
-    // Subcontractor advances recorded via the Advance Tracker (TQS advance vouchers) — mapped to "Sub Con".
-    // Only count amounts actually paid out (paid_amount), excluding pending/cancelled vouchers.
+    // Paid only: subcontractor advances via the Advance Tracker (TQS advance
+    // vouchers). Only amounts actually paid out (paid_amount), excluding
+    // pending/cancelled vouchers.
     const advTrackerActuals = await query(`
       SELECT 'Sub Con' AS cost_head, SUM(paid_amount) AS actual
       FROM tqs_advance_vouchers
       WHERE project_id=$1 AND is_deleted=false
         AND status IN ('issued','partial','recovered') AND paid_amount > 0`, [project_id]);
 
-    // Petty cash — item lines carry their own cost head (same attribution as the
-    // BOQ item view); whatever portion of approved entries has no cost-headed
-    // items stays under the extra 'Petty Cash' head so no money is hidden.
+    // Paid only: petty cash — item lines carry their own cost head (same
+    // attribution as the BOQ item view); whatever portion of approved entries
+    // has no cost-headed items stays under the extra 'Petty Cash' head so no
+    // money is hidden. Petty cash is cash already spent, so it's Paid, not
+    // a "bill received".
     const spcActuals = await query(`
       SELECT si.cost_head, SUM(si.total_amount) AS actual
       FROM stores_petty_cash_items si
@@ -687,8 +714,8 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
                     WHERE se.project_id=$1 AND se.status='Approved' AND si.cost_head IS NOT NULL), 0)
       , 0) AS actual`, [project_id]);
 
-    // PO-tagged spend where the bill line itself wasn't cost-headed — same
-    // fallback (and same dedup guard) as the BOQ item view.
+    // Received: PO-tagged spend where the bill line itself wasn't cost-headed —
+    // same fallback (and same dedup guard) as the BOQ item view.
     const poFallbackActuals = await query(`
       SELECT pi.cost_head, SUM(li.basic_amount) AS actual
       FROM po_items pi
@@ -702,8 +729,22 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
         AND tb.is_deleted = FALSE
         AND tb.workflow_status NOT IN ('rejected')
       GROUP BY pi.cost_head`, [project_id]);
+    // Paid: same PO fallback, restricted to bills marked fully paid
+    const poFallbackPaid = await query(`
+      SELECT pi.cost_head, SUM(li.basic_amount) AS actual
+      FROM po_items pi
+      JOIN purchase_orders po ON po.id = pi.po_id
+      JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+      JOIN tqs_bills tb ON tb.id = li.bill_id
+      WHERE po.project_id = $1
+        AND po.status NOT IN ('rejected', 'cancelled')
+        AND pi.cost_head IS NOT NULL
+        AND li.cost_head IS NULL
+        AND tb.is_deleted = FALSE
+        AND tb.workflow_status = 'paid'
+      GROUP BY pi.cost_head`, [project_id]);
 
-    // Contractor advances given through the Stores Petty Cash module — mapped to "Sub Con"
+    // Paid only: contractor advances given through the Stores Petty Cash module
     let storePCAdvActuals = { rows: [] };
     try {
       storePCAdvActuals = await query(`
@@ -712,9 +753,30 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
         WHERE project_id=$1 AND status != 'cancelled'`, [project_id]);
     } catch (_) {}
 
-    // Merge actuals by cost head
-    const actualMap = {};
-    for (const rows of [raActuals.rows, scActuals.rows, scPayActuals.rows, tqsActuals.rows, advActuals.rows, advTrackerActuals.rows, spcActuals.rows, spcRemainder.rows, poFallbackActuals.rows, storePCAdvActuals.rows]) {
+    // "Received" = value of bills logged (RA/SC/TQS/PO), any approval stage.
+    const receivedMap = {};
+    for (const rows of [raActuals.rows, scActuals.rows, tqsActuals.rows, poFallbackActuals.rows]) {
+      for (const r of rows) {
+        if (!r.cost_head) continue;
+        receivedMap[r.cost_head] = (receivedMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
+      }
+    }
+    // "Paid" = cash actually disbursed: the paid portion of those same bills,
+    // plus advances/petty cash (cash out with no corresponding bill received).
+    const paidMap = {};
+    for (const rows of [raPaid.rows, scPaid.rows, tqsPaid.rows, poFallbackPaid.rows, advActuals.rows, advTrackerActuals.rows, spcActuals.rows, spcRemainder.rows, storePCAdvActuals.rows]) {
+      for (const r of rows) {
+        if (!r.cost_head) continue;
+        paidMap[r.cost_head] = (paidMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
+      }
+    }
+    // actualMap = total cost incurred (received bills + advances/petty cash that
+    // have no bill of their own) — drives Profit/Contingency derivation below,
+    // same total as before this Received/Paid split was added. Excludes
+    // raPaid/scPaid/tqsPaid/poFallbackPaid since those are already inside
+    // receivedMap (they're the paid subset of the same bills, not extra money).
+    const actualMap = { ...receivedMap };
+    for (const rows of [advActuals.rows, advTrackerActuals.rows, spcActuals.rows, spcRemainder.rows, storePCAdvActuals.rows]) {
       for (const r of rows) {
         if (!r.cost_head) continue;
         actualMap[r.cost_head] = (actualMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
@@ -749,10 +811,18 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     actualMap['Profit'] = baseActual * PROFIT_PCT;
     const baseBudget = PROFIT_BASE_HEADS.reduce((s, h) => s + (budgetMap[h] || 0), 0);
     if (baseBudget > 0) budgetMap['Profit'] = baseBudget * PROFIT_PCT;
+    // Same derivation for the Received/Paid columns, so Profit/Contingency
+    // show a sensible split there too instead of just under the combined total.
+    const baseReceived = PROFIT_BASE_HEADS.reduce((s, h) => s + (receivedMap[h] || 0), 0);
+    receivedMap['Profit'] = baseReceived * PROFIT_PCT;
+    const basePaid = PROFIT_BASE_HEADS.reduce((s, h) => s + (paidMap[h] || 0), 0);
+    paidMap['Profit'] = basePaid * PROFIT_PCT;
 
     // Contingency (head 20) = Total BOQ Value − sum(heads 1-18) − Profit
     // Represents the emergency reserve within the contract value.
     actualMap[CONTINGENCY_HEAD] = totalBoqValue - baseActual - actualMap['Profit'];
+    receivedMap[CONTINGENCY_HEAD] = totalBoqValue - baseReceived - receivedMap['Profit'];
+    paidMap[CONTINGENCY_HEAD] = totalBoqValue - basePaid - paidMap['Profit'];
     if (baseBudget > 0) {
       budgetMap[CONTINGENCY_HEAD] = totalBoqValue - baseBudget - budgetMap['Profit'];
     }
@@ -773,7 +843,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       : 1;
 
     // Build result for all known cost heads + any extra heads with actuals
-    const allHeads = new Set([...BOQ_COST_HEADS, ...Object.keys(actualMap), ...Object.keys(budgetMap)]);
+    const allHeads = new Set([...BOQ_COST_HEADS, ...Object.keys(actualMap), ...Object.keys(paidMap), ...Object.keys(budgetMap)]);
     const DERIVED_HEADS = new Set(['Profit', CONTINGENCY_HEAD]);
     const data = [...allHeads].map(head => ({
       cost_head: head,
@@ -786,6 +856,8 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
                 : 'none',
       budget: budgetMap[head] || 0,
       actual: actualMap[head] || 0,
+      received: receivedMap[head] || 0,
+      paid: paidMap[head] || 0,
       balance: (budgetMap[head] || 0) - (actualMap[head] || 0),
       derived: DERIVED_HEADS.has(head),
       monthly_avg: parseFloat(((actualMap[head] || 0) / monthsElapsed).toFixed(2)),
