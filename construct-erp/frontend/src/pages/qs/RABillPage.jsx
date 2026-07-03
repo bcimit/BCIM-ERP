@@ -52,6 +52,7 @@ export default function RABillPage() {
   const [activeTab, setActiveTab]         = useState('all');
   const [filterProject, setFilterProject] = useState('all');
   const [search, setSearch]               = useState('');
+  const [sort, setSort]                   = useState({ key: null, dir: 'asc' });
 
   const { data: bills = [], isLoading, refetch } = useQuery({
     queryKey: ['ra-bills', filterProject],
@@ -78,16 +79,31 @@ export default function RABillPage() {
     onError: e => toast.error(e?.response?.data?.error || 'Cannot delete — check status'),
   });
 
+  const toggleSort = (key) => setSort(s => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+
   const filtered = useMemo(() => {
-    return bills.filter(b => {
+    const term = search.toLowerCase();
+    const rows = bills.filter(b => {
       const matchTab  = activeTab === 'all' || b.status === activeTab;
-      const matchSrch = !search ||
-        b.bill_number?.toLowerCase().includes(search.toLowerCase()) ||
-        b.project_name?.toLowerCase().includes(search.toLowerCase()) ||
-        b.contractor_name?.toLowerCase().includes(search.toLowerCase());
+      const matchSrch = !term ||
+        b.bill_number?.toLowerCase().includes(term) ||
+        b.project_name?.toLowerCase().includes(term) ||
+        b.contractor_name?.toLowerCase().includes(term);
       return matchTab && matchSrch;
     });
-  }, [bills, activeTab, search]);
+    if (!sort.key) return rows;
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    const accessors = {
+      bill_number:  b => (b.bill_number || '').toLowerCase(),
+      bill_date:    b => (b.bill_date ? new Date(b.bill_date).getTime() : 0),
+      gross_amount: b => parseFloat(b.gross_amount) || 0,
+      total_deductions: b => parseFloat(b.total_deductions) || 0,
+      net_payable:  b => parseFloat(b.net_payable) || 0,
+      status:       b => (b.status || '').toLowerCase(),
+    };
+    const acc = accessors[sort.key];
+    return acc ? [...rows].sort((a, b) => (acc(a) > acc(b) ? 1 : acc(a) < acc(b) ? -1 : 0) * dir) : rows;
+  }, [bills, activeTab, search, sort]);
 
   // KPIs
   const kpis = useMemo(() => ({
@@ -129,6 +145,26 @@ export default function RABillPage() {
     doc.save(`RA_Bills_${dayjs().format('YYYYMMDD')}.pdf`);
   };
 
+  const handleDownloadCSV = () => {
+    const header = ['Bill No', 'Project', 'Contractor', 'Date', 'Gross', 'Deductions', 'Net Payable', 'Status'];
+    const csvRows = [header, ...filtered.map(b => [
+      b.bill_number, b.project_name, b.contractor_name, dayjs(b.bill_date).format('DD/MM/YYYY'),
+      Number(b.gross_amount || 0).toFixed(2), Number(b.total_deductions || 0).toFixed(2),
+      Number(b.net_payable || 0).toFixed(2), STATUS[b.status]?.label || b.status,
+    ])];
+    const csv = csvRows.map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RA_Bills_${dayjs().format('YYYYMMDD')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f6f9] font-sans">
 
@@ -147,6 +183,12 @@ export default function RABillPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadCSV}
+              className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-[#e2e6ec] bg-white text-[#6a6f7d] text-[11px] font-medium hover:bg-[#f4f6f9] transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> CSV
+            </button>
             <button
               onClick={handleDownloadPDF}
               className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-[#e2e6ec] bg-white text-[#6a6f7d] text-[11px] font-medium hover:bg-[#f4f6f9] transition-colors"
@@ -235,15 +277,16 @@ export default function RABillPage() {
 
         {/* ── Table ── */}
         <div className="bg-white rounded-2xl border border-[#e2e6ec] overflow-hidden shadow-sm">
-          <table className="w-full text-left border-separate border-spacing-y-1">
+          <div className="overflow-x-auto">
+          <table className="w-full text-left border-separate border-spacing-y-1 min-w-[900px]">
             <thead>
               <tr className="border-b border-[#e2e6ec] bg-[#f8fafc]">
-                <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider">Bill / Project</th>
-                <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider">Period</th>
-                <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider text-right">Gross Value</th>
-                <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider text-right">Deductions</th>
-                <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider text-right">Net Payable</th>
-                <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider text-center">Status</th>
+                <SortTh label="Bill / Project" sortKey="bill_number" sort={sort} onSort={toggleSort} />
+                <SortTh label="Period" sortKey="bill_date" sort={sort} onSort={toggleSort} />
+                <SortTh label="Gross Value" sortKey="gross_amount" sort={sort} onSort={toggleSort} right />
+                <SortTh label="Deductions" sortKey="total_deductions" sort={sort} onSort={toggleSort} right />
+                <SortTh label="Net Payable" sortKey="net_payable" sort={sort} onSort={toggleSort} right />
+                <SortTh label="Status" sortKey="status" sort={sort} onSort={toggleSort} center />
                 <th className="px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
@@ -273,7 +316,7 @@ export default function RABillPage() {
                 const canDelete = ['draft', 'rejected'].includes(bill.status);
 
                 return (
-                  <tr key={bill.id} className="hover:bg-[#f8fafc] transition-colors group" style={{ outline: '1.5px solid #ef4444', outlineOffset: '-1px' }}>
+                  <tr key={bill.id} className="hover:bg-[#f8fafc] transition-colors group">
 
                     {/* Bill / Project */}
                     <td className="px-5 py-4">
@@ -400,6 +443,7 @@ export default function RABillPage() {
               })}
             </tbody>
           </table>
+          </div>
 
           {/* Table footer */}
           {filtered.length > 0 && (
@@ -424,6 +468,26 @@ export default function RABillPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function SortTh({ label, sortKey, sort, onSort, right, center }) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      className={clsx(
+        'px-5 py-3 text-[11px] font-medium text-black uppercase tracking-wider cursor-pointer select-none hover:bg-slate-100 transition',
+        right ? 'text-right' : center ? 'text-center' : 'text-left'
+      )}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className={clsx('inline-flex items-center gap-1', right && 'justify-end', center && 'justify-center')}>
+        {label}
+        <span className={clsx('text-[9px]', active ? 'opacity-100 text-indigo-600' : 'opacity-25')}>
+          {active && sort.dir === 'desc' ? '▼' : '▲'}
+        </span>
+      </span>
+    </th>
   );
 }
 
