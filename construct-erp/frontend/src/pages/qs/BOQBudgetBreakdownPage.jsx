@@ -274,8 +274,12 @@ function HeadInvoiceChips({ txns, loading, estimated }) {
 
 // Shared fetch: all transactions counted in one chapter's Spent — item-tagged
 // plus chapter-tagged (resolved through the PO linkage on the server).
+// Synthetic unlinked rows (isUnlinkedRow) have string ids like
+// "chapter-unlinked-Blockwork", not real BOQ item UUIDs — sending one to the
+// backend's ::uuid[] cast 500s the whole request, wiping out every real
+// invoice reference for the chapter. Filter them out before building itemIds.
 function useChapterTxns(projectId, ch) {
-  const itemIds = ch.items.map(i => i.id);
+  const itemIds = ch.items.filter(i => !isUnlinkedRow(i)).map(i => i.id);
   return useQuery({
     queryKey: ['items-drilldown', projectId, itemIds, ch.name],
     queryFn: () => boqBudgetAPI.itemsDrilldown(projectId, itemIds, ch.name).then(r => r.data?.data || []),
