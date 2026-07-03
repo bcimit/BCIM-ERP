@@ -792,7 +792,7 @@ Overhead	14496254.84
 Petty Cash	954211.41`;
 
 // ─── Drilldown sub-table shown when a cost head row is expanded ───────────────
-const DRILLDOWN_COLSPAN = 8; // must match number of <th> columns in the parent table
+const DRILLDOWN_COLSPAN = 9; // must match number of <th> columns in the parent table
 function CostHeadDrilldown({ projectId, costHead }) {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['costhead-drilldown', projectId, costHead],
@@ -1596,17 +1596,19 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
         return (pa - pb) * dir;
       }
       if (chSort.key === 'balance') return ((a.budget - a.actual) - (b.budget - b.actual)) * dir;
+      if (chSort.key === 'outstanding') return (((a.received||0) - (a.paid||0)) - ((b.received||0) - (b.paid||0))) * dir;
       return ((a[chSort.key] || 0) - (b[chSort.key] || 0)) * dir;
     });
 
   const exportCsv = () => {
-    const header = ['Sl No', 'Description of Works', 'Budget', 'Bills Received', 'Bills Paid', '% Used', 'Balance'];
+    const header = ['Sl No', 'Description of Works', 'Budget', 'Bills Received', 'Bills Paid', 'Outstanding', '% Used', 'Balance'];
     const csvRows = [header, ...displayRows.map((r, i) => [
       i + 1,
       r.cost_head,
       Math.round(r.budget),
       Math.round(r.received || 0),
       Math.round(r.paid || 0),
+      Math.round((r.received || 0) - (r.paid || 0)),
       r.budget > 0 ? `${((r.actual / r.budget) * 100).toFixed(1)}%` : '',
       Math.round(r.budget - r.actual),
     ])];
@@ -1759,6 +1761,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
             ['Total Budget', totalBudget > 0 ? `₹${Math.round(totalBudget).toLocaleString('en-IN')}` : null],
             ['Bills Received', totalReceived > 0 ? `₹${Math.round(totalReceived).toLocaleString('en-IN')}` : null],
             ['Bills Paid', totalPaid > 0 ? `₹${Math.round(totalPaid).toLocaleString('en-IN')}` : null],
+            ['Outstanding', (totalReceived - totalPaid) > 0.5 ? `₹${Math.round(totalReceived - totalPaid).toLocaleString('en-IN')}` : null],
           ]}
         />
       <table className="w-full text-sm">
@@ -1769,6 +1772,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
             <SortableTh label="Budget" sortKey="budget" chSort={chSort} onSort={toggleSort} className="w-52" />
             <SortableTh label="Bills Received" sortKey="received" chSort={chSort} onSort={toggleSort} className="w-36" />
             <SortableTh label="Bills Paid" sortKey="paid" chSort={chSort} onSort={toggleSort} className="w-36" />
+            <SortableTh label="Outstanding" sortKey="outstanding" chSort={chSort} onSort={toggleSort} className="w-36" />
             <SortableTh label="% Used" sortKey="pct" chSort={chSort} onSort={toggleSort} className="w-24" />
             <th className="px-4 py-2.5 text-right w-40 text-white">Provisional</th>
             <SortableTh label="Balance" sortKey="balance" chSort={chSort} onSort={toggleSort} className="w-44" />
@@ -1776,7 +1780,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
         </thead>
         <tbody>
           {displayRows.length === 0 && (
-            <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">No cost heads match your search/filter.</td></tr>
+            <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-400">No cost heads match your search/filter.</td></tr>
           )}
           {displayRows.map((r, i) => {
             const isEditing = editingHead === r.cost_head;
@@ -1897,6 +1901,18 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
+                  <td className="px-4 py-2 text-right font-semibold">
+                    {isContingency || r.derived ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (() => {
+                      const outstanding = (r.received || 0) - (r.paid || 0);
+                      return outstanding > 0.5 ? (
+                        <span className="font-semibold text-amber-600" title="Bills received but not yet paid">
+                          ₹{Math.round(outstanding).toLocaleString('en-IN')}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>;
+                    })()}
+                  </td>
                   <td className="px-4 py-2 text-right text-xs font-bold tabular-nums">
                     {r.budget > 0 && !isContingency ? (
                       <span className={clsx(
@@ -1959,6 +1975,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
             <td className="px-4 py-2.5 text-right text-sm">₹{Math.round(totalBudget).toLocaleString('en-IN')}</td>
             <td className="px-4 py-2.5 text-right text-sm text-emerald-700">₹{Math.round(totalReceived).toLocaleString('en-IN')}</td>
             <td className="px-4 py-2.5 text-right text-sm text-indigo-700">₹{Math.round(totalPaid).toLocaleString('en-IN')}</td>
+            <td className="px-4 py-2.5 text-right text-sm text-amber-700">₹{Math.round(totalReceived - totalPaid).toLocaleString('en-IN')}</td>
             <td className="px-4 py-2.5 text-right text-xs font-bold text-slate-600">
               {totalBudget > 0 ? `${((totalActual / totalBudget) * 100).toFixed(1)}%` : '—'}
             </td>
