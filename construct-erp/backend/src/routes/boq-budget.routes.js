@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
+// Budget-setting writes only — matches the role list already used for
+// project budget writes in budget.routes.js. Reads stay open to any
+// authenticated user with project access (unchanged).
+const BUDGET_WRITERS = ['super_admin', 'admin', 'project_manager', 'accountant'];
 const { query, withTransaction } = require('../config/database');
 const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
 const { runSchemaInit } = require('../utils/schemaInit');
@@ -1486,7 +1490,7 @@ router.get('/:project_id/costhead-monthly', async (req, res) => {
 
 // PUT /boq-budget/:project_id/costhead-budget
 // Upsert budget amount for a single cost head at project level.
-router.put('/:project_id/costhead-budget', async (req, res) => {
+router.put('/:project_id/costhead-budget', authorize(...BUDGET_WRITERS), async (req, res) => {
   try {
     const { project_id } = req.params;
     const { cost_head, budget_amount, boq_amount } = req.body;
@@ -1516,7 +1520,7 @@ router.put('/:project_id/costhead-budget', async (req, res) => {
 
 // POST /boq-budget/:project_id/bulk-costhead-budget
 // Accepts array of {cost_head, budget_amount} and upserts all at once.
-router.post('/:project_id/bulk-costhead-budget', async (req, res) => {
+router.post('/:project_id/bulk-costhead-budget', authorize(...BUDGET_WRITERS), async (req, res) => {
   try {
     const { project_id } = req.params;
     const { entries } = req.body;
@@ -1553,7 +1557,7 @@ router.post('/:project_id/bulk-costhead-budget', async (req, res) => {
 // Set a total budget for a whole chapter at once.
 // Distributes the amount proportionally across all items in the chapter
 // by their BOQ value, saving to the specified cost_head (default: 'Sub Con').
-router.post('/:project_id/chapter-budget', async (req, res) => {
+router.post('/:project_id/chapter-budget', authorize(...BUDGET_WRITERS), async (req, res) => {
   try {
     const { project_id } = req.params;
     const { chapter_name, chapter_no, total_budget, cost_head = 'Sub Con' } = req.body;
