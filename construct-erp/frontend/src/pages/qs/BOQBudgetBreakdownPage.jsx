@@ -1236,6 +1236,49 @@ function ClientKPI({ label, value, sub, icon: Icon, color }) {
   );
 }
 
+// ─── Profitability Abstract — Cumulative RA Bill Value vs Total Spent ────────
+function ProfitabilityAbstract({ projectId, totalSpent }) {
+  // Same queryKey as ClientBillingSummary — react-query dedupes, no extra fetch.
+  const { data: bills = [] } = useQuery({
+    queryKey: ['ra-bills-client-summary', projectId],
+    queryFn: () => raBillAPI.list({ project_id: projectId }).then(r => r.data?.data || []).catch(() => []),
+    enabled: !!projectId,
+  });
+  const certifiedBills = bills.filter(b => ['certified', 'paid'].includes(b.status));
+  const cumulativeBilled = certifiedBills.reduce((s, b) => s + parseFloat(b.net_payable || 0), 0);
+  const margin = cumulativeBilled - totalSpent;
+  const marginPct = cumulativeBilled > 0 ? (margin / cumulativeBilled) * 100 : null;
+
+  return (
+    <div className="bg-[#0B2E59] rounded-2xl px-5 py-4 shadow-sm">
+      <div className="text-[10px] font-bold text-blue-200 uppercase tracking-widest mb-3">Project Profitability Abstract</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
+        <div>
+          <div className="text-[10px] text-blue-200 uppercase tracking-wide">Cumulative RA Bill Value</div>
+          <div className="text-lg font-bold text-white mt-0.5">₹{Math.round(cumulativeBilled).toLocaleString('en-IN')}</div>
+          <div className="text-[10px] text-blue-300 mt-0.5">{certifiedBills.length} certified/paid bill{certifiedBills.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div className="text-center text-blue-300 text-lg font-bold">−</div>
+        <div>
+          <div className="text-[10px] text-blue-200 uppercase tracking-wide">Total Spent</div>
+          <div className="text-lg font-bold text-white mt-0.5">₹{Math.round(totalSpent).toLocaleString('en-IN')}</div>
+        </div>
+        <div className="border-l border-blue-400/30 pl-4">
+          <div className="text-[10px] text-blue-200 uppercase tracking-wide">Gross Margin</div>
+          <div className={clsx('text-xl font-bold mt-0.5', margin >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
+            {margin < 0 ? '−' : ''}₹{Math.round(Math.abs(margin)).toLocaleString('en-IN')}
+          </div>
+          {marginPct != null && (
+            <div className={clsx('text-[10px] mt-0.5', margin >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
+              {marginPct.toFixed(1)}% of billed value
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName, contractValue }) {
   const qc = useQueryClient();
   const [editingHead, setEditingHead] = useState(null);
@@ -1609,6 +1652,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
     </div>
     </div>
       )}
+
+      <ProfitabilityAbstract projectId={projectId} totalSpent={totalActual} />
     </div>
   );
 }
