@@ -246,6 +246,58 @@ function WOForm({ wo, projects, subcontractors, onClose }) {
   const [bulkBoqItemId, setBulkBoqItemId] = useState('');
   const applyBulkBoqItem = () => setForm(f => ({ ...f, items: f.items.map(it => ({ ...it, boq_item_id: bulkBoqItemId })) }));
 
+  // Auto-match each WO item to a BOQ item by description keyword overlap, so a
+  // WO line like "Dismantling of Concrete Block Masonry" finds the BOQ's
+  // dismantling item without manually searching the dropdown. Only fills rows
+  // that are still unlinked; a row needs at least 2 shared significant words
+  // (or 1 when the row has only one) so unrelated items don't get guessed.
+  const STOPWORDS = new Set(['of','the','and','for','with','in','at','to','all','etc','as','per','mm','cm','thk','thick','work','works','providing','fixing','supply','supplying','laying','including']);
+  // Light stemming so "plastering"/"plaster" and "blocks"/"block" match
+  const stem = (w) => w.length > 4 ? w.replace(/ing$/, '').replace(/s$/, '') : w;
+  const tokenize = (s) => (s || '').toLowerCase()
+    // split "200mm"/"100MM" style tokens so they match "200 mm" written with a space
+    .replace(/(\d)([a-z])/g, '$1 $2').replace(/([a-z])(\d)/g, '$1 $2')
+    .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+    .filter(w => (w.length > 2 || /^\d+$/.test(w)) && !STOPWORDS.has(w))
+    .map(stem);
+  // BOQ thickness variants (100/150/200/300mm block items) all mention the same
+  // standard block-size numbers, so word overlap alone can't tell them apart.
+  // Extract the declared thickness ("thickness of 150mm", "300 MM THICK") and
+  // boost the item whose thickness equals the WO description's leading number.
+  const boqThickness = (s) => {
+    const m = /thickness\s*(?:of\s*)?(\d+)\s*mm/i.exec(s || '') || /(\d+)\s*mm\s+thick/i.exec(s || '');
+    return m ? m[1] : null;
+  };
+  const autoMatchBoqItems = () => {
+    let matched = 0;
+    const newItems = form.items.map(it => {
+      if (it.boq_item_id) return it;
+      const woTokens = tokenize(it.description);
+      if (!woTokens.length) return it;
+      const woNum = (/(\d+)/.exec(it.description || '') || [])[1] || null;
+      let best = null, bestScore = 0, bestCoverage = 0;
+      for (const b of boqItems) {
+        const boqTokens = new Set(tokenize(b.description));
+        if (!boqTokens.size) continue;
+        let overlap = woTokens.filter(t => boqTokens.has(t)).length;
+        if (woNum && boqThickness(b.description) === woNum) overlap += 5;
+        // Ties go to the more specific (shorter) BOQ description — e.g. "RCC Band"
+        // should pick the dedicated RCC-band item over a long blockwork item that
+        // merely mentions RCC bands in passing.
+        const coverage = overlap / boqTokens.size;
+        if (overlap > bestScore || (overlap === bestScore && coverage > bestCoverage)) {
+          best = b; bestScore = overlap; bestCoverage = coverage;
+        }
+      }
+      const needed = Math.min(2, woTokens.length);
+      if (best && bestScore >= needed) { matched++; return { ...it, boq_item_id: best.id }; }
+      return it;
+    });
+    setForm(f => ({ ...f, items: newItems }));
+    if (matched > 0) toast.success(`${matched} row(s) auto-matched — review before saving`);
+    else toast('No confident matches found — link manually or use "Apply to All Rows"', { icon: 'ℹ️' });
+  };
+
   const WORK_CATEGORIES = ['Civil','Structural','Waterproofing','Electrical','Plumbing','Painting','Carpentry','Tiles','Aluminium','Demolition','Earth Work','Fabrication','Interior','Landscaping','General'];
 
   return (
@@ -357,6 +409,12 @@ function WOForm({ wo, projects, subcontractors, onClose }) {
               <button onClick={applyBulkBoqItem} disabled={!bulkBoqItemId}
                 className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 whitespace-nowrap">
                 Apply to All Rows
+              </button>
+              <span className="text-[10px] text-slate-400 font-bold">or</span>
+              <button onClick={autoMatchBoqItems}
+                title='Matches each unlinked row to the BOQ item whose description shares the most keywords (e.g. "Dismantling…" finds the BOQ dismantling item)'
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 whitespace-nowrap">
+                ✨ Auto-Match by Description
               </button>
             </div>
           )}
