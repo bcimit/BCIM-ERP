@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import {
   Download, ClipboardList, Building2, AlertCircle,
-  Upload, X, CheckCircle2, AlertTriangle, Loader2,
+  Upload, X, CheckCircle2, AlertTriangle, Loader2, Search, FileSpreadsheet,
 } from 'lucide-react';
 import { poAPI, projectAPI, vendorAPI } from '../../api/client';
 import toast from 'react-hot-toast';
@@ -55,8 +55,20 @@ function parseXlDate(val) {
   return null;
 }
 
-const TH = ({ children, right }) => (
-  <th className={`px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-slate-900 font-medium whitespace-nowrap ${right ? 'text-right' : 'text-left'}`}>{children}</th>
+const TH = ({ children, right, sortKey, sort, onSort }) => (
+  <th
+    className={`px-3 py-2.5 text-xs font-medium uppercase tracking-wider text-slate-900 whitespace-nowrap ${right ? 'text-right' : 'text-left'} ${sortKey ? 'cursor-pointer select-none hover:bg-slate-100 transition' : ''}`}
+    onClick={sortKey ? () => onSort(sortKey) : undefined}
+  >
+    <span className={`inline-flex items-center gap-1 ${right ? 'justify-end' : ''}`}>
+      {children}
+      {sortKey && (
+        <span className={`text-[9px] ${sort?.key === sortKey ? 'opacity-100' : 'opacity-25'}`}>
+          {sort?.key === sortKey && sort.dir === 'desc' ? '▼' : '▲'}
+        </span>
+      )}
+    </span>
+  </th>
 );
 const TD = ({ children, right, bold, mono, className = '' }) => (
   <td className={`px-3 py-2 text-sm ${right ? 'text-right' : 'text-left'} ${bold ? 'font-medium text-slate-900' : 'text-slate-700'} ${mono ? 'font-mono text-xs' : ''} ${className}`}>{children}</td>
@@ -435,6 +447,9 @@ export default function PORegisterPage() {
   const [tab, setTab]             = useState('summary');
   const [exporting, setExporting] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [search, setSearch]       = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sort, setSort]           = useState({ key: null, dir: 'asc' });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -452,33 +467,62 @@ export default function PORegisterPage() {
     enabled: !!projectId,
   });
 
+  // Status counts computed off the full unfiltered set so filter-chip counts
+  // don't shift as the user types a search term.
+  const statusCounts = useMemo(() => {
+    const counts = {};
+    for (const po of poData) counts[po.status] = (counts[po.status] || 0) + 1;
+    return counts;
+  }, [poData]);
+
+  const toggleSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const displayedPOs = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return poData
+      .filter(po => statusFilter === 'all' || po.status === statusFilter)
+      .filter(po => !term || [po.po_number, po.vendor_name, po.narration, po.vendor_gst]
+        .some(f => (f || '').toLowerCase().includes(term)))
+      .slice()
+      .sort((a, b) => {
+        if (!sort.key) return 0;
+        const dir = sort.dir === 'asc' ? 1 : -1;
+        const av = a[sort.key], bv = b[sort.key];
+        if (sort.key === 'po_date') return (new Date(av || 0) - new Date(bv || 0)) * dir;
+        if (typeof av === 'number' || typeof bv === 'number' || !isNaN(parseFloat(av))) {
+          return ((parseFloat(av) || 0) - (parseFloat(bv) || 0)) * dir;
+        }
+        return String(av || '').localeCompare(String(bv || '')) * dir;
+      });
+  }, [poData, statusFilter, search, sort]);
+
   const vendorSummary = useMemo(() => {
     const map = {};
-    for (const po of poData) {
+    for (const po of displayedPOs) {
       const key = po.vendor_name || 'Unknown';
       if (!map[key]) map[key] = { gst: po.vendor_gst || '—', pos: [], total: 0, category: po.category || '' };
       map[key].pos.push(po.status === 'cancelled' ? `${po.po_number}(C)` : po.po_number);
       map[key].total += Number(po.grand_total) || 0;
     }
     return Object.entries(map).map(([name, v]) => ({ name, ...v }));
-  }, [poData]);
+  }, [displayedPOs]);
 
   const lineItems = useMemo(() => {
     const rows = [];
-    for (const po of poData) {
+    for (const po of displayedPOs) {
       if (!po.items) continue;
       for (const it of po.items) {
         rows.push({ ...it, po_number: po.po_number, po_date: po.po_date, vendor_name: po.vendor_name });
       }
     }
     return rows;
-  }, [poData]);
+  }, [displayedPOs]);
 
-  const grandTotal  = poData.reduce((s, p) => s + (Number(p.grand_total)   || 0), 0);
-  const subTotalSum = poData.reduce((s, p) => s + (Number(p.sub_total)     || 0), 0);
-  const cgstSum     = poData.reduce((s, p) => s + (Number(p.cgst_amount)   || 0), 0);
-  const sgstSum     = poData.reduce((s, p) => s + (Number(p.sgst_amount)   || 0), 0);
-  const tcsSum      = poData.reduce((s, p) => s + (Number(p.tcs_amount)    || 0), 0);
+  const grandTotal  = displayedPOs.reduce((s, p) => s + (Number(p.grand_total)   || 0), 0);
+  const subTotalSum = displayedPOs.reduce((s, p) => s + (Number(p.sub_total)     || 0), 0);
+  const cgstSum     = displayedPOs.reduce((s, p) => s + (Number(p.cgst_amount)   || 0), 0);
+  const sgstSum     = displayedPOs.reduce((s, p) => s + (Number(p.sgst_amount)   || 0), 0);
+  const tcsSum      = displayedPOs.reduce((s, p) => s + (Number(p.tcs_amount)    || 0), 0);
 
   const handleExport = async () => {
     if (!projectId) return toast.error('Select a project first');
@@ -498,6 +542,26 @@ export default function PORegisterPage() {
     } finally {
       setExporting(false);
     }
+  };
+
+  const exportCsv = () => {
+    const header = ['PO No', 'Date', 'Supplier Name', 'Supplier GST', 'Narration', 'Sub Total', 'CGST', 'SGST', 'TCS/Other Tax', 'Grand Total', 'Payment Terms', 'Status'];
+    const csvRows = [header, ...displayedPOs.map(po => [
+      po.po_number, fmtDate(po.po_date), po.vendor_name || '', po.vendor_gst || '', po.narration || '',
+      Number(po.sub_total || 0).toFixed(2), Number(po.cgst_amount || 0).toFixed(2), Number(po.sgst_amount || 0).toFixed(2),
+      Number(po.tcs_amount || 0).toFixed(2), Number(po.grand_total || 0).toFixed(2), po.payment_terms || '', STATUS_CFG[po.status]?.label || po.status,
+    ])];
+    const csv = csvRows.map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PO_Register_${(projects.find(p => p.id === projectId)?.project_code || 'export')}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const selectedProject = projects.find(p => p.id === projectId);
@@ -558,8 +622,48 @@ export default function PORegisterPage() {
               <Download className="w-4 h-4" />
               {exporting ? 'Exporting…' : 'Download Excel'}
             </button>
+            <button
+              onClick={exportCsv}
+              disabled={!projectId || !displayedPOs.length}
+              className="flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              CSV
+            </button>
           </div>
         </div>
+
+        {projectId && (
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <div className="relative w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search PO #, vendor, GST, narration…"
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button onClick={() => setStatusFilter('all')}
+                className={`px-2.5 py-1 text-[10px] font-bold rounded-full border transition ${statusFilter === 'all' ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                All ({poData.length})
+              </button>
+              {Object.entries(statusCounts).map(([st, n]) => (
+                <button key={st} onClick={() => setStatusFilter(st)}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-full border transition ${statusFilter === st ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                  {STATUS_CFG[st]?.label || st} ({n})
+                </button>
+              ))}
+            </div>
+            {(search || statusFilter !== 'all') && (
+              <button onClick={() => { setSearch(''); setStatusFilter('all'); }}
+                className="text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2">
+                Clear
+              </button>
+            )}
+          </div>
+        )}
 
         {selectedProject && (
           <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
@@ -569,7 +673,7 @@ export default function PORegisterPage() {
             <span>{selectedProject.project_code}</span>
             <span>·</span>
             <span className="font-medium text-indigo-700">₹{fmt(grandTotal)}</span>
-            <span>({poData.length} POs)</span>
+            <span>({displayedPOs.length}{displayedPOs.length !== poData.length ? ` of ${poData.length}` : ''} POs)</span>
           </div>
         )}
       </div>
@@ -577,7 +681,7 @@ export default function PORegisterPage() {
       {/* ── Tabs ── */}
       <div className="border-b border-slate-200 bg-white px-6">
         {[
-          { id: 'summary', label: 'PO Summary',       count: poData.length },
+          { id: 'summary', label: 'PO Summary',       count: displayedPOs.length },
           { id: 'items',   label: 'Line Item Details', count: lineItems.length },
           { id: 'vendors', label: 'Vendor Summary',    count: vendorSummary.length },
         ].map(t => (
@@ -607,6 +711,14 @@ export default function PORegisterPage() {
               <Upload className="w-4 h-4" /> Import from Excel
             </button>
           </div>
+        ) : displayedPOs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <Search className="w-10 h-10 mb-3" />
+            <p className="text-sm">No POs match your search/filter</p>
+            <button onClick={() => { setSearch(''); setStatusFilter('all'); }} className="mt-4 text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2">
+              Clear search/filter
+            </button>
+          </div>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
@@ -615,15 +727,21 @@ export default function PORegisterPage() {
                 <table className="w-full text-left border-collapse min-w-[1100px]">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <TH>PO No</TH><TH>Date</TH><TH>Supplier Name</TH><TH>Supplier GST</TH>
+                      <TH sortKey="po_number" sort={sort} onSort={toggleSort}>PO No</TH>
+                      <TH sortKey="po_date" sort={sort} onSort={toggleSort}>Date</TH>
+                      <TH sortKey="vendor_name" sort={sort} onSort={toggleSort}>Supplier Name</TH>
+                      <TH>Supplier GST</TH>
                       <TH>Narration / Description</TH>
-                      <TH right>Sub Total (₹)</TH><TH right>CGST (₹)</TH><TH right>SGST (₹)</TH>
-                      <TH right>Other Tax/TCS (₹)</TH><TH right>Grand Total (₹)</TH>
-                      <TH>Payment Terms</TH><TH>Status</TH>
+                      <TH right sortKey="sub_total" sort={sort} onSort={toggleSort}>Sub Total (₹)</TH>
+                      <TH right>CGST (₹)</TH><TH right>SGST (₹)</TH>
+                      <TH right>Other Tax/TCS (₹)</TH>
+                      <TH right sortKey="grand_total" sort={sort} onSort={toggleSort}>Grand Total (₹)</TH>
+                      <TH>Payment Terms</TH>
+                      <TH sortKey="status" sort={sort} onSort={toggleSort}>Status</TH>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {poData.map((po, idx) => (
+                    {displayedPOs.map((po, idx) => (
                       <tr key={po.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                         <TD mono bold>{po.po_number}</TD>
                         <TD>{fmtDate(po.po_date)}</TD>
@@ -642,7 +760,7 @@ export default function PORegisterPage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-indigo-50 border-t-2 border-indigo-200 font-semibold">
-                      <td colSpan={5} className="px-3 py-2.5 text-sm font-medium text-indigo-900">GRAND TOTAL — {poData.length} POs</td>
+                      <td colSpan={5} className="px-3 py-2.5 text-sm font-medium text-indigo-900">GRAND TOTAL — {displayedPOs.length} POs</td>
                       <TD right bold>₹{fmt(subTotalSum)}</TD>
                       <TD right bold>₹{fmt(cgstSum)}</TD>
                       <TD right bold>₹{fmt(sgstSum)}</TD>
