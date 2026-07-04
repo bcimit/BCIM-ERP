@@ -1468,6 +1468,143 @@ function ImportBillsModal({ projects, defaultProjectId, onClose, onDone }) {
 }
 
 // â"€â"€ Edit Bill Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ── Line item editor row (used inside EditBillModal) ────────────────────────
+function LineItemEditRow({ billId, item, boqItems }) {
+  const qc = useQueryClient();
+  const [row, setRow] = useState({
+    item_name:  item.item_name  || '',
+    unit:       item.unit       || '',
+    quantity:   String(item.quantity ?? ''),
+    rate:       String(item.rate ?? ''),
+    gst_pct:    String(item.gst_pct ?? ''),
+    cost_head:  item.cost_head  || '',
+    boq_item_id:item.boq_item_id|| '',
+  });
+  const [dirty, setDirty] = useState(false);
+  const set = (k, v) => { setRow(p => ({ ...p, [k]: v })); setDirty(true); };
+
+  const qty = parseFloat(row.quantity) || 0;
+  const rt  = parseFloat(row.rate) || 0;
+  const basic = qty * rt;
+  const gstAmt = basic * (parseFloat(row.gst_pct) || 0) / 100;
+  const total = basic + gstAmt;
+
+  const saveMut = useMutation({
+    mutationFn: () => tqsBillsAPI.updateLineItem(billId, item.id, row),
+    onSuccess: () => {
+      toast.success('Line item updated');
+      setDirty(false);
+      qc.invalidateQueries({ queryKey: ['tqs-bill-detail', billId] });
+      qc.invalidateQueries({ queryKey: ['tqs-bills'] });
+    },
+    onError: (err) => toast.error(err?.response?.data?.error || 'Failed to update line item'),
+  });
+
+  return (
+    <tr className="border-t border-slate-100">
+      <td className="px-2 py-1.5 min-w-[160px]">
+        <input className="w-full border border-slate-200 rounded px-2 py-1 text-xs"
+          value={row.item_name} onChange={e => set('item_name', e.target.value)} />
+        <div className="flex gap-1 mt-1">
+          <select className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+            value={row.boq_item_id} onChange={e => set('boq_item_id', e.target.value)} title="Link to BOQ item">
+            <option value="">No BOQ item</option>
+            {boqItems.map(b => (
+              <option key={b.id} value={b.id}>{b.item_no ? `${b.item_no} — ` : ''}{b.description}</option>
+            ))}
+          </select>
+          <select className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+            value={row.cost_head} onChange={e => set('cost_head', e.target.value)} title="Cost sub-heading">
+            <option value="">Unallocated</option>
+            {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </div>
+      </td>
+      <td className="px-2 py-1.5 w-20">
+        <input className="w-full border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Nos"
+          value={row.unit} onChange={e => set('unit', e.target.value)} />
+      </td>
+      <td className="px-2 py-1.5 w-20">
+        <input type="number" step="0.01" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
+          value={row.quantity} onChange={e => set('quantity', e.target.value)} />
+      </td>
+      <td className="px-2 py-1.5 w-24">
+        <input type="number" step="0.01" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
+          value={row.rate} onChange={e => set('rate', e.target.value)} />
+      </td>
+      <td className="px-2 py-1.5 w-16">
+        <input type="number" step="0.5" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
+          value={row.gst_pct} onChange={e => set('gst_pct', e.target.value)} />
+      </td>
+      <td className="px-2 py-1.5 w-24 text-right text-xs text-slate-600">{inr(basic)}</td>
+      <td className="px-2 py-1.5 w-28 text-right text-xs font-semibold text-slate-800">{inr(total)}</td>
+      <td className="px-2 py-1.5 w-16 text-center">
+        <button type="button" onClick={() => saveMut.mutate()} disabled={!dirty || saveMut.isPending}
+          className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+            dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-400'
+          } disabled:opacity-60`}>
+          {saveMut.isPending ? '…' : 'Save'}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// ── Line items section: fetches full bill detail (list rows don't include
+// items) and renders each line editable, so the Edit Bill modal shows the
+// same material/cost-head/BOQ detail as the Create form. ────────────────────
+function BillLineItemsSection({ billId, projectId }) {
+  const { data: detail, isLoading } = useQuery({
+    queryKey: ['tqs-bill-detail', billId],
+    queryFn: () => tqsBillsAPI.get(billId).then(r => r.data?.data ?? r.data),
+    enabled: !!billId,
+  });
+  const { data: boqItems = [] } = useQuery({
+    queryKey: ['tqs-boq-items', projectId],
+    queryFn: () => boqAPI.summary(projectId).then(r => r.data?.data ?? r.data ?? []).catch(() => []),
+    enabled: !!projectId,
+  });
+
+  const items = detail?.line_items || [];
+
+  return (
+    <div className={Z_CARD}>
+      <h3 className={Z_HEAD}>
+        Line Items {items.length > 0 && <span className="text-slate-400 normal-case font-normal">({items.length})</span>}
+      </h3>
+      <div className="p-4">
+        {isLoading ? (
+          <div className="text-xs text-slate-400 italic py-4 text-center">Loading line items…</div>
+        ) : items.length === 0 ? (
+          <div className="text-xs text-slate-400 italic py-4 text-center bg-slate-50 rounded-lg border border-slate-100">
+            No material line items on this bill — header amounts only.
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-xl overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-2 py-2 text-left text-slate-500 font-medium">Item / BOQ / Cost Head</th>
+                  <th className="px-2 py-2 text-left text-slate-500 font-medium">Unit</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Qty</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Rate</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">GST%</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Basic</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Total</th>
+                  <th className="w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(it => <LineItemEditRow key={it.id} billId={billId} item={it} boqItems={boqItems} />)}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function EditBillModal({ bill, projects, onClose }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
@@ -1501,13 +1638,32 @@ function EditBillModal({ bill, projects, onClose }) {
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  // â"€â"€ Line items (shares the cache key BillLineItemsSection populates) â"€â"€â"€â"€
+  // Bills with line items can have a DIFFERENT GST% per line (e.g. one line at
+  // 5%, another at 18%) — a single header CGST/SGST% can't represent that.
+  // When line items exist, the header GST is derived by summing each line's
+  // own basic/GST amounts instead of applying one flat rate.
+  const { data: billDetail } = useQuery({
+    queryKey: ['tqs-bill-detail', bill.id],
+    queryFn: () => tqsBillsAPI.get(bill.id).then(r => r.data?.data ?? r.data),
+    enabled: !!bill.id,
+  });
+  const lineItems = billDetail?.line_items || [];
+  const hasLineItems = lineItems.length > 0;
+  const distinctGstRates = [...new Set(lineItems.map(it => parseFloat(it.gst_pct) || 0))];
+  const itemsBasic = lineItems.reduce((s, it) => s + (parseFloat(it.basic_amount) || 0), 0);
+  const itemsCgst  = lineItems.reduce((s, it) => s + (parseFloat(it.cgst_amt) || 0), 0);
+  const itemsSgst  = lineItems.reduce((s, it) => s + (parseFloat(it.sgst_amt) || 0), 0);
+  const itemsIgst  = lineItems.reduce((s, it) => s + (parseFloat(it.igst_amt) || 0), 0);
+  const itemsGst   = itemsCgst + itemsSgst + itemsIgst;
+
   // â"€â"€ Live calculations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  const basicAmt     = parseFloat(form.basic_amount)      || 0;
   const taxMode      = form.tax_mode;
-  const cgstAmt      = taxMode === 'intrastate' ? basicAmt * (parseFloat(form.cgst_pct) || 0) / 100 : 0;
-  const sgstAmt      = taxMode === 'intrastate' ? basicAmt * (parseFloat(form.sgst_pct) || 0) / 100 : 0;
-  const igstAmt      = taxMode === 'interstate' ? basicAmt * (parseFloat(form.igst_pct) || 0) / 100 : 0;
-  const totalGST     = cgstAmt + sgstAmt + igstAmt;
+  const basicAmt     = hasLineItems ? itemsBasic : (parseFloat(form.basic_amount) || 0);
+  const cgstAmt      = hasLineItems ? itemsCgst : (taxMode === 'intrastate' ? basicAmt * (parseFloat(form.cgst_pct) || 0) / 100 : 0);
+  const sgstAmt      = hasLineItems ? itemsSgst : (taxMode === 'intrastate' ? basicAmt * (parseFloat(form.sgst_pct) || 0) / 100 : 0);
+  const igstAmt      = hasLineItems ? itemsIgst : (taxMode === 'interstate' ? basicAmt * (parseFloat(form.igst_pct) || 0) / 100 : 0);
+  const totalGST     = hasLineItems ? itemsGst : (cgstAmt + sgstAmt + igstAmt);
   const transportAmt = parseFloat(form.transport_charges)  || 0;
   const transportGST = transportAmt * (parseFloat(form.transport_gst_pct) || 0) / 100;
   const otherAmt     = parseFloat(form.other_charges)      || 0;
@@ -1548,14 +1704,21 @@ function EditBillModal({ bill, projects, onClose }) {
       if (!form.hire_period_to) return toast.error('Hire period end date is required');
     }
 
+    // When line items exist, each line already has its own GST% and was saved
+    // via its own Save button — the header just needs the summed totals for
+    // reporting (blended % is informational only, not used to recompute tax).
+    const blendedCgstPct = hasLineItems ? (basicAmt > 0 ? (cgstAmt / basicAmt) * 100 : 0) : (taxMode === 'intrastate' ? parseFloat(form.cgst_pct) || 0 : 0);
+    const blendedSgstPct = hasLineItems ? (basicAmt > 0 ? (sgstAmt / basicAmt) * 100 : 0) : (taxMode === 'intrastate' ? parseFloat(form.sgst_pct) || 0 : 0);
+    const blendedIgstPct = hasLineItems ? (basicAmt > 0 ? (igstAmt / basicAmt) * 100 : 0) : (taxMode === 'interstate' ? parseFloat(form.igst_pct) || 0 : 0);
+
     updateMut.mutate({
       ...form,
       basic_amount:      basicAmt.toFixed(2),
-      cgst_pct:          taxMode === 'intrastate' ? parseFloat(form.cgst_pct) || 0 : 0,
+      cgst_pct:          Number(blendedCgstPct.toFixed(2)),
       cgst_amt:          cgstAmt.toFixed(2),
-      sgst_pct:          taxMode === 'intrastate' ? parseFloat(form.sgst_pct) || 0 : 0,
+      sgst_pct:          Number(blendedSgstPct.toFixed(2)),
       sgst_amt:          sgstAmt.toFixed(2),
-      igst_pct:          taxMode === 'interstate' ? parseFloat(form.igst_pct) || 0 : 0,
+      igst_pct:          Number(blendedIgstPct.toFixed(2)),
       igst_amt:          igstAmt.toFixed(2),
       gst_amount:        totalGST.toFixed(2),
       transport_charges: transportAmt.toFixed(2),
@@ -1572,29 +1735,33 @@ function EditBillModal({ bill, projects, onClose }) {
   const inrFmt = inr;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
 
-        {/* â"€â"€ Header â"€â"€ */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-blue-600 rounded-t-2xl flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Pencil className="w-4 h-4 text-white" />
-            <div>
-              <h2 className="text-sm font-medium text-white">Edit Bill - SL #{bill.sl_number}</h2>
-              <p className="text-xs text-blue-200">{bill.vendor_name} - {bill.inv_number}</p>
-            </div>
+      {/* ── Breadcrumb header (matches New Bill) ── */}
+      <div className="flex items-center justify-between px-6 py-3.5 flex-shrink-0 bg-white border-b border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-400">
+            Bill Tracker <span className="text-slate-300">›</span> Bills <span className="text-slate-300">›</span>{' '}
+            <b className="text-slate-700">Edit Bill — SL #{bill.sl_number}</b>
           </div>
-          <button onClick={onClose} className="text-blue-200 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <span className="text-xs text-slate-400">{bill.vendor_name} · {bill.inv_number}</span>
         </div>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+      {/* ── Scrollable body ── */}
+      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1600px] mx-auto px-6 py-6 space-y-5">
 
-          {/* â"€â"€ SECTION 1: Bill Info â"€â"€ */}
-          <div>
-            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-widest mb-3">Bill Information</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* ── SECTION 1: Bill Info ── */}
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Bill Information</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
               <div>
                 <Lbl req>Vendor Name</Lbl>
                 <input className={F} value={form.vendor_name} onChange={e => set('vendor_name', e.target.value)} />
@@ -1677,57 +1844,92 @@ function EditBillModal({ bill, projects, onClose }) {
             </div>
           </div>
 
-          {/* â"€â"€ SECTION 2: GST & Amounts â"€â"€ */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-widest">Invoice Amounts & GST</p>
-              <select
-                className={`text-xs h-9 rounded-lg px-2 text-slate-900 outline-none transition-all border ${FIELD_HL}`}
-                value={form.tax_mode} onChange={e => set('tax_mode', e.target.value)}
-              >
-                <option value="intrastate">Intrastate (CGST + SGST)</option>
-                <option value="interstate">Interstate (IGST)</option>
-              </select>
-            </div>
+          {/* ── SECTION 1B: Line Items ── */}
+          <BillLineItemsSection billId={bill.id} projectId={form.project_id} />
 
-            {/* Quick GST buttons */}
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              <span className="text-xs text-slate-900 font-medium self-center">Quick GST:</span>
-              {[0, 5, 12, 18, 28].map(pct => {
-                const active = taxMode === 'intrastate' &&
-                  parseFloat(form.cgst_pct) * 2 === pct;
-                return (
-                  <button key={pct} type="button" onClick={() => applyGST(pct)}
-                    className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
-                      active ? 'bg-blue-600 text-white border-blue-600'
-                             : 'border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-slate-600'
-                    }`}>
-                    {pct}%
-                  </button>
-                );
-              })}
-              <button type="button" onClick={() => applyGST(18, true)}
-                className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
-                  taxMode === 'interstate' ? 'bg-amber-500 text-white border-amber-500'
-                                          : 'border-amber-200 hover:bg-amber-50 text-amber-700'
-                }`}>
-                IGST 18%
-              </button>
-            </div>
+          {/* â"€â"€ SECTION 2: GST & Amounts â"€â"€ */}
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Invoice Amounts &amp; GST</h3>
+            <div className="p-4">
+            {hasLineItems ? (
+              <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <p className="text-xs font-medium text-blue-700">
+                  Basic Amount and GST are computed automatically from the {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} above
+                  {distinctGstRates.length > 1
+                    ? <> — <b>mixed GST rates</b> ({distinctGstRates.sort((a, b) => a - b).map(r => `${r}%`).join(', ')})</>
+                    : <> at {distinctGstRates[0] ?? 0}% GST</>}.
+                  {' '}Edit a line's GST% in the Line Items section to change it.
+                </p>
+              </div>
+            ) : (<>
+              <div className="flex items-center justify-end mb-3">
+                <select
+                  className={`text-xs h-9 rounded-lg px-2 text-slate-900 outline-none transition-all border ${FIELD_HL}`}
+                  value={form.tax_mode} onChange={e => set('tax_mode', e.target.value)}
+                >
+                  <option value="intrastate">Intrastate (CGST + SGST)</option>
+                  <option value="interstate">Interstate (IGST)</option>
+                </select>
+              </div>
+
+              {/* Quick GST buttons */}
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                <span className="text-xs text-slate-900 font-medium self-center">Quick GST:</span>
+                {[0, 5, 12, 18, 28].map(pct => {
+                  const active = taxMode === 'intrastate' &&
+                    parseFloat(form.cgst_pct) * 2 === pct;
+                  return (
+                    <button key={pct} type="button" onClick={() => applyGST(pct)}
+                      className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
+                        active ? 'bg-blue-600 text-white border-blue-600'
+                               : 'border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-slate-600'
+                      }`}>
+                      {pct}%
+                    </button>
+                  );
+                })}
+                <button type="button" onClick={() => applyGST(18, true)}
+                  className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
+                    taxMode === 'interstate' ? 'bg-amber-500 text-white border-amber-500'
+                                            : 'border-amber-200 hover:bg-amber-50 text-amber-700'
+                  }`}>
+                  IGST 18%
+                </button>
+              </div>
+            </>)}
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {/* Basic Amount */}
               <div>
                 <Lbl req>Basic Amount (Rs )</Lbl>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-900 font-medium text-sm">Rs </span>
-                  <input type="number" step="0.01" className={F + ' pl-7'} placeholder="0.00"
-                    value={form.basic_amount} onChange={e => set('basic_amount', e.target.value)} />
-                </div>
+                {hasLineItems ? (
+                  <div className={F + ' pl-3 flex items-center bg-slate-50 text-slate-700 font-semibold'}>Rs {inrFmt(basicAmt)}</div>
+                ) : (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-900 font-medium text-sm">Rs </span>
+                    <input type="number" step="0.01" className={F + ' pl-7'} placeholder="0.00"
+                      value={form.basic_amount} onChange={e => set('basic_amount', e.target.value)} />
+                  </div>
+                )}
               </div>
 
-              {/* GST inputs - intrastate */}
-              {taxMode === 'intrastate' ? (<>
+              {/* GST — read-only summed totals when line items exist, else manual entry */}
+              {hasLineItems ? (<>
+                <div>
+                  <Lbl>CGST (auto-summed)</Lbl>
+                  <div className={F + ' pl-3 flex items-center bg-slate-50 text-blue-700 font-semibold'}>Rs {inrFmt(cgstAmt)}</div>
+                </div>
+                <div>
+                  <Lbl>SGST (auto-summed)</Lbl>
+                  <div className={F + ' pl-3 flex items-center bg-slate-50 text-blue-700 font-semibold'}>Rs {inrFmt(sgstAmt)}</div>
+                </div>
+                {igstAmt > 0 && (
+                  <div>
+                    <Lbl>IGST (auto-summed)</Lbl>
+                    <div className={F + ' pl-3 flex items-center bg-slate-50 text-amber-700 font-semibold'}>Rs {inrFmt(igstAmt)}</div>
+                  </div>
+                )}
+              </>) : taxMode === 'intrastate' ? (<>
                 <div>
                   <Lbl>CGST %</Lbl>
                   <input type="number" step="0.5" className={F} placeholder="9"
@@ -1795,6 +1997,7 @@ function EditBillModal({ bill, projects, onClose }) {
                 )}
               </div>
             </div>
+            </div>
           </div>
 
           {/* â"€â"€ SECTION 3: Live Totals â"€â"€ */}
@@ -1805,7 +2008,22 @@ function EditBillModal({ bill, projects, onClose }) {
                 <p className="text-xs text-slate-900 font-medium mb-0.5">Basic Amount</p>
                 <p className="font-medium text-slate-800">Rs {inrFmt(basicAmt)}</p>
               </div>
-              {taxMode === 'intrastate' ? (<>
+              {hasLineItems ? (<>
+                <div className="text-center bg-white rounded-lg p-2.5 border border-blue-100">
+                  <p className="text-xs text-slate-900 font-medium mb-0.5">CGST (blended)</p>
+                  <p className="font-medium text-blue-700">Rs {inrFmt(cgstAmt)}</p>
+                </div>
+                <div className="text-center bg-white rounded-lg p-2.5 border border-blue-100">
+                  <p className="text-xs text-slate-900 font-medium mb-0.5">SGST (blended)</p>
+                  <p className="font-medium text-blue-700">Rs {inrFmt(sgstAmt)}</p>
+                </div>
+                {igstAmt > 0 && (
+                  <div className="text-center bg-white rounded-lg p-2.5 border border-amber-100">
+                    <p className="text-xs text-slate-900 font-medium mb-0.5">IGST (blended)</p>
+                    <p className="font-medium text-amber-700">Rs {inrFmt(igstAmt)}</p>
+                  </div>
+                )}
+              </>) : taxMode === 'intrastate' ? (<>
                 <div className="text-center bg-white rounded-lg p-2.5 border border-blue-100">
                   <p className="text-xs text-slate-900 font-medium mb-0.5">CGST ({form.cgst_pct || 0}%)</p>
                   <p className="font-medium text-blue-700">Rs {inrFmt(cgstAmt)}</p>
@@ -1860,25 +2078,47 @@ function EditBillModal({ bill, projects, onClose }) {
           </div>
 
           {/* â"€â"€ SECTION 4: Remarks â"€â"€ */}
-          <div>
-            <Lbl>Remarks / Notes</Lbl>
-            <textarea rows={2} className={F + ' resize-none'}
-              placeholder="Any remarks..."
-              value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Remarks / Notes</h3>
+            <div className="p-4">
+              <textarea rows={2} className={F + ' resize-none'}
+                placeholder="Any remarks..."
+                value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+            </div>
           </div>
 
-        </form>
+        </div>
+      </form>
 
-        {/* â"€â"€ Footer â"€â"€ */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-slate-50 rounded-b-2xl flex-shrink-0">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-900 hover:bg-slate-100 transition-colors">
-            Cancel
-          </button>
-          <button type="button" onClick={handleSubmit} disabled={updateMut.isPending}
-            className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-60 transition-colors flex items-center gap-2">
-            {updateMut.isPending ? 'Saving...' : <><Pencil className="w-3.5 h-3.5" /> Save Changes</>}
-          </button>
+      {/* ── Sticky footer ── */}
+      <div style={{ flexShrink: 0, background: '#ffffff', borderTop: '1px solid #e2e8f0' }}
+        className="px-6 py-4 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+        <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between gap-4">
+          {/* Grand total preview */}
+          <div className="flex items-center gap-6">
+            <div className="text-[11px] text-slate-500 font-medium">
+              Basic: <span className="font-medium text-slate-700 text-sm ml-1">₹{inrFmt(basicAmt)}</span>
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">
+              GST: <span className="font-medium text-slate-700 text-sm ml-1">₹{inrFmt(totalGST)}</span>
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">
+              Grand Total: <span className="font-medium text-blue-700 text-lg ml-1">₹{inrFmt(grandTotal)}</span>
+            </div>
+          </div>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose}
+              className="px-4 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+            <button type="button" onClick={handleSubmit} disabled={updateMut.isPending}
+              className="inline-flex items-center gap-2 px-5 h-9 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+              {updateMut.isPending
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+                : <><Pencil className="w-3.5 h-3.5" /> Save Changes</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>
