@@ -6,6 +6,7 @@ const router  = express.Router();
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { authenticate, authorize } = require('../middleware/auth');
+const { runSchemaInit } = require('../utils/schemaInit');
 
 const PLANNERS = ['project_manager', 'site_engineer', 'admin', 'super_admin'];
 const MANAGERS = ['project_manager', 'admin', 'super_admin'];
@@ -31,6 +32,25 @@ const uploadDPRWorkbook = (req, res, next) => {
 };
 
 router.use(authenticate);
+
+// ─── DPR CONSOLE SETTINGS (numbering / approval chain / notifications / sync) ──
+runSchemaInit('dpr_settings', async () => {
+  await db().query(`
+    CREATE TABLE IF NOT EXISTS dpr_settings (
+      company_id UUID PRIMARY KEY REFERENCES companies(id),
+      number_prefix VARCHAR(20) DEFAULT 'DPR',
+      number_next INT DEFAULT 1,
+      number_pad INT DEFAULT 4,
+      approval_chain JSONB DEFAULT '["Site Engineer","Project Engineer","Construction Manager","Project Manager","Client Approval"]',
+      notification_rules JSONB DEFAULT '{"dpr_pending":true,"dpr_approved":true,"dpr_rejected":true,"delay_alert":true,"missing_photos":true,"manpower_shortage":true,"equipment_breakdown":true}',
+      sync_frequency VARCHAR(30) DEFAULT 'realtime',
+      photo_quality VARCHAR(20) DEFAULT 'compressed',
+      allow_offline_drafts BOOLEAN DEFAULT true,
+      auto_attach_gps BOOLEAN DEFAULT true,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+});
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const db = () => require('../config/database').pool;
@@ -270,6 +290,18 @@ function buildPlanningDPRResponse(row) {
     subcontractors: subcontractors,
     plant_items: toArray(equipmentStatus.plant_items),
     steel: toArray(materialConsumed.steel),
+    // Richer mockup fields — all live inside the same two JSONB columns, no migration needed
+    materials: toArray(materialConsumed.materials),
+    issues_list: toArray(equipmentStatus.issues_list),
+    safety_checklist: ensureObject(equipmentStatus.safety_checklist),
+    quality_checklist: ensureObject(equipmentStatus.quality_checklist),
+    approval_chain: toArray(equipmentStatus.approval_chain),
+    approval_history: toArray(equipmentStatus.approval_history),
+    client_name: equipmentStatus.client_name || '',
+    contractor_name: equipmentStatus.contractor_name || '',
+    site_location: equipmentStatus.site_location || '',
+    shift: equipmentStatus.shift || '',
+    reviewed_by: equipmentStatus.reviewed_by || '',
     constraints: equipmentStatus.constraints || row.issues || '',
     rfi: equipmentStatus.rfi || row.tomorrow_plan || '',
     prepared_by: equipmentStatus.prepared_by || row.submitted_by_name || '',
@@ -294,14 +326,35 @@ function buildPlanningDPRStorage(payload) {
     material_consumed: {
       concrete_today: toArray(payload.concrete_today),
       steel: toArray(payload.steel),
+      // Generic material rows: {name, unit, opening, received, consumed, closing, remarks}
+      materials: toArray(payload.materials),
     },
     equipment_status: {
       site_conditions: payload.site_conditions || 'Dry',
       rain_log: payload.rain_log || '',
       staff: toArray(payload.staff),
+      // direct_workers rows now also carry {designation, planned, ot, contractor, remarks}
+      // alongside the existing {category, day, night} — additive, old readers unaffected.
       direct_workers: toArray(payload.direct_workers),
       subcontractors: toArray(payload.subcontractors),
+      // plant_items rows now also carry {equipment_no, qty, idle, breakdown, operator,
+      // utilization, remarks} alongside the existing {item, nos} — additive.
       plant_items: toArray(payload.plant_items),
+      // Issues & Delays: {category, description, impact, root_cause, corrective_action, responsible, target_date, status}
+      issues_list: toArray(payload.issues_list),
+      // Safety/Quality checklist: { "Toolbox Talk Conducted": true, ... }
+      safety_checklist: ensureObject(payload.safety_checklist),
+      quality_checklist: ensureObject(payload.quality_checklist),
+      // Approval chain: ordered role list configured in Settings, copied onto the DPR
+      // at creation time so re-ordering the chain later doesn't rewrite history.
+      approval_chain: toArray(payload.approval_chain),
+      // Approval history: [{role, action, by, at, comment}]
+      approval_history: toArray(payload.approval_history),
+      client_name: payload.client_name || '',
+      contractor_name: payload.contractor_name || '',
+      site_location: payload.site_location || '',
+      shift: payload.shift || '',
+      reviewed_by: payload.reviewed_by || '',
       constraints: payload.constraints || '',
       rfi: payload.rfi || '',
       prepared_by: payload.prepared_by || '',
@@ -1465,6 +1518,227 @@ router.get('/dashboard', async (req, res) => {
         latest_scurve:   scurve.rows[0] || null,
         current_lookahead: lookahead.rows[0] || null,
       }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DPR CONSOLE: settings ──────────────────────────────────────────────────
+// GET /planning/dpr-settings
+router.get('/dpr-settings', async (req, res) => {
+  try {
+    const { rows } = await db().query(`SELECT * FROM dpr_settings WHERE company_id = $1`, [req.user.company_id]);
+    if (rows.length) return res.json({ data: rows[0] });
+    const inserted = await db().query(
+      `INSERT INTO dpr_settings (company_id) VALUES ($1) RETURNING *`,
+      [req.user.company_id]
+    );
+    res.json({ data: inserted.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /planning/dpr-settings
+router.put('/dpr-settings', authorize(...ADMINS), async (req, res) => {
+  try {
+    const {
+      number_prefix, number_next, number_pad, approval_chain,
+      notification_rules, sync_frequency, photo_quality,
+      allow_offline_drafts, auto_attach_gps,
+    } = req.body;
+
+    const { rows } = await db().query(`
+      INSERT INTO dpr_settings (company_id, number_prefix, number_next, number_pad, approval_chain, notification_rules, sync_frequency, photo_quality, allow_offline_drafts, auto_attach_gps, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+      ON CONFLICT (company_id) DO UPDATE SET
+        number_prefix = COALESCE($2, dpr_settings.number_prefix),
+        number_next = COALESCE($3, dpr_settings.number_next),
+        number_pad = COALESCE($4, dpr_settings.number_pad),
+        approval_chain = COALESCE($5, dpr_settings.approval_chain),
+        notification_rules = COALESCE($6, dpr_settings.notification_rules),
+        sync_frequency = COALESCE($7, dpr_settings.sync_frequency),
+        photo_quality = COALESCE($8, dpr_settings.photo_quality),
+        allow_offline_drafts = COALESCE($9, dpr_settings.allow_offline_drafts),
+        auto_attach_gps = COALESCE($10, dpr_settings.auto_attach_gps),
+        updated_at = NOW()
+      RETURNING *
+    `, [
+      req.user.company_id, number_prefix || null, number_next ?? null, number_pad ?? null,
+      approval_chain ? JSON.stringify(approval_chain) : null,
+      notification_rules ? JSON.stringify(notification_rules) : null,
+      sync_frequency || null, photo_quality || null,
+      allow_offline_drafts ?? null, auto_attach_gps ?? null,
+    ]);
+    res.json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DPR CONSOLE: multi-step approval action ───────────────────────────────
+// PATCH /planning/dpr/:id/approval-action  { action: 'approve'|'return'|'reject', comment }
+// Advances the DPR through the approval_chain recorded on it at creation time,
+// appending to approval_history each step so a full audit trail is kept.
+router.patch('/dpr/:id/approval-action', authorize(...MANAGERS), async (req, res) => {
+  try {
+    const { action, comment } = req.body;
+    if (!['approve', 'return', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'action must be approve, return, or reject' });
+    }
+    const existing = await db().query(`
+      SELECT d.* FROM daily_progress_reports d
+      JOIN projects p ON p.id = d.project_id
+      WHERE d.id = $1 AND p.company_id = $2
+    `, [req.params.id, req.user.company_id]);
+    if (!existing.rows.length) return notFound(res, 'DPR');
+
+    const row = existing.rows[0];
+    const equipmentStatus = ensureObject(row.equipment_status);
+    const chain = toArray(equipmentStatus.approval_chain).length
+      ? toArray(equipmentStatus.approval_chain)
+      : ['Site Engineer', 'Project Engineer', 'Construction Manager', 'Project Manager', 'Client Approval'];
+    const history = toArray(equipmentStatus.approval_history);
+    const currentStepIdx = history.filter(h => h.action === 'approve').length;
+    const currentRole = chain[currentStepIdx] || chain[chain.length - 1];
+
+    history.push({
+      role: currentRole,
+      action,
+      by: req.user.name || '',
+      at: new Date().toISOString(),
+      comment: comment || '',
+    });
+
+    let status = row.status;
+    if (action === 'approve') {
+      status = (currentStepIdx + 1 >= chain.length) ? 'approved' : 'submitted';
+    } else if (action === 'return') {
+      status = 'draft';
+    } else if (action === 'reject') {
+      status = 'rejected';
+    }
+
+    equipmentStatus.approval_history = history;
+    if (status === 'approved') {
+      equipmentStatus.approved_by = req.user.name || '';
+      equipmentStatus.approved_at = new Date().toISOString();
+    }
+
+    await db().query(
+      `UPDATE daily_progress_reports SET status = $1, equipment_status = $2 WHERE id = $3`,
+      [status, JSON.stringify(equipmentStatus), req.params.id]
+    );
+
+    res.json({ data: { id: req.params.id, status, current_role: currentRole, history } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DPR CONSOLE: company-wide dashboard ───────────────────────────────────
+// GET /planning/dpr-console/dashboard — aggregates across ALL projects for the
+// company (the per-project /planning/dashboard and /planning/dpr/analytics
+// routes above are scoped to one project_id and don't cover this).
+router.get('/dpr-console/dashboard', async (req, res) => {
+  try {
+    const companyId = req.user.company_id;
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+    const [todayRows, yesterdayRows, recentRows, equipStats, actStats] = await Promise.all([
+      db().query(`
+        SELECT d.*, p.name AS project_name FROM daily_progress_reports d
+        JOIN projects p ON p.id = d.project_id
+        WHERE p.company_id = $1 AND d.report_date = $2
+      `, [companyId, today]),
+      db().query(`
+        SELECT d.id FROM daily_progress_reports d
+        JOIN projects p ON p.id = d.project_id
+        WHERE p.company_id = $1 AND d.report_date = $2
+      `, [companyId, yesterday]),
+      db().query(`
+        SELECT d.*, p.name AS project_name FROM daily_progress_reports d
+        JOIN projects p ON p.id = d.project_id
+        WHERE p.company_id = $1
+        ORDER BY d.report_date DESC, d.created_at DESC
+        LIMIT 14
+      `, [companyId]),
+      db().query(`
+        SELECT COUNT(*) FILTER (WHERE status IN ('in_progress','planned')) AS active,
+               COUNT(*) FILTER (WHERE status = 'delayed') AS delayed,
+               COUNT(*) AS total
+        FROM project_activities pa
+        JOIN projects p ON p.id = pa.project_id
+        WHERE p.company_id = $1
+      `, [companyId]).catch(() => ({ rows: [{ active: 0, delayed: 0, total: 0 }] })),
+      db().query(`
+        SELECT COUNT(DISTINCT d.project_id) AS updated_today
+        FROM daily_progress_reports d JOIN projects p ON p.id = d.project_id
+        WHERE p.company_id = $1 AND d.report_date = $2
+      `, [companyId, today]),
+    ]);
+
+    const todayDPRs = todayRows.rows.map(buildPlanningDPRResponse);
+    let totalManpower = 0, equipmentRunning = 0, equipmentTotal = 0, pendingApprovals = 0, activitiesDoneToday = 0;
+    todayDPRs.forEach(d => {
+      totalManpower += d.total_workers;
+      activitiesDoneToday += (d.work_items || []).filter(w => Number(w.achieved) >= Number(w.planned) && Number(w.planned) > 0).length;
+      (d.plant_items || []).forEach(p => { equipmentTotal += Number(p.nos) || 0; if (Number(p.idle || 0) === 0 && Number(p.breakdown || 0) === 0) equipmentRunning += Number(p.nos) || 0; });
+      if (d.status === 'submitted') pendingApprovals++;
+    });
+
+    // 14-day trend: planned vs executed % per day, averaged across that day's DPRs
+    const trendByDate = {};
+    recentRows.rows.forEach(row => {
+      const d = buildPlanningDPRResponse(row);
+      const items = d.work_items || [];
+      if (!items.length) return;
+      const plannedSum = items.reduce((s, w) => s + (Number(w.planned) || 0), 0);
+      const executedSum = items.reduce((s, w) => s + (Number(w.achieved) || 0), 0);
+      const key = d.report_date;
+      if (!trendByDate[key]) trendByDate[key] = { date: key, planned_pct: [], executed_pct: [] };
+      trendByDate[key].planned_pct.push(100);
+      trendByDate[key].executed_pct.push(plannedSum > 0 ? Math.min(150, (executedSum / plannedSum) * 100) : 0);
+    });
+    const trend = Object.values(trendByDate)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(t => ({
+        date: t.date,
+        planned: 100,
+        executed: Math.round(t.executed_pct.reduce((s, v) => s + v, 0) / t.executed_pct.length),
+      }));
+
+    // Project-wise progress: latest DPR per project, avg % complete of its activities
+    const byProject = {};
+    recentRows.rows.forEach(row => {
+      const d = buildPlanningDPRResponse(row);
+      if (byProject[d.project_id]) return; // already have the latest (rows ordered DESC)
+      const items = d.work_items || [];
+      const pct = items.length
+        ? Math.round(items.reduce((s, w) => s + (Number(w.boq_qty) > 0 ? Math.min(100, (Number(w.cumulative) / Number(w.boq_qty)) * 100) : 0), 0) / items.length)
+        : 0;
+      byProject[d.project_id] = { project_id: d.project_id, project_name: row.project_name, pct };
+    });
+
+    res.json({
+      data: {
+        kpis: {
+          dprs_today: todayRows.rows.length,
+          dprs_yesterday: yesterdayRows.rows.length,
+          projects_updated: Number(actStats.rows[0]?.updated_today || 0),
+          activities_done_today: activitiesDoneToday,
+          total_manpower: totalManpower,
+          equipment_running: equipmentRunning,
+          equipment_total: equipmentTotal,
+          delayed_activities: Number(equipStats.rows[0]?.delayed || 0),
+          pending_approvals: pendingApprovals,
+        },
+        trend,
+        project_progress: Object.values(byProject).sort((a, b) => b.pct - a.pct),
+        recent_dprs: recentRows.rows.slice(0, 10).map(buildPlanningDPRResponse),
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

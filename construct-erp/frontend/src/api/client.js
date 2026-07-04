@@ -819,6 +819,10 @@ export const planningAPI = {
   updateDPR:      (id, d) => api.put(`/planning/dpr/${id}`, d),
   deleteDPR:      (id)    => api.delete(`/planning/dpr/${id}`),
   approveDPR:     (id)    => api.patch(`/planning/dpr/${id}/approve`),
+  approvalAction: (id, d) => api.patch(`/planning/dpr/${id}/approval-action`, d),
+  dprConsoleDashboard: () => api.get('/planning/dpr-console/dashboard'),
+  getDPRSettings: ()      => api.get('/planning/dpr-settings'),
+  updateDPRSettings: (d)  => api.put('/planning/dpr-settings', d),
   importDPR:      (file, projectId, overwrite = true) => {
     const fd = new FormData();
     fd.append('file', file);

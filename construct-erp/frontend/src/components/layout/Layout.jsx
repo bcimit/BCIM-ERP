@@ -47,6 +47,7 @@ const navGroups = [
     { to: '/planning/mrp',          icon: Package,          label: 'Material Plan (MRP)' },
     { to: '/planning/engineer-log',  icon: ClipboardList,    label: 'Engineer Daily Log' },
     { to: '/planning/dpr',          icon: FileText,         label: 'Daily Progress (DPR)' },
+    { to: '/planning/dpr-console',  icon: LayoutDashboard,  label: 'DPR Console' },
     { to: '/planning/reports',      icon: BarChart3,        label: 'Planning Reports' },
     { to: '/planning/documents',    icon: FolderSearch,     label: 'Documents' },
   ]},
@@ -385,7 +386,7 @@ const NAV_SECTIONS = {
   'Planning': [
     { label: 'Dashboard',  paths: ['/planning','/planning/p6-dashboard'] },
     { label: 'Schedule',   paths: ['/planning/wbs','/planning/activities','/planning/milestones','/planning/look-ahead'] },
-    { label: 'Progress',   paths: ['/planning/engineer-log','/planning/dpr','/planning/progress','/planning/delays','/planning/reports'] },
+    { label: 'Progress',   paths: ['/planning/engineer-log','/planning/dpr','/planning/dpr-console','/planning/progress','/planning/delays','/planning/reports'] },
     { label: 'P6',         paths: ['/planning/risks','/planning/mrp'] },
     { label: 'Documents',  paths: ['/planning/documents'] },
   ],
