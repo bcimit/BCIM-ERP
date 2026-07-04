@@ -111,7 +111,12 @@ export default function ERPChat() {
 
   // ── Connect Socket.IO ───────────────────────────────────────────────────────
   useEffect(() => {
-    const token = sessionStorage.getItem('accessToken');
+    // Auth persists in localStorage (see authStore.js) so sessions survive a
+    // refresh; sessionStorage is only ever used as a legacy fallback. Reading
+    // sessionStorage alone here meant the token was almost always missing,
+    // so the socket handshake failed silently and chat fell back to
+    // REST-only (no live delivery, unread badges, or notifications).
+    const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
     if (!token) return;
 
     const socket = socketIO(SOCKET_URL, {
@@ -121,6 +126,10 @@ export default function ERPChat() {
 
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
+    socket.on('connect_error', (err) => {
+      console.error('[chat] socket connect_error:', err.message);
+      setConnected(false);
+    });
 
     socket.on('new_message', (msg) => {
       const isOtherChannel = msg.channel !== activeChannelRef.current;
