@@ -227,6 +227,36 @@ export default function ERPChat() {
     if (searchOpen && searchRef.current) searchRef.current.focus();
   }, [searchOpen]);
 
+  // ── Download an attachment ───────────────────────────────────────────────────
+  // OneDrive share links are public/anonymous — open directly. Local-disk
+  // fallback URLs (/uploads/...) are behind the same `authenticate` middleware
+  // as every other protected route, so a plain <a href> navigation (no
+  // Authorization header) gets a 401 with nothing to show for it. Fetch those
+  // with the token instead and hand the browser a blob to save.
+  const downloadAttachment = useCallback(async (url, filename) => {
+    if (!url) return;
+    if (/^https?:\/\//i.test(url)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename || 'file';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      toast.error(e.message || 'Failed to download attachment');
+    }
+  }, []);
+
   // ── Send message ────────────────────────────────────────────────────────────
   const sendMsg = useCallback(async () => {
     const text = inputVal.trim();
@@ -575,13 +605,13 @@ export default function ERPChat() {
                   )}
                   {m.file_name && FIcon && (
                     m.file_url ? (
-                      <a href={m.file_url} target="_blank" rel="noopener noreferrer"
+                      <button type="button" onClick={() => downloadAttachment(m.file_url, m.file_name)}
                         className="mt-2 inline-flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs cursor-pointer hover:border-indigo-300 transition-colors">
                         <FIcon className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                         <span className="font-medium text-slate-700">{m.file_name}</span>
                         {m.file_size && <span className="text-slate-400">{m.file_size}</span>}
                         <Download className="w-3.5 h-3.5 text-indigo-500 ml-1" />
-                      </a>
+                      </button>
                     ) : (
                       <div title="Sent before file attachments were wired up — no file to open"
                         className="mt-2 inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs opacity-60 cursor-not-allowed">
