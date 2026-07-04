@@ -124,6 +124,7 @@ export default function SCDashboard() {
   const sc   = d.subcontractors || {};
   const wo   = d.work_orders || {};
   const fin  = d.financials || {};
+  const adv  = d.advances || {};
   const billsKpi = d.bills || {};
   const byProject   = d.by_project || [];
   const billStatus  = d.bill_status || [];
@@ -138,6 +139,12 @@ export default function SCDashboard() {
   const retentionHeld = parseFloat(fin.retention_held || 0);
   const billingPct    = pct(totalBilled, contractValue);
   const paymentPct    = pct(totalPaid, totalBilled);
+  // Advances paid to subcontractors — combines every place an advance can be
+  // recorded (sc_advances, Advance Tracker, Finance payments) so this reflects
+  // reality even when the advance wasn't entered through the SC module itself.
+  const advancePaid      = parseFloat(adv.total_paid || 0);
+  const advanceRecovered = parseFloat(adv.total_recovered || 0);
+  const advanceBalance   = parseFloat(adv.balance || 0);
 
   // Bill status buckets
   const statusBuckets = useMemo(() => {
@@ -190,12 +197,14 @@ export default function SCDashboard() {
       <div className="p-5 md:p-6 max-w-[1400px] mx-auto space-y-5">
 
         {/* ── KPI Row ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
           <ThemeKpiCard icon={IndianRupee}  label="Contract Value"   value={fmt(contractValue)}  color="blue"    sub={`${wo.total||0} work orders`} />
           <ThemeKpiCard icon={Receipt}      label="Total Billed"     value={fmt(totalBilled)}    color="emerald" sub={`${totalBillCount} SC bills`} />
           <ThemeKpiCard icon={Wallet}       label="Amount Paid"      value={fmt(totalPaid)}      color="emerald" sub={`${paymentPct}% of billed`} />
           <ThemeKpiCard icon={AlertTriangle}label="Outstanding"      value={fmt(outstanding)}    color="amber"   sub="Approved, unpaid" />
           <ThemeKpiCard icon={ShieldCheck}  label="Retention Held"   value={fmt(retentionHeld)}  color="slate"   sub="Deducted from bills" />
+          <ThemeKpiCard icon={Wallet}       label="Advance Paid"     value={fmt(advancePaid)}    color="purple"  sub="All subcontractors" />
+          <ThemeKpiCard icon={AlertTriangle}label="Advance Balance"  value={fmt(advanceBalance)} color={advanceBalance > 0 ? 'amber' : 'emerald'} sub="Not yet recovered" />
           <ThemeKpiCard icon={Users}        label="Subcontractors"   value={sc.active||0}        color="orange"  sub={`${sc.total||0} total registered`} />
         </div>
 

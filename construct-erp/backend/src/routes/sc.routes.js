@@ -244,7 +244,7 @@ router.get('/dashboard', async (req, res) => {
       ? ` AND id IN (SELECT DISTINCT sc_id FROM sc_work_orders WHERE project_id=$2 AND company_id=$1)`
       : '';
 
-    const [subs, wos, bills, payments, retention] = await Promise.all([
+    const [subs, wos, bills, payments, retention, advTracker, advPayments, advRecovered] = await Promise.all([
       query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active,
              COUNT(*) FILTER (WHERE contractor_type='sub_contractor' AND status='active') AS active_sub,
              COUNT(*) FILTER (WHERE contractor_type='labour_contractor' AND status='active') AS active_labour
@@ -253,11 +253,33 @@ router.get('/dashboard', async (req, res) => {
       query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE b.status IN ('submitted','under_review')) AS pending_approval, COALESCE(SUM(b.gross_amount),0) AS total_billed, COALESCE(SUM(b.net_payable),0) AS total_net FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id WHERE b.company_id=$1${pClause}`, pp),
       query(`SELECT COALESCE(SUM(p.amount),0) AS total_paid FROM sc_payments p JOIN sc_bills b ON b.id=p.bill_id JOIN sc_work_orders wo ON wo.id=b.wo_id WHERE p.company_id=$1${pClause}`, pp),
       query(`SELECT COALESCE(SUM(b.retention_amount),0) AS held FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id WHERE b.company_id=$1 AND b.status NOT IN ('draft','rejected')${pClause}`, pp),
+      // Advances issued via the Advance Tracker (tqs_advance_vouchers), matched
+      // to SC work orders by wo_number — see GET /work-orders/:id for why this
+      // and the payments-table bridge below are both needed.
+      query(`
+        SELECT COALESCE(SUM(av.paid_amount),0) AS total
+        FROM tqs_advance_vouchers av
+        JOIN sc_work_orders wo ON wo.wo_number = av.wo_number AND wo.project_id = av.project_id
+        WHERE wo.company_id=$1 AND av.is_deleted=false
+          AND av.status IN ('issued','partial','recovered') AND av.paid_amount > 0${pClause}`, pp),
+      // Advances issued via the Finance "Record Payment" screen (payments table),
+      // tagged cost_head = 'Advance — <wo_number>' — the most common path for LH-10.
+      query(`
+        SELECT COALESCE(SUM(p.amount),0) AS total
+        FROM payments p
+        JOIN sc_work_orders wo ON p.project_id = wo.project_id AND p.cost_head = 'Advance — ' || wo.wo_number
+        WHERE wo.company_id=$1 AND p.status IN ('success','paid')${pClause}`, pp),
+      query(`SELECT COALESCE(SUM(b.advance_recovery),0) AS total FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id WHERE b.company_id=$1 AND b.status NOT IN ('draft','rejected')${pClause}`, pp),
     ]);
 
     const totalBilled = parseFloat(bills.rows[0].total_net||0);
     const totalPaid   = parseFloat(payments.rows[0].total_paid||0);
     const outstanding = totalBilled - totalPaid;
+    const advancePaid = parseFloat(wos.rows[0].advance_paid||0)
+      + parseFloat(advTracker.rows[0].total||0)
+      + parseFloat(advPayments.rows[0].total||0);
+    const advanceRecovered = parseFloat(advRecovered.rows[0].total||0);
+    const advanceBalance   = Math.max(0, advancePaid - advanceRecovered);
 
     // By project breakdown
     const byProject = await query(`
@@ -303,7 +325,10 @@ router.get('/dashboard', async (req, res) => {
 
     res.json({ data: {
       subcontractors: { total: parseInt(subs.rows[0].total), active: parseInt(subs.rows[0].active), active_sub: parseInt(subs.rows[0].active_sub||0), active_labour: parseInt(subs.rows[0].active_labour||0) },
-      work_orders: { total: parseInt(wos.rows[0].total), active: parseInt(wos.rows[0].active), total_value: parseFloat(wos.rows[0].total_value), advance_paid: parseFloat(wos.rows[0].advance_paid) },
+      work_orders: { total: parseInt(wos.rows[0].total), active: parseInt(wos.rows[0].active), total_value: parseFloat(wos.rows[0].total_value), advance_paid: advancePaid },
+      // Combines all three places an advance can be recorded (sc_advances,
+      // Advance Tracker, Finance payments) — see GET /work-orders/:id for details.
+      advances: { total_paid: advancePaid, total_recovered: advanceRecovered, balance: advanceBalance },
       bills: { total: parseInt(bills.rows[0].total), pending_approval: parseInt(bills.rows[0].pending_approval), total_billed: parseFloat(bills.rows[0].total_billed) },
       financials: { total_billed: totalBilled, total_paid: totalPaid, outstanding, retention_held: parseFloat(retention.rows[0].held) },
       by_project: byProject.rows,
