@@ -1568,37 +1568,39 @@ function BillLineItemsSection({ billId, projectId }) {
   const items = detail?.line_items || [];
 
   return (
-    <div>
-      <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-widest mb-3">
+    <div className={Z_CARD}>
+      <h3 className={Z_HEAD}>
         Line Items {items.length > 0 && <span className="text-slate-400 normal-case font-normal">({items.length})</span>}
-      </p>
-      {isLoading ? (
-        <div className="text-xs text-slate-400 italic py-4 text-center">Loading line items…</div>
-      ) : items.length === 0 ? (
-        <div className="text-xs text-slate-400 italic py-4 text-center bg-slate-50 rounded-lg border border-slate-100">
-          No material line items on this bill — header amounts only.
-        </div>
-      ) : (
-        <div className="border border-slate-200 rounded-xl overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-2 py-2 text-left text-slate-500 font-medium">Item / BOQ / Cost Head</th>
-                <th className="px-2 py-2 text-left text-slate-500 font-medium">Unit</th>
-                <th className="px-2 py-2 text-right text-slate-500 font-medium">Qty</th>
-                <th className="px-2 py-2 text-right text-slate-500 font-medium">Rate</th>
-                <th className="px-2 py-2 text-right text-slate-500 font-medium">GST%</th>
-                <th className="px-2 py-2 text-right text-slate-500 font-medium">Basic</th>
-                <th className="px-2 py-2 text-right text-slate-500 font-medium">Total</th>
-                <th className="w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(it => <LineItemEditRow key={it.id} billId={billId} item={it} boqItems={boqItems} />)}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </h3>
+      <div className="p-4">
+        {isLoading ? (
+          <div className="text-xs text-slate-400 italic py-4 text-center">Loading line items…</div>
+        ) : items.length === 0 ? (
+          <div className="text-xs text-slate-400 italic py-4 text-center bg-slate-50 rounded-lg border border-slate-100">
+            No material line items on this bill — header amounts only.
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-xl overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-2 py-2 text-left text-slate-500 font-medium">Item / BOQ / Cost Head</th>
+                  <th className="px-2 py-2 text-left text-slate-500 font-medium">Unit</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Qty</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Rate</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">GST%</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Basic</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">Total</th>
+                  <th className="w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(it => <LineItemEditRow key={it.id} billId={billId} item={it} boqItems={boqItems} />)}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1707,29 +1709,33 @@ function EditBillModal({ bill, projects, onClose }) {
   const inrFmt = inr;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
 
-        {/* â"€â"€ Header â"€â"€ */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-blue-600 rounded-t-2xl flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Pencil className="w-4 h-4 text-white" />
-            <div>
-              <h2 className="text-sm font-medium text-white">Edit Bill - SL #{bill.sl_number}</h2>
-              <p className="text-xs text-blue-200">{bill.vendor_name} - {bill.inv_number}</p>
-            </div>
+      {/* ── Breadcrumb header (matches New Bill) ── */}
+      <div className="flex items-center justify-between px-6 py-3.5 flex-shrink-0 bg-white border-b border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-400">
+            Bill Tracker <span className="text-slate-300">›</span> Bills <span className="text-slate-300">›</span>{' '}
+            <b className="text-slate-700">Edit Bill — SL #{bill.sl_number}</b>
           </div>
-          <button onClick={onClose} className="text-blue-200 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <span className="text-xs text-slate-400">{bill.vendor_name} · {bill.inv_number}</span>
         </div>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+      {/* ── Scrollable body ── */}
+      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="w-full max-w-[1600px] mx-auto px-6 py-6 space-y-5">
 
-          {/* â"€â"€ SECTION 1: Bill Info â"€â"€ */}
-          <div>
-            <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-widest mb-3">Bill Information</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* ── SECTION 1: Bill Info ── */}
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Bill Information</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
               <div>
                 <Lbl req>Vendor Name</Lbl>
                 <input className={F} value={form.vendor_name} onChange={e => set('vendor_name', e.target.value)} />
@@ -1816,9 +1822,10 @@ function EditBillModal({ bill, projects, onClose }) {
           <BillLineItemsSection billId={bill.id} projectId={form.project_id} />
 
           {/* â"€â"€ SECTION 2: GST & Amounts â"€â"€ */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-slate-900 font-medium uppercase tracking-widest">Invoice Amounts & GST</p>
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Invoice Amounts &amp; GST</h3>
+            <div className="p-4">
+            <div className="flex items-center justify-end mb-3">
               <select
                 className={`text-xs h-9 rounded-lg px-2 text-slate-900 outline-none transition-all border ${FIELD_HL}`}
                 value={form.tax_mode} onChange={e => set('tax_mode', e.target.value)}
@@ -1933,6 +1940,7 @@ function EditBillModal({ bill, projects, onClose }) {
                 )}
               </div>
             </div>
+            </div>
           </div>
 
           {/* â"€â"€ SECTION 3: Live Totals â"€â"€ */}
@@ -1998,25 +2006,47 @@ function EditBillModal({ bill, projects, onClose }) {
           </div>
 
           {/* â"€â"€ SECTION 4: Remarks â"€â"€ */}
-          <div>
-            <Lbl>Remarks / Notes</Lbl>
-            <textarea rows={2} className={F + ' resize-none'}
-              placeholder="Any remarks..."
-              value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+          <div className={Z_CARD}>
+            <h3 className={Z_HEAD}>Remarks / Notes</h3>
+            <div className="p-4">
+              <textarea rows={2} className={F + ' resize-none'}
+                placeholder="Any remarks..."
+                value={form.remarks} onChange={e => set('remarks', e.target.value)} />
+            </div>
           </div>
 
-        </form>
+        </div>
+      </form>
 
-        {/* â"€â"€ Footer â"€â"€ */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-slate-50 rounded-b-2xl flex-shrink-0">
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-900 hover:bg-slate-100 transition-colors">
-            Cancel
-          </button>
-          <button type="button" onClick={handleSubmit} disabled={updateMut.isPending}
-            className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-60 transition-colors flex items-center gap-2">
-            {updateMut.isPending ? 'Saving...' : <><Pencil className="w-3.5 h-3.5" /> Save Changes</>}
-          </button>
+      {/* ── Sticky footer ── */}
+      <div style={{ flexShrink: 0, background: '#ffffff', borderTop: '1px solid #e2e8f0' }}
+        className="px-6 py-4 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+        <div className="w-full max-w-[1600px] mx-auto flex items-center justify-between gap-4">
+          {/* Grand total preview */}
+          <div className="flex items-center gap-6">
+            <div className="text-[11px] text-slate-500 font-medium">
+              Basic: <span className="font-medium text-slate-700 text-sm ml-1">₹{inrFmt(basicAmt)}</span>
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">
+              GST: <span className="font-medium text-slate-700 text-sm ml-1">₹{inrFmt(totalGST)}</span>
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">
+              Grand Total: <span className="font-medium text-blue-700 text-lg ml-1">₹{inrFmt(grandTotal)}</span>
+            </div>
+          </div>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose}
+              className="px-4 h-9 rounded-md border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+            <button type="button" onClick={handleSubmit} disabled={updateMut.isPending}
+              className="inline-flex items-center gap-2 px-5 h-9 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+              {updateMut.isPending
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+                : <><Pencil className="w-3.5 h-3.5" /> Save Changes</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>
