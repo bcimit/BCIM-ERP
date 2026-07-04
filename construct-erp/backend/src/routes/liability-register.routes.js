@@ -355,9 +355,48 @@ router.get('/ledger', async (req, res) => {
 });
 
 // PATCH /tqs/liability-register/advance/:id — edit advance amount + TDS
+//
+// Ledger rows tagged 'Advance Given' now come from two tables (tqs_advances,
+// uuid ids; tqs_advance_vouchers, integer ids) but look identical to the
+// frontend, so the id's own format is the only signal for which table to hit.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.patch('/advance/:id', async (req, res) => {
   try {
     const { amount, tds_amount, payment_date, reference_number, remarks } = req.body;
+    const isVoucher = !UUID_RE.test(req.params.id);
+
+    if (isVoucher) {
+      // Advance Tracker (tqs_advance_vouchers) — no tds_amount/reference_number
+      // column on this table, so those two fields are accepted but ignored here.
+      const existing = await query(
+        `SELECT id, project_id FROM tqs_advance_vouchers WHERE id = $1::int AND company_id = $2`,
+        [req.params.id, req.user.company_id]
+      );
+      if (!existing.rows.length) return res.status(404).json({ error: 'Advance not found' });
+      if (!userCanAccessProject(req, existing.rows[0].project_id)) {
+        return res.status(403).json({ error: 'Access denied for this project.' });
+      }
+      const { rows } = await query(
+        `UPDATE tqs_advance_vouchers
+         SET paid_amount = COALESCE($1, paid_amount),
+             pay_date    = COALESCE($2, pay_date),
+             remarks     = COALESCE($3, remarks),
+             updated_at  = NOW()
+         WHERE id = $4::int AND company_id = $5
+         RETURNING *`,
+        [
+          amount != null ? parseFloat(amount) : null,
+          payment_date || null,
+          remarks != null ? remarks : null,
+          req.params.id,
+          req.user.company_id,
+        ]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Advance not found' });
+      return res.json({ data: rows[0] });
+    }
+
     const existing = await query(
       `SELECT id, project_id
        FROM tqs_advances
