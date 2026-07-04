@@ -1018,6 +1018,7 @@ const MD_SHORTCUTS = [
   { label: 'GRN / IGN',         to: '/stores/ign',                            icon: ClipboardCheck },
   { label: 'DPR',               to: '/planning/dpr-console',                  icon: FileText },
   { label: 'Liability Register', to: '/tqs/liability-register',              icon: BookOpen },
+  { label: 'Team Chat',         to: '/chat',                                  icon: MessageSquare },
 ];
 
 function MDQuickAccessBar() {
