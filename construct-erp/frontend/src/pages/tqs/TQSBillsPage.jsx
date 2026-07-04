@@ -943,138 +943,134 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
               );
             })()}
 
-            {/* Items table */}
-            <div className="border border-slate-100 rounded-xl overflow-x-auto">
-              <table className="w-full min-w-[1160px] text-xs">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-2 py-2 text-left text-slate-500 font-medium w-28">Category</th>
-                    <th className="px-2 py-2 text-left text-slate-500 font-medium">Description / Item</th>
-                    <th className="px-2 py-2 text-left text-slate-500 font-medium w-16">Unit</th>
-                    <th className="px-2 py-2 text-right text-slate-500 font-medium w-20">Qty</th>
-                    <th className="px-2 py-2 text-right text-slate-500 font-medium w-24">Rate</th>
-                    <th className="px-2 py-2 text-right text-slate-500 font-medium w-24">Discount Amt</th>
-                    <th className="px-2 py-2 text-right text-slate-500 font-medium w-20">Basic</th>
-                    <th className="px-2 py-2 text-center text-slate-500 font-medium w-14">GST%</th>
-                    <th className="px-2 py-2 text-right text-slate-500 font-medium w-20">GST Amt</th>
-                    <th className="px-2 py-2 text-right text-slate-500 font-medium w-28">Total with GST</th>
-                    <th className="w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, i) => {
-                    const { basic, discount, gst, total } = calcItemRow(it, form.tax_mode);
-                    return (
-                      <tr key={i} className="border-t border-slate-50">
-                        <td className="px-2 py-1.5">
-                          <div className={`w-24 px-2 py-1 text-xs rounded border ${it.category ? 'bg-blue-50 border-blue-200 text-blue-700 font-semibold' : 'bg-slate-50 border-slate-200 text-slate-900 font-medium italic'}`}>
-                            {it.category || 'Auto-filled'}
-                          </div>
-                        </td>
-                        <td className="px-2 py-1.5 min-w-[160px]">
-                          <MaterialCombobox
-                            value={it.item_name}
-                            inventoryItems={inventoryItems}
-                            placeholder="Item / material name"
-                            onChange={(materialName) => handleItemName(i, materialName)}
-                          />
-                          <div className="flex gap-1 mt-1">
-                            <select
-                              className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
-                              value={it.boq_item_id || ''}
-                              onChange={e => updateItem(i, 'boq_item_id', e.target.value)}
-                              title="Link to BOQ item"
-                            >
-                              <option value="">No BOQ item</option>
-                              {boqItems.map(b => (
-                                <option key={b.id} value={b.id}>{b.item_no ? `${b.item_no} — ` : ''}{b.description}</option>
-                              ))}
-                            </select>
-                            <select
-                              className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
-                              value={it.cost_head || ''}
-                              onChange={e => updateItem(i, 'cost_head', e.target.value)}
-                              title="Cost sub-heading"
-                            >
-                              <option value="">Unallocated</option>
-                              {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
-                            </select>
-                          </div>
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input className={`w-16 rounded px-2 py-1.5 text-xs outline-none transition-all border ${FIELD_HL}`}
-                            placeholder="Nos"
-                            value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          {(() => {
-                            const rem = it.remaining_qty;
-                            const entered = parseFloat(it.quantity || 0);
-                            const exceeded = rem !== null && rem !== undefined && entered > rem + 0.0001;
-                            return (
-                              <div className="flex flex-col gap-0.5">
-                                <input
-                                  type="number" step="0.001"
-                                  max={rem !== null && rem !== undefined ? rem : undefined}
-                                  className={clsx('w-20 rounded px-2 py-1.5 text-xs text-right outline-none transition-all border',
-                                    exceeded
-                                      ? 'border-red-400 bg-red-50 text-red-700 shadow-[0_0_0_3px_rgba(248,113,113,0.15)] focus:border-red-500'
-                                      : FIELD_HL
-                                  )}
-                                  placeholder="0"
-                                  value={it.quantity}
-                                  onChange={e => updateItem(i, 'quantity', e.target.value)}
-                                />
-                                {rem !== null && rem !== undefined && (
-                                  <span className={`text-[10px] leading-tight ${exceeded ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
-                                    {exceeded ? `Warning max ${rem}` : `Avail: ${rem}`}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input type="number" step="0.01" className={`w-24 rounded px-2 py-1.5 text-xs text-right outline-none transition-all border ${FIELD_HL}`}
-                            placeholder="0.00"
-                            value={it.rate} onChange={e => updateItem(i, 'rate', e.target.value)} />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input type="number" step="0.01" className={`w-24 rounded px-2 py-1.5 text-xs text-right outline-none transition-all border ${FIELD_HL}`}
-                            placeholder="0.00"
-                            value={discount > 0 && !it.discount_amount ? discount.toFixed(2) : it.discount_amount}
-                            onChange={e => updateItem(i, 'discount_amount', e.target.value)} />
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-slate-900 font-medium">{basic !== 0 ? inr(basic) : '-'}</td>
-                        <td className="px-2 py-1.5">
-                          <input type="number" step="0.5" className={`w-16 rounded px-2 py-1.5 text-xs text-center outline-none transition-all border ${FIELD_HL}`}
-                            placeholder="18"
-                            value={it.gst_pct} onChange={e => updateItem(i, 'gst_pct', e.target.value)} />
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-slate-500">{gst !== 0 ? inr(gst) : '-'}</td>
-                        <td className="px-2 py-1.5 text-right font-semibold text-slate-600">{total !== 0 ? inr(total) : '-'}</td>
-                        <td className="px-2 py-1.5">
-                          <button type="button" onClick={() => removeItem(i)} className="text-slate-300 hover:text-red-500"><X className="w-3.5 h-3.5" /></button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                {itemsBasic > 0 && (
-                  <tfoot className="bg-blue-50 border-t border-blue-100">
-                    <tr>
-                      <td colSpan={5} className="px-3 py-2 text-xs text-right font-semibold text-slate-500">Items Total:</td>
-                      <td className="px-2 py-2 text-right text-xs font-semibold text-rose-500">{itemsDiscount > 0 ? inr(itemsDiscount) : '-'}</td>
-                      <td className="px-2 py-2 text-right text-xs font-semibold text-slate-600">{inr(itemsBasic)}</td>
-                      <td></td>
-                      <td className="px-2 py-2 text-right text-xs font-semibold text-slate-400">{inr(itemsGST)}</td>
-                      <td className="px-2 py-2 text-right text-xs font-semibold text-slate-700">{inr(itemsBasic + itemsGST)}</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
+            {/* Items — one clearly-labeled card per line item (no cramped horizontal-scroll table) */}
+            <div className="space-y-3">
+              {items.map((it, i) => {
+                const { basic, discount, gst, total } = calcItemRow(it, form.tax_mode);
+                const rem = it.remaining_qty;
+                const entered = parseFloat(it.quantity || 0);
+                const exceeded = rem !== null && rem !== undefined && entered > rem + 0.0001;
+                return (
+                  <div key={i} className="border border-slate-200 rounded-xl bg-white p-3.5 space-y-3">
+                    {/* Row 1 — item search + category badge + remove */}
+                    <div className="flex items-start gap-2.5">
+                      <div className="flex-1 min-w-0">
+                        <Lbl>Item / Material</Lbl>
+                        <MaterialCombobox
+                          value={it.item_name}
+                          inventoryItems={inventoryItems}
+                          placeholder="Search or type item / material name"
+                          onChange={(materialName) => handleItemName(i, materialName)}
+                        />
+                      </div>
+                      <div className="shrink-0 pt-[22px]">
+                        <div className={`px-2.5 h-10 flex items-center text-xs rounded-lg border font-medium whitespace-nowrap ${it.category ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-400 italic'}`}>
+                          {it.category || 'Auto'}
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => removeItem(i)}
+                        className="shrink-0 mt-[22px] w-10 h-10 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Row 2 — BOQ link + cost head */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      <div>
+                        <Lbl>BOQ Item</Lbl>
+                        <select
+                          className={`w-full h-10 rounded-lg px-2.5 text-xs bg-white outline-none transition-all border ${FIELD_HL}`}
+                          value={it.boq_item_id || ''}
+                          onChange={e => updateItem(i, 'boq_item_id', e.target.value)}
+                        >
+                          <option value="">No BOQ item</option>
+                          {boqItems.map(b => (
+                            <option key={b.id} value={b.id}>{b.item_no ? `${b.item_no} — ` : ''}{b.description}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Lbl>Cost Sub-heading</Lbl>
+                        <select
+                          className={`w-full h-10 rounded-lg px-2.5 text-xs bg-white outline-none transition-all border ${FIELD_HL}`}
+                          value={it.cost_head || ''}
+                          onChange={e => updateItem(i, 'cost_head', e.target.value)}
+                        >
+                          <option value="">Unallocated</option>
+                          {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Row 3 — qty/rate/gst inputs */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 pt-2 border-t border-slate-100">
+                      <div>
+                        <Lbl>Unit</Lbl>
+                        <input className={`w-full h-10 rounded-lg px-2.5 text-xs outline-none transition-all border ${FIELD_HL}`}
+                          placeholder="Nos"
+                          value={it.unit} onChange={e => updateItem(i, 'unit', e.target.value)} />
+                      </div>
+                      <div>
+                        <Lbl>Qty</Lbl>
+                        <input
+                          type="number" step="0.001"
+                          max={rem !== null && rem !== undefined ? rem : undefined}
+                          className={clsx('w-full h-10 rounded-lg px-2.5 text-xs text-right outline-none transition-all border',
+                            exceeded
+                              ? 'border-red-400 bg-red-50 text-red-700 shadow-[0_0_0_3px_rgba(248,113,113,0.15)] focus:border-red-500'
+                              : FIELD_HL
+                          )}
+                          placeholder="0"
+                          value={it.quantity}
+                          onChange={e => updateItem(i, 'quantity', e.target.value)}
+                        />
+                        {rem !== null && rem !== undefined && (
+                          <span className={`block text-[10px] mt-0.5 leading-tight ${exceeded ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>
+                            {exceeded ? `Warning max ${rem}` : `Avail: ${rem}`}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <Lbl>Rate (Rs )</Lbl>
+                        <input type="number" step="0.01" className={`w-full h-10 rounded-lg px-2.5 text-xs text-right outline-none transition-all border ${FIELD_HL}`}
+                          placeholder="0.00"
+                          value={it.rate} onChange={e => updateItem(i, 'rate', e.target.value)} />
+                      </div>
+                      <div>
+                        <Lbl>Discount (Rs )</Lbl>
+                        <input type="number" step="0.01" className={`w-full h-10 rounded-lg px-2.5 text-xs text-right outline-none transition-all border ${FIELD_HL}`}
+                          placeholder="0.00"
+                          value={discount > 0 && !it.discount_amount ? discount.toFixed(2) : it.discount_amount}
+                          onChange={e => updateItem(i, 'discount_amount', e.target.value)} />
+                      </div>
+                      <div>
+                        <Lbl>GST %</Lbl>
+                        <input type="number" step="0.5" className={`w-full h-10 rounded-lg px-2.5 text-xs text-center outline-none transition-all border ${FIELD_HL}`}
+                          placeholder="18"
+                          value={it.gst_pct} onChange={e => updateItem(i, 'gst_pct', e.target.value)} />
+                      </div>
+                    </div>
+
+                    {/* Row 4 — computed totals for this line */}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-slate-500">Basic: <b className="text-slate-700">{basic !== 0 ? `Rs ${inr(basic)}` : '—'}</b></span>
+                      <span className="text-slate-500">GST: <b className="text-slate-700">{gst !== 0 ? `Rs ${inr(gst)}` : '—'}</b></span>
+                      <span className="ml-auto text-slate-500">Line Total: <b className="text-sm text-slate-800">{total !== 0 ? `Rs ${inr(total)}` : '—'}</b></span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+
+            {itemsBasic > 0 && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-xs">
+                <span className="font-semibold text-slate-600">Items Total:</span>
+                {itemsDiscount > 0 && <span className="text-rose-500">Discount: <b>Rs {inr(itemsDiscount)}</b></span>}
+                <span className="text-slate-600">Basic: <b>Rs {inr(itemsBasic)}</b></span>
+                <span className="text-slate-400">GST: Rs {inr(itemsGST)}</span>
+                <span className="ml-auto font-semibold text-slate-700">Grand Total: Rs {inr(itemsBasic + itemsGST)}</span>
+              </div>
+            )}
 
             {/* Manual basic amount - only when no items */}
             {itemsBasic === 0 && (
