@@ -529,6 +529,12 @@ const CHAT_CHANNELS = [
 io.on('connection', (socket) => {
   logger.info(`💬 Chat: ${socket.user?.name || socket.user?.id} connected`);
   CHAT_CHANNELS.forEach(ch => socket.join(ch));
+  // Personal room — DM delivery uses this instead of the dm-<id>-<id> channel
+  // room, since a socket only joins that room once the recipient has actually
+  // opened that specific DM. Without a personal room, a first-time DM (or one
+  // the recipient hasn't opened yet) never reaches them: no live message, no
+  // desktop notification.
+  if (socket.user?.id) socket.join(`user-${socket.user.id}`);
 
   // Fixed channels are already joined above at connect time (so cross-channel
   // notifications work); this still needs to join dynamic rooms that aren't
@@ -543,7 +549,17 @@ io.on('connection', (socket) => {
   // New message — broadcast to everyone in the channel
   socket.on('send_message', (msg) => {
     // msg already saved via REST POST, just broadcast to others
-    socket.to(msg.channel).emit('new_message', msg);
+    if (msg.channel?.startsWith('dm-')) {
+      // DM channel id is `dm-<uuid1>-<uuid2>` (sorted) — each UUID is a fixed
+      // 36 chars, so we can split deterministically without a delimiter clash.
+      const raw = msg.channel.slice(3);
+      const id1 = raw.slice(0, 36);
+      const id2 = raw.slice(37);
+      const recipientId = id1 === String(socket.user?.id) ? id2 : id1;
+      io.to(`user-${recipientId}`).emit('new_message', msg);
+    } else {
+      socket.to(msg.channel).emit('new_message', msg);
+    }
   });
 
   // Pin toggle
