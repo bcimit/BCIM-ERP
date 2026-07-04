@@ -15,6 +15,30 @@ import {
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
 const MAX_OPEN_POPUPS = 3;
 
+// Two-note notification chime, synthesized with Web Audio API so there's no
+// audio file to host. Lazily created so the AudioContext is only constructed
+// (and, if needed, resumed) once a message actually needs to play — most
+// browsers require it to happen after some prior user interaction on the page.
+let chimeCtx;
+function playChime() {
+  try {
+    if (!chimeCtx) chimeCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (chimeCtx.state === 'suspended') chimeCtx.resume();
+    const t = chimeCtx.currentTime;
+    const osc = chimeCtx.createOscillator();
+    const gain = chimeCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.setValueAtTime(660, t + 0.09);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    osc.connect(gain).connect(chimeCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  } catch { /* audio unsupported or blocked — silently skip */ }
+}
+
 export const CHANNELS = [
   { id: 'general',        label: 'General',        desc: 'Company-wide announcements' },
   { id: 'finance',        label: 'Finance',         desc: 'Finance, TDS, payments' },
@@ -135,6 +159,7 @@ export function ChatProvider({ children }) {
 
       if (msg.sender_id !== user.id && !popupVisible && !isActive) {
         setUnread(prev => ({ ...prev, [msg.channel]: (prev[msg.channel] || 0) + 1 }));
+        playChime();
       }
 
       if (msg.sender_id !== user.id && 'Notification' in window && Notification.permission === 'granted' && (document.hidden || (!popupVisible && !isActive))) {
