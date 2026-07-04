@@ -334,7 +334,7 @@ const navGroups = [
     { to: '/sc/master',           icon: Users,           label: 'Subcontractor Master' },
     { to: '/sc/work-orders',      icon: Briefcase,       label: 'Work Order Management' },
     { to: '/sc/labour',           icon: HardHat,         label: 'Labour / Worker Attendance' },
-    { to: '/sc/progress',         icon: Ruler,           label: 'Work Progress Entry' },
+    { to: '/sc/progress',         icon: Ruler,           label: 'Measurement Book' },
     { to: '/sc/bill-preparation', icon: Receipt,         label: 'Bill Preparation' },
     { to: '/sc/hire-usage-tracker', icon: Truck,         label: 'Hire Usage Tracker' },
     { to: '/sc/bill-approval',    icon: ShieldCheck,     label: 'Bill Approval' },

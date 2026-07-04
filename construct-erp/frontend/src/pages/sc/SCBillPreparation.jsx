@@ -1,5 +1,6 @@
 // src/pages/sc/SCBillPreparation.jsx — Subcontractor Bill Preparation
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useReactToPrint } from 'react-to-print';
 import { scAPI, projectAPI } from '../../api/client';
@@ -16,6 +17,7 @@ import { clsx } from 'clsx';
 import dayjs from 'dayjs';
 import RABillPrintTemplate from '../qs/RABillPrintTemplate';
 import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
+import SCMeasurementBook from './mb/SCMeasurementBook';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fmt  = (n) => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`;
@@ -284,14 +286,19 @@ function NMRBillModal({ wo, onClose }) {
 }
 
 // ─── Raise Bill Wizard ────────────────────────────────────────────────────────
-function RaiseBillModal({ wos, onClose }) {
+function RaiseBillModal({ wos, onClose, initialWoId }) {
   const qc = useQueryClient();
   const [step, setStep]       = useState(1);
-  const [woId, setWoId]       = useState('');
+  const [woId, setWoId]       = useState(initialWoId || '');
   const [woDetail, setWoDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [items, setItems]     = useState([]);
   const [showNMRModal, setShowNMRModal] = useState(false);   // for labour WOs
+  const [showMB, setShowMB]   = useState(false);             // Open Measurement Book overlay
+  // Count of approved MB entries not tied to a specific BOQ/WO item — these
+  // can't be auto-attributed to one line's curr_qty, so they're excluded and
+  // surfaced as a note instead of silently vanishing.
+  const [unlinkedMbCount, setUnlinkedMbCount] = useState(0);
   const [form, setForm] = useState({
     bill_date: dayjs().format('YYYY-MM-DD'),
     bill_type: 'ra',
@@ -317,21 +324,52 @@ function RaiseBillModal({ wos, onClose }) {
       const r = await scAPI.getWO(id);
       const wo = r.data?.data;
       setWoDetail(wo);
-      setItems((wo.items || []).map(it => ({
-        ...it,
-        wo_item_id:  it.id,
-        prev_qty:    num(it.billed_qty),
-        // Use server-computed live_balance so it's always accurate
-        balance_qty: num(it.live_balance ?? Math.max(0, num(it.qty) - num(it.billed_qty))),
-        billed_pct:  num(it.billed_pct || 0),
-        curr_qty:    0,
-      })));
+
+      // Auto-load approved Measurement Book quantities — same idea as the client
+      // RA bill's approved-measurements auto-fill: sum approved executed_qty per
+      // wo_item_id, subtract what's already billed, and pre-fill curr_qty with
+      // the claimable remainder instead of leaving it at 0 for manual entry.
+      // Non-fatal: if the MB fetch fails, fall back to today's 0-quantity behavior.
+      let mbMap = {};
+      let unlinkedMbCount = 0;
+      try {
+        const mbRes = await scAPI.listMB({ wo_id: id, status: 'approved' });
+        const mbEntries = mbRes.data?.data || [];
+        for (const m of mbEntries) {
+          if (!m.wo_item_id) { unlinkedMbCount++; continue; }
+          mbMap[m.wo_item_id] = (mbMap[m.wo_item_id] || 0) + num(m.executed_qty);
+        }
+      } catch { /* MB fetch failing shouldn't block bill creation */ }
+      setUnlinkedMbCount(unlinkedMbCount);
+
+      setItems((wo.items || []).map(it => {
+        const billed = num(it.billed_qty);
+        const approved = mbMap[it.id] || 0;
+        const claimable = Math.max(0, approved - billed);
+        return {
+          ...it,
+          wo_item_id:  it.id,
+          prev_qty:    billed,
+          // Use server-computed live_balance so it's always accurate
+          balance_qty: num(it.live_balance ?? Math.max(0, num(it.qty) - num(it.billed_qty))),
+          billed_pct:  num(it.billed_pct || 0),
+          curr_qty:    claimable,
+          mb_approved_qty: approved,
+        };
+      }));
       set('gst_pct', wo.gst_pct || 18);
       set('tds_pct', wo.tds_pct || 2);
       set('retention_pct', wo.retention_pct || 5);
     } catch { toast.error('Failed to load work order details'); }
     finally { setLoading(false); }
   };
+
+  // Deep-link support — e.g. opened from "Raise Bill for this WO" inside
+  // SCMeasurementBook via /sc/bill-preparation?wo_id=...&open=1.
+  useEffect(() => {
+    if (initialWoId) loadWO(initialWoId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialWoId]);
 
   const calc = useMemo(() => calcBill(items, form), [items, form]);
 
@@ -373,6 +411,7 @@ function RaiseBillModal({ wos, onClose }) {
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
 
         {/* Header */}
@@ -452,11 +491,23 @@ function RaiseBillModal({ wos, onClose }) {
                 <>
                   {/* WO summary card */}
                   <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 overflow-hidden">
-                    <div className="px-4 py-2.5 flex items-center gap-2"
+                    <div className="px-4 py-2.5 flex items-center justify-between gap-2"
                       style={{ background: `linear-gradient(90deg, ${Theme.navy}dd 0%, ${Theme.navyDark}dd 100%)` }}>
-                      <Building2 className="w-3.5 h-3.5 text-white/80" />
-                      <span className="text-xs font-bold text-white">{woDetail.wo_number} — {woDetail.subject}</span>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-white/80" />
+                        <span className="text-xs font-bold text-white">{woDetail.wo_number} — {woDetail.subject}</span>
+                      </div>
+                      <button type="button" onClick={() => setShowMB(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold text-white transition"
+                        style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
+                        <Receipt className="w-3 h-3" /> Print Measurement Book
+                      </button>
                     </div>
+                    {unlinkedMbCount > 0 && (
+                      <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-700">
+                        {unlinkedMbCount} approved MB {unlinkedMbCount === 1 ? 'entry' : 'entries'} not linked to a specific BOQ item {unlinkedMbCount === 1 ? 'was' : 'were'} excluded from auto-load below.
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
                       {[
                         { l: 'Subcontractor',  v: woDetail.sc_name },
@@ -1031,6 +1082,10 @@ function RaiseBillModal({ wos, onClose }) {
           </div>
         </div>
     </div>
+    {showMB && woId && (
+      <SCMeasurementBook wo_id={woId} onClose={() => setShowMB(false)} onRaiseBill={() => setShowMB(false)} />
+    )}
+    </>
   );
 }
 
@@ -1252,6 +1307,18 @@ export default function SCBillPreparation() {
   const [showForm,      setShowForm]    = useState(false);
   const [drawerBillId,  setDrawerBill]  = useState(null);
 
+  // Deep-link support — e.g. "Raise Bill for this WO" from SCMeasurementBook
+  // navigates to /sc/bill-preparation?wo_id=...&open=1.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkWoId = searchParams.get('wo_id') || '';
+  useEffect(() => {
+    if (deepLinkWoId && searchParams.get('open') === '1') {
+      setShowForm(true);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { data: projects = [] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });
   // Scoped to the selected project — previously fetched with no project_id at
   // all, so the Raise Bill wizard's WO picker showed every project's work
@@ -1446,7 +1513,7 @@ export default function SCBillPreparation() {
         </div>
       </div>
 
-      {showForm    && <RaiseBillModal wos={wos} onClose={() => setShowForm(false)} />}
+      {showForm    && <RaiseBillModal wos={wos} onClose={() => setShowForm(false)} initialWoId={deepLinkWoId} />}
       {drawerBillId && <BillDetailDrawer billId={drawerBillId} onClose={() => setDrawerBill(null)} />}
     </div>
   );

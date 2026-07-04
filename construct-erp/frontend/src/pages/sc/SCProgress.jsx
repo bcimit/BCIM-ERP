@@ -7,8 +7,9 @@ import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, RefreshCw, X, Eye, CheckCircle2,
   Clock, FileText, MapPin, Layers, Send, ThumbsUp,
-  ThumbsDown, ChevronRight,
+  ThumbsDown, ChevronRight, BookOpen,
 } from 'lucide-react';
+import SCMeasurementBook from './mb/SCMeasurementBook';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -295,8 +296,14 @@ export default function SCProgress() {
   const [statFilt,setStat]    = useState('');
   const [showForm,setShowForm]= useState(false);
   const [drawer,  setDrawer]  = useState(null);
+  const [mbWoId,  setMbWoId]  = useState('');   // WO selected for "Open Measurement Book"
+  const [openMB,  setOpenMB]  = useState(false);
 
   const { data: projects=[] } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data??[]) });
+  const { data: wos=[] } = useQuery({
+    queryKey:['sc-wo-mb-picker', projFilt],
+    queryFn:()=>scAPI.listWO({project_id:projFilt||undefined}).then(r=>r.data?.data||[]),
+  });
   const { data: mbs=[], isLoading, refetch } = useQuery({
     queryKey:['sc-mb', projFilt, statFilt],
     queryFn:()=>scAPI.listMB({project_id:projFilt||undefined, status:statFilt||undefined}).then(r=>r.data?.data||[]),
@@ -324,11 +331,24 @@ export default function SCProgress() {
         subtitle="Record, verify and approve executed work quantities on site"
         breadcrumbs={[{label:'Subcontractors'},{label:'Measurement Book'}]}
         actions={
-          <button onClick={()=>setShowForm(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg shadow-sm"
-            style={{background:'#fff', color: Theme.navyDark}}>
-            <Plus className="w-3.5 h-3.5"/> New MB Entry
-          </button>
+          <div className="flex items-center gap-2">
+            <select value={mbWoId} onChange={e=>setMbWoId(e.target.value)}
+              className="px-3 py-2 text-xs font-semibold rounded-lg border-none min-w-[220px]"
+              style={{background:'rgba(255,255,255,0.15)', color:'#fff'}}>
+              <option value="" style={{color:'#1e293b'}}>— Select WO to open Measurement Book —</option>
+              {wos.map(w=><option key={w.id} value={w.id} style={{color:'#1e293b'}}>{w.wo_number} · {w.sc_name}</option>)}
+            </select>
+            <button onClick={()=>setOpenMB(true)} disabled={!mbWoId}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg shadow-sm disabled:opacity-40"
+              style={{background:'rgba(255,255,255,0.15)', color:'#fff'}}>
+              <BookOpen className="w-3.5 h-3.5"/> Open Measurement Book
+            </button>
+            <button onClick={()=>setShowForm(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg shadow-sm"
+              style={{background:'#fff', color: Theme.navyDark}}>
+              <Plus className="w-3.5 h-3.5"/> New MB Entry
+            </button>
+          </div>
         }
       />
 
@@ -458,6 +478,7 @@ export default function SCProgress() {
 
       {showForm && <MBForm onClose={()=>setShowForm(false)}/>}
       {drawer   && <MBDrawer mbId={drawer} onClose={()=>setDrawer(null)}/>}
+      {openMB && mbWoId && <SCMeasurementBook wo_id={mbWoId} onClose={()=>setOpenMB(false)}/>}
     </div>
   );
 }
