@@ -5,7 +5,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  LayoutDashboard, FileText, FilePlus2, Images, BarChart2, Smartphone, Settings as SettingsIcon,
+  LayoutDashboard, FileText, FilePlus2, BarChart2, Smartphone, Settings as SettingsIcon,
   Search, Bell, ChevronLeft, ChevronRight, Check, X, Plus, Trash2, Camera, Send, ShieldCheck,
   Users, Truck, Package, AlertTriangle, Calendar, MapPin, Clock, CheckCircle2, Download,
   Upload, Mic, QrCode, Wifi, WifiOff, Image as ImageIcon, ChevronUp, ChevronDown, Edit2,
@@ -33,7 +33,7 @@ const NAV = [
   { key: 'drafts',    label: 'Draft DPRs',        icon: FileText,  countKey: 'draft' },
   { key: 'submitted', label: 'Submitted DPRs',    icon: Send,      countKey: 'submitted' },
   { key: 'approved',  label: 'Approved DPRs',     icon: CheckCircle2, countKey: 'approved' },
-  { key: 'gallery',   label: 'Image Gallery',     icon: Images },
+  { key: 'gallery',   label: 'Image Gallery',     icon: ImageIcon },
   { key: 'reports',   label: 'Reports & Analytics', icon: BarChart2 },
   { key: 'mobile',    label: 'Mobile App',        icon: Smartphone },
   { key: 'settings',  label: 'Settings',          icon: SettingsIcon },
