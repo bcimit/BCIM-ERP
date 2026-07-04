@@ -2704,6 +2704,8 @@ router.put('/:id', async (req, res) => {
       'inv_number','inv_date','inv_month','received_date',
       // Bill meta
       'bill_type','work_desc','tax_mode','remarks',
+      // Hire / Rental
+      'equipment_type','hire_period_from','hire_period_to',
       // Amounts & GST
       'basic_amount','cgst_pct','cgst_amt','sgst_pct','sgst_amt','igst_pct','igst_amt','gst_amount',
       // Transport

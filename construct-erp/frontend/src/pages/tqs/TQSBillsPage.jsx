@@ -1486,6 +1486,9 @@ function EditBillModal({ bill, projects, onClose }) {
     received_date:    bill.received_date     ? bill.received_date.slice(0, 10) : '',
     bill_type:        bill.bill_type         || 'po',
     work_desc:        bill.work_desc         || '',
+    equipment_type:   bill.equipment_type    || '',
+    hire_period_from: bill.hire_period_from  ? bill.hire_period_from.slice(0, 10) : '',
+    hire_period_to:   bill.hire_period_to    ? bill.hire_period_to.slice(0, 10) : '',
     tax_mode:         bill.tax_mode          || 'intrastate',
     basic_amount:     bill.basic_amount      || '',
     cgst_pct:         bill.cgst_pct          || '9',
@@ -1543,6 +1546,11 @@ function EditBillModal({ bill, projects, onClose }) {
     if (!form.vendor_name?.trim()) return toast.error('Vendor is required');
     if (!form.inv_number?.trim())  return toast.error('Invoice number is required');
     if (!form.inv_date)            return toast.error('Invoice date is required');
+    if (form.bill_type === 'hire') {
+      if (!form.equipment_type?.trim()) return toast.error('Equipment / Plant description is required');
+      if (!form.hire_period_from) return toast.error('Hire period start date is required');
+      if (!form.hire_period_to) return toast.error('Hire period end date is required');
+    }
 
     updateMut.mutate({
       ...form,
@@ -1629,6 +1637,7 @@ function EditBillModal({ bill, projects, onClose }) {
                 <select className={F} value={form.bill_type} onChange={e => set('bill_type', e.target.value)}>
                   <option value="po">Purchase Order (PO)</option>
                   <option value="wo">Work Order (WO)</option>
+                  <option value="hire">Hire / Rental</option>
                   <option value="service">Service</option>
                   <option value="advance">Advance</option>
                   <option value="other">Other</option>
@@ -1652,6 +1661,23 @@ function EditBillModal({ bill, projects, onClose }) {
                   <input className={F} value={form.work_desc} onChange={e => set('work_desc', e.target.value)} placeholder="Brief description of work done" />
                 </div>
               )}
+              {form.bill_type === 'hire' && (<>
+                <div className="col-span-2 md:col-span-3">
+                  <Lbl req>Equipment / Plant Description</Lbl>
+                  <input className={F} placeholder="e.g. JCB Excavator, Transit Mixer, Tower Crane"
+                    value={form.equipment_type} onChange={e => set('equipment_type', e.target.value)} />
+                </div>
+                <div>
+                  <Lbl req>Hire Period From</Lbl>
+                  <input type="date" className={F} value={form.hire_period_from}
+                    onChange={e => set('hire_period_from', e.target.value)} />
+                </div>
+                <div>
+                  <Lbl req>Hire Period To</Lbl>
+                  <input type="date" className={F} value={form.hire_period_to}
+                    onChange={e => set('hire_period_to', e.target.value)} />
+                </div>
+              </>)}
             </div>
           </div>
 
