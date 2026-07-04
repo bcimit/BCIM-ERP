@@ -1638,13 +1638,32 @@ function EditBillModal({ bill, projects, onClose }) {
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  // â"€â"€ Line items (shares the cache key BillLineItemsSection populates) â"€â"€â"€â"€
+  // Bills with line items can have a DIFFERENT GST% per line (e.g. one line at
+  // 5%, another at 18%) — a single header CGST/SGST% can't represent that.
+  // When line items exist, the header GST is derived by summing each line's
+  // own basic/GST amounts instead of applying one flat rate.
+  const { data: billDetail } = useQuery({
+    queryKey: ['tqs-bill-detail', bill.id],
+    queryFn: () => tqsBillsAPI.get(bill.id).then(r => r.data?.data ?? r.data),
+    enabled: !!bill.id,
+  });
+  const lineItems = billDetail?.line_items || [];
+  const hasLineItems = lineItems.length > 0;
+  const distinctGstRates = [...new Set(lineItems.map(it => parseFloat(it.gst_pct) || 0))];
+  const itemsBasic = lineItems.reduce((s, it) => s + (parseFloat(it.basic_amount) || 0), 0);
+  const itemsCgst  = lineItems.reduce((s, it) => s + (parseFloat(it.cgst_amt) || 0), 0);
+  const itemsSgst  = lineItems.reduce((s, it) => s + (parseFloat(it.sgst_amt) || 0), 0);
+  const itemsIgst  = lineItems.reduce((s, it) => s + (parseFloat(it.igst_amt) || 0), 0);
+  const itemsGst   = itemsCgst + itemsSgst + itemsIgst;
+
   // â"€â"€ Live calculations â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  const basicAmt     = parseFloat(form.basic_amount)      || 0;
   const taxMode      = form.tax_mode;
-  const cgstAmt      = taxMode === 'intrastate' ? basicAmt * (parseFloat(form.cgst_pct) || 0) / 100 : 0;
-  const sgstAmt      = taxMode === 'intrastate' ? basicAmt * (parseFloat(form.sgst_pct) || 0) / 100 : 0;
-  const igstAmt      = taxMode === 'interstate' ? basicAmt * (parseFloat(form.igst_pct) || 0) / 100 : 0;
-  const totalGST     = cgstAmt + sgstAmt + igstAmt;
+  const basicAmt     = hasLineItems ? itemsBasic : (parseFloat(form.basic_amount) || 0);
+  const cgstAmt      = hasLineItems ? itemsCgst : (taxMode === 'intrastate' ? basicAmt * (parseFloat(form.cgst_pct) || 0) / 100 : 0);
+  const sgstAmt      = hasLineItems ? itemsSgst : (taxMode === 'intrastate' ? basicAmt * (parseFloat(form.sgst_pct) || 0) / 100 : 0);
+  const igstAmt      = hasLineItems ? itemsIgst : (taxMode === 'interstate' ? basicAmt * (parseFloat(form.igst_pct) || 0) / 100 : 0);
+  const totalGST     = hasLineItems ? itemsGst : (cgstAmt + sgstAmt + igstAmt);
   const transportAmt = parseFloat(form.transport_charges)  || 0;
   const transportGST = transportAmt * (parseFloat(form.transport_gst_pct) || 0) / 100;
   const otherAmt     = parseFloat(form.other_charges)      || 0;
@@ -1685,14 +1704,21 @@ function EditBillModal({ bill, projects, onClose }) {
       if (!form.hire_period_to) return toast.error('Hire period end date is required');
     }
 
+    // When line items exist, each line already has its own GST% and was saved
+    // via its own Save button — the header just needs the summed totals for
+    // reporting (blended % is informational only, not used to recompute tax).
+    const blendedCgstPct = hasLineItems ? (basicAmt > 0 ? (cgstAmt / basicAmt) * 100 : 0) : (taxMode === 'intrastate' ? parseFloat(form.cgst_pct) || 0 : 0);
+    const blendedSgstPct = hasLineItems ? (basicAmt > 0 ? (sgstAmt / basicAmt) * 100 : 0) : (taxMode === 'intrastate' ? parseFloat(form.sgst_pct) || 0 : 0);
+    const blendedIgstPct = hasLineItems ? (basicAmt > 0 ? (igstAmt / basicAmt) * 100 : 0) : (taxMode === 'interstate' ? parseFloat(form.igst_pct) || 0 : 0);
+
     updateMut.mutate({
       ...form,
       basic_amount:      basicAmt.toFixed(2),
-      cgst_pct:          taxMode === 'intrastate' ? parseFloat(form.cgst_pct) || 0 : 0,
+      cgst_pct:          Number(blendedCgstPct.toFixed(2)),
       cgst_amt:          cgstAmt.toFixed(2),
-      sgst_pct:          taxMode === 'intrastate' ? parseFloat(form.sgst_pct) || 0 : 0,
+      sgst_pct:          Number(blendedSgstPct.toFixed(2)),
       sgst_amt:          sgstAmt.toFixed(2),
-      igst_pct:          taxMode === 'interstate' ? parseFloat(form.igst_pct) || 0 : 0,
+      igst_pct:          Number(blendedIgstPct.toFixed(2)),
       igst_amt:          igstAmt.toFixed(2),
       gst_amount:        totalGST.toFixed(2),
       transport_charges: transportAmt.toFixed(2),
@@ -1825,54 +1851,85 @@ function EditBillModal({ bill, projects, onClose }) {
           <div className={Z_CARD}>
             <h3 className={Z_HEAD}>Invoice Amounts &amp; GST</h3>
             <div className="p-4">
-            <div className="flex items-center justify-end mb-3">
-              <select
-                className={`text-xs h-9 rounded-lg px-2 text-slate-900 outline-none transition-all border ${FIELD_HL}`}
-                value={form.tax_mode} onChange={e => set('tax_mode', e.target.value)}
-              >
-                <option value="intrastate">Intrastate (CGST + SGST)</option>
-                <option value="interstate">Interstate (IGST)</option>
-              </select>
-            </div>
+            {hasLineItems ? (
+              <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <p className="text-xs font-medium text-blue-700">
+                  Basic Amount and GST are computed automatically from the {lineItems.length} line item{lineItems.length !== 1 ? 's' : ''} above
+                  {distinctGstRates.length > 1
+                    ? <> — <b>mixed GST rates</b> ({distinctGstRates.sort((a, b) => a - b).map(r => `${r}%`).join(', ')})</>
+                    : <> at {distinctGstRates[0] ?? 0}% GST</>}.
+                  {' '}Edit a line's GST% in the Line Items section to change it.
+                </p>
+              </div>
+            ) : (<>
+              <div className="flex items-center justify-end mb-3">
+                <select
+                  className={`text-xs h-9 rounded-lg px-2 text-slate-900 outline-none transition-all border ${FIELD_HL}`}
+                  value={form.tax_mode} onChange={e => set('tax_mode', e.target.value)}
+                >
+                  <option value="intrastate">Intrastate (CGST + SGST)</option>
+                  <option value="interstate">Interstate (IGST)</option>
+                </select>
+              </div>
 
-            {/* Quick GST buttons */}
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              <span className="text-xs text-slate-900 font-medium self-center">Quick GST:</span>
-              {[0, 5, 12, 18, 28].map(pct => {
-                const active = taxMode === 'intrastate' &&
-                  parseFloat(form.cgst_pct) * 2 === pct;
-                return (
-                  <button key={pct} type="button" onClick={() => applyGST(pct)}
-                    className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
-                      active ? 'bg-blue-600 text-white border-blue-600'
-                             : 'border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-slate-600'
-                    }`}>
-                    {pct}%
-                  </button>
-                );
-              })}
-              <button type="button" onClick={() => applyGST(18, true)}
-                className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
-                  taxMode === 'interstate' ? 'bg-amber-500 text-white border-amber-500'
-                                          : 'border-amber-200 hover:bg-amber-50 text-amber-700'
-                }`}>
-                IGST 18%
-              </button>
-            </div>
+              {/* Quick GST buttons */}
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                <span className="text-xs text-slate-900 font-medium self-center">Quick GST:</span>
+                {[0, 5, 12, 18, 28].map(pct => {
+                  const active = taxMode === 'intrastate' &&
+                    parseFloat(form.cgst_pct) * 2 === pct;
+                  return (
+                    <button key={pct} type="button" onClick={() => applyGST(pct)}
+                      className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
+                        active ? 'bg-blue-600 text-white border-blue-600'
+                               : 'border-slate-200 hover:bg-blue-50 hover:border-blue-300 text-slate-600'
+                      }`}>
+                      {pct}%
+                    </button>
+                  );
+                })}
+                <button type="button" onClick={() => applyGST(18, true)}
+                  className={`px-2.5 py-1 text-xs rounded-full border font-medium transition-colors ${
+                    taxMode === 'interstate' ? 'bg-amber-500 text-white border-amber-500'
+                                            : 'border-amber-200 hover:bg-amber-50 text-amber-700'
+                  }`}>
+                  IGST 18%
+                </button>
+              </div>
+            </>)}
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {/* Basic Amount */}
               <div>
                 <Lbl req>Basic Amount (Rs )</Lbl>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-900 font-medium text-sm">Rs </span>
-                  <input type="number" step="0.01" className={F + ' pl-7'} placeholder="0.00"
-                    value={form.basic_amount} onChange={e => set('basic_amount', e.target.value)} />
-                </div>
+                {hasLineItems ? (
+                  <div className={F + ' pl-3 flex items-center bg-slate-50 text-slate-700 font-semibold'}>Rs {inrFmt(basicAmt)}</div>
+                ) : (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-900 font-medium text-sm">Rs </span>
+                    <input type="number" step="0.01" className={F + ' pl-7'} placeholder="0.00"
+                      value={form.basic_amount} onChange={e => set('basic_amount', e.target.value)} />
+                  </div>
+                )}
               </div>
 
-              {/* GST inputs - intrastate */}
-              {taxMode === 'intrastate' ? (<>
+              {/* GST — read-only summed totals when line items exist, else manual entry */}
+              {hasLineItems ? (<>
+                <div>
+                  <Lbl>CGST (auto-summed)</Lbl>
+                  <div className={F + ' pl-3 flex items-center bg-slate-50 text-blue-700 font-semibold'}>Rs {inrFmt(cgstAmt)}</div>
+                </div>
+                <div>
+                  <Lbl>SGST (auto-summed)</Lbl>
+                  <div className={F + ' pl-3 flex items-center bg-slate-50 text-blue-700 font-semibold'}>Rs {inrFmt(sgstAmt)}</div>
+                </div>
+                {igstAmt > 0 && (
+                  <div>
+                    <Lbl>IGST (auto-summed)</Lbl>
+                    <div className={F + ' pl-3 flex items-center bg-slate-50 text-amber-700 font-semibold'}>Rs {inrFmt(igstAmt)}</div>
+                  </div>
+                )}
+              </>) : taxMode === 'intrastate' ? (<>
                 <div>
                   <Lbl>CGST %</Lbl>
                   <input type="number" step="0.5" className={F} placeholder="9"
@@ -1951,7 +2008,22 @@ function EditBillModal({ bill, projects, onClose }) {
                 <p className="text-xs text-slate-900 font-medium mb-0.5">Basic Amount</p>
                 <p className="font-medium text-slate-800">Rs {inrFmt(basicAmt)}</p>
               </div>
-              {taxMode === 'intrastate' ? (<>
+              {hasLineItems ? (<>
+                <div className="text-center bg-white rounded-lg p-2.5 border border-blue-100">
+                  <p className="text-xs text-slate-900 font-medium mb-0.5">CGST (blended)</p>
+                  <p className="font-medium text-blue-700">Rs {inrFmt(cgstAmt)}</p>
+                </div>
+                <div className="text-center bg-white rounded-lg p-2.5 border border-blue-100">
+                  <p className="text-xs text-slate-900 font-medium mb-0.5">SGST (blended)</p>
+                  <p className="font-medium text-blue-700">Rs {inrFmt(sgstAmt)}</p>
+                </div>
+                {igstAmt > 0 && (
+                  <div className="text-center bg-white rounded-lg p-2.5 border border-amber-100">
+                    <p className="text-xs text-slate-900 font-medium mb-0.5">IGST (blended)</p>
+                    <p className="font-medium text-amber-700">Rs {inrFmt(igstAmt)}</p>
+                  </div>
+                )}
+              </>) : taxMode === 'intrastate' ? (<>
                 <div className="text-center bg-white rounded-lg p-2.5 border border-blue-100">
                   <p className="text-xs text-slate-900 font-medium mb-0.5">CGST ({form.cgst_pct || 0}%)</p>
                   <p className="font-medium text-blue-700">Rs {inrFmt(cgstAmt)}</p>
