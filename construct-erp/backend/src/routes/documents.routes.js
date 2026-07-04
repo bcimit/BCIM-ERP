@@ -508,6 +508,25 @@ router.get('/modules', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── GET /documents/:id/file ─────────────────────────────────────────────────
+// Streams the raw file bytes through an authenticated request — needed
+// because the /uploads static route requires a Bearer header, which a plain
+// <img src> or <a href> can never send. Callers fetch this as a blob and
+// build an object URL (e.g. for gallery thumbnails / previews).
+router.get('/:id/file', async (req, res) => {
+  try {
+    const doc = await getAccessibleDocument(req, req.params.id);
+    const { rows } = await query('SELECT local_url, file_name FROM documents WHERE id=$1', [doc.id]);
+    const localUrl = rows[0]?.local_url;
+    if (!localUrl) return res.status(404).json({ error: 'No local file for this document' });
+    const filePath = documentPath(localUrl);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing on disk' });
+    res.sendFile(filePath);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // ── POST /documents/:id/parse-order ───────────────────────────────────────
 // Reads the linked Excel file, auto-creates (or re-syncs) the PO/WO record
 // including all line items, then links the document back to that record.

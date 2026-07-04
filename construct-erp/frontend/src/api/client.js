@@ -1682,6 +1682,7 @@ export const documentsAPI = {
   listForRecord:  (module, record_id) => api.get('/documents', { params: { module, module_record_id: record_id }, skipProjectInject: true }),
   modules:        ()              => api.get('/documents/modules'),
   parseOrder:     (id, body = {}) => api.post(`/documents/${id}/parse-order-v2`, body),
+  serveFile:      (id) => api.get(`/documents/${id}/file`, { responseType: 'blob' }),
   upload: (formData) => api.post('/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

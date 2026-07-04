@@ -436,6 +436,23 @@ function DPRDetailDrawer({ dpr, project, onClose, qc }) {
 // ─────────────────────────────────────────────────────────────────────────
 // Gallery view
 // ─────────────────────────────────────────────────────────────────────────
+// The /uploads static route (and the underlying file bytes) require a Bearer
+// token, which a plain <img src> can never send — so each thumbnail is
+// fetched as an authenticated blob and rendered via an object URL.
+function PhotoThumb({ doc }) {
+  const { data: objectUrl, isLoading, isError } = useQuery({
+    queryKey: ['dpr-photo-blob', doc.id],
+    queryFn: () => documentsAPI.serveFile(doc.id).then(r => URL.createObjectURL(r.data)),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  useEffect(() => () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, [objectUrl]);
+
+  if (isLoading) return <div className="ph-icon"><Clock size={22} /></div>;
+  if (isError || !objectUrl) return <div className="ph-icon"><ImageIcon size={22} /></div>;
+  return <img src={objectUrl} alt={doc.file_name} />;
+}
+
 function GalleryView() {
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ['dpr-console-gallery'],
@@ -459,7 +476,12 @@ function GalleryView() {
             {images.map(d => (
               <div className="photo-card" key={d.id}>
                 <div className="photo-thumb">
-                  <img src={d.file_url || d.url || d.path} alt={d.file_name} onError={e => { e.target.style.display = 'none'; }} />
+                  <PhotoThumb doc={d} />
+                  {d.onedrive_web_url && (
+                    <a href={d.onedrive_web_url} target="_blank" rel="noreferrer" className="tag" title="Open in OneDrive">
+                      <Wifi size={10} style={{ display: 'inline', marginRight: 3 }} /> OneDrive
+                    </a>
+                  )}
                 </div>
                 <div className="photo-meta">
                   <div className="cap">{d.file_name || d.filename || 'Photo'}</div>
