@@ -2808,18 +2808,18 @@ router.patch('/:id/line-items/:lineId/chapter', async (req, res) => {
 });
 
 // ── PATCH /tqs/bills/:id/line-items/:lineId ────────────────────────────────
-// Full edit of one bill line item — item name, unit, qty, rate, GST%, cost
-// head and BOQ item/chapter tags. Recomputes that line's basic/GST/total
-// amounts from the same CGST+SGST or IGST split already stored on the line
-// (gst_mode), so editing stays consistent with how the bill was created.
-// Does not touch po_item_id/wo_item_id linkage or re-validate PO/WO
-// remaining-quantity balances — those stay as originally set.
+// Full edit of one bill line item — item name, unit, qty, rate, GST% + mode,
+// cost head and BOQ item/chapter tags. Recomputes that line's CGST+SGST or
+// IGST split, GST amount and total from the (possibly updated) gst_mode and
+// gst_pct, so each line can carry its own GST rate independent of the rest
+// of the bill. Does not touch po_item_id/wo_item_id linkage or re-validate
+// PO/WO remaining-quantity balances — those stay as originally set.
 router.patch('/:id/line-items/:lineId', async (req, res) => {
   try {
     await getAccessibleBill(req, req.params.id);
     const {
       item_name, category, unit, quantity, rate, discount_amount,
-      gst_pct, cost_head, boq_item_id, boq_chapter,
+      gst_pct, gst_mode, cost_head, boq_item_id, boq_chapter,
     } = req.body;
 
     const existing = await query(
@@ -2835,7 +2835,7 @@ router.patch('/:id/line-items/:lineId', async (req, res) => {
     const gstP = gst_pct       !== undefined ? parseFloat(gst_pct)       || 0 : parseFloat(line.gst_pct)        || 0;
     const gross = qty * rt;
     const basic = gross - disc;
-    const mode  = line.gst_mode || 'intrastate';
+    const mode  = gst_mode === 'interstate' || gst_mode === 'intrastate' ? gst_mode : (line.gst_mode || 'intrastate');
     let cgP = 0, sgP = 0, igP = 0, cgA = 0, sgA = 0, igA = 0;
     if (mode === 'interstate') { igP = gstP; igA = basic * igP / 100; }
     else { cgP = gstP / 2; sgP = gstP / 2; cgA = basic * cgP / 100; sgA = basic * sgP / 100; }
@@ -2849,17 +2849,17 @@ router.patch('/:id/line-items/:lineId', async (req, res) => {
     const r = await query(`
       UPDATE tqs_bill_line_items SET
         item_name = $1, category = $2, unit = $3, quantity = $4, rate = $5,
-        discount_amount = $6, basic_amount = $7, gst_pct = $8,
-        cgst_pct = $9, cgst_amt = $10, sgst_pct = $11, sgst_amt = $12,
-        igst_pct = $13, igst_amt = $14, gst_amount = $15, total_amount = $16,
-        cost_head = $17, boq_item_id = $18, boq_chapter = $19
-      WHERE id = $20 AND bill_id = $21
+        discount_amount = $6, basic_amount = $7, gst_pct = $8, gst_mode = $9,
+        cgst_pct = $10, cgst_amt = $11, sgst_pct = $12, sgst_amt = $13,
+        igst_pct = $14, igst_amt = $15, gst_amount = $16, total_amount = $17,
+        cost_head = $18, boq_item_id = $19, boq_chapter = $20
+      WHERE id = $21 AND bill_id = $22
       RETURNING *
     `, [
       item_name !== undefined ? item_name : line.item_name,
       category  !== undefined ? category  : line.category,
       unit      !== undefined ? unit      : line.unit,
-      qty, rt, disc, basic, gstP,
+      qty, rt, disc, basic, gstP, mode,
       cgP, cgA.toFixed(2), sgP, sgA.toFixed(2), igP, igA.toFixed(2),
       gstAmt.toFixed(2), totalAmt.toFixed(2),
       finalCostHead,

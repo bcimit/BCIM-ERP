@@ -1512,6 +1512,7 @@ function LineItemEditRow({ billId, item, boqItems }) {
     quantity:   String(item.quantity ?? ''),
     rate:       String(item.rate ?? ''),
     gst_pct:    String(item.gst_pct ?? ''),
+    gst_mode:   item.gst_mode   || 'intrastate',
     cost_head:  item.cost_head  || '',
     boq_item_id:item.boq_item_id|| '',
   });
@@ -1567,9 +1568,14 @@ function LineItemEditRow({ billId, item, boqItems }) {
         <input type="number" step="0.01" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
           value={row.rate} onChange={e => set('rate', e.target.value)} />
       </td>
-      <td className="px-2 py-1.5 w-16">
+      <td className="px-2 py-1.5 w-24">
         <input type="number" step="0.5" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
           value={row.gst_pct} onChange={e => set('gst_pct', e.target.value)} />
+        <select className="w-full mt-1 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+          value={row.gst_mode} onChange={e => set('gst_mode', e.target.value)} title="CGST+SGST or IGST for this line">
+          <option value="intrastate">CGST+SGST</option>
+          <option value="interstate">IGST</option>
+        </select>
       </td>
       <td className="px-2 py-1.5 w-24 text-right text-xs text-slate-600">{inr(basic)}</td>
       <td className="px-2 py-1.5 w-28 text-right text-xs font-semibold text-slate-800">{inr(total)}</td>
@@ -1623,7 +1629,7 @@ function BillLineItemsSection({ billId, projectId }) {
                   <th className="px-2 py-2 text-left text-slate-500 font-medium">Unit</th>
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">Qty</th>
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">Rate</th>
-                  <th className="px-2 py-2 text-right text-slate-500 font-medium">GST%</th>
+                  <th className="px-2 py-2 text-right text-slate-500 font-medium">GST% / Mode</th>
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">Basic</th>
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">Total</th>
                   <th className="w-16"></th>
