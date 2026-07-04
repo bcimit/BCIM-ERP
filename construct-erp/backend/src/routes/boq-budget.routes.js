@@ -879,11 +879,15 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     const basePaid = PROFIT_BASE_HEADS.reduce((s, h) => s + (paidMap[h] || 0), 0);
     paidMap['Profit'] = basePaid * PROFIT_PCT;
 
-    // Contingency (head 20) = Total BOQ Value − sum(heads 1-18) − Profit
-    // Represents the emergency reserve within the contract value.
-    actualMap[CONTINGENCY_HEAD] = totalBoqValue - baseActual - actualMap['Profit'];
-    receivedMap[CONTINGENCY_HEAD] = totalBoqValue - baseReceived - receivedMap['Profit'];
-    paidMap[CONTINGENCY_HEAD] = totalBoqValue - basePaid - paidMap['Profit'];
+    // Contingency (head 20) budget = Total BOQ Value − sum(heads 1-18) − Profit.
+    // This is a planning allocation only — "whatever's left of the contract
+    // value once every other head and profit are accounted for". It must NOT
+    // be applied to actual/received/paid: those track real money spent, and
+    // totalBoqValue is the contract value, not cumulative spend — subtracting
+    // real spend from it produced a huge fake "actual" (and deeply negative
+    // balance) that had nothing to do with real Contingency expenditure.
+    // Actual/received/paid for Contingency stay as whatever real bills were
+    // genuinely tagged with that cost head (defaulting to 0 if none).
     if (baseBudget > 0) {
       budgetMap[CONTINGENCY_HEAD] = totalBoqValue - baseBudget - budgetMap['Profit'];
     }
