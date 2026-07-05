@@ -1736,12 +1736,15 @@ router.get('/dpr-console/dashboard', async (req, res) => {
       trendByDate[key].planned_pct.push(100);
       trendByDate[key].executed_pct.push(plannedSum > 0 ? Math.min(150, (executedSum / plannedSum) * 100) : 0);
     });
+    // Frontend's Line dataKey is planned_pct/executed_pct and its XAxis just
+    // prints whatever's in `date` verbatim — report_date arrives here as a
+    // full ISO timestamp, so slice to the plain YYYY-MM-DD the chart expects.
     const trend = Object.values(trendByDate)
       .sort((a, b) => a.date.localeCompare(b.date))
       .map(t => ({
-        date: t.date,
-        planned: 100,
-        executed: Math.round(t.executed_pct.reduce((s, v) => s + v, 0) / t.executed_pct.length),
+        date: String(t.date).slice(0, 10),
+        planned_pct: 100,
+        executed_pct: Math.round(t.executed_pct.reduce((s, v) => s + v, 0) / t.executed_pct.length),
       }));
 
     // Project-wise progress: latest DPR per project, avg % complete of its activities
@@ -1753,7 +1756,7 @@ router.get('/dpr-console/dashboard', async (req, res) => {
       const pct = items.length
         ? Math.round(items.reduce((s, w) => s + (Number(w.boq_qty) > 0 ? Math.min(100, (Number(w.cumulative) / Number(w.boq_qty)) * 100) : 0), 0) / items.length)
         : 0;
-      byProject[d.project_id] = { project_id: d.project_id, project_name: row.project_name, pct };
+      byProject[d.project_id] = { project_id: d.project_id, project_name: row.project_name, avg_pct: pct };
     });
 
     res.json({
@@ -1770,7 +1773,7 @@ router.get('/dpr-console/dashboard', async (req, res) => {
           pending_approvals: pendingApprovals,
         },
         trend,
-        project_progress: Object.values(byProject).sort((a, b) => b.pct - a.pct),
+        project_progress: Object.values(byProject).sort((a, b) => b.avg_pct - a.avg_pct),
         recent_dprs: recentRows.rows.slice(0, 10).map(buildPlanningDPRResponse),
       },
     });
