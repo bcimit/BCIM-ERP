@@ -2501,9 +2501,16 @@ export default function Layout() {
       )}
 
       {/* ── Floating Send Drive launcher — quick access to the external large-file
-          transfer tool, stacked above the Team Chat bubble. Opens in a new tab. ── */}
+          transfer tool, stacked above the Team Chat bubble. Opens in a new tab.
+          Passes the logged-in user's email as ?from= so Send Drive can
+          pre-fill the sender field — Send Drive has no login of its own, this
+          just saves re-typing who you are; nothing security-sensitive rides
+          on it. ── */}
       <button
-        onClick={() => window.open('https://senddrive.bcim.in/', '_blank', 'noopener,noreferrer')}
+        onClick={() => window.open(
+          `https://senddrive.bcim.in/${user?.email ? `?from=${encodeURIComponent(user.email)}` : ''}`,
+          '_blank', 'noopener,noreferrer'
+        )}
         title="Send Drive — send large files"
         className="hidden md:flex fixed bottom-24 right-6 z-40 w-14 h-14 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 print:hidden"
         style={{ background: 'linear-gradient(135deg, #059669, #047857)', boxShadow: '0 8px 24px rgba(5,150,105,0.4)' }}
