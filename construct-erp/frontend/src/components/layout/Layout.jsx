@@ -2503,12 +2503,23 @@ export default function Layout() {
       {/* ── Floating Send Drive launcher — quick access to the external large-file
           transfer tool, stacked above the Team Chat bubble. Opens in a new tab. ── */}
       <button
-        onClick={() => window.open('https://send-drive-production.up.railway.app/', '_blank', 'noopener,noreferrer')}
+        onClick={() => window.open('https://senddrive.bcim.in/', '_blank', 'noopener,noreferrer')}
         title="Send Drive — send large files"
         className="hidden md:flex fixed bottom-24 right-6 z-40 w-14 h-14 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 print:hidden"
         style={{ background: 'linear-gradient(135deg, #059669, #047857)', boxShadow: '0 8px 24px rgba(5,150,105,0.4)' }}
       >
         <Send className="w-5 h-5" />
+      </button>
+
+      {/* ── Floating PDF Tool launcher — quick access to the external PDF utility
+          app, stacked above Send Drive. Opens in a new tab. ── */}
+      <button
+        onClick={() => window.open('https://pdf.bcim.in/', '_blank', 'noopener,noreferrer')}
+        title="PDF Tools — merge, split, convert"
+        className="hidden md:flex fixed bottom-[168px] right-6 z-40 w-14 h-14 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 print:hidden"
+        style={{ background: 'linear-gradient(135deg, #DC2626, #B91C1C)', boxShadow: '0 8px 24px rgba(220,38,38,0.4)' }}
+      >
+        <FileText className="w-5 h-5" />
       </button>
 
       <CommandPalette
