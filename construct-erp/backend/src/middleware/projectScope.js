@@ -85,10 +85,64 @@ function appendProjectScope(req, sql, params, alias, column = 'project_id') {
   return { sql: sql + ` AND ${alias}.${column} = ANY($${idx}::uuid[])`, params };
 }
 
+/**
+ * Mutates `conditions`/`params` in place to add a project scope clause,
+ * honoring an explicit requestedProjectId (validated against access) or
+ * falling back to the user's allowed project set. Throws a 403-flagged
+ * error if the user requests a project they can't access.
+ *
+ * @param {object} req
+ * @param {Array}  conditions          array of SQL condition strings (mutated)
+ * @param {Array}  params              query params array (mutated)
+ * @param {string} alias               table alias whose project_id to scope
+ * @param {string} requestedProjectId  optional explicit project_id filter
+ */
+function applyProjectScope(req, conditions, params, alias = 'b', requestedProjectId = null) {
+  if (requestedProjectId && String(requestedProjectId).trim()) {
+    if (!userCanAccessProject(req, requestedProjectId)) {
+      const err = new Error('Access denied for this project.');
+      err.statusCode = 403;
+      throw err;
+    }
+    params.push(requestedProjectId);
+    conditions.push(`${alias}.project_id = $${params.length}`);
+    return;
+  }
+
+  if (req.isGlobalRole) return;
+  const allowed = req.allowedProjectIds || [];
+  if (allowed.length === 0) {
+    conditions.push('FALSE');
+    return;
+  }
+  params.push(allowed);
+  conditions.push(`${alias}.project_id = ANY($${params.length}::uuid[])`);
+}
+
+/**
+ * Returns the set of project IDs the request is scoped to: `undefined` for
+ * global roles or a validated explicit requestedProjectId (meaning "no
+ * restriction needed"), otherwise the user's allowed project ID array.
+ * Throws a 403-flagged error if requestedProjectId isn't accessible.
+ */
+function scopedProjectIds(req, requestedProjectId = null) {
+  if (requestedProjectId && String(requestedProjectId).trim()) {
+    if (!userCanAccessProject(req, requestedProjectId)) {
+      const err = new Error('Access denied for this project.');
+      err.statusCode = 403;
+      throw err;
+    }
+    return undefined;
+  }
+  return req.isGlobalRole ? undefined : (req.allowedProjectIds || []);
+}
+
 module.exports = {
   GLOBAL_ROLES,
   isGlobalRole,
   loadProjectScope,
   userCanAccessProject,
   appendProjectScope,
+  applyProjectScope,
+  scopedProjectIds,
 };

@@ -104,6 +104,7 @@ const tqsVendorsRoutes       = require('./routes/tqs-vendors.routes');
 const tqsTransmittalRoutes   = require('./routes/tqs-transmittal.routes');
 const procurementAdvanceRoutes       = require('./routes/procurement-advance.routes');
 const liabilityRegisterRoutes = require('./routes/liability-register.routes');
+const copilotRoutes           = require('./routes/copilot.routes');
 const tdsRoutes           = require('./routes/tds.routes');
 const hrMastersRoutes     = require('./routes/hr-masters.routes');
 const hrEmployeesRoutes   = require('./routes/hr-employees.routes');
@@ -423,6 +424,7 @@ app.use(`${API}/tqs/vendors`,          tqsVendorsRoutes);
 app.use(`${API}/tqs/transmittals`,     tqsTransmittalRoutes);
 app.use(`${API}/procurement/advances`,           procurementAdvanceRoutes);
 app.use(`${API}/tqs/liability-register`, liabilityRegisterRoutes);
+app.use(`${API}/copilot`, copilotRoutes);
 
 // DQS Sync (no JWT — key-based, for cross-app data sharing)
 app.use(`${API}/sync`, syncRoutes);

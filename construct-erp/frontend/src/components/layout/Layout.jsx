@@ -15,7 +15,7 @@ import {
   CalendarOff, FileBarChart, Star, UserCheck, Fingerprint, PackageCheck, ArrowLeftRight,
   Landmark, FileSignature, CircleSlash, ShieldCheck, Clock3, Lightbulb,
   Gavel, Target, Send, Coins, Replace, Link2, Wrench, Layers, MapPin, TrendingDown, FolderOpen, Calculator, UserRound,
-  Cog, Fuel, Gauge, BarChart2, History, GitBranch, MinusCircle, FolderKanban
+  Cog, Fuel, Gauge, BarChart2, History, GitBranch, MinusCircle, FolderKanban, Sparkles
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import CommandPalette from './CommandPalette';
@@ -24,6 +24,7 @@ import { clsx } from 'clsx';
 import LoadingScreen from '../common/LoadingScreen';
 import { useLanguage, LANGUAGES } from '../../context/LanguageContext';
 import NotificationPanel, { useNotificationCount } from './NotificationPanel';
+import CopilotPanel from '../copilot/CopilotPanel';
 import { initPushNotifications } from '../../utils/pushNotifications';
 import api from '../../api/client';
 
@@ -1966,6 +1967,7 @@ export default function Layout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [langOpen,    setLangOpen]    = useState(false);
   const [notifOpen,   setNotifOpen]   = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
   const [now,          setNow]         = useState(() => new Date());
   const notifCount = useNotificationCount();
   const recentPages = useRecentPages();
@@ -2083,6 +2085,12 @@ export default function Layout() {
     const d = String(user?.department || '').toLowerCase();
     return r.includes('procurement') || d.includes('procurement') || d.includes('purchase');
   })();
+  // Bill Tracker AI Copilot pilot — a separate access boundary from isMDNavUser
+  // (which is about nav ordering, not data access). The backend's
+  // requireCopilotAccess middleware is the real gate; this only hides the
+  // trigger for roles that would get a 403 anyway.
+  const isCopilotUser = ['super_admin', 'managing_director', 'finance_manager', 'accountant', 'procurement_manager']
+    .includes(String(user?.role || '').toLowerCase());
   const orderedGroups = isMDNavUser
     ? [
         ...MD_NAV_ORDER.map(lbl => filteredGroups.find(g => g.label === lbl)).filter(Boolean),
@@ -2254,6 +2262,27 @@ export default function Layout() {
             </button>
             {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
           </div>
+
+          {/* AI Copilot (Bill Tracker pilot) */}
+          {isCopilotUser && (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setCopilotOpen(o => !o)}
+                title="Bill Tracker Copilot"
+                style={{ position: 'relative', width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.90)', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseLeave={e => { if (!copilotOpen) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Sparkles size={16} />
+              </button>
+              {copilotOpen && (
+                <CopilotPanel
+                  onClose={() => setCopilotOpen(false)}
+                  projectId={sessionStorage.getItem('selectedProjectId') || undefined}
+                />
+              )}
+            </div>
+          )}
 
           {/* Profile + Logout */}
           <NavLink to="/profile"

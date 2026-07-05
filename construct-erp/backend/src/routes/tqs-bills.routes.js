@@ -5,7 +5,7 @@ const path    = require('path');
 const fs      = require('fs');
 const wa      = require('../services/whatsapp.service');
 const { authenticate } = require('../middleware/auth');
-const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
+const { loadProjectScope, userCanAccessProject, applyProjectScope, scopedProjectIds } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
 const { uploadToOneDrive, getFreshDownloadUrl, isConfigured } = require('../services/onedrive.service');
 const {
@@ -90,40 +90,6 @@ const DQS_FULL_ACCESS_ROLES = [
 ];
 
 const PO_ALERT_THRESHOLD_PCT = Number(process.env.PO_ALERT_THRESHOLD_PCT || 90);
-
-function applyProjectScope(req, conditions, params, alias = 'b', requestedProjectId = null) {
-  if (requestedProjectId && String(requestedProjectId).trim()) {
-    if (!userCanAccessProject(req, requestedProjectId)) {
-      const err = new Error('Access denied for this project.');
-      err.statusCode = 403;
-      throw err;
-    }
-    params.push(requestedProjectId);
-    conditions.push(`${alias}.project_id = $${params.length}`);
-    return;
-  }
-
-  if (req.isGlobalRole) return;
-  const allowed = req.allowedProjectIds || [];
-  if (allowed.length === 0) {
-    conditions.push('FALSE');
-    return;
-  }
-  params.push(allowed);
-  conditions.push(`${alias}.project_id = ANY($${params.length}::uuid[])`);
-}
-
-function scopedProjectIds(req, requestedProjectId = null) {
-  if (requestedProjectId && String(requestedProjectId).trim()) {
-    if (!userCanAccessProject(req, requestedProjectId)) {
-      const err = new Error('Access denied for this project.');
-      err.statusCode = 403;
-      throw err;
-    }
-    return undefined;
-  }
-  return req.isGlobalRole ? undefined : (req.allowedProjectIds || []);
-}
 
 async function getAccessibleBill(req, billId, client = { query }) {
   const { rows } = await client.query(

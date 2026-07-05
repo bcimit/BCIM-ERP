@@ -2121,6 +2121,10 @@ export const notificationsAPI = {
   markAllRead: ()   => api.post('/notifications/mark-all-read'),
 };
 
+export const copilotAPI = {
+  sendMessage: (data) => api.post('/copilot/chat', data),
+};
+
 export const automationIdeasAPI = {
   stats:  ()        => api.get('/automation-ideas/stats'),
   list:   (params) => api.get('/automation-ideas', { params }),
