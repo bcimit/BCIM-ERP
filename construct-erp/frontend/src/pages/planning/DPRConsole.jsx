@@ -357,9 +357,8 @@ function DPRDetailDrawer({ dpr, project, onClose, qc }) {
   const approvedCount = history.filter(h => h.action === 'approve').length;
 
   return (
-    <div className="fixed inset-0 z-50 flex" style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex' }}>
-      <div style={{ flex: 1, background: 'rgba(10,20,32,0.35)', backdropFilter: 'blur(2px)' }} onClick={onClose} />
-      <div className="dpr-console" style={{ width: 980, maxWidth: '92vw', background: 'var(--gray-50)', height: '100vh', overflowY: 'auto', boxShadow: '-16px 0 44px rgba(0,0,0,0.25)' }}>
+    <div className="fixed inset-0 z-50" style={{ position: 'fixed', inset: 0, zIndex: 999 }}>
+      <div className="dpr-console" style={{ width: '100vw', background: 'var(--gray-50)', height: '100vh', overflowY: 'auto' }}>
         <div className="topbar" style={{ position: 'sticky' }}>
           <div>
             <h1>DPR #{dpr.dpr_number || dpr.id.slice(0, 8)}</h1>
@@ -421,7 +420,7 @@ function DPRDetailDrawer({ dpr, project, onClose, qc }) {
               </div>
             )}
           </div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
             <DPRPrintTemplate dpr={dpr} project={project} />
           </div>
           <div className="card" style={{ padding: 20, marginTop: 16 }}>

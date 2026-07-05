@@ -85,23 +85,24 @@ const borderStrong = `1.5px solid ${NAVY}`;
 
 const th = (extra = {}) => ({
   border,
-  padding: '4px 6px',
+  padding: '7px 9px',
   background: '#eef2f7',
   color: '#334155',
   fontWeight: 700,
-  fontSize: 9,
+  fontSize: 9.5,
   textAlign: 'center',
   verticalAlign: 'middle',
   whiteSpace: 'nowrap',
   textTransform: 'uppercase',
-  letterSpacing: 0.3,
+  letterSpacing: 0.4,
   ...extra,
 });
 
 const td = (extra = {}) => ({
   border,
-  padding: '4px 6px',
-  fontSize: 9.5,
+  padding: '7px 9px',
+  fontSize: 10.5,
+  lineHeight: 1.4,
   color: '#1e293b',
   verticalAlign: 'middle',
   ...extra,
@@ -110,13 +111,13 @@ const td = (extra = {}) => ({
 const sectionTitle = (extra = {}) => ({
   border: borderStrong,
   borderBottom: 'none',
-  padding: '4px 8px',
+  padding: '7px 10px',
   background: NAVY,
   color: '#fff',
   fontWeight: 700,
-  fontSize: 10,
+  fontSize: 10.5,
   textAlign: 'left',
-  letterSpacing: 0.6,
+  letterSpacing: 0.8,
   textTransform: 'uppercase',
   ...extra,
 });
@@ -167,30 +168,30 @@ export default function DPRPrintTemplate({ dpr, project }) {
         </button>
       </div>
 
-      <div className="dpr-print-root" style={{ width: 1120, margin: '0 auto', background: '#fff', padding: '10px 14px' }}>
+      <div className="dpr-print-root" style={{ width: 1180, margin: '0 auto', background: '#fff', padding: '20px 26px' }}>
 
         {/* ── LETTERHEAD ─────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 8, marginBottom: 8, borderBottom: `2px solid ${NAVY}` }}>
-          <img src={bcimLogo} alt="BCIM" style={{ width: 46, height: 46, objectFit: 'contain', flexShrink: 0 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingBottom: 14, marginBottom: 16, borderBottom: `3px solid ${NAVY}` }}>
+          <img src={bcimLogo} alt="BCIM" style={{ width: 56, height: 56, objectFit: 'contain', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 900, color: NAVY, lineHeight: 1.1 }}>BCIM Engineering Pvt. Ltd.</div>
-            <div style={{ fontSize: 8.5, color: '#64748b', marginTop: 1 }}>Construction &amp; Infrastructure Management &nbsp;|&nbsp; Bengaluru, Karnataka, India</div>
+            <div style={{ fontSize: 19, fontWeight: 900, color: NAVY, lineHeight: 1.15 }}>BCIM Engineering Pvt. Ltd.</div>
+            <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 3 }}>Construction &amp; Infrastructure Management &nbsp;|&nbsp; Bengaluru, Karnataka, India</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', color: NAVY_D }}>Daily Progress Report</div>
-            <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>{v.projectName || '—'}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', color: NAVY_D }}>Daily Progress Report</div>
+            <div style={{ fontSize: 10, color: '#475569', marginTop: 3 }}>{v.projectName || '—'}</div>
           </div>
-          <div style={{ textAlign: 'right', fontSize: 8, color: '#64748b' }}>
-            <div style={{ fontWeight: 700, color: '#1e293b' }}>{dpr?.dpr_number}</div>
+          <div style={{ textAlign: 'right', fontSize: 9, color: '#64748b', lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 700, color: '#1e293b', fontSize: 10 }}>{dpr?.dpr_number}</div>
             <div>Generated: {now}</div>
           </div>
-          <div style={{ padding: 4, border, borderRadius: 4 }}>
-            <QRCodeSVG value={`${getPublicAppOrigin()}/verify/dpr/${dpr.id}`} size={40} />
+          <div style={{ padding: 6, border, borderRadius: 4 }}>
+            <QRCodeSVG value={`${getPublicAppOrigin()}/verify/dpr/${dpr.id}`} size={46} />
           </div>
         </div>
 
         {/* ── PROJECT INFO STRIP ─────────────────────────────── */}
-        <table style={{ width: '100%', marginBottom: 8, tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', marginBottom: 16, tableLayout: 'fixed' }}>
           <tbody>
             <tr>
               <InfoCell label="Employer" value={v.employer} flex={2} />
@@ -208,7 +209,7 @@ export default function DPRPrintTemplate({ dpr, project }) {
         </table>
 
         {/* ── WORK PROGRESS ──────────────────────────────────── */}
-        <table style={{ width: '100%', marginBottom: 8, tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', marginBottom: 16, tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: 26 }} />
             <col style={{ width: 260 }} />
@@ -248,14 +249,14 @@ export default function DPRPrintTemplate({ dpr, project }) {
                 <td style={td({ textAlign: 'right', fontWeight: 700, color: NAVY })}>{fmt(row.achieved)}</td>
                 <td style={td({ textAlign: 'right' })}>{fmt(row.cumulative)}</td>
                 <td style={td({ textAlign: 'right', fontWeight: 700 })}>{pct(row.cumulative, row.boq_qty)}</td>
-                <td style={td({ fontSize: 8.5, color: '#64748b' })}>{row.remarks}</td>
+                <td style={td({ fontSize: 9.5, color: '#64748b' })}>{row.remarks}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
         {/* ── RESOURCES ROW ──────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
           {/* Staff */}
           <table style={{ width: '18%', tableLayout: 'fixed' }}>
             <thead>
@@ -341,13 +342,13 @@ export default function DPRPrintTemplate({ dpr, project }) {
         </div>
 
         {/* Grand total labour strip */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', background: NAVY, color: '#fff', padding: '5px 12px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', background: NAVY, color: '#fff', padding: '9px 16px', borderRadius: 4, fontSize: 10.5, fontWeight: 700, marginBottom: 16 }}>
           <span>Grand Total Labour on Site</span>
           <span>Day: {fmt(grandTotalDay, 0)} &nbsp;·&nbsp; Night: {fmt(grandTotalNight, 0)} &nbsp;·&nbsp; Total: {fmt(grandTotal, 0)}</span>
         </div>
 
         {/* ── PLANT & MATERIAL ROW ───────────────────────────── */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
           <table style={{ width: '32%', tableLayout: 'fixed' }}>
             <thead>
               <tr><td colSpan={2} style={sectionTitle()}>Plant &amp; Machinery</td></tr>
@@ -410,35 +411,35 @@ export default function DPRPrintTemplate({ dpr, project }) {
         </div>
 
         {/* ── FOOTER ─────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 14 }}>
           <div style={{ width: '34%' }}>
             <div style={sectionTitle()}>Constraints / Issues</div>
-            <div style={{ border, borderTop: 'none', padding: '6px 8px', fontSize: 9, minHeight: 60, whiteSpace: 'pre-wrap', color: '#334155' }}>
+            <div style={{ border, borderTop: 'none', padding: '10px 12px', fontSize: 10, lineHeight: 1.5, minHeight: 68, whiteSpace: 'pre-wrap', color: '#334155' }}>
               {v.constraints || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None reported</span>}
             </div>
           </div>
           <div style={{ width: '30%' }}>
             <div style={sectionTitle()}>RFI / Open Items</div>
-            <div style={{ border, borderTop: 'none', padding: '6px 8px', fontSize: 9, minHeight: 60, whiteSpace: 'pre-wrap', color: '#334155' }}>
+            <div style={{ border, borderTop: 'none', padding: '10px 12px', fontSize: 10, lineHeight: 1.5, minHeight: 68, whiteSpace: 'pre-wrap', color: '#334155' }}>
               {v.rfi || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>None</span>}
             </div>
           </div>
           <div style={{ width: '36%' }}>
             <div style={sectionTitle()}>Signatures</div>
-            <div style={{ border, borderTop: 'none', padding: '8px' }}>
+            <div style={{ border, borderTop: 'none', padding: '12px' }}>
               <table style={{ width: '100%' }}>
                 <tbody>
                   <tr>
-                    <td style={{ fontSize: 8.5, fontWeight: 700, color: '#475569', paddingRight: 8, whiteSpace: 'nowrap', paddingBottom: 14 }}>Prepared by:</td>
-                    <td style={{ fontSize: 9.5, borderBottom: '1px solid #94a3b8', width: '100%', paddingBottom: 2 }}>{v.preparedBy || ''}</td>
+                    <td style={{ fontSize: 9.5, fontWeight: 700, color: '#475569', paddingRight: 10, whiteSpace: 'nowrap', paddingBottom: 20 }}>Prepared by:</td>
+                    <td style={{ fontSize: 10.5, borderBottom: '1px solid #94a3b8', width: '100%', paddingBottom: 4 }}>{v.preparedBy || ''}</td>
                   </tr>
                   <tr>
-                    <td style={{ fontSize: 8.5, fontWeight: 700, color: '#475569', paddingRight: 8, whiteSpace: 'nowrap' }}>Approved by:</td>
-                    <td style={{ fontSize: 9.5, borderBottom: '1px solid #94a3b8', width: '100%', paddingBottom: 2 }}>{v.approvedBy || ''}</td>
+                    <td style={{ fontSize: 9.5, fontWeight: 700, color: '#475569', paddingRight: 10, whiteSpace: 'nowrap' }}>Approved by:</td>
+                    <td style={{ fontSize: 10.5, borderBottom: '1px solid #94a3b8', width: '100%', paddingBottom: 4 }}>{v.approvedBy || ''}</td>
                   </tr>
-                  <tr><td colSpan={2} style={{ height: 8 }} /></tr>
+                  <tr><td colSpan={2} style={{ height: 12 }} /></tr>
                   <tr>
-                    <td colSpan={2} style={{ fontSize: 7.5, color: '#94a3b8' }}>Distribution: {v.employer} &nbsp;|&nbsp; BCIM Engineering</td>
+                    <td colSpan={2} style={{ fontSize: 8.5, color: '#94a3b8' }}>Distribution: {v.employer} &nbsp;|&nbsp; BCIM Engineering</td>
                   </tr>
                 </tbody>
               </table>
@@ -454,9 +455,9 @@ export default function DPRPrintTemplate({ dpr, project }) {
 /* ─── Helper ─────────────────────────────────────────────────── */
 function InfoCell({ label, value, flex, accent }) {
   return (
-    <td style={{ border, padding: '3px 8px', width: `${flex * 10}%`, verticalAlign: 'top', background: accent ? '#eef2f7' : '#fff' }}>
-      <div style={{ fontSize: 7.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 9.5, fontWeight: accent ? 800 : 600, color: accent ? NAVY : '#1e293b', marginTop: 1 }}>{value}</div>
+    <td style={{ border, padding: '7px 12px', width: `${flex * 10}%`, verticalAlign: 'top', background: accent ? '#eef2f7' : '#fff' }}>
+      <div style={{ fontSize: 8.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 10.5, fontWeight: accent ? 800 : 600, color: accent ? NAVY : '#1e293b', marginTop: 3 }}>{value}</div>
     </td>
   );
 }
