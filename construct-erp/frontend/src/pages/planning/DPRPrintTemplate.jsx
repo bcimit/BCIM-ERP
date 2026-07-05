@@ -85,16 +85,18 @@ const borderStrong = `1.5px solid ${NAVY}`;
 
 const th = (extra = {}) => ({
   border,
-  padding: '7px 9px',
+  padding: '6px 6px',
   background: '#eef2f7',
   color: '#334155',
   fontWeight: 700,
-  fontSize: 9.5,
+  fontSize: 9,
+  lineHeight: 1.3,
   textAlign: 'center',
   verticalAlign: 'middle',
-  whiteSpace: 'nowrap',
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
   textTransform: 'uppercase',
-  letterSpacing: 0.4,
+  letterSpacing: 0.3,
   ...extra,
 });
 
@@ -211,15 +213,15 @@ export default function DPRPrintTemplate({ dpr, project }) {
         {/* ── WORK PROGRESS ──────────────────────────────────── */}
         <table style={{ width: '100%', marginBottom: 16, tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: 26 }} />
-            <col style={{ width: 260 }} />
-            <col style={{ width: 48 }} />
-            <col style={{ width: 68 }} />
-            <col style={{ width: 68 }} />
-            <col style={{ width: 68 }} />
-            <col style={{ width: 68 }} />
-            <col style={{ width: 55 }} />
-            <col />
+            <col style={{ width: '3%' }} />
+            <col style={{ width: '27%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '25%' }} />
           </colgroup>
           <thead>
             <tr><td colSpan={9} style={sectionTitle()}>Work Progress</td></tr>
@@ -259,6 +261,7 @@ export default function DPRPrintTemplate({ dpr, project }) {
         <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
           {/* Staff */}
           <table style={{ width: '18%', tableLayout: 'fixed' }}>
+            <colgroup><col style={{ width: '70%' }} /><col style={{ width: '30%' }} /></colgroup>
             <thead>
               <tr><td style={sectionTitle()}>Staff</td></tr>
               <tr><th style={th({ textAlign: 'left' })}>Category</th><th style={th()}>Nos</th></tr>
@@ -282,6 +285,7 @@ export default function DPRPrintTemplate({ dpr, project }) {
 
           {/* Direct Workers */}
           <table style={{ width: '38%', tableLayout: 'fixed' }}>
+            <colgroup><col style={{ width: '46%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} /></colgroup>
             <thead>
               <tr><td colSpan={4} style={sectionTitle()}>Daily Labour Register — Direct Workers</td></tr>
               <tr>
@@ -312,6 +316,7 @@ export default function DPRPrintTemplate({ dpr, project }) {
 
           {/* Subcontractors */}
           <table style={{ width: '44%', tableLayout: 'fixed' }}>
+            <colgroup><col style={{ width: '52%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} /></colgroup>
             <thead>
               <tr><td colSpan={4} style={sectionTitle()}>Subcontractor Labour</td></tr>
               <tr>
@@ -350,6 +355,7 @@ export default function DPRPrintTemplate({ dpr, project }) {
         {/* ── PLANT & MATERIAL ROW ───────────────────────────── */}
         <div style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
           <table style={{ width: '32%', tableLayout: 'fixed' }}>
+            <colgroup><col style={{ width: '70%' }} /><col style={{ width: '30%' }} /></colgroup>
             <thead>
               <tr><td colSpan={2} style={sectionTitle()}>Plant &amp; Machinery</td></tr>
               <tr><th style={th({ textAlign: 'left' })}>Equipment</th><th style={th()}>Nos</th></tr>
@@ -372,6 +378,11 @@ export default function DPRPrintTemplate({ dpr, project }) {
           </table>
 
           <table style={{ width: '68%', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '11%' }} /><col style={{ width: '11%' }} />
+              <col style={{ width: '19.5%' }} /><col style={{ width: '19.5%' }} />
+              <col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} />
+            </colgroup>
             <thead>
               <tr><td colSpan={7} style={sectionTitle()}>Material — Steel Fe 500</td></tr>
               <tr>
