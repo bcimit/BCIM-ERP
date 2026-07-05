@@ -67,6 +67,26 @@ function httpsPut(path, token, fileBuffer, mimeType) {
   });
 }
 
+// Fetches a URL and buffers the full response body, following redirects
+// (Graph's /content endpoint 302s to a pre-signed download URL that must
+// NOT be sent the Graph bearer token — only the initial request needs auth).
+function httpsGetBuffer(hostname, urlPath, headers, redirectsLeft = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname, path: urlPath, method: 'GET', headers }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
+        res.resume();
+        const next = new URL(res.headers.location);
+        return httpsGetBuffer(next.hostname, next.pathname + next.search, {}, redirectsLeft - 1).then(resolve, reject);
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function getAccessToken() {
   const body = new URLSearchParams({
     client_id:     CLIENT(),
@@ -148,4 +168,21 @@ async function uploadAndShare(localFilePath, originalName, module, projectName) 
   return { ...result, share_url: shareUrl };
 }
 
-module.exports = { uploadToOneDrive, uploadAndShare, createSharingLink, isConfigured };
+/**
+ * Download a file's bytes from OneDrive by item id. Used to serve thumbnails/
+ * previews for documents whose local copy no longer exists (deleted after
+ * upload, or wiped by Railway's ephemeral filesystem on redeploy) — the
+ * `onedrive_url` captured at upload time is a short-lived pre-signed link
+ * (~1hr), so it can't be reused later; a fresh token + request is needed
+ * every time.
+ */
+async function downloadFromOneDrive(itemId) {
+  if (!isConfigured()) throw new Error('OneDrive not configured');
+  const token = await getAccessToken();
+  const apiPath = `/v1.0/users/${encodeURIComponent(USER())}/drive/items/${encodeURIComponent(itemId)}/content`;
+  const result = await httpsGetBuffer(GRAPH, apiPath, { Authorization: `Bearer ${token}` });
+  if (result.status >= 400) throw new Error(`OneDrive download failed (${result.status})`);
+  return { buffer: result.buffer, contentType: result.contentType || 'application/octet-stream' };
+}
+
+module.exports = { uploadToOneDrive, uploadAndShare, createSharingLink, downloadFromOneDrive, isConfigured };

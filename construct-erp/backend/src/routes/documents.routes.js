@@ -8,7 +8,7 @@ const { v4: uuid } = require('uuid');
 const { authenticate } = require('../middleware/auth');
 const { loadProjectScope, userCanAccessProject } = require('../middleware/projectScope');
 const { query, withTransaction } = require('../config/database');
-const { uploadToOneDrive, isConfigured } = require('../services/onedrive.service');
+const { uploadToOneDrive, isConfigured, downloadFromOneDrive } = require('../services/onedrive.service');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 router.use(authenticate);
@@ -513,15 +513,31 @@ router.get('/modules', async (req, res) => {
 // because the /uploads static route requires a Bearer header, which a plain
 // <img src> or <a href> can never send. Callers fetch this as a blob and
 // build an object URL (e.g. for gallery thumbnails / previews).
+//
+// Falls back to OneDrive when there's no usable local copy — documents
+// synced to OneDrive have their local file deleted right after upload (see
+// upload.routes.js), and Railway's filesystem is ephemeral anyway (wiped on
+// every redeploy), so "local_url is set" doesn't mean the bytes still exist
+// on disk.
 router.get('/:id/file', async (req, res) => {
   try {
     const doc = await getAccessibleDocument(req, req.params.id);
-    const { rows } = await query('SELECT local_url, file_name FROM documents WHERE id=$1', [doc.id]);
-    const localUrl = rows[0]?.local_url;
-    if (!localUrl) return res.status(404).json({ error: 'No local file for this document' });
-    const filePath = documentPath(localUrl);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing on disk' });
-    res.sendFile(filePath);
+    const { rows } = await query('SELECT local_url, onedrive_id, file_name FROM documents WHERE id=$1', [doc.id]);
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Document not found' });
+
+    if (row.local_url) {
+      const filePath = documentPath(row.local_url);
+      if (fs.existsSync(filePath)) return res.sendFile(filePath);
+    }
+
+    if (row.onedrive_id) {
+      const { buffer, contentType } = await downloadFromOneDrive(row.onedrive_id);
+      res.setHeader('Content-Type', contentType);
+      return res.send(buffer);
+    }
+
+    return res.status(404).json({ error: 'File not available locally or on OneDrive' });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
