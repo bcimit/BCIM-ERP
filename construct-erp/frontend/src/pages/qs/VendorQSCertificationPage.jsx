@@ -3,6 +3,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import useAuthStore from '../../store/authStore';
+
+// Only this user may approve a certification and move it to Accounts —
+// must match CERT_APPROVER_EMAIL in backend/src/routes/vendor-qs-certification.routes.js
+const CERT_APPROVER_EMAIL = 'prithivi@bcim.in';
 import {
   vendorQSCertificationAPI,
   projectAPI,
@@ -39,6 +44,17 @@ function statusClass(status) {
   return map[status] || map.draft;
 }
 
+// Suggests the company's own certificate number format:
+// P26/PO<last-2-digits-of-PO/WO-number>/XXXX/<vendor-first-3-letters>
+// The XXXX sequence is always left as a literal placeholder — the user
+// tracks and fills that part in manually (their own physical register).
+function suggestCertNumber(vendorName, orderNumber) {
+  const ven = (vendorName || '').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+  const digits = (orderNumber || '').replace(/\D/g, '');
+  const poSuffix = digits ? digits.slice(-2).padStart(2, '0') : '';
+  return `P26/PO${poSuffix}/XXXX/${ven}`;
+}
+
 function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
@@ -47,6 +63,7 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
     vendor_name: '',
     order_type: 'po',
     order_number: '',
+    cert_number: '',
     ra_sequence: 1,
     ra_bill_number: '',
     gst_tax: '',
@@ -61,7 +78,17 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
   });
   const [selectedBillIds, setSelectedBillIds] = useState([]);
   const [summaryRows, setSummaryRows] = useState([]);
+  const [certNumberTouched, setCertNumberTouched] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  // Re-suggest the certificate number whenever vendor/PO changes, unless the
+  // user has already started editing it themselves.
+  useEffect(() => {
+    if (certNumberTouched) return;
+    if (!form.vendor_name) return;
+    set('cert_number', suggestCertNumber(form.vendor_name, form.order_number));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.vendor_name, form.order_number, certNumberTouched]);
 
   const { data: pos = [] } = useQuery({
     queryKey: ['vendor-cert-pos', form.project_id, form.vendor_id, form.vendor_name],
@@ -271,6 +298,18 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
             <div>
               <label className="text-[11px] font-medium text-slate-900 font-medium uppercase">RA Bill Number</label>
               <input className={fieldCls} placeholder={`RA-${form.ra_sequence}`} value={form.ra_bill_number} onChange={e => set('ra_bill_number', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-slate-900 uppercase flex items-center gap-1">
+                Certificate No.
+                <span className="text-[10px] text-slate-400 font-normal normal-case">(edit XXXX)</span>
+              </label>
+              <input
+                className={fieldCls}
+                placeholder="P26/PO06/XXXX/VEN"
+                value={form.cert_number}
+                onChange={e => { setCertNumberTouched(true); set('cert_number', e.target.value); }}
+              />
             </div>
             <div>
               <label className="text-[11px] font-medium text-slate-900 uppercase flex items-center gap-1">
@@ -526,6 +565,8 @@ export default function VendorQSCertificationPage() {
   const [modalInitial, setModalInitial] = useState({});
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const { user } = useAuthStore();
+  const canApprove = (user?.email || '').toLowerCase() === CERT_APPROVER_EMAIL;
   const qc = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -715,10 +756,11 @@ export default function VendorQSCertificationPage() {
                           e.stopPropagation();
                           statusMut.mutate({ id: c.id, status: 'accounts' });
                         }}
-                        disabled={c.status === 'accounts' || c.status === 'paid'}
+                        disabled={c.status === 'accounts' || c.status === 'paid' || !canApprove}
+                        title={canApprove ? 'Approve and send to Accounts' : `Only ${CERT_APPROVER_EMAIL} can approve and send this to Accounts`}
                         className="px-2 py-1 rounded bg-indigo-50 text-indigo-700 font-medium disabled:opacity-40 inline-flex items-center gap-1"
                       >
-                        <Send className="w-3 h-3" /> Accounts
+                        <Send className="w-3 h-3" /> {canApprove ? 'Approve & Send' : 'Accounts'}
                       </button>
                       <button
                         onClick={e => handleDelete(e, c)}

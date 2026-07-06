@@ -78,6 +78,9 @@ async function ensureTables() {
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS reference_number TEXT`); } catch (_) {}
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS bank_name TEXT`); } catch (_) {}
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`); } catch (_) {}
+  // ── Accounts-approval gate (only APPROVER_EMAIL may send a cert to Accounts) ──
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS approved_by UUID`); } catch (_) {}
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`); } catch (_) {}
   await query(`
     UPDATE tqs_bill_updates u
     SET pc_number = c.cert_number,
@@ -134,6 +137,8 @@ runSchemaInit('vendor_qs_certifications', ensureTables);
 
 const n = (v) => parseFloat(v || 0) || 0;
 const round2 = (v) => Math.round(n(v) * 100) / 100;
+// Only this user may approve a certification and move it to the Accounts stage.
+const CERT_APPROVER_EMAIL = 'prithivi@bcim.in';
 const billPayableCap = (bill = {}) => {
   const gross = n(bill.bill_total ?? bill.total_amount);
   const deductions = n(bill.tds_deduction) + n(bill.other_deductions) + n(bill.advance_recovered);
@@ -519,7 +524,7 @@ router.post('/', async (req, res) => {
     const {
       project_id, vendor_id, vendor_name, order_type = 'po', order_number,
       bill_ids = [], ra_sequence = 1, ra_bill_number, is_final_bill = false,
-      gst_tax,
+      gst_tax, cert_number: cert_number_input,
       tds_rate: tds_rate_input,   // explicit rate from frontend (0/1/2)
       tds_amount: tds_amount_input, advance_recovered = 0, retention_amount = 0, other_deductions = 0,
       remarks, summary_items = [],
@@ -529,7 +534,13 @@ router.post('/', async (req, res) => {
     if (!Array.isArray(bill_ids) || bill_ids.length === 0) return res.status(400).json({ error: 'Select at least one invoice' });
 
     const result = await withTransaction(async (client) => {
-      const certNumber = await nextCertNumber(req.user.company_id);
+      // The QS enters the company's own certificate number (format:
+      // P26/PO<last-2-digits-of-PO>/XXXX/<vendor-first-3-letters>, e.g.
+      // "P26/PO06/0123/SUP") — only fall back to the auto VQS-YYYY-NNNN
+      // sequence if the field was left blank.
+      const certNumber = (cert_number_input && String(cert_number_input).trim())
+        ? String(cert_number_input).trim()
+        : await nextCertNumber(req.user.company_id);
       const billsRes = await client.query(`
         SELECT b.*
         FROM tqs_bills b
@@ -783,6 +794,9 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json({ data: result });
   } catch (err) {
+    if (err.code === '23505' && /cert_number/.test(err.constraint || '')) {
+      return res.status(409).json({ error: `Certificate number "${req.body.cert_number}" is already in use. Enter a different number.` });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -1023,11 +1037,22 @@ router.patch('/:id/status', async (req, res) => {
     const { status } = req.body;
     const allowed = ['draft', 'certified', 'accounts', 'paid', 'cancelled'];
     if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    // Moving a certification to Accounts is a gated approval step — only the
+    // designated approver may do it, so a certification can't skip straight
+    // from QS certification to Accounts without their sign-off.
+    if (status === 'accounts' && (req.user.email || '').toLowerCase() !== CERT_APPROVER_EMAIL) {
+      return res.status(403).json({ error: `Only ${CERT_APPROVER_EMAIL} can approve and send a certification to Accounts.` });
+    }
+
     const { rows } = await query(
       `UPDATE vendor_qs_certifications
-       SET status=$1, sent_to_accounts_at=CASE WHEN $1='accounts' THEN NOW() ELSE sent_to_accounts_at END, updated_at=NOW()
+       SET status=$1, sent_to_accounts_at=CASE WHEN $1='accounts' THEN NOW() ELSE sent_to_accounts_at END,
+           approved_by=CASE WHEN $1='accounts' THEN $4 ELSE approved_by END,
+           approved_at=CASE WHEN $1='accounts' THEN NOW() ELSE approved_at END,
+           updated_at=NOW()
        WHERE id=$2 AND company_id=$3 RETURNING *`,
-      [status, req.params.id, req.user.company_id]
+      [status, req.params.id, req.user.company_id, req.user.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Certification not found' });
     res.json({ data: rows[0] });
