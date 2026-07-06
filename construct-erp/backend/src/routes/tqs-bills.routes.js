@@ -3023,6 +3023,11 @@ router.patch('/:id/qs', requireTqsStageAccess('qs'), async (req, res) => {
   try {
     await getAccessibleBill(req, req.params.id);
     const {
+      // QS Received/Certified Date now live on the Vendor QS Certification
+      // record itself (see vendor-qs-certification.routes.js), and Handed to
+      // Accounts Date is gone now that Accounts is no longer a routing gate —
+      // none of the three are collected on this quick-cert form anymore, so
+      // they're optional here and default to today if not supplied.
       qs_received_date, qs_certified_date, handed_over_accounts_date, qs_gross, qs_tax,
       advance_recovered = 0, credit_note_amt = 0,
       retention_money = 0, tds_deduction = 0, other_deductions = 0,
@@ -3034,11 +3039,10 @@ router.patch('/:id/qs', requireTqsStageAccess('qs'), async (req, res) => {
       sgst_pct: ra_sgst_pct = 9,
       igst_pct: ra_igst_pct = 0,
     } = req.body;
-    requireDateFields(req.body, [
-      { key: 'qs_received_date', label: 'QS Received Date' },
-      { key: 'qs_certified_date', label: 'QS Certified Date' },
-      { key: 'handed_over_accounts_date', label: 'Handed to Accounts Date' },
-    ]);
+    const today = new Date().toISOString().slice(0, 10);
+    const qsReceivedDate  = qs_received_date  || today;
+    const qsCertifiedDate = qs_certified_date || today;
+    const handedOverAccountsDate = handed_over_accounts_date || null;
 
     const n = (v) => parseFloat(v || 0) || 0;
 
@@ -3132,8 +3136,8 @@ router.patch('/:id/qs', requireTqsStageAccess('qs'), async (req, res) => {
         NOW()
       )
       ON CONFLICT (bill_id) DO UPDATE SET
-        qs_received_date=EXCLUDED.qs_received_date,
-        qs_certified_date=EXCLUDED.qs_certified_date,
+        qs_received_date=COALESCE(tqs_bill_updates.qs_received_date, EXCLUDED.qs_received_date),
+        qs_certified_date=COALESCE(tqs_bill_updates.qs_certified_date, EXCLUDED.qs_certified_date),
         qs_gross=EXCLUDED.qs_gross,
         qs_tax=EXCLUDED.qs_tax,
         qs_total=EXCLUDED.qs_total,
@@ -3145,7 +3149,7 @@ router.patch('/:id/qs', requireTqsStageAccess('qs'), async (req, res) => {
         total_deductions=EXCLUDED.total_deductions,
         certified_net=EXCLUDED.certified_net,
         qs_remarks=EXCLUDED.qs_remarks,
-        handed_over_accounts_date=EXCLUDED.handed_over_accounts_date,
+        handed_over_accounts_date=COALESCE(tqs_bill_updates.handed_over_accounts_date, EXCLUDED.handed_over_accounts_date),
         ra_sequence=EXCLUDED.ra_sequence,
         ra_bill_number=EXCLUDED.ra_bill_number,
         is_final_bill=EXCLUDED.is_final_bill,
@@ -3158,10 +3162,10 @@ router.patch('/:id/qs', requireTqsStageAccess('qs'), async (req, res) => {
         ra_igst_pct=EXCLUDED.ra_igst_pct,
         balance_to_pay=EXCLUDED.balance_to_pay,
         updated_at=NOW()
-    `, [qs_received_date, qs_certified_date, certifiedGross, certifiedTax, qs_total,
+    `, [qsReceivedDate, qsCertifiedDate, certifiedGross, certifiedTax, qs_total,
         advance_recovered, credit_note_amt, retention_money,
         tds_deduction, other_deductions, total_deductions, certified_net,
-        qs_remarks, handed_over_accounts_date || null,
+        qs_remarks, handedOverAccountsDate,
         ra_sequence, raNum, is_final_bill,
         previous_certified_amount, cumulative_certified_amount,
         JSON.stringify(qs_summary_template),

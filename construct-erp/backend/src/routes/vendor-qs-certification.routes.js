@@ -81,6 +81,10 @@ async function ensureTables() {
   // ── Accounts-approval gate (only APPROVER_EMAIL may send a cert to Accounts) ──
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS approved_by UUID`); } catch (_) {}
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`); } catch (_) {}
+  // ── QS Received/Certified dates now live on the certification itself ────
+  // (moved off the Bill Tracker's per-bill QS tab, which no longer collects them)
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS qs_received_date DATE`); } catch (_) {}
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS qs_certified_date DATE`); } catch (_) {}
   await query(`
     UPDATE tqs_bill_updates u
     SET pc_number = c.cert_number,
@@ -525,6 +529,7 @@ router.post('/', async (req, res) => {
       project_id, vendor_id, vendor_name, order_type = 'po', order_number,
       bill_ids = [], ra_sequence = 1, ra_bill_number, is_final_bill = false,
       gst_tax, cert_number: cert_number_input,
+      qs_received_date, qs_certified_date,
       tds_rate: tds_rate_input,   // explicit rate from frontend (0/1/2)
       tds_amount: tds_amount_input, advance_recovered = 0, retention_amount = 0, other_deductions = 0,
       remarks, summary_items = [],
@@ -666,8 +671,9 @@ router.post('/', async (req, res) => {
           cert_number, ra_sequence, ra_bill_number, status, invoice_count,
           gross_amount, tax_amount, tds_amount, tds_rate, advance_recovered, retention_amount,
           other_deductions, net_payable, previous_certified_amount,
-          cumulative_certified_amount, is_final_bill, remarks, certified_at, created_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'certified',$10,$11,$12,$13,$23,$14,$15,$16,$17,$18,$19,$20,$21,NOW(),$22)
+          cumulative_certified_amount, is_final_bill, remarks, certified_at, created_by,
+          qs_received_date, qs_certified_date
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'certified',$10,$11,$12,$13,$23,$14,$15,$16,$17,$18,$19,$20,$21,NOW(),$22,$24,$25)
         RETURNING *
       `, [
         req.user.company_id, project_id, vendor_id || null, vendor_name, order_type, order_number || null,
@@ -675,6 +681,8 @@ router.post('/', async (req, res) => {
         gross, billTax, tds_amount, n(advance_recovered), n(retention_amount), n(other_deductions),
         netPayable, prevTotal, prevTotal + netPayable, is_final_bill, remarks || null, req.user.id,
         appliedTdsRate,  // $23
+        qs_received_date || null,  // $24
+        qs_certified_date || null, // $25
       ]);
 
       const selectedBillTotal = Math.max(1, billsRes.rows.reduce((s, x) => s + n(x.total_amount), 0));
@@ -696,17 +704,18 @@ router.post('/', async (req, res) => {
         );
         await client.query(`
           INSERT INTO tqs_bill_updates (
-            bill_id, certified_net, balance_to_pay, qs_certified_date,
+            bill_id, certified_net, balance_to_pay, qs_received_date, qs_certified_date,
             qs_gross, qs_tax, qs_total,
             ra_sequence, ra_bill_number, pc_number, pc_generated_at,
             advance_recovered, tds_deduction, retention_money,
             other_deductions, total_deductions,
             handed_over_accounts_date, updated_at
           )
-          VALUES ($1,$2,$2,CURRENT_DATE,$3,$4,$5,$6,$7,$8,NOW(),$9,$10,$11,$12,$13,CURRENT_DATE,NOW())
+          VALUES ($1,$2,$2,$14,COALESCE($15,CURRENT_DATE),$3,$4,$5,$6,$7,$8,NOW(),$9,$10,$11,$12,$13,CURRENT_DATE,NOW())
           ON CONFLICT (bill_id) DO UPDATE SET
             certified_net=EXCLUDED.certified_net,
             balance_to_pay=EXCLUDED.balance_to_pay,
+            qs_received_date=COALESCE(EXCLUDED.qs_received_date, tqs_bill_updates.qs_received_date),
             qs_certified_date=EXCLUDED.qs_certified_date,
             qs_gross=EXCLUDED.qs_gross,
             qs_tax=EXCLUDED.qs_tax,
@@ -736,8 +745,13 @@ router.post('/', async (req, res) => {
           billRetention,
           billOtherDeduction,
           billTotalDeductions,
+          qs_received_date || null,   // $14
+          qs_certified_date || null,  // $15
         ]);
-        await client.query(`UPDATE tqs_bills SET workflow_status='accounts', updated_at=NOW() WHERE id=$1`, [b.id]);
+        // QS certification now routes straight to Procurement (Accounts is no
+        // longer a blocking waypoint — see PATCH /:id/qs in tqs-bills.routes.js
+        // for the matching change on the Bill Tracker's own quick-cert path).
+        await client.query(`UPDATE tqs_bills SET workflow_status='procurement', updated_at=NOW() WHERE id=$1`, [b.id]);
       }
 
       let recoveryLeft = n(advance_recovered);

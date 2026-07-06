@@ -64,6 +64,8 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
     order_type: 'po',
     order_number: '',
     cert_number: '',
+    qs_received_date: new Date().toISOString().slice(0, 10),
+    qs_certified_date: new Date().toISOString().slice(0, 10),
     ra_sequence: 1,
     ra_bill_number: '',
     gst_tax: '',
@@ -310,6 +312,14 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
                 value={form.cert_number}
                 onChange={e => { setCertNumberTouched(true); set('cert_number', e.target.value); }}
               />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-slate-900 font-medium uppercase">QS Received Date</label>
+              <input type="date" className={fieldCls} value={form.qs_received_date} onChange={e => set('qs_received_date', e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-slate-900 font-medium uppercase">QS Certified Date</label>
+              <input type="date" className={fieldCls} value={form.qs_certified_date} onChange={e => set('qs_certified_date', e.target.value)} />
             </div>
             <div>
               <label className="text-[11px] font-medium text-slate-900 uppercase flex items-center gap-1">
@@ -695,14 +705,14 @@ export default function VendorQSCertificationPage() {
         <table className="w-full text-xs">
           <thead className="bg-slate-800 text-white">
             <tr>
-              {['Cert No','RA No','Vendor','Project','Order','Invoices','Gross','Deductions','Net Payable','Status','Actions'].map(h => (
+              {['Cert No','RA No','Vendor','Project','Order','QS Received','QS Certified','Invoices','Gross','Deductions','Net Payable','Status','Actions'].map(h => (
                 <th key={h} className="px-3 py-2 text-left font-medium uppercase tracking-wide">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
-              <tr><td colSpan={11} className="py-12 text-center text-slate-400">Loading certifications...</td></tr>
+              <tr><td colSpan={13} className="py-12 text-center text-slate-400">Loading certifications...</td></tr>
             ) : certs.length ? certs.map(c => {
               const deductions = Number(c.tds_amount || 0) + Number(c.advance_recovered || 0) + Number(c.retention_amount || 0) + Number(c.other_deductions || 0);
               return (
@@ -717,6 +727,8 @@ export default function VendorQSCertificationPage() {
                   <td className="px-3 py-2 font-medium text-slate-800">{c.vendor_name}</td>
                   <td className="px-3 py-2 text-slate-500">{c.project_name || '-'}</td>
                   <td className="px-3 py-2 text-slate-500">{String(c.order_type || '').toUpperCase()} {c.order_number || '-'}</td>
+                  <td className="px-3 py-2 text-slate-500">{fmtDate(c.qs_received_date)}</td>
+                  <td className="px-3 py-2 text-slate-500">{fmtDate(c.qs_certified_date)}</td>
                   <td className="px-3 py-2 font-bold">{c.invoice_count}</td>
                   <td className="px-3 py-2 font-bold">Rs {inr(c.gross_amount)}</td>
                   <td className="px-3 py-2 font-medium text-orange-600">Rs {inr(deductions)}</td>
@@ -775,7 +787,7 @@ export default function VendorQSCertificationPage() {
                 </tr>
               );
             }) : (
-              <tr><td colSpan={11} className="py-16 text-center text-slate-400">No vendor QS certifications created yet.</td></tr>
+              <tr><td colSpan={13} className="py-16 text-center text-slate-400">No vendor QS certifications created yet.</td></tr>
             )}
           </tbody>
         </table>

@@ -370,9 +370,6 @@ function QSTab({ bill, billId }) {
   const defaultGross = parseFloat(upd.qs_gross || bill.total_amount || 0);
 
   const [form, setForm] = useState({
-    qs_received_date:          upd.qs_received_date?.slice(0, 10)          || '',
-    qs_certified_date:         upd.qs_certified_date?.slice(0, 10)         || '',
-    handed_over_accounts_date: upd.handed_over_accounts_date?.slice(0, 10) || '',
     qs_remarks:                upd.qs_remarks || '',
     qs_gross:                  defaultGross || '',
     advance_recovered:         parseFloat(upd.advance_recovered || 0) || '',
@@ -417,31 +414,12 @@ function QSTab({ bill, billId }) {
         <Award className="w-5 h-5 text-emerald-600 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-emerald-900">RA Abstract &amp; Payment Certificate</p>
-          <p className="text-xs text-emerald-700 mt-0.5">For full RA breakdown with line items, use the QS Certification module. Use this form for quick certification of PO bills.</p>
+          <p className="text-xs text-emerald-700 mt-0.5">QS Received/Certified Dates are now entered on the QS Certification module (button on the right) — use this form for quick certification of PO bills without those dates.</p>
         </div>
         <button onClick={() => navigate(certLink)}
           className="shrink-0 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5">
           Open QS Certification <ChevronRight className="w-3.5 h-3.5" />
         </button>
-      </div>
-
-      {/* Date fields */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div>
-          <RequiredDateLabel>QS Received Date</RequiredDateLabel>
-          <input type="date" required className={inputCls}
-            value={form.qs_received_date} onChange={e => set('qs_received_date', e.target.value)} />
-        </div>
-        <div>
-          <RequiredDateLabel>QS Certified Date</RequiredDateLabel>
-          <input type="date" required className={inputCls}
-            value={form.qs_certified_date} onChange={e => set('qs_certified_date', e.target.value)} />
-        </div>
-        <div>
-          <RequiredDateLabel>Handed to Accounts Date</RequiredDateLabel>
-          <input type="date" required className={inputCls}
-            value={form.handed_over_accounts_date} onChange={e => set('handed_over_accounts_date', e.target.value)} />
-        </div>
       </div>
 
       {/* Certified Amount & Deductions */}
@@ -501,11 +479,7 @@ function QSTab({ bill, billId }) {
       </div>
 
       <button
-        onClick={() => requireDates(form, [
-          { key: 'qs_received_date', label: 'QS Received Date' },
-          { key: 'qs_certified_date', label: 'QS Certified Date' },
-          { key: 'handed_over_accounts_date', label: 'Handed to Accounts Date' },
-        ]) && mutation.mutate(form)}
+        onClick={() => mutation.mutate(form)}
         disabled={mutation.isPending}
         className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
       >
