@@ -503,7 +503,9 @@ function AccountsTab({ bill, billId }) {
   // kept in state (unedited) purely so saving the JV date doesn't wipe them.
   const [form, setForm] = useState({
     accts_received_from_qs_date: upd.accts_received_from_qs_date?.slice(0, 10) || '',
-    accts_jv_date:      upd.accts_jv_date?.slice(0, 10) || '',
+    // Falls back to the QS Certified Date for older bills certified before
+    // this auto-assign existed on the backend.
+    accts_jv_date:      upd.accts_jv_date?.slice(0, 10) || upd.qs_certified_date?.slice(0, 10) || '',
     accts_remarks:      upd.accts_remarks      || '',
     advance_recovered:  upd.advance_recovered  != null ? String(upd.advance_recovered)  : '',
     tds_deduction:      upd.tds_deduction      != null ? String(upd.tds_deduction)      : '',

@@ -709,9 +709,9 @@ router.post('/', async (req, res) => {
             ra_sequence, ra_bill_number, pc_number, pc_generated_at,
             advance_recovered, tds_deduction, retention_money,
             other_deductions, total_deductions,
-            handed_over_accounts_date, updated_at
+            handed_over_accounts_date, accts_jv_date, updated_at
           )
-          VALUES ($1,$2,$2,$14,COALESCE($15,CURRENT_DATE),$3,$4,$5,$6,$7,$8,NOW(),$9,$10,$11,$12,$13,CURRENT_DATE,NOW())
+          VALUES ($1,$2,$2,$14,COALESCE($15,CURRENT_DATE),$3,$4,$5,$6,$7,$8,NOW(),$9,$10,$11,$12,$13,CURRENT_DATE,COALESCE($15,CURRENT_DATE),NOW())
           ON CONFLICT (bill_id) DO UPDATE SET
             certified_net=EXCLUDED.certified_net,
             balance_to_pay=EXCLUDED.balance_to_pay,
@@ -730,6 +730,10 @@ router.post('/', async (req, res) => {
             total_deductions=EXCLUDED.total_deductions,
             pc_generated_at=COALESCE(tqs_bill_updates.pc_generated_at, EXCLUDED.pc_generated_at),
             handed_over_accounts_date=COALESCE(tqs_bill_updates.handed_over_accounts_date, EXCLUDED.handed_over_accounts_date),
+            -- Auto-assign Accounts' JV date to the QS Certified Date so it
+            -- doesn't sit blank until someone visits the Accounts JV section —
+            -- but never clobber a real JV date Accounts already recorded.
+            accts_jv_date=COALESCE(tqs_bill_updates.accts_jv_date, EXCLUDED.accts_jv_date),
             updated_at=NOW()
         `, [
           b.id,
