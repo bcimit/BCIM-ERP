@@ -498,8 +498,9 @@ const PAYMENT_MODES = [
 function AccountsTab({ bill, billId }) {
   const qc  = useQueryClient();
   const upd = bill.bill_updates || {};
-  const totalAmount = parseFloat(bill.total_amount || 0);
 
+  // Amounts/deductions/received-date are set by QS certification already —
+  // kept in state (unedited) purely so saving the JV date doesn't wipe them.
   const [form, setForm] = useState({
     accts_received_from_qs_date: upd.accts_received_from_qs_date?.slice(0, 10) || '',
     accts_jv_date:      upd.accts_jv_date?.slice(0, 10) || '',
@@ -511,36 +512,11 @@ function AccountsTab({ bill, billId }) {
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  /* Pending advance auto-suggest — query by vendor_id or vendor_name fallback */
-  const vendorId   = bill.vendor_id;
-  const vendorName = bill.vendor_name;
-  const projectId  = bill.project_id;
-  const { data: pendingAdv } = useQuery({
-    queryKey: ['tqs-pending-advances', vendorId, vendorName, projectId],
-    queryFn: () => tqsBillsAPI.pendingAdvances({
-      ...(vendorId   ? { vendor_id:   vendorId   } : {}),
-      ...(vendorName ? { vendor_name: vendorName } : {}),
-      ...(projectId  ? { project_id:  projectId  } : {}),
-    }).then(r => r.data?.data ?? r.data ?? []),
-    enabled: !!(vendorId || vendorName),
-    staleTime: 30000,
-  });
-  // pendingAdv shape: { total_advanced, total_recovered, pending_balance, advances: [...] }
-  const totalPending = parseFloat(pendingAdv?.pending_balance ?? 0);
-
-  /* Live certified net preview */
-  const advRec  = parseFloat(form.advance_recovered)  || 0;
-  const tdsDed  = parseFloat(form.tds_deduction)      || 0;
-  const retMon  = parseFloat(form.retention_money)    || 0;
-  const othDed  = parseFloat(form.other_deductions)   || 0;
-  const certNet = totalAmount - advRec - tdsDed - retMon - othDed;
-
   const mutation = useMutation({
     mutationFn: (d) => tqsBillsAPI.updateAccounts(billId, d),
     onSuccess: () => {
       refreshBillQueries(qc, billId);
-      qc.invalidateQueries({ queryKey: ['tqs-pending-advances', vendorId, projectId] });
-      toast.success('Accounts updated');
+      toast.success('JV date saved');
     },
     onError: (e) => toast.error(e.response?.data?.error || 'Failed'),
   });
@@ -550,100 +526,25 @@ function AccountsTab({ bill, billId }) {
       <SectionTitle>Accounts JV</SectionTitle>
       <p className="text-xs text-slate-500 -mt-3">
         Accounts can fill this in any time after QS certification — it does not block Procurement's approval above.
+        Amounts/deductions are already set from QS certification and aren't re-entered here.
       </p>
 
-      {/* Dates */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div>
-          <RequiredDateLabel>Received from QS Date</RequiredDateLabel>
-          <input type="date"
-            required
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            value={form.accts_received_from_qs_date} onChange={e => set('accts_received_from_qs_date', e.target.value)} />
-        </div>
-        <div>
-          <RequiredDateLabel>JV Date (Accounts)</RequiredDateLabel>
-          <input type="date"
-            required
-            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            value={form.accts_jv_date} onChange={e => set('accts_jv_date', e.target.value)} />
-        </div>
-      </div>
-
-      {/* Deductions */}
-      <div>
-        <SectionTitle>Deductions</SectionTitle>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-          {/* Advance Recovery */}
-          <div>
-            <label className="block text-xs font-medium text-slate-900 mb-1">Advance Recovered (₹)</label>
-            <input type="number" min="0" step="0.01" placeholder="0"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              value={form.advance_recovered} onChange={e => set('advance_recovered', e.target.value)} />
-            {totalPending > 0 && (
-              <button
-                type="button"
-                className="mt-1 text-xs text-blue-600 hover:underline"
-                onClick={() => set('advance_recovered', String(Math.min(totalPending, totalAmount).toFixed(2)))}
-              >
-                Pending advance ₹{Number(totalPending || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — apply
-              </button>
-            )}
-          </div>
-
-          {/* TDS Deduction */}
-          <div>
-            <label className="block text-xs font-medium text-slate-900 mb-1">TDS Deduction (₹)</label>
-            <input type="number" min="0" step="0.01" placeholder="0"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              value={form.tds_deduction} onChange={e => set('tds_deduction', e.target.value)} />
-          </div>
-
-          {/* Retention Money */}
-          <div>
-            <label className="block text-xs font-medium text-slate-900 mb-1">Retention Money (₹)</label>
-            <input type="number" min="0" step="0.01" placeholder="0"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              value={form.retention_money} onChange={e => set('retention_money', e.target.value)} />
-          </div>
-
-          {/* Other Deductions */}
-          <div>
-            <label className="block text-xs font-medium text-slate-900 mb-1">Other Deductions (₹)</label>
-            <input type="number" min="0" step="0.01" placeholder="0"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              value={form.other_deductions} onChange={e => set('other_deductions', e.target.value)} />
-          </div>
-        </div>
-
-        {/* Certified Net Preview */}
-        <div className="mt-3 flex items-center gap-3 text-sm">
-          <span className="text-slate-500">Invoice Total: <strong className="text-slate-700">₹{inr(totalAmount)}</strong></span>
-          <span className="text-slate-400">−</span>
-          <span className="text-slate-500">Deductions: <strong className="text-red-600">₹{inr(advRec + tdsDed + retMon + othDed)}</strong></span>
-          <span className="text-slate-400">=</span>
-          <span className="text-slate-900 font-semibold">Certified Net: <strong className="text-emerald-700">₹{inr(certNet)}</strong></span>
-        </div>
-      </div>
-
-      {/* Remarks */}
-      <div>
-        <label className="block text-xs font-medium text-slate-900 mb-1">Accounts Remarks</label>
-        <textarea rows={2}
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-          value={form.accts_remarks} onChange={e => set('accts_remarks', e.target.value)} />
+      <div className="max-w-xs">
+        <RequiredDateLabel>JV Date (Accounts)</RequiredDateLabel>
+        <input type="date"
+          required
+          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          value={form.accts_jv_date} onChange={e => set('accts_jv_date', e.target.value)} />
       </div>
 
       <button
         onClick={() => requireDates(form, [
-          { key: 'accts_received_from_qs_date', label: 'Received from QS Date' },
           { key: 'accts_jv_date', label: 'JV Date (Accounts)' },
         ]) && mutation.mutate(form)}
         disabled={mutation.isPending}
         className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
       >
-        {mutation.isPending ? 'Saving…' : 'Save JV & Deductions'}
+        {mutation.isPending ? 'Saving…' : 'Save JV Date'}
       </button>
     </div>
   );

@@ -3361,10 +3361,12 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
       retention_money    = 0,
       other_deductions   = 0,
     } = req.body;
+    // Received from QS Date is no longer collected on this simplified form —
+    // only JV Date matters now (Accounts just confirms when they posted it).
     requireDateFields(req.body, [
-      { key: 'accts_received_from_qs_date', label: 'Received from QS Date' },
       { key: 'accts_jv_date', label: 'JV Date (Accounts)' },
     ]);
+    const acctsReceivedFromQsDate = accts_received_from_qs_date || new Date().toISOString().slice(0, 10);
 
     const n = (v) => parseFloat(v || 0) || 0;
 
@@ -3389,7 +3391,7 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
         updated_at
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,NOW())
       ON CONFLICT (bill_id) DO UPDATE SET
-        accts_received_from_qs_date = EXCLUDED.accts_received_from_qs_date,
+        accts_received_from_qs_date = COALESCE(tqs_bill_updates.accts_received_from_qs_date, EXCLUDED.accts_received_from_qs_date),
         accts_jv_date        = EXCLUDED.accts_jv_date,
         accts_remarks        = EXCLUDED.accts_remarks,
         advance_recovered    = EXCLUDED.advance_recovered,
@@ -3402,7 +3404,7 @@ router.patch('/:id/accounts', requireTqsStageAccess('accounts'), async (req, res
         updated_at           = NOW()
     `, [
       req.params.id,
-      accts_received_from_qs_date || null,
+      acctsReceivedFromQsDate,
       accts_jv_date || null,
       accts_remarks || null,
       n(advance_recovered), n(tds_deduction), n(retention_money), n(other_deductions),
