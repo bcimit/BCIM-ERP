@@ -947,7 +947,22 @@ router.patch('/:id/amounts', async (req, res) => {
       retention_amount = 0,
       other_deductions = 0,
       remarks,
+      cert_number: cert_number_edit,   // sensitive — prithivi only
+      gst_tax,                          // sensitive — prithivi only (edit GST)
     } = req.body;
+
+    // Certificate number and GST are the QS Certifier's fields — only the
+    // designated approver (or a super_admin/admin) may change them. Deductions
+    // stay editable by anyone with access, as before.
+    const email = (req.user.email || '').toLowerCase();
+    const role  = (req.user.role || '').toLowerCase();
+    const canEditSensitive = email === CERT_APPROVER_EMAIL || role === 'super_admin' || role === 'admin';
+
+    const wantsCertNumberChange = cert_number_edit !== undefined && cert_number_edit !== null;
+    const wantsGstChange = gst_tax !== undefined && gst_tax !== '' && gst_tax !== null;
+    if ((wantsCertNumberChange || wantsGstChange) && !canEditSensitive) {
+      return res.status(403).json({ error: `Only ${CERT_APPROVER_EMAIL} can edit the certificate number or GST.` });
+    }
 
     const result = await withTransaction(async (client) => {
       const certRes = await client.query(
@@ -968,6 +983,9 @@ router.patch('/:id/amounts', async (req, res) => {
       // Invoice total = what vendor actually billed (incl. GST). Use as the net base.
       const invoiceBillTotal = bills.rows.reduce((s, b) => s + n(b.total_amount), 0) || gross;
 
+      // GST: if the approver edited it, that new tax is authoritative; otherwise keep as-is.
+      const finalTax = wantsGstChange ? n(gst_tax) : n(cert.tax_amount);
+
       // Recalc TDS amount from rate if rate supplied, else use explicit amount.
       // TDS base = invoiceBillTotal (matches frontend useEffect and POST handler).
       const finalTdsAmount = (tds_rate_edit !== undefined && tds_rate_edit !== '')
@@ -977,8 +995,17 @@ router.patch('/:id/amounts', async (req, res) => {
         ? n(tds_rate_edit)
         : (invoiceBillTotal > 0 ? round2((n(tds_amount) / invoiceBillTotal) * 100) : n(cert.tds_rate));
       const totalDed = finalTdsAmount + n(advance_recovered) + n(retention_amount) + n(other_deductions);
-      // Net = invoice total minus all deductions (gross+tax would miss GST embedded in total_amount)
-      const netPayable = invoiceBillTotal - totalDed;
+      // Net base: when GST is explicitly edited, use gross + edited-tax (matches the
+      // on-screen preview the approver confirms — WYSIWYG). Otherwise keep the
+      // invoice-total basis so a cert-number-only edit doesn't shift payables.
+      const netPayable = wantsGstChange
+        ? round2(gross + finalTax - totalDed)
+        : (invoiceBillTotal - totalDed);
+
+      // Certificate number change — trim, and let the UNIQUE constraint reject dupes.
+      const newCertNumber = wantsCertNumberChange && String(cert_number_edit).trim()
+        ? String(cert_number_edit).trim()
+        : cert.cert_number;
 
       const updated = await client.query(`
         UPDATE vendor_qs_certifications
@@ -990,12 +1017,15 @@ router.patch('/:id/amounts', async (req, res) => {
             net_payable=$5,
             cumulative_certified_amount=COALESCE(previous_certified_amount,0) + $5,
             remarks=COALESCE($6, remarks),
+            tax_amount=$10,
+            cert_number=$11,
             updated_at=NOW()
         WHERE id=$8 AND company_id=$9
         RETURNING *
       `, [
         finalTdsAmount, n(advance_recovered), n(retention_amount), n(other_deductions),
         netPayable, remarks || null, finalTdsRate, req.params.id, req.user.company_id,
+        finalTax, newCertNumber,
       ]);
       const selectedBillTotal = Math.max(1, bills.rows.reduce((s, x) => s + n(x.total_amount), 0));
       const allocate = (amount, billAmount) => Math.round((n(billAmount) / selectedBillTotal) * n(amount) * 100) / 100;
@@ -1007,6 +1037,9 @@ router.patch('/:id/amounts', async (req, res) => {
         const billRetention = allocate(n(retention_amount), b.total_amount);
         const billOtherDeduction = allocate(other_deductions, b.total_amount);
         const billTotalDeductions = billAdvanceRecovery + billTds + billRetention + billOtherDeduction;
+        // Only touch qs_tax/qs_total and pc_number when those were actually edited,
+        // so an unrelated deductions edit leaves the certified GST snapshot alone.
+        const billTax = allocate(finalTax, b.total_amount);
         await client.query(`
           UPDATE tqs_bill_updates
           SET certified_net=$1,
@@ -1016,11 +1049,16 @@ router.patch('/:id/amounts', async (req, res) => {
               retention_money=$4,
               other_deductions=$5,
               total_deductions=$6,
+              qs_tax = CASE WHEN $8 THEN $9 ELSE qs_tax END,
+              qs_total = CASE WHEN $8 THEN COALESCE(qs_gross,0) + $9 ELSE qs_total END,
+              pc_number = CASE WHEN $10 THEN $11 ELSE pc_number END,
               updated_at=NOW()
           WHERE bill_id=$7
         `, [
           billCertifiedNet, billAdvanceRecovery, billTds, billRetention,
           billOtherDeduction, billTotalDeductions, b.bill_id,
+          wantsGstChange, billTax,
+          wantsCertNumberChange, newCertNumber,
         ]);
       }
 
@@ -1028,6 +1066,9 @@ router.patch('/:id/amounts', async (req, res) => {
     });
     res.json({ data: result });
   } catch (err) {
+    if (err.code === '23505' && /cert_number/.test(err.constraint || '')) {
+      return res.status(409).json({ error: `Certificate number "${String(req.body.cert_number).trim()}" is already in use. Enter a different number.` });
+    }
     res.status(500).json({ error: err.message });
   }
 });

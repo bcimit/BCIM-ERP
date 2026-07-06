@@ -4,7 +4,12 @@ import { useParams, useNavigate, useLocation, useSearchParams } from 'react-rout
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { vendorQSCertificationAPI } from '../../api/client';
+import useAuthStore from '../../store/authStore';
 import { ArrowLeft, Pencil, Printer, RefreshCw, X, IndianRupee, CheckCircle2, FileText, Trash2 } from 'lucide-react';
+
+// Only the QS certifier (or a super_admin/admin) may edit the certificate
+// number and GST — matches the CERT_APPROVER_EMAIL gate on the backend.
+const CERT_APPROVER_EMAIL = 'prithivi@bcim.in';
 import BCIM_LOGO from '../../assets/bcim-logo.png';
 
 // ── Tinos font (Times New Roman equivalent) ───────────────────────────────────
@@ -520,6 +525,10 @@ function PaymentCertificate({ cert }) {
 // ── Edit Deductions Modal ─────────────────────────────────────────────────────
 function AmountCorrectionModal({ cert, onClose }) {
   const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const canEditSensitive =
+    (user?.email || '').toLowerCase() === CERT_APPROVER_EMAIL ||
+    ['super_admin', 'admin'].includes((user?.role || '').toLowerCase());
   const [form, setForm] = useState({
     tds_rate:          cert.tds_rate          || 0,
     tds_amount:        cert.tds_amount        || 0,
@@ -527,6 +536,8 @@ function AmountCorrectionModal({ cert, onClose }) {
     retention_amount:  cert.retention_amount  || 0,
     other_deductions:  cert.other_deductions  || 0,
     remarks:           cert.remarks           || '',
+    cert_number:       cert.cert_number       || '',
+    gst_tax:           cert.tax_amount        || 0,
   });
   // Fetch pending subcon advances from Stores matching this vendor
   const { data: scAdv } = useQuery({
@@ -543,6 +554,8 @@ function AmountCorrectionModal({ cert, onClose }) {
       retention_amount:  cert.retention_amount  || 0,
       other_deductions:  cert.other_deductions  || 0,
       remarks:           cert.remarks           || '',
+      cert_number:       cert.cert_number       || '',
+      gst_tax:           cert.tax_amount        || 0,
     });
   }, [cert]);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -553,28 +566,56 @@ function AmountCorrectionModal({ cert, onClose }) {
     setForm(p => ({ ...p, tds_rate: rate, tds_amount: newAmt }));
   };
   const totalDed  = n(form.tds_amount) + n(form.advance_recovered) + n(form.retention_amount) + n(form.other_deductions);
-  const revisedNet = n(cert.gross_amount) + n(cert.tax_amount) - totalDed;
+  // Preview follows the edited GST when the approver changes it (WYSIWYG with backend)
+  const effectiveTax = canEditSensitive ? n(form.gst_tax) : n(cert.tax_amount);
+  const revisedNet = n(cert.gross_amount) + effectiveTax - totalDed;
   const mut = useMutation({
-    mutationFn: () => vendorQSCertificationAPI.updateAmounts(cert.id, form),
+    mutationFn: () => {
+      const payload = { ...form };
+      if (!canEditSensitive) { delete payload.cert_number; delete payload.gst_tax; }
+      return vendorQSCertificationAPI.updateAmounts(cert.id, payload);
+    },
     onSuccess: () => {
-      toast.success('Certification amounts corrected');
+      toast.success('Certification updated');
       qc.invalidateQueries({ queryKey: ['vendor-qs-certification', cert.id] });
       qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
       onClose();
     },
-    onError: err => toast.error(err?.response?.data?.error || 'Failed to update amounts'),
+    onError: err => toast.error(err?.response?.data?.error || 'Failed to update certification'),
   });
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 no-print">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-medium text-slate-900">Edit Certification Deductions</h2>
-            <p className="text-xs text-slate-500">Correct TDS and deductions. Linked bills will be updated.</p>
+            <h2 className="text-base font-medium text-slate-900">
+              {canEditSensitive ? 'Edit Certification' : 'Edit Certification Deductions'}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {canEditSensitive
+                ? 'Correct certificate number, GST, TDS and deductions. Linked bills will be updated.'
+                : 'Correct TDS and deductions. Linked bills will be updated.'}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg border border-slate-200"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 grid grid-cols-2 gap-3">
+          {/* Certificate number + GST — QS certifier (prithivi) / admin only */}
+          {canEditSensitive && (
+            <>
+              <div>
+                <label className="text-[11px] font-medium text-slate-900 uppercase">Certificate Number</label>
+                <input type="text" className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm"
+                  value={form.cert_number} onChange={e => set('cert_number', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-slate-900 uppercase">GST / Tax Amount</label>
+                <input type="number" className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm"
+                  value={form.gst_tax} onChange={e => set('gst_tax', e.target.value)} />
+              </div>
+              <div className="col-span-2 border-b border-dashed border-slate-200 -mt-1 mb-1" />
+            </>
+          )}
           {/* TDS Rate selector */}
           <div>
             <label className="text-[11px] font-medium text-slate-900 uppercase">TDS Rate</label>
@@ -636,7 +677,7 @@ function AmountCorrectionModal({ cert, onClose }) {
               <p className="text-[10px] uppercase font-medium text-slate-500">Revised Net Payable</p>
               <p className="text-xl font-medium text-emerald-700">₹{inr(revisedNet)}</p>
             </div>
-            <p className="text-xs text-slate-500">Gross ₹{inr(cert.gross_amount)} + Tax ₹{inr(cert.tax_amount)} − Ded ₹{inr(totalDed)}</p>
+            <p className="text-xs text-slate-500">Gross ₹{inr(cert.gross_amount)} + Tax ₹{inr(effectiveTax)} − Ded ₹{inr(totalDed)}</p>
           </div>
         </div>
         <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
@@ -793,6 +834,10 @@ export default function VendorQSCertificationDetailPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const canEditSensitive =
+    (user?.email || '').toLowerCase() === CERT_APPROVER_EMAIL ||
+    ['super_admin', 'admin'].includes((user?.role || '').toLowerCase());
   // Work from both /qs and /tqs paths
   const backPath = location.pathname.startsWith('/tqs') ? '/tqs/vendor-certifications'
     : location.pathname.startsWith('/accounts') ? '/accounts/purchases/qs-certifications'
@@ -985,7 +1030,7 @@ export default function VendorQSCertificationDetailPage() {
             disabled={cert.status === 'paid' || cert.status === 'cancelled'}
             className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 shadow-sm"
           >
-            <Pencil className="w-4 h-4" /> Edit Deductions
+            <Pencil className="w-4 h-4" /> {canEditSensitive ? 'Edit Certification' : 'Edit Deductions'}
           </button>
           {/* ── Print Abstract (Landscape A4) ── */}
           <button
