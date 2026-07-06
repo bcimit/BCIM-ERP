@@ -7,7 +7,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hireLogAPI, scAPI } from '../../api/client';
 import { PageHeader, Theme } from '../../theme';
-import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck, Settings } from 'lucide-react';
+import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck, Settings, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -40,12 +40,18 @@ function computeTieredQty(totalHrs) {
 }
 
 // ─── Add/Edit Entry Modal ───────────────────────────────────────────────────
-function EntryModal({ wo, equipmentGroups, onClose }) {
+function EntryModal({ wo, equipmentGroups, onClose, entry }) {
+  const isEdit = !!entry;
   const qc = useQueryClient();
-  const [billNo, setBillNo]   = useState('');
-  const [month, setMonth]     = useState('');
-  const [date, setDate]       = useState(dayjs().format('YYYY-MM-DD'));
-  const [hours, setHours]     = useState({}); // wo_item_id -> { invoice, certified }
+  const [billNo, setBillNo]   = useState(entry?.bill_no || '');
+  const [month, setMonth]     = useState(entry?.bill_month || '');
+  const [date, setDate]       = useState(entry?.bill_date ? dayjs(entry.bill_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
+  const [hours, setHours]     = useState(() => {
+    if (!entry) return {};
+    const init = {};
+    entry.lines.forEach(l => { init[l.wo_item_id] = { invoice: l.invoice_hours || '', certified: l.certified_hours || '' }; });
+    return init;
+  }); // wo_item_id -> { invoice, certified }
   const [groupHrs, setGroupHrs] = useState({}); // group name -> { invoice: '', certified: '' }
 
   const setHour = (itemId, field, value) =>
@@ -76,18 +82,21 @@ function EntryModal({ wo, equipmentGroups, onClose }) {
   };
 
   const saveMut = useMutation({
-    mutationFn: () => hireLogAPI.addEntry(wo.id, {
-      bill_no: billNo, bill_month: month, bill_date: date,
-      lines: Object.entries(hours).map(([wo_item_id, h]) => ({
-        wo_item_id, invoice_hours: num(h.invoice), certified_hours: num(h.certified),
-      })).filter(l => l.invoice_hours > 0 || l.certified_hours > 0),
-    }),
+    mutationFn: () => {
+      const payload = {
+        bill_no: billNo, bill_month: month, bill_date: date,
+        lines: Object.entries(hours).map(([wo_item_id, h]) => ({
+          wo_item_id, invoice_hours: num(h.invoice), certified_hours: num(h.certified),
+        })).filter(l => l.invoice_hours > 0 || l.certified_hours > 0),
+      };
+      return isEdit ? hireLogAPI.updateEntry(wo.id, entry.id, payload) : hireLogAPI.addEntry(wo.id, payload);
+    },
     onSuccess: () => {
-      toast.success('Entry added');
+      toast.success(isEdit ? 'Entry updated' : 'Entry added');
       qc.invalidateQueries({ queryKey: ['hire-log', wo.id] });
       onClose();
     },
-    onError: e => toast.error(e?.response?.data?.error || 'Failed to add entry'),
+    onError: e => toast.error(e?.response?.data?.error || `Failed to ${isEdit ? 'update' : 'add'} entry`),
   });
 
   const handleSave = () => {
@@ -103,7 +112,7 @@ function EntryModal({ wo, equipmentGroups, onClose }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"
           style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
           <div>
-            <h2 className="font-bold text-white text-sm">Add Bill Entry</h2>
+            <h2 className="font-bold text-white text-sm">{isEdit ? 'Edit Bill Entry' : 'Add Bill Entry'}</h2>
             <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>{wo.wo_number} · {wo.sc_name}</p>
           </div>
           <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: 'rgba(255,255,255,0.12)' }}>
@@ -205,7 +214,7 @@ function EntryModal({ wo, equipmentGroups, onClose }) {
 }
 
 // ─── Equipment Group Table ──────────────────────────────────────────────────
-function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
+function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId, onEdit, onDelete }) {
   const cats = group.categories;
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -255,10 +264,20 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId }) {
                         <CheckCircle2 className="w-3 h-3" /> {e.sc_bill_number || 'Billed'}
                       </span>
                     ) : (
-                      <button onClick={() => onRaiseBill(e)} disabled={raisingId === e.id}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-2 py-1 rounded-lg">
-                        <Receipt className="w-3 h-3" /> {raisingId === e.id ? '…' : 'Raise Bill'}
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => onRaiseBill(e)} disabled={raisingId === e.id}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-2 py-1 rounded-lg">
+                          <Receipt className="w-3 h-3" /> {raisingId === e.id ? '…' : 'Raise Bill'}
+                        </button>
+                        <button onClick={() => onEdit(e)} title="Edit entry"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => onDelete(e)} title="Delete entry"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -449,6 +468,7 @@ export default function HireUsageTrackerPage() {
   const qc = useQueryClient();
   const [woId, setWoId] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
   const [showSetup, setShowSetup] = useState(false);
   const [raisingId, setRaisingId] = useState(null);
 
@@ -491,7 +511,7 @@ export default function HireUsageTrackerPage() {
         wo_id: woId, bill_type: 'ra',
         bill_date: entry.bill_date || dayjs().format('YYYY-MM-DD'),
         description: `Hire bill ${entry.bill_no || ''} (${entry.bill_month || ''})`,
-        gross_amount: grossAmount, gst_pct: 18, tds_pct: 0, retention_pct: 0,
+        gross_amount: grossAmount, gst_pct: num(wo?.gst_pct ?? 18), tds_pct: num(wo?.tds_pct), retention_pct: num(wo?.retention_pct),
         items,
       });
       const newBill = res.data?.data;
@@ -503,6 +523,17 @@ export default function HireUsageTrackerPage() {
       toast.error(e?.response?.data?.error || 'Failed to raise bill');
     } finally {
       setRaisingId(null);
+    }
+  };
+
+  const deleteEntry = async (entry) => {
+    if (!window.confirm('Delete this entry?')) return;
+    try {
+      await hireLogAPI.deleteEntry(woId, entry.id);
+      toast.success('Entry deleted');
+      qc.invalidateQueries({ queryKey: ['hire-log', woId] });
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'Failed to delete entry');
     }
   };
 
@@ -569,10 +600,16 @@ export default function HireUsageTrackerPage() {
               totals={totals}
               onRaiseBill={raiseBill}
               raisingId={raisingId}
+              onEdit={setEditingEntry}
+              onDelete={deleteEntry}
             />
           ))
         )}
       </div>
+
+      {editingEntry && wo && (
+        <EntryModal wo={wo} equipmentGroups={equipmentGroups} entry={editingEntry} onClose={() => setEditingEntry(null)} />
+      )}
 
       {showAdd && wo && (
         <EntryModal wo={wo} equipmentGroups={equipmentGroups} onClose={() => setShowAdd(false)} />
