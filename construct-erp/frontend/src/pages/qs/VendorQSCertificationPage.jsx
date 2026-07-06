@@ -640,6 +640,24 @@ export default function VendorQSCertificationPage() {
     onError: err => toast.error(err?.response?.data?.error || 'Failed to delete'),
   });
 
+  const [selectedIds, setSelectedIds] = useState([]);
+  const toggleSelected = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const bulkApproveMut = useMutation({
+    mutationFn: async (ids) => {
+      const results = await Promise.allSettled(ids.map(id => vendorQSCertificationAPI.updateStatus(id, { status: 'accounts' })));
+      const failed = results.filter(r => r.status === 'rejected').length;
+      return { total: ids.length, failed };
+    },
+    onSuccess: ({ total, failed }) => {
+      if (failed) toast.error(`${failed} of ${total} failed to approve`);
+      else toast.success(`Approved ${total} certification${total === 1 ? '' : 's'}`);
+      setSelectedIds([]);
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
+    },
+    onError: () => toast.error('Bulk approve failed'),
+  });
+
   const handleDelete = (e, cert) => {
     e.stopPropagation();
     if (cert.status === 'paid') { toast.error('Cannot delete a paid certification.'); return; }
@@ -699,12 +717,29 @@ export default function VendorQSCertificationPage() {
           <option value="">All projects</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+        {canApprove && (
+          <button
+            onClick={() => bulkApproveMut.mutate(selectedIds)}
+            disabled={selectedIds.length === 0 || bulkApproveMut.isPending}
+            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 flex items-center gap-2"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {bulkApproveMut.isPending ? 'Approving…' : `Approve Selected (${selectedIds.length})`}
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-slate-800 text-white">
             <tr>
+              {canApprove && (
+                <th className="px-3 py-2 w-8">
+                  <input type="checkbox" className="accent-indigo-500"
+                    checked={selectedIds.length > 0 && selectedIds.length === certs.filter(c => c.status === 'certified').length}
+                    onChange={e => setSelectedIds(e.target.checked ? certs.filter(c => c.status === 'certified').map(c => c.id) : [])} />
+                </th>
+              )}
               {['Cert No','RA No','Vendor','Project','Order','QS Received','QS Certified','Invoices','Gross','Deductions','Net Payable','Status','Actions'].map(h => (
                 <th key={h} className="px-3 py-2 text-left font-medium uppercase tracking-wide">{h}</th>
               ))}
@@ -712,7 +747,7 @@ export default function VendorQSCertificationPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
-              <tr><td colSpan={13} className="py-12 text-center text-slate-400">Loading certifications...</td></tr>
+              <tr><td colSpan={canApprove ? 14 : 13} className="py-12 text-center text-slate-400">Loading certifications...</td></tr>
             ) : certs.length ? certs.map(c => {
               const deductions = Number(c.tds_amount || 0) + Number(c.advance_recovered || 0) + Number(c.retention_amount || 0) + Number(c.other_deductions || 0);
               return (
@@ -722,6 +757,14 @@ export default function VendorQSCertificationPage() {
                   className="hover:bg-slate-50 cursor-pointer"
                   title="Open certification"
                 >
+                  {canApprove && (
+                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" className="accent-indigo-500"
+                        disabled={c.status !== 'certified'}
+                        checked={selectedIds.includes(c.id)}
+                        onChange={() => toggleSelected(c.id)} />
+                    </td>
+                  )}
                   <td className="px-3 py-2 font-medium text-indigo-700 underline decoration-indigo-200 underline-offset-2">{c.cert_number}</td>
                   <td className="px-3 py-2 font-semibold">{c.ra_bill_number || `RA-${c.ra_sequence}`}</td>
                   <td className="px-3 py-2 font-medium text-slate-800">{c.vendor_name}</td>
@@ -787,7 +830,7 @@ export default function VendorQSCertificationPage() {
                 </tr>
               );
             }) : (
-              <tr><td colSpan={13} className="py-16 text-center text-slate-400">No vendor QS certifications created yet.</td></tr>
+              <tr><td colSpan={canApprove ? 14 : 13} className="py-16 text-center text-slate-400">No vendor QS certifications created yet.</td></tr>
             )}
           </tbody>
         </table>

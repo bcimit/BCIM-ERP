@@ -4,6 +4,7 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
+const { sendMail } = require('../services/mail.service');
 
 router.use(authenticate);
 
@@ -811,6 +812,27 @@ router.post('/', async (req, res) => {
       return cert.rows[0];
     });
     res.status(201).json({ data: result });
+
+    // Best-effort: notify the approver a new certification is awaiting their
+    // sign-off — never blocks/fails the request if mail isn't configured.
+    try {
+      const appUrl = (process.env.PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://erp.bcim.in').replace(/\/$/, '');
+      await sendMail({
+        to: CERT_APPROVER_EMAIL,
+        subject: `QS Certification awaiting approval — ${result.cert_number} (${result.vendor_name})`,
+        html: `
+          <p>A new Vendor QS Certification has been created and needs your approval before it moves to Accounts.</p>
+          <table style="border-collapse:collapse;font-family:sans-serif;font-size:13px;margin:12px 0;">
+            <tr><td style="padding:4px 12px 4px 0;color:#666;">Certificate No.</td><td><b>${result.cert_number}</b></td></tr>
+            <tr><td style="padding:4px 12px 4px 0;color:#666;">Vendor</td><td>${result.vendor_name}</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;color:#666;">RA No.</td><td>${result.ra_bill_number || ''}</td></tr>
+            <tr><td style="padding:4px 12px 4px 0;color:#666;">Net Payable</td><td>₹${n(result.net_payable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
+          </table>
+          <p><a href="${appUrl}/qs/vendor-certifications/${result.id}">Open this certification</a></p>
+        `,
+      });
+    } catch (_) { /* mail not configured / transient failure — non-blocking */ }
+    return;
   } catch (err) {
     if (err.code === '23505' && /cert_number/.test(err.constraint || '')) {
       return res.status(409).json({ error: `Certificate number "${req.body.cert_number}" is already in use. Enter a different number.` });
