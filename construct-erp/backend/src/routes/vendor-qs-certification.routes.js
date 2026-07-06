@@ -144,6 +144,9 @@ const n = (v) => parseFloat(v || 0) || 0;
 const round2 = (v) => Math.round(n(v) * 100) / 100;
 // Only this user may approve a certification and move it to the Accounts stage.
 const CERT_APPROVER_EMAIL = 'prithivi@bcim.in';
+// Notified (along with the approver) once a certification is approved and its
+// Payment Certificate is ready.
+const PAYMENT_CERT_NOTIFY_EMAILS = ['prithivi@bcim.in', 'jephins@bcim.in'];
 const billPayableCap = (bill = {}) => {
   const gross = n(bill.bill_total ?? bill.total_amount);
   const deductions = n(bill.tds_deduction) + n(bill.other_deductions) + n(bill.advance_recovered);
@@ -1137,6 +1140,27 @@ router.patch('/:id/status', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Certification not found' });
     res.json({ data: rows[0] });
+
+    if (status === 'accounts') {
+      // Best-effort: let the approver + Derek know the Payment Certificate is
+      // ready — never blocks/fails the request if mail isn't configured.
+      try {
+        const cert = rows[0];
+        const appUrl = (process.env.PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://erp.bcim.in').replace(/\/$/, '');
+        await sendMail({
+          to: PAYMENT_CERT_NOTIFY_EMAILS,
+          subject: `Payment Certificate ready — ${cert.cert_number} (${cert.vendor_name})`,
+          html: `
+            <p>Certification <b>${cert.cert_number}</b> for <b>${cert.vendor_name}</b> has been approved and is now with Accounts. The Payment Certificate is ready.</p>
+            <table style="border-collapse:collapse;font-family:sans-serif;font-size:13px;margin:12px 0;">
+              <tr><td style="padding:4px 12px 4px 0;color:#666;">RA No.</td><td>${cert.ra_bill_number || ''}</td></tr>
+              <tr><td style="padding:4px 12px 4px 0;color:#666;">Net Payable</td><td>₹${n(cert.net_payable).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
+            </table>
+            <p><a href="${appUrl}/qs/vendor-certifications/${cert.id}?print=payment">Open / Print Payment Certificate</a></p>
+          `,
+        });
+      } catch (_) { /* mail not configured / transient failure — non-blocking */ }
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
