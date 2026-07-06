@@ -40,8 +40,38 @@ function statusClass(status) {
     accounts: 'bg-indigo-100 text-indigo-700',
     paid: 'bg-blue-100 text-blue-700',
     cancelled: 'bg-red-100 text-red-700',
+    rejected: 'bg-orange-100 text-orange-700',
   };
   return map[status] || map.draft;
+}
+
+function RejectCertModal({ cert, onClose, onConfirm, isPending }) {
+  const [remarks, setRemarks] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-900">Reject Certification</h3>
+          <p className="text-xs text-slate-500 mt-0.5">{cert.cert_number} · {cert.vendor_name} — sends the linked bills back to QS for correction.</p>
+        </div>
+        <div className="p-5">
+          <label className="block text-xs font-medium text-slate-700 mb-1">Reason (required)</label>
+          <textarea rows={3} autoFocus className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-300"
+            placeholder="What needs to be corrected?" value={remarks} onChange={e => setRemarks(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600">Cancel</button>
+          <button
+            onClick={() => remarks.trim() ? onConfirm(remarks.trim()) : toast.error('A reason is required')}
+            disabled={isPending}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+          >
+            {isPending ? 'Rejecting…' : 'Reject & Send Back'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Suggests the company's own certificate number format:
@@ -623,12 +653,23 @@ export default function VendorQSCertificationPage() {
   });
 
   const statusMut = useMutation({
-    mutationFn: ({ id, status }) => vendorQSCertificationAPI.updateStatus(id, { status }),
+    mutationFn: ({ id, status, remarks }) => vendorQSCertificationAPI.updateStatus(id, { status, remarks }),
     onSuccess: () => {
       toast.success('Certification status updated');
       qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
     },
     onError: err => toast.error(err?.response?.data?.error || 'Status update failed'),
+  });
+
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const rejectMut = useMutation({
+    mutationFn: ({ id, remarks }) => vendorQSCertificationAPI.updateStatus(id, { status: 'rejected', remarks }),
+    onSuccess: () => {
+      toast.success('Certification rejected and sent back to QS');
+      setRejectTarget(null);
+      qc.invalidateQueries({ queryKey: ['vendor-qs-certifications'] });
+    },
+    onError: err => toast.error(err?.response?.data?.error || 'Failed to reject'),
   });
 
   const deleteMut = useMutation({
@@ -817,6 +858,16 @@ export default function VendorQSCertificationPage() {
                       >
                         <Send className="w-3 h-3" /> {canApprove ? 'Approve & Send' : 'Accounts'}
                       </button>
+                      {canApprove && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setRejectTarget(c); }}
+                          disabled={c.status !== 'certified'}
+                          title="Reject and send back to QS with a reason"
+                          className="px-2 py-1 rounded bg-orange-50 text-orange-700 font-medium disabled:opacity-40 inline-flex items-center gap-1"
+                        >
+                          <X className="w-3 h-3" /> Reject
+                        </button>
+                      )}
                       <button
                         onClick={e => handleDelete(e, c)}
                         disabled={deleteMut.isPending || c.status === 'paid'}
@@ -842,6 +893,15 @@ export default function VendorQSCertificationPage() {
           projects={projects}
           vendors={vendors}
           initialData={modalInitial}
+        />
+      )}
+
+      {rejectTarget && (
+        <RejectCertModal
+          cert={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          isPending={rejectMut.isPending}
+          onConfirm={(remarks) => rejectMut.mutate({ id: rejectTarget.id, remarks })}
         />
       )}
     </div>

@@ -1051,6 +1051,40 @@ export default function VendorQSCertificationDetailPage() {
         </div>
       </div>
 
+      {/* ── Audit trail ── */}
+      <div className="no-print bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 mb-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">Timeline</p>
+        <div className="flex flex-wrap gap-6 text-xs">
+          <div>
+            <p className="text-slate-400 uppercase tracking-wide text-[10px]">Created</p>
+            <p className="font-medium text-slate-800">{fmt(cert.created_at)}{cert.created_by_name ? ` · ${cert.created_by_name}` : ''}</p>
+          </div>
+          {cert.status === 'rejected' ? (
+            <div>
+              <p className="text-orange-500 uppercase tracking-wide text-[10px]">Rejected</p>
+              <p className="font-medium text-orange-700">{fmt(cert.rejected_at)}{cert.rejected_by_name ? ` · ${cert.rejected_by_name}` : ''}</p>
+              {cert.rejection_remarks && <p className="text-orange-600 mt-0.5 max-w-md">"{cert.rejection_remarks}"</p>}
+            </div>
+          ) : ['accounts', 'paid'].includes(cert.status) ? (
+            <div>
+              <p className="text-indigo-500 uppercase tracking-wide text-[10px]">Approved → Accounts</p>
+              <p className="font-medium text-indigo-700">{fmt(cert.approved_at)}{cert.approved_by_name ? ` · ${cert.approved_by_name}` : ''}</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-amber-500 uppercase tracking-wide text-[10px]">Status</p>
+              <p className="font-medium text-amber-700">Awaiting approval</p>
+            </div>
+          )}
+          {cert.status === 'paid' && (
+            <div>
+              <p className="text-emerald-500 uppercase tracking-wide text-[10px]">Paid</p>
+              <p className="font-medium text-emerald-700">{fmt(cert.paid_at)}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── Print area ── */}
       <div className="print-area space-y-6">
         <AbstractSheet cert={cert} />

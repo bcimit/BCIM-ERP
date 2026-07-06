@@ -82,6 +82,10 @@ async function ensureTables() {
   // ── Accounts-approval gate (only APPROVER_EMAIL may send a cert to Accounts) ──
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS approved_by UUID`); } catch (_) {}
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`); } catch (_) {}
+  // ── Reject-back-to-QS (audit fields) ─────────────────────────────────────
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS rejected_by UUID`); } catch (_) {}
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ`); } catch (_) {}
+  try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS rejection_remarks TEXT`); } catch (_) {}
   // ── QS Received/Certified dates now live on the certification itself ────
   // (moved off the Bill Tracker's per-bill QS tab, which no longer collects them)
   try { await query(`ALTER TABLE vendor_qs_certifications ADD COLUMN IF NOT EXISTS qs_received_date DATE`); } catch (_) {}
@@ -142,6 +146,7 @@ runSchemaInit('vendor_qs_certifications', ensureTables);
 
 const n = (v) => parseFloat(v || 0) || 0;
 const round2 = (v) => Math.round(n(v) * 100) / 100;
+const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // Only this user may approve a certification and move it to the Accounts stage.
 const CERT_APPROVER_EMAIL = 'prithivi@bcim.in';
 // Notified (along with the approver) once a certification is approved and its
@@ -192,7 +197,7 @@ async function buildSummaryFromBills(executor, billIds, companyId, excludeCertif
       FROM vendor_qs_certification_items i
       JOIN vendor_qs_certifications c ON c.id = i.certification_id
       WHERE c.company_id = $2
-        AND c.status <> 'cancelled'
+        AND c.status NOT IN ('cancelled', 'rejected')
         AND ($3::uuid IS NULL OR c.id <> $3::uuid)
       GROUP BY COALESCE(item_ref_id::text, LOWER(TRIM(description)))
     ) prev ON prev.item_key = COALESCE((li.po_item_id)::text, (li.wo_item_id)::text, LOWER(TRIM(COALESCE(li.item_name, ''))))
@@ -328,7 +333,7 @@ router.get('/pending-invoices', async (req, res) => {
       `NOT EXISTS (
         SELECT 1 FROM vendor_qs_certification_bills cb
         JOIN vendor_qs_certifications c ON c.id = cb.certification_id
-        WHERE cb.bill_id = b.id AND c.status <> 'cancelled'
+        WHERE cb.bill_id = b.id AND c.status NOT IN ('cancelled', 'rejected')
       )`
     ];
     let i = 2;
@@ -429,7 +434,7 @@ router.post('/summary-items', async (req, res) => {
           SUM(qs_pres_qty) AS qs_qty
         FROM vendor_qs_certification_items i
         JOIN vendor_qs_certifications c ON c.id = i.certification_id
-        WHERE c.company_id = $2 AND c.status <> 'cancelled'
+        WHERE c.company_id = $2 AND c.status NOT IN ('cancelled', 'rejected')
         GROUP BY COALESCE(item_ref_id::text, LOWER(TRIM(description)))
       ) prev ON prev.item_key = COALESCE((li.po_item_id)::text, (li.wo_item_id)::text, LOWER(TRIM(COALESCE(li.item_name, ''))))
       WHERE li.bill_id = ANY($1::uuid[])
@@ -503,10 +508,16 @@ router.get('/:id', async (req, res) => {
               CASE
                 WHEN c.order_type = 'wo' THEN COALESCE(wo.contract_amount, wo.total_value)
                 ELSE COALESCE(po.grand_total, po.sub_total)
-              END AS order_total_value
+              END AS order_total_value,
+              creator.name AS created_by_name,
+              approver.name AS approved_by_name,
+              rejecter.name AS rejected_by_name
        FROM vendor_qs_certifications c
        LEFT JOIN projects p ON p.id = c.project_id
        LEFT JOIN vendors v ON v.id = c.vendor_id
+       LEFT JOIN users creator  ON creator.id  = c.created_by
+       LEFT JOIN users approver ON approver.id = c.approved_by
+       LEFT JOIN users rejecter ON rejecter.id = c.rejected_by
        -- Case-insensitive, trimmed join so "POTQS073" matches " POTQS073 " etc.
        LEFT JOIN purchase_orders po
               ON LOWER(TRIM(po.po_number)) = LOWER(TRIM(c.order_number))
@@ -559,7 +570,7 @@ router.post('/', async (req, res) => {
           AND NOT EXISTS (
             SELECT 1 FROM vendor_qs_certification_bills cb
             JOIN vendor_qs_certifications c ON c.id = cb.certification_id
-            WHERE cb.bill_id = b.id AND c.status <> 'cancelled'
+            WHERE cb.bill_id = b.id AND c.status NOT IN ('cancelled', 'rejected')
           )
       `, [bill_ids, req.user.company_id]);
       if (billsRes.rows.length !== bill_ids.length) throw new Error('Some selected invoices are invalid or already certified');
@@ -665,7 +676,7 @@ router.post('/', async (req, res) => {
         FROM vendor_qs_certifications
         WHERE company_id=$1 AND project_id=$2 AND LOWER(TRIM(vendor_name))=LOWER(TRIM($3))
           AND COALESCE(order_number,'') = COALESCE($4,'')
-          AND status <> 'cancelled'
+          AND status NOT IN ('cancelled', 'rejected')
       `, [req.user.company_id, project_id, vendor_name, order_number || '']);
       const prevTotal = n(prev.rows[0]?.total);
 
@@ -1118,34 +1129,58 @@ router.patch('/:id/amounts', async (req, res) => {
 
 router.patch('/:id/status', async (req, res) => {
   try {
-    const { status } = req.body;
-    const allowed = ['draft', 'certified', 'accounts', 'paid', 'cancelled'];
+    const { status, remarks } = req.body;
+    const allowed = ['draft', 'certified', 'accounts', 'paid', 'cancelled', 'rejected'];
     if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
-    // Moving a certification to Accounts is a gated approval step — only the
-    // designated approver may do it, so a certification can't skip straight
-    // from QS certification to Accounts without their sign-off.
-    if (status === 'accounts' && (req.user.email || '').toLowerCase() !== CERT_APPROVER_EMAIL) {
-      return res.status(403).json({ error: `Only ${CERT_APPROVER_EMAIL} can approve and send a certification to Accounts.` });
+    // Approving (-> accounts) and rejecting are both gated to the designated
+    // approver — a certification can't skip straight to Accounts without
+    // sign-off, and only the approver can send it back to QS with a reason.
+    const isApproverAction = status === 'accounts' || status === 'rejected';
+    if (isApproverAction && (req.user.email || '').toLowerCase() !== CERT_APPROVER_EMAIL) {
+      return res.status(403).json({ error: `Only ${CERT_APPROVER_EMAIL} can ${status === 'accounts' ? 'approve and send a certification to Accounts' : 'reject a certification'}.` });
+    }
+    if (status === 'rejected' && !String(remarks || '').trim()) {
+      return res.status(400).json({ error: 'A reason is required when rejecting a certification.' });
     }
 
-    const { rows } = await query(
-      `UPDATE vendor_qs_certifications
-       SET status=$1, sent_to_accounts_at=CASE WHEN $1='accounts' THEN NOW() ELSE sent_to_accounts_at END,
-           approved_by=CASE WHEN $1='accounts' THEN $4 ELSE approved_by END,
-           approved_at=CASE WHEN $1='accounts' THEN NOW() ELSE approved_at END,
-           updated_at=NOW()
-       WHERE id=$2 AND company_id=$3 RETURNING *`,
-      [status, req.params.id, req.user.company_id, req.user.id]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Certification not found' });
-    res.json({ data: rows[0] });
+    const result = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `UPDATE vendor_qs_certifications
+         SET status=$1, sent_to_accounts_at=CASE WHEN $1='accounts' THEN NOW() ELSE sent_to_accounts_at END,
+             approved_by=CASE WHEN $1='accounts' THEN $4 ELSE approved_by END,
+             approved_at=CASE WHEN $1='accounts' THEN NOW() ELSE approved_at END,
+             rejected_by=CASE WHEN $1='rejected' THEN $4 ELSE rejected_by END,
+             rejected_at=CASE WHEN $1='rejected' THEN NOW() ELSE rejected_at END,
+             rejection_remarks=CASE WHEN $1='rejected' THEN $5 ELSE rejection_remarks END,
+             updated_at=NOW()
+         WHERE id=$2 AND company_id=$3 RETURNING *`,
+        [status, req.params.id, req.user.company_id, req.user.id, remarks || null]
+      );
+      if (!rows.length) return null;
+
+      // Rejecting frees up the linked bills — send them back to the QS stage
+      // (they were moved to 'procurement' at certification time) so QS can
+      // fix and re-certify. The "not already certified" checks elsewhere
+      // already exclude 'rejected' certs, so re-certifying just works.
+      if (status === 'rejected') {
+        await client.query(`
+          UPDATE tqs_bills SET workflow_status='qs', updated_at=NOW()
+          WHERE id IN (SELECT bill_id FROM vendor_qs_certification_bills WHERE certification_id=$1)
+            AND workflow_status NOT IN ('paid')
+        `, [req.params.id]);
+      }
+      return rows[0];
+    });
+
+    if (!result) return res.status(404).json({ error: 'Certification not found' });
+    res.json({ data: result });
 
     if (status === 'accounts') {
       // Best-effort: let the approver + Derek know the Payment Certificate is
       // ready — never blocks/fails the request if mail isn't configured.
       try {
-        const cert = rows[0];
+        const cert = result;
         const appUrl = (process.env.PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://erp.bcim.in').replace(/\/$/, '');
         await sendMail({
           to: PAYMENT_CERT_NOTIFY_EMAILS,
@@ -1160,6 +1195,27 @@ router.patch('/:id/status', async (req, res) => {
           `,
         });
       } catch (_) { /* mail not configured / transient failure — non-blocking */ }
+    }
+
+    if (status === 'rejected') {
+      // Best-effort: tell whoever created it why it was sent back.
+      try {
+        const cert = result;
+        const creatorRes = await query(`SELECT email FROM users WHERE id=$1`, [cert.created_by]);
+        const creatorEmail = creatorRes.rows[0]?.email;
+        if (creatorEmail) {
+          const appUrl = (process.env.PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://erp.bcim.in').replace(/\/$/, '');
+          await sendMail({
+            to: creatorEmail,
+            subject: `Certification rejected — ${cert.cert_number} (${cert.vendor_name})`,
+            html: `
+              <p>Certification <b>${cert.cert_number}</b> for <b>${cert.vendor_name}</b> was rejected and sent back to QS.</p>
+              <p style="background:#fef2f2;border:1px solid #fecaca;padding:10px 14px;border-radius:6px;"><b>Reason:</b> ${esc(cert.rejection_remarks)}</p>
+              <p><a href="${appUrl}/qs/vendor-certifications/${cert.id}">Open this certification</a></p>
+            `,
+          });
+        }
+      } catch (_) { /* non-blocking */ }
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
