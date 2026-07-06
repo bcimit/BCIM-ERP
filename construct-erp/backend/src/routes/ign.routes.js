@@ -948,10 +948,18 @@ router.delete('/:id', authorize('super_admin'), async (req, res) => {
         );
       };
 
-      // 1. Block if QS certifications or invoices reference this IGN
+      // 1. Block if QS certifications, invoices, or GRNs reference this IGN
       const qsRef = await client.query(`SELECT 1 FROM qs_certifications WHERE grn_id = $1 LIMIT 1`, [ign.id]);
       if (qsRef.rows.length) {
         throw Object.assign(new Error('Cannot delete: a QS certification is linked to this IGN. Reverse the certification first.'), { status: 409 });
+      }
+      // grn.ign_id has no ON DELETE cascade, so a linked GRN would otherwise
+      // fail the final DELETE below with a raw FK-violation error. Point the
+      // user at the existing DELETE /grn/:id flow (which handles its own
+      // qs_certifications/invoice/stock reversal) instead of deleting it here.
+      const grnRef = await client.query(`SELECT grn_number FROM grn WHERE ign_id = $1 LIMIT 1`, [ign.id]);
+      if (grnRef.rows.length) {
+        throw Object.assign(new Error(`Cannot delete: GRN ${grnRef.rows[0].grn_number || ''} is linked to this IGN. Delete that GRN first.`), { status: 409 });
       }
 
       // 2. Linked auto-created bills — block if progressed/paid, else reverse
