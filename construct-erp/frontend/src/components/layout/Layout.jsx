@@ -2437,7 +2437,7 @@ export default function Layout() {
         <div ref={chatMenuRef} className="hidden md:block fixed bottom-6 right-6 z-40 print:hidden">
           {chatMenuOpen && (
             <div style={{
-              position: 'absolute', bottom: 68, right: 0, width: 320, maxHeight: 420,
+              position: 'absolute', bottom: 56, right: 0, width: 320, maxHeight: 420,
               background: '#fff', borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.22)',
               overflow: 'hidden', display: 'flex', flexDirection: 'column',
             }}>
@@ -2487,18 +2487,47 @@ export default function Layout() {
           <button
             onClick={() => setChatMenuOpen(v => !v)}
             title="Team Chat"
-            className="flex w-14 h-14 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 relative"
+            className="flex w-11 h-11 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 relative"
             style={{ background: 'linear-gradient(135deg, #4F46E5, #4338CA)', boxShadow: '0 8px 24px rgba(79,70,229,0.4)' }}
           >
-            <MessageSquare className="w-6 h-6" />
+            <MessageSquare className="w-5 h-5" />
             {unreadTotal > 0 && (
-              <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 22, height: 22, borderRadius: 999, background: '#EF4444', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', border: '2px solid #fff' }}>
+              <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 999, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: '2px solid #fff' }}>
                 {unreadTotal > 99 ? '99+' : unreadTotal}
               </span>
             )}
           </button>
         </div>
       )}
+
+      {/* ── Floating Send Drive launcher — quick access to the external large-file
+          transfer tool, stacked above the Team Chat bubble. Opens in a new tab.
+          Passes the logged-in user's email as ?from= so Send Drive can
+          pre-fill the sender field — Send Drive has no login of its own, this
+          just saves re-typing who you are; nothing security-sensitive rides
+          on it. ── */}
+      <button
+        onClick={() => window.open(
+          `https://senddrive.bcim.in/${user?.email ? `?from=${encodeURIComponent(user.email)}` : ''}`,
+          '_blank', 'noopener,noreferrer'
+        )}
+        title="Send Drive — send large files"
+        className="hidden md:flex fixed bottom-[84px] right-6 z-40 w-11 h-11 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 print:hidden"
+        style={{ background: 'linear-gradient(135deg, #059669, #047857)', boxShadow: '0 8px 24px rgba(5,150,105,0.4)' }}
+      >
+        <Send className="w-4 h-4" />
+      </button>
+
+      {/* ── Floating PDF Tool launcher — quick access to the external PDF utility
+          app, stacked above Send Drive. Opens in a new tab. ── */}
+      <button
+        onClick={() => window.open('https://pdf.bcim.in/', '_blank', 'noopener,noreferrer')}
+        title="PDF Tools — merge, split, convert"
+        className="hidden md:flex fixed bottom-[144px] right-6 z-40 w-11 h-11 rounded-full items-center justify-center text-white shadow-lg transition-transform hover:scale-105 print:hidden"
+        style={{ background: 'linear-gradient(135deg, #DC2626, #B91C1C)', boxShadow: '0 8px 24px rgba(220,38,38,0.4)' }}
+      >
+        <FileText className="w-4 h-4" />
+      </button>
 
       <CommandPalette
         isOpen={paletteOpen}
