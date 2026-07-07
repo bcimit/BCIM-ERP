@@ -477,6 +477,23 @@ function RequireAnyModule({ modules, children }) {
   return <Navigate to={getHomeRoute(user)} replace />;
 }
 
+// BOQ Budget Breakdown / Budget Control was reachable by anyone holding any of
+// three broad, commonly-assigned modules (QS & Billing, Procurement, Finance)
+// across three different routes, all rendering the same cost/margin data —
+// effectively open to most project staff. Locked to an explicit allow-list
+// per direct request: super_admin, the procurement team, and stephen@bcim.in.
+const BUDGET_BREAKDOWN_ROLES = ['procurement_manager', 'purchase_executive'];
+const BUDGET_BREAKDOWN_EMAILS = ['stephen@bcim.in'];
+function RequireBudgetAccess({ children }) {
+  const { user } = useAuthStore();
+  if (!user) return <Navigate to="/login" replace />;
+  const role = String(user.role || '').toLowerCase();
+  const email = String(user.email || '').toLowerCase();
+  const allowed = role === 'super_admin' || BUDGET_BREAKDOWN_ROLES.includes(role) || BUDGET_BREAKDOWN_EMAILS.includes(email);
+  if (allowed) return children;
+  return <Navigate to={getHomeRoute(user)} replace />;
+}
+
 // Initializer — runs once on mount, verifies stored token against backend
 function AuthInitializer({ children }) {
   const { user, initialize, logout } = useAuthStore();
@@ -588,7 +605,7 @@ export default function App() {
                 <Route path="qs/boq"                  element={<RequireModule module="QS & Billing"><BOQPage /></RequireModule>} />
                 <Route path="qs/boq-mapping"          element={<RequireModule module="QS & Billing"><BOQMappingPage /></RequireModule>} />
                 <Route path="qs/boq-dashboard"        element={<RequireModule module="QS & Billing"><BOQDashboardPage /></RequireModule>} />
-                <Route path="qs/boq-budget-breakdown" element={<RequireModule module="QS & Billing"><BOQBudgetBreakdownPage /></RequireModule>} />
+                <Route path="qs/boq-budget-breakdown" element={<RequireBudgetAccess><BOQBudgetBreakdownPage /></RequireBudgetAccess>} />
                 <Route path="qs/measurements" element={<RequireModule module="QS & Billing"><MeasurementPage /></RequireModule>} />
                 <Route path="qs/measurements/book" element={<RequireModule module="QS & Billing"><MeasurementBookPage /></RequireModule>} />
                 <Route path="qs/ra-bills" element={<RequireModule module="QS & Billing"><RABillPage /></RequireModule>} />
@@ -741,8 +758,8 @@ export default function App() {
                 <Route path="procurement/tenders/:id/bid-entry" element={<RequireModule module="Procurement"><TenderBidEntryPage /></RequireModule>} />
                 <Route path="procurement/bid-opportunities" element={<RequireModule module="Procurement"><BidOpportunityPage /></RequireModule>} />
                 <Route path="procurement/bid-opportunities/:id" element={<RequireModule module="Procurement"><BidOpportunityDetailPage /></RequireModule>} />
-                <Route path="procurement/budget-control" element={<RequireAnyModule modules={['Procurement', 'Finance']}><BudgetPage /></RequireAnyModule>} />
-                <Route path="procurement/boq-budget"    element={<RequireModule module="Procurement"><BOQBudgetBreakdownPage /></RequireModule>} />
+                <Route path="procurement/budget-control" element={<RequireBudgetAccess><BudgetPage /></RequireBudgetAccess>} />
+                <Route path="procurement/boq-budget"    element={<RequireBudgetAccess><BOQBudgetBreakdownPage /></RequireBudgetAccess>} />
 
                 {/* Stores */}
                 <Route path="stores" element={<RequireModule module="Stores"><StoresDashboard /></RequireModule>} />
