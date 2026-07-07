@@ -701,15 +701,21 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     // summing sc_payments separately, so a paid bill's value is never counted
     // twice (previously scActuals + scPayActuals both counted the same money).
 
+    // Received/Paid amounts include GST — "the bill value", not just the basic
+    // taxable amount, since that's what's actually invoiced/disbursed.
+    // TQS bill lines carry GST per line (cgst/sgst/igst); RA and SC bills carry
+    // a single flat GST% for the whole bill, so each item is grossed up by that
+    // rate instead (no per-item GST split exists for those two bill types).
+
     // Received: RA bills (certified/paid)
     const raActuals = await query(`
-      SELECT rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+      SELECT rbi.cost_head, SUM(rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0)) AS actual
       FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       WHERE rb.project_id=$1 AND rb.status IN ('certified','paid')
       GROUP BY rbi.cost_head`, [project_id]);
     // Paid: RA bills fully paid only
     const raPaid = await query(`
-      SELECT rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+      SELECT rbi.cost_head, SUM(rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0)) AS actual
       FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       WHERE rb.project_id=$1 AND rb.status = 'paid'
       GROUP BY rbi.cost_head`, [project_id]);
@@ -717,25 +723,28 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     // Received: SC bills — same statuses and cost-head attribution as the BOQ
     // item view (untagged lines default to "Sub Con") so both screens agree.
     const scActuals = await query(`
-      SELECT COALESCE(bi.cost_head, 'Sub Con') AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
+      SELECT COALESCE(bi.cost_head, 'Sub Con') AS cost_head, SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS actual
       FROM sc_bill_items bi JOIN sc_bills sb ON sb.id = bi.bill_id
       WHERE sb.project_id=$1 AND sb.status IN ('approved','paid')
       GROUP BY COALESCE(bi.cost_head, 'Sub Con')`, [project_id]);
     // Paid: actual cash paid against SC bills (mapped to "Sub Con" — SC bill
-    // items are essentially all Sub Con, and paid_amount isn't split by head)
+    // items are essentially all Sub Con, and paid_amount isn't split by head).
+    // paid_amount is the cash disbursed against net_payable, which is already
+    // GST-inclusive (net_payable = gross_amount + gst_amount − deductions), so
+    // no grossing-up needed here — it's already basic+GST.
     const scPaid = await query(`
       SELECT 'Sub Con' AS cost_head, SUM(paid_amount) AS actual
       FROM sc_bills WHERE project_id=$1 AND paid_amount > 0`, [project_id]);
 
     // Received: TQS material bills — every logged bill, any workflow stage
     const tqsActuals = await query(`
-      SELECT li.cost_head, SUM(li.basic_amount) AS actual
+      SELECT li.cost_head, SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
       WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
       GROUP BY li.cost_head`, [project_id]);
     // Paid: TQS bills marked fully paid only
     const tqsPaid = await query(`
-      SELECT li.cost_head, SUM(li.basic_amount) AS actual
+      SELECT li.cost_head, SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
       WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
         AND tb.workflow_status = 'paid'
@@ -778,7 +787,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     // Received: PO-tagged spend where the bill line itself wasn't cost-headed —
     // same fallback (and same dedup guard) as the BOQ item view.
     const poFallbackActuals = await query(`
-      SELECT pi.cost_head, SUM(li.basic_amount) AS actual
+      SELECT pi.cost_head, SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM po_items pi
       JOIN purchase_orders po ON po.id = pi.po_id
       JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
@@ -792,7 +801,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       GROUP BY pi.cost_head`, [project_id]);
     // Paid: same PO fallback, restricted to bills marked fully paid
     const poFallbackPaid = await query(`
-      SELECT pi.cost_head, SUM(li.basic_amount) AS actual
+      SELECT pi.cost_head, SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM po_items pi
       JOIN purchase_orders po ON po.id = pi.po_id
       JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
