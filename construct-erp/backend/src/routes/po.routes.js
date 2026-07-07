@@ -1042,22 +1042,55 @@ router.patch('/:id', authorize(...PROCUREMENT_ROLES), async (req, res) => {
 
       // Replace items and recalculate totals
       if (Array.isArray(items) && items.length) {
+        // Deleting and re-inserting po_items means every row gets a brand new
+        // id — anything that had linked to the OLD ids (an IGN/GRN line
+        // recording what was received against a specific item, or a TQS bill
+        // line billed against one) becomes silently orphaned by this edit,
+        // even though the material itself hasn't materially changed. That
+        // showed up as "received qty stuck at 0" on Supply Tracker for a PO
+        // that had already been edited after goods were received against it.
+        // Fix: capture the old (id, material_name) pairs before deleting,
+        // then re-point every dependent table's po_item_id from old -> new id
+        // once the new rows exist, matched by normalized material name (in
+        // order of appearance, so duplicate names on either side still pair
+        // up sensibly instead of colliding).
+        const normName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const { rows: oldItems } = await client.query(
+          `SELECT id, material_name FROM po_items WHERE po_id = $1`, [req.params.id]
+        );
+        const oldByName = new Map();
+        for (const oi of oldItems) {
+          const key = normName(oi.material_name);
+          if (!oldByName.has(key)) oldByName.set(key, []);
+          oldByName.get(key).push(oi.id);
+        }
+
         await client.query(`DELETE FROM po_items WHERE po_id = $1`, [req.params.id]);
         let subTotal = 0, totalGst = 0;
+        const relinkPairs = []; // [{ oldId, newId }]
         for (let j = 0; j < items.length; j++) {
           const it = items[j];
           const basic = (parseFloat(it.quantity) || 0) * (parseFloat(it.rate) || 0);
           const gst   = basic * ((parseFloat(it.gst_rate) || 0) / 100);
-          await client.query(
+          const { rows: inserted } = await client.query(
             `INSERT INTO po_items (po_id, material_name, make_model, hsn_code, quantity, unit, rate, gst_rate, req_date, sort_order, mrs_item_id, boq_item_id, boq_chapter, cost_head)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             RETURNING id`,
             [req.params.id, it.material_name, it.make_model || null, it.hsn_code || null,
              parseFloat(it.quantity) || 0, it.unit || 'Nos',
              parseFloat(it.rate) || 0, parseFloat(it.gst_rate) || 0,
              it.req_date || null, j + 1, it.mrs_item_id || null, it.boq_item_id || null, it.boq_chapter || null, it.cost_head || null]
           );
+          const newId = inserted[0].id;
+          const bucket = oldByName.get(normName(it.material_name));
+          const oldId = bucket && bucket.length ? bucket.shift() : null;
+          if (oldId && oldId !== newId) relinkPairs.push({ oldId, newId });
           subTotal += basic;
           totalGst += gst;
+        }
+        for (const { oldId, newId } of relinkPairs) {
+          await client.query(`UPDATE ign_items SET po_item_id = $1 WHERE po_item_id = $2`, [newId, oldId]);
+          await client.query(`UPDATE tqs_bill_line_items SET po_item_id = $1 WHERE po_item_id = $2`, [newId, oldId]);
         }
         const tcsValue = parseFloat(tcs_amount) || 0;
         sets.push(`sub_total = $${i++}, total_gst = $${i++}, grand_total = $${i++}`);

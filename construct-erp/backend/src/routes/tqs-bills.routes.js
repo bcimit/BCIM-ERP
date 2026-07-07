@@ -447,6 +447,43 @@ async function ensureTables() {
 }
 runSchemaInit('dqs_bills', ensureTables);
 
+// One-time repair (idempotent, re-runs every boot but only touches rows still
+// broken): fixes tqs_bill_line_items whose po_item_id points at a po_items
+// row that no longer exists. Editing a PO used to delete all its po_items and
+// re-insert them with brand new ids on every edit (fixed in
+// PATCH /purchase-orders/:id, which now re-points live), silently orphaning
+// any bill line already billed against the old ids — bills edited/created
+// before that fix stay broken until repaired here. Re-links to the current
+// po_items row within the same PO by normalized material name, only when
+// exactly one candidate matches (prefix-tolerant either direction).
+runSchemaInit('tqs_bill_line_items_po_item_repair_orphaned', async () => {
+  await query(`
+    UPDATE tqs_bill_line_items li
+    SET po_item_id = sub.pi_id
+    FROM (
+      SELECT li2.id AS line_id, MIN(pi.id::text)::uuid AS pi_id
+      FROM tqs_bill_line_items li2
+      JOIN tqs_bills tb ON tb.id = li2.bill_id
+      JOIN po_items pi
+        ON pi.po_id = tb.po_id
+       AND length(regexp_replace(lower(trim(li2.item_name)), '[^a-z0-9]+', '', 'g')) >= 3
+       AND length(regexp_replace(lower(trim(pi.material_name)), '[^a-z0-9]+', '', 'g')) >= 3
+       AND (
+         regexp_replace(lower(trim(li2.item_name)), '[^a-z0-9]+', '', 'g')
+           LIKE regexp_replace(lower(trim(pi.material_name)), '[^a-z0-9]+', '', 'g') || '%'
+         OR regexp_replace(lower(trim(pi.material_name)), '[^a-z0-9]+', '', 'g')
+           LIKE regexp_replace(lower(trim(li2.item_name)), '[^a-z0-9]+', '', 'g') || '%'
+       )
+      WHERE li2.po_item_id IS NOT NULL
+        AND tb.po_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM po_items existing WHERE existing.id = li2.po_item_id)
+      GROUP BY li2.id
+      HAVING COUNT(DISTINCT pi.id) = 1
+    ) sub
+    WHERE li.id = sub.line_id
+  `).catch(() => {});
+});
+
 // ── Helper: generate SL number ─────────────────────────────────────────────
 async function nextSlNumber(billType = 'po', companyId) {
   // Use MAX aggregate across ALL bills so we never collide with earlier high-numbered bills

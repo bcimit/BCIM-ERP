@@ -181,6 +181,44 @@ runSchemaInit('ign_items_po_item_backfill', async () => {
   `);
 });
 
+// One-time repair (idempotent, re-runs every boot but only touches rows still
+// broken): fixes ign_items whose po_item_id points at a po_items row that no
+// longer exists. This happens whenever a PO is edited — PATCH /purchase-orders/:id
+// used to delete all po_items and re-insert them with brand new ids on every
+// edit, silently orphaning any IGN/GRN already linked to the old ids (that
+// route now re-points these live going forward, but existing data edited
+// before that fix stays broken until repaired here). Re-links to the current
+// po_items row within the same PO by normalized material name, same
+// prefix-tolerant matching and "exactly one candidate" ambiguity guard as the
+// backfill above.
+runSchemaInit('ign_items_po_item_repair_orphaned', async () => {
+  await query(`
+    UPDATE ign_items ii
+    SET po_item_id = sub.pi_id
+    FROM (
+      SELECT ii2.id AS ign_item_id, MIN(pi.id::text)::uuid AS pi_id
+      FROM ign_items ii2
+      JOIN ign n ON n.id = ii2.ign_id
+      JOIN po_items pi
+        ON pi.po_id = n.po_id
+       AND length(regexp_replace(lower(trim(ii2.material_name)), '[^a-z0-9]+', '', 'g')) >= 3
+       AND length(regexp_replace(lower(trim(pi.material_name)), '[^a-z0-9]+', '', 'g')) >= 3
+       AND (
+         regexp_replace(lower(trim(ii2.material_name)), '[^a-z0-9]+', '', 'g')
+           LIKE regexp_replace(lower(trim(pi.material_name)), '[^a-z0-9]+', '', 'g') || '%'
+         OR regexp_replace(lower(trim(pi.material_name)), '[^a-z0-9]+', '', 'g')
+           LIKE regexp_replace(lower(trim(ii2.material_name)), '[^a-z0-9]+', '', 'g') || '%'
+       )
+      WHERE ii2.po_item_id IS NOT NULL
+        AND n.po_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM po_items existing WHERE existing.id = ii2.po_item_id)
+      GROUP BY ii2.id
+      HAVING COUNT(DISTINCT pi.id) = 1
+    ) sub
+    WHERE ii.id = sub.ign_item_id
+  `);
+});
+
 // Public verification endpoint (no auth — QR scan)
 router.get('/public/verify/:id', async (req, res) => {
   try {
