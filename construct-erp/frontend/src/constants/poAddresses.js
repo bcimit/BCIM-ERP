@@ -33,10 +33,15 @@ export function isLancoProject(...parts) {
   return s.includes('lanco') || s.includes('lancho') || s.includes('lh10');
 }
 
-// DQS Yelahanka project — code WDIRY0151 or name containing 'yelah'/'dqs'.
+// DQS Yelahanka project — code WDIRY0151, name containing 'yelah'/'dqs'+'ynt',
+// or the "DQS Tower" project (PO prefix PODQSMB, code containing 'dqsmb', or
+// name containing both 'dqs' and 'tower') — same physical Yelahanka site as
+// the "Residential Yelahanka" project, just tracked as a separate project
+// record, so it must resolve to the same delivery address.
 export function isDQSYelahankaProject(...parts) {
   const s = parts.filter(Boolean).join(' ').toLowerCase().replace(/[\s-]/g, '');
-  return s.includes('wdiry0151') || s.includes('yelah') || (s.includes('dqs') && s.includes('ynt'));
+  return s.includes('wdiry0151') || s.includes('yelah') || (s.includes('dqs') && s.includes('ynt'))
+    || s.includes('dqsmb') || (s.includes('dqs') && s.includes('tower'));
 }
 
 // Billing address (BCIM's own address, as the buyer) — varies per project/company entity.
