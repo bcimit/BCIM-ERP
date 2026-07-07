@@ -72,8 +72,12 @@ router.get('/:project_id', async (req, res) => {
       WHERE project_id = $1
     `, [project_id]);
 
+    // Spend includes GST — "the bill value", not just the basic taxable
+    // amount, matching the Budget Control (costhead-summary) treatment below.
+    // TQS bill lines carry GST per line; RA/SC bills carry one flat GST% for
+    // the whole bill, so each item is grossed up by that rate instead.
     const raActuals = await query(`
-      SELECT rbi.boq_item_id, rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+      SELECT rbi.boq_item_id, rbi.cost_head, SUM(rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0)) AS actual
       FROM ra_bill_items rbi
       JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       WHERE rb.project_id = $1 AND rb.status IN ('certified','paid')
@@ -81,7 +85,7 @@ router.get('/:project_id', async (req, res) => {
     `, [project_id]);
 
     const scActuals = await query(`
-      SELECT swi.boq_item_id, COALESCE(bi.cost_head, 'Sub Con') AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
+      SELECT swi.boq_item_id, COALESCE(bi.cost_head, 'Sub Con') AS cost_head, SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS actual
       FROM sc_bill_items bi
       JOIN sc_bills sb ON sb.id = bi.bill_id
       JOIN sc_wo_items swi ON swi.id = bi.wo_item_id
@@ -161,7 +165,7 @@ router.get('/:project_id', async (req, res) => {
     const tqsActuals = await query(`
       SELECT li.boq_item_id, li.cost_head,
              COALESCE(li.boq_chapter, pi.boq_chapter, po_single.chapter) AS boq_chapter,
-             SUM(li.basic_amount) AS actual
+             SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM tqs_bill_line_items li
       JOIN tqs_bills tb ON tb.id = li.bill_id
       LEFT JOIN po_items pi ON pi.id = li.po_item_id
@@ -193,7 +197,7 @@ router.get('/:project_id', async (req, res) => {
     // carry their own cost_head tag are already counted via tqsActuals above —
     // this only picks up the fallback case where the bill line wasn't tagged.
     const poActuals = await query(`
-      SELECT pi.boq_item_id, pi.boq_chapter, pi.cost_head, SUM(li.basic_amount) AS actual
+      SELECT pi.boq_item_id, pi.boq_chapter, pi.cost_head, SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM po_items pi
       JOIN purchase_orders po ON po.id = pi.po_id
       JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
@@ -394,7 +398,7 @@ router.get('/:project_id', async (req, res) => {
 
     // 3. SC bill lines whose WO item has no BOQ link (scActuals above requires one)
     const scUnlinked = await query(`
-      SELECT SUM(bi.curr_qty * bi.rate) AS actual
+      SELECT SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS actual
       FROM sc_bill_items bi
       JOIN sc_bills sb ON sb.id = bi.bill_id
       LEFT JOIN sc_wo_items swi ON swi.id = bi.wo_item_id
@@ -972,7 +976,7 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
       const scBills = await query(`
         SELECT sb.bill_number AS reference, sb.bill_date AS date,
                COALESCE(sc.name, sb.bill_number, 'Subcontractor') AS description,
-               SUM(bi.curr_qty * bi.rate) AS amount, 'SC Bill' AS source
+               SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS amount, 'SC Bill' AS source
         FROM sc_bill_items bi
         JOIN sc_bills sb ON sb.id = bi.bill_id
         LEFT JOIN sc_subcontractors sc ON sc.id = sb.sc_id
@@ -1040,7 +1044,7 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
                tb.inv_date AS date,
                COALESCE(v.name, pi.material_name, 'Vendor') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
-               li.basic_amount AS amount, 'Purchase Order' AS source
+               li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount, 'Purchase Order' AS source
         FROM po_items pi
         JOIN purchase_orders po ON po.id = pi.po_id
         JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
@@ -1110,7 +1114,8 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
       // TQS bill line items for this cost head — only paid bills or accounts-approved
       const tqs = await query(`
         SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
-               li.item_name AS description, li.basic_amount AS amount,
+               li.item_name AS description,
+               li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount,
                'TQS Bill' AS source
         FROM tqs_bill_line_items li
         JOIN tqs_bills tb ON tb.id = li.bill_id
@@ -1133,7 +1138,7 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
       const ra = await query(`
         SELECT rb.bill_number AS reference, rb.bill_date AS date,
                COALESCE(bi.description, rb.bill_number, 'RA Bill Item') AS description,
-               rbi.current_qty * rbi.rate AS amount,
+               rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0) AS amount,
                'RA Bill' AS source
         FROM ra_bill_items rbi
         JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
@@ -1149,7 +1154,7 @@ router.get('/:project_id/costhead-drilldown', async (req, res) => {
         SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
                tb.inv_date AS date,
                COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
-               li.basic_amount AS amount, 'Purchase Order' AS source
+               li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount, 'Purchase Order' AS source
         FROM po_items pi
         JOIN purchase_orders po ON po.id = pi.po_id
         JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
@@ -1217,7 +1222,8 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
     if (chapter) {
       const chTqs = await query(`
         SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
-               li.item_name AS description, li.cost_head, li.basic_amount AS amount,
+               li.item_name AS description, li.cost_head,
+               li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount,
                'TQS Bill' AS source
         FROM tqs_bill_line_items li
         JOIN tqs_bills tb ON tb.id = li.bill_id
@@ -1241,7 +1247,7 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
         SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
                tb.inv_date AS date,
                COALESCE(pi.material_name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
-               pi.cost_head, li.basic_amount AS amount, 'Purchase Order' AS source
+               pi.cost_head, li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount, 'Purchase Order' AS source
         FROM po_items pi
         JOIN purchase_orders po ON po.id = pi.po_id
         JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
@@ -1257,7 +1263,8 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
     // TQS bill line items tagged directly to any of these BOQ items
     const tqs = await query(`
       SELECT tb.inv_number AS reference, COALESCE(tb.inv_date, tb.created_at) AS date,
-             li.item_name AS description, li.cost_head, li.basic_amount AS amount,
+             li.item_name AS description, li.cost_head,
+             li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount,
              'TQS Bill' AS source
       FROM tqs_bill_line_items li
       JOIN tqs_bills tb ON tb.id = li.bill_id
@@ -1269,7 +1276,7 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
     const ra = await query(`
       SELECT rb.bill_number AS reference, rb.bill_date AS date,
              COALESCE(bi.description, rb.bill_number, 'RA Bill Item') AS description,
-             rbi.cost_head, rbi.current_qty * rbi.rate AS amount, 'RA Bill' AS source
+             rbi.cost_head, rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0) AS amount, 'RA Bill' AS source
       FROM ra_bill_items rbi
       JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       LEFT JOIN boq_items bi ON bi.id = rbi.boq_item_id
@@ -1281,7 +1288,7 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
     const scBills = await query(`
       SELECT sb.bill_number AS reference, sb.bill_date AS date,
              COALESCE(sc.name, sb.bill_number, 'Subcontractor') AS description,
-             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS amount, 'SC Bill' AS source
+             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS amount, 'SC Bill' AS source
       FROM sc_bill_items bi
       JOIN sc_bills sb ON sb.id = bi.bill_id
       JOIN sc_wo_items swi ON swi.id = bi.wo_item_id
@@ -1372,7 +1379,7 @@ router.get('/:project_id/items-drilldown', async (req, res) => {
       SELECT COALESCE(po.po_ref_no, po.po_number, 'PO') AS reference,
              tb.inv_date AS date,
              COALESCE(pi.material_name, v.name, 'PO Item') || ' — ' || COALESCE(tb.inv_number, 'Bill') AS description,
-             pi.cost_head, li.basic_amount AS amount, 'Purchase Order' AS source
+             pi.cost_head, li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0) AS amount, 'Purchase Order' AS source
       FROM po_items pi
       JOIN purchase_orders po ON po.id = pi.po_id
       JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
@@ -1518,14 +1525,14 @@ router.get('/:project_id/costhead-monthly', async (req, res) => {
 
     const raM = await query(`
       SELECT TO_CHAR(COALESCE(rb.bill_date, rb.created_at), 'YYYY-MM') AS month,
-             rbi.cost_head, SUM(rbi.current_qty * rbi.rate) AS actual
+             rbi.cost_head, SUM(rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0)) AS actual
       FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
       WHERE rb.project_id=$1 AND rb.status IN ('certified','paid') AND rbi.cost_head IS NOT NULL
       GROUP BY 1, 2`, [project_id]);
 
     const scM = await query(`
       SELECT TO_CHAR(COALESCE(sb.bill_date, sb.created_at), 'YYYY-MM') AS month,
-             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate) AS actual
+             'Sub Con' AS cost_head, SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS actual
       FROM sc_bill_items bi JOIN sc_bills sb ON sb.id = bi.bill_id
       WHERE sb.project_id=$1 AND sb.status NOT IN ('draft','rejected','queried')
       GROUP BY 1`, [project_id]);
@@ -1539,7 +1546,7 @@ router.get('/:project_id/costhead-monthly', async (req, res) => {
 
     const tqsM = await query(`
       SELECT TO_CHAR(COALESCE(tb.inv_date, tb.created_at), 'YYYY-MM') AS month,
-             li.cost_head, SUM(li.basic_amount) AS actual
+             li.cost_head, SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)) AS actual
       FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id = li.bill_id
       WHERE tb.project_id=$1 AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
       GROUP BY 1, 2`, [project_id]);
