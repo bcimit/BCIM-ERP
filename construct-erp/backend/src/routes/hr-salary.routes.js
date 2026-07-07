@@ -107,7 +107,11 @@ function calculateCTCBreakup(ctcMonthly, opts = {}) {
   const hra                    = Math.round(basic * 0.20);                      // 20% of Basic
   const projectAllowance       = Math.round(Math.min(basic * 0.20, 7500));      // 20%, cap ₹7,500
   const accommodationAllowance = Math.round(Math.min(basic * 0.30, 50000));     // 30%
-  const foodAllowance          = Math.round(Math.min(basic * 0.1867, 9000));    // ~18.67%, cap ₹9,000
+  // Food Allowance: GreytHR's ₹2,800 at the ₹15,000 basic floor is exactly
+  // 2800/15000 (18.6666…%) — the truncated 0.1867 decimal overshot by ₹1 at
+  // that floor (15000 × 0.1867 = 2800.5 → rounds to 2801, not 2800) and by a
+  // proportional amount at every other basic too.
+  const foodAllowance          = Math.round(Math.min(basic * (2800 / 15000), 9000)); // cap ₹9,000
   const transportAllowance     = Math.round(Math.min(basic * 0.0667, 35000));   // ~6.67%
   const lta                    = Math.round(basic * 0.0833);                    // 8.33% (annual LTA/12)
   const medicalAllowance       = Math.round(Math.min(basic * 0.05, 7500));      // 5%, cap ₹7,500
