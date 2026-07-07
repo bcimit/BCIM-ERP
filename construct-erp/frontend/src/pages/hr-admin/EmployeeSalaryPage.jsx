@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, Calculator, CheckCircle2, IndianRupee, Plus, Search, ShieldCheck, Users, X } from 'lucide-react';
+import { Banknote, Calculator, CheckCircle2, Edit2, IndianRupee, Plus, Search, ShieldCheck, Users, Utensils, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { hrEmployeesAPI, hrSalaryAPI } from '../../api/client';
 
@@ -192,10 +192,63 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
   );
 }
 
+function MessEditModal({ employee, salary, onClose, onSave, saving }) {
+  const [amount, setAmount] = useState(String(salary?.mess_deduction ?? 0));
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <motion.div initial={{opacity:0,scale:0.97}} animate={{opacity:1,scale:1}} transition={{duration:0.2}}
+        className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
+        <div className="px-6 py-4 flex items-center justify-between"
+          style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`}}>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
+              <Utensils className="w-4 h-4 text-white"/>
+            </div>
+            <div>
+              <p className="font-black text-white text-sm">Mess Deduction</p>
+              <p className="text-white/55 text-xs">{employee.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center">
+            <X className="w-4 h-4 text-white"/>
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-black text-gray-600 uppercase tracking-wide block mb-1.5">
+              Deduction Amount (₹) — this month
+            </label>
+            <input type="number" value={amount} onChange={e=>setAmount(e.target.value)}
+              min="0" autoFocus
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-2xl font-black text-gray-900 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all"
+              placeholder="0"/>
+            <p className="text-xs text-gray-400 mt-1.5">
+              Previous: ₹{fmt(salary?.mess_deduction || 0)} &nbsp;|&nbsp;
+              Net Pay after this change: ₹{fmt((Number(salary?.gross_monthly)||0) - (Number(salary?.employee_pf)||0) - (Number(salary?.pt_deduction)||0) - (Number(amount)||0))}
+            </p>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors">
+              Cancel
+            </button>
+            <button onClick={()=>onSave(Number(amount)||0)} disabled={saving}
+              className="flex-1 py-2.5 text-white rounded-xl text-sm font-black disabled:opacity-50 transition-opacity"
+              style={{background:`linear-gradient(135deg,#2563EB,#0A1F5C)`}}>
+              {saving?'Saving…':'Save'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function EmployeeSalaryPage() {
   const qc = useQueryClient();
   const [search,    setSearch]    = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [messEdit,  setMessEdit]  = useState(null); // { employee, salary }
 
   const { data:empData,     isLoading:empLoading     } = useQuery({
     queryKey:['hr-employees-active'],
@@ -238,6 +291,12 @@ export default function EmployeeSalaryPage() {
   });
 
   const breakupMut = useMutation({ mutationFn:(payload)=>hrSalaryAPI.calculateBreakup(payload) });
+
+  const messMut = useMutation({
+    mutationFn:({id, mess_deduction})=>hrSalaryAPI.updateMess(id, { mess_deduction }),
+    onSuccess:()=>{ toast.success('Mess deduction updated'); setMessEdit(null); qc.invalidateQueries({queryKey:['hr-employee-salaries']}); },
+    onError:(e)=>toast.error(e.response?.data?.error||'Failed to update mess deduction'),
+  });
 
   const kpis = [
     { label:'Active Employees', value:employees.length,                  icon:Users,        bg:'bg-blue-50',    text:'text-blue-700'    },
@@ -307,14 +366,14 @@ export default function EmployeeSalaryPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`}}>
-                {['Employee','Department','Structure','Gross Monthly','Annual CTC','Effective From','Status'].map(h=>(
+                {['Employee','Department','Structure','Gross Monthly','Annual CTC','Mess Deduction','Net Pay','Effective From','Status'].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-xs font-black text-white/80 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {(empLoading||salaryLoading) && (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">Loading salary data…</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400 text-sm">Loading salary data…</td></tr>
               )}
               {!empLoading && !salaryLoading && filtered.map(emp=>{
                 const sal = latestByUser.get(emp.id);
@@ -336,6 +395,16 @@ export default function EmployeeSalaryPage() {
                     <td className="px-4 py-3 font-bold text-gray-700">{sal?.structure_name||'—'}</td>
                     <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(sal.gross_monthly)}`:'—'}</td>
                     <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(sal.ctc_annual)}`:'—'}</td>
+                    <td className="px-4 py-3">
+                      {sal ? (
+                        <button onClick={()=>setMessEdit({employee:emp,salary:sal})}
+                          className="flex items-center gap-2 group">
+                          <span className="font-bold text-gray-800">₹{fmt(sal.mess_deduction||0)}</span>
+                          <Edit2 className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors"/>
+                        </button>
+                      ) : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(sal.net_pay_monthly)}`:'—'}</td>
                     <td className="px-4 py-3 text-gray-600">{sal?.effective_from?new Date(sal.effective_from).toLocaleDateString('en-IN'):'—'}</td>
                     <td className="px-4 py-3">
                       {sal ? (
@@ -352,12 +421,22 @@ export default function EmployeeSalaryPage() {
                 );
               })}
               {!empLoading && !salaryLoading && filtered.length===0 && (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">No employees found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400 text-sm">No employees found</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </motion.div>
+
+      {messEdit && (
+        <MessEditModal
+          employee={messEdit.employee}
+          salary={messEdit.salary}
+          saving={messMut.isPending}
+          onClose={()=>setMessEdit(null)}
+          onSave={(amount)=>messMut.mutate({id:messEdit.salary.id, mess_deduction:amount})}
+        />
+      )}
 
       {showModal && (
         <SalaryModal

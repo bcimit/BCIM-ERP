@@ -245,6 +245,26 @@ router.put('/structures/:id', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // EMPLOYEE SALARY ASSIGNMENT
 // ═══════════════════════════════════════════════════════════
+
+// PATCH /:id/mess-deduction — update mess deduction on an existing salary record
+router.patch('/employee-salaries/:id/mess-deduction', async (req, res) => {
+  try {
+    const { mess_deduction } = req.body;
+    if (mess_deduction === undefined || mess_deduction === null) {
+      return res.status(400).json({ error: 'mess_deduction is required' });
+    }
+    const { rows } = await query(
+      `UPDATE hr_employee_salaries
+          SET mess_deduction = $1,
+              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - $1
+        WHERE id = $2
+        RETURNING id, mess_deduction, net_pay_monthly`,
+      [parseFloat(mess_deduction) || 0, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Salary record not found' });
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/employee-salaries', async (req, res) => {
   try {
     const { user_id } = req.query;
