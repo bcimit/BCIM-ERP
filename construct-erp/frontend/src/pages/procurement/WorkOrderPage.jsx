@@ -674,7 +674,9 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
     ? Math.max(0, dayjs(form.end_date).diff(dayjs(form.start_date), 'day'))
     : null;
 
-  const valid = form.project_id && form.vendor_id && form.subject && form.mrs_id;
+  // MR is optional — some Work Orders are raised directly against a
+  // contractor with no prior Material Requisition (e.g. a services-only WO).
+  const valid = form.project_id && form.vendor_id && form.subject;
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
@@ -740,9 +742,9 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
               <ZField label="Cost Head">
                 <input className={Z_INP} placeholder="e.g. Civil Works" value={form.cost_head} onChange={e => f('cost_head', e.target.value)} />
               </ZField>
-              <ZField label="Approved MR *" className="col-span-2 md:col-span-2">
+              <ZField label="Approved MR (optional)" className="col-span-2 md:col-span-2">
                 <select
-                  className={`${Z_INP}${!form.mrs_id ? ' border-red-300' : ''}`}
+                  className={Z_INP}
                   value={form.mrs_id}
                   onChange={e => selectMR(e.target.value)}
                   disabled={mrsFetching}
@@ -751,18 +753,22 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
                     {mrsFetching
                       ? 'Loading MRs…'
                       : !form.project_id
-                        ? '— Select a project first —'
+                        ? '— Select a project first (or leave blank for a direct WO) —'
                         : activeMrsList.length === 0
-                          ? '— No MRs found for this project —'
-                          : '— Select an MR —'}
+                          ? '— No MRs found for this project — leave blank for a direct WO —'
+                          : '— No MR — raise this WO directly —'}
                   </option>
                   {activeMrsList.map(m => (
                     <option key={m.id} value={m.id}>{mrLabel(m)}</option>
                   ))}
                 </select>
-                {linkedMr && (
+                {linkedMr ? (
                   <p className="text-[11px] text-slate-400 mt-1">
                     Issuing this WO against MR {linkedMr.mrs_number || linkedMr.id?.slice(0, 8)} ({linkedMr.project_name})
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    No MR selected — this will be a direct Work Order with no linked requisition.
                   </p>
                 )}
               </ZField>
