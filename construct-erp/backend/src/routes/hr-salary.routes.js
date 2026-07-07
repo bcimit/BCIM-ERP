@@ -130,10 +130,12 @@ function calculateCTCBreakup(ctcMonthly, opts = {}) {
 
   // Special Allowance — fixed ₹287/month for all staff (not CTC-derived)
   const specialAllowance = SPECIAL_ALLOWANCE_FIXED;
-  const basicReversal = opts.basic_reversal ?? 0;  // manual per-employee adjustment, entered separately
+  // Basic Reversal — manual per-employee earning (Part A), e.g. refunding a
+  // previously over-deducted basic. Added to gross/net pay, not subtracted.
+  const basicReversal = opts.basic_reversal ?? 0;
 
-  const grossSalary   = earningsBeforeSpecial + specialAllowance;
-  const netPayMonthly = grossSalary - employeePf - ptDeduction - employeeEsic - employeeLwf - basicReversal;
+  const grossSalary   = earningsBeforeSpecial + specialAllowance + basicReversal;
+  const netPayMonthly = grossSalary - employeePf - ptDeduction - employeeEsic - employeeLwf;
 
   return {
     ctc_monthly: ctc, ctc_annual: ctc * 12,
@@ -258,7 +260,7 @@ router.patch('/employee-salaries/:id/mess-deduction', async (req, res) => {
     const { rows } = await query(
       `UPDATE hr_employee_salaries
           SET mess_deduction = $1,
-              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - $1 - COALESCE(basic_reversal,0)
+              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - $1 + COALESCE(basic_reversal,0)
         WHERE id = $2
         RETURNING id, mess_deduction, net_pay_monthly`,
       [parseFloat(mess_deduction) || 0, req.params.id]
@@ -268,8 +270,9 @@ router.patch('/employee-salaries/:id/mess-deduction', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PATCH /:id/basic-reversal — manual per-employee adjustment, deducted from net pay
-// (e.g. clawing back an over-paid basic). Entered by hand, same pattern as mess deduction.
+// PATCH /:id/basic-reversal — manual per-employee earning (Part A), added to net pay
+// (e.g. refunding a previously over-deducted basic). Entered by hand, same
+// editable-column pattern as mess deduction.
 router.patch('/employee-salaries/:id/basic-reversal', async (req, res) => {
   try {
     const { basic_reversal } = req.body;
@@ -279,7 +282,7 @@ router.patch('/employee-salaries/:id/basic-reversal', async (req, res) => {
     const { rows } = await query(
       `UPDATE hr_employee_salaries
           SET basic_reversal = $1,
-              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - COALESCE(mess_deduction,0) - $1
+              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - COALESCE(mess_deduction,0) + $1
         WHERE id = $2
         RETURNING id, basic_reversal, net_pay_monthly`,
       [parseFloat(basic_reversal) || 0, req.params.id]

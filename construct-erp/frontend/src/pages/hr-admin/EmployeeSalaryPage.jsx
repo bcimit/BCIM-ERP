@@ -25,7 +25,7 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
 
   const messDeduction = Number(form.mess_deduction||0);
   const basicReversal = Number(form.basic_reversal||0);
-  const netPayAfterMess = breakup ? breakup.net_pay_monthly - messDeduction - basicReversal : 0;
+  const netPayAfterMess = breakup ? breakup.net_pay_monthly - messDeduction + basicReversal : 0;
 
   const runCalculate = async () => {
     if (!form.ctc_monthly || Number(form.ctc_monthly) <= 0) return toast.error('Enter a monthly CTC to calculate');
@@ -132,6 +132,12 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
                     <div className="text-sm font-black text-gray-900">₹{fmt(v)}</div>
                   </div>
                 ))}
+                <div className="bg-white px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase">Basic Reversal</div>
+                  <input type="number" value={form.basic_reversal} onChange={e=>update('basic_reversal',e.target.value)}
+                    className="w-full text-sm font-black text-gray-900 border border-gray-200 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:border-blue-400"
+                    placeholder="0"/>
+                </div>
               </div>
               <div className="px-4 py-2 bg-gray-100 text-xs font-black text-gray-600 uppercase tracking-wide">Part B — Employer Contribution</div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
@@ -153,12 +159,6 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
                 <div className="bg-white px-3 py-2">
                   <div className="text-[10px] font-bold text-gray-400 uppercase">Mess Deduction</div>
                   <input type="number" value={form.mess_deduction} onChange={e=>update('mess_deduction',e.target.value)}
-                    className="w-full text-sm font-black text-gray-900 border border-gray-200 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:border-blue-400"
-                    placeholder="0"/>
-                </div>
-                <div className="bg-white px-3 py-2">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase">Basic Reversal</div>
-                  <input type="number" value={form.basic_reversal} onChange={e=>update('basic_reversal',e.target.value)}
                     className="w-full text-sm font-black text-gray-900 border border-gray-200 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:border-blue-400"
                     placeholder="0"/>
                 </div>
@@ -184,7 +184,7 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
             <span className="text-gray-500">Net Pay Monthly: </span>
             <strong className="text-gray-900">₹{fmt(netPayAfterMess)}</strong>
             {messDeduction>0 && <span className="text-gray-400 text-xs ml-1">(after ₹{fmt(messDeduction)} mess)</span>}
-            {basicReversal>0 && <span className="text-gray-400 text-xs ml-1">(after ₹{fmt(basicReversal)} reversal)</span>}
+            {basicReversal>0 && <span className="text-gray-400 text-xs ml-1">(plus ₹{fmt(basicReversal)} reversal)</span>}
             <span className="mx-3 text-gray-200">|</span>
             <span className="text-gray-500">Annual CTC: </span>
             <strong className="text-gray-900">₹{fmt(breakup?.ctc_annual)}</strong>
@@ -232,7 +232,7 @@ function MessEditModal({ employee, salary, onClose, onSave, saving }) {
               placeholder="0"/>
             <p className="text-xs text-gray-400 mt-1.5">
               Previous: ₹{fmt(salary?.mess_deduction || 0)} &nbsp;|&nbsp;
-              Net Pay after this change: ₹{fmt((Number(salary?.gross_monthly)||0) - (Number(salary?.employee_pf)||0) - (Number(salary?.pt_deduction)||0) - (Number(amount)||0) - (Number(salary?.basic_reversal)||0))}
+              Net Pay after this change: ₹{fmt((Number(salary?.gross_monthly)||0) - (Number(salary?.employee_pf)||0) - (Number(salary?.pt_deduction)||0) - (Number(amount)||0) + (Number(salary?.basic_reversal)||0))}
             </p>
           </div>
           <div className="flex gap-3 pt-1">
@@ -284,7 +284,7 @@ function BasicReversalEditModal({ employee, salary, onClose, onSave, saving }) {
               placeholder="0"/>
             <p className="text-xs text-gray-400 mt-1.5">
               Previous: ₹{fmt(salary?.basic_reversal || 0)} &nbsp;|&nbsp;
-              Net Pay after this change: ₹{fmt((Number(salary?.gross_monthly)||0) - (Number(salary?.employee_pf)||0) - (Number(salary?.pt_deduction)||0) - (Number(salary?.mess_deduction)||0) - (Number(amount)||0))}
+              Net Pay after this change: ₹{fmt((Number(salary?.gross_monthly)||0) - (Number(salary?.employee_pf)||0) - (Number(salary?.pt_deduction)||0) - (Number(salary?.mess_deduction)||0) + (Number(amount)||0))}
             </p>
           </div>
           <div className="flex gap-3 pt-1">
