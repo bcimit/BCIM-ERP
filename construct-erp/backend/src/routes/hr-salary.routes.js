@@ -72,6 +72,7 @@ const initTables = async () => {
     ['pt_deduction', 'NUMERIC(12,2) DEFAULT 0'],
     ['net_pay_monthly', 'NUMERIC(12,2) DEFAULT 0'],
     ['mess_deduction', 'NUMERIC(12,2) DEFAULT 0'],
+    ['basic_reversal', 'NUMERIC(12,2) DEFAULT 0'],
     ['incentive', 'NUMERIC(12,2) DEFAULT 0'],
     ['edli', 'NUMERIC(12,2) DEFAULT 0'],
     ['epf_admin', 'NUMERIC(12,2) DEFAULT 0'],
@@ -85,10 +86,12 @@ runSchemaInit('hr-salary', initTables);
 // ─── CTC Breakup calculator — BCIM Salary Structure (from GreytHR extract) ───
 // Basic = max(40% of CTC, ₹15,000). Allowances are % of Basic (with caps),
 // derived from the BCIM GreytHR salary structure for site staff. Special
-// Allowance is the balancing figure: CTC − all fixed earnings − employer costs.
+// Allowance is a fixed ₹287/month for every staff member (not a CTC-balancing
+// figure) — Basic Reversal is the manual per-employee adjustment instead.
 // Employer side: PF 12%, EDLI ₹75, EPF Admin ₹75, Gratuity 4.81%.
 // Employee deductions: PF 12% (capped at ₹15,000 PF wage), PT ₹200.
 const PF_WAGE_CEILING = 15000;
+const SPECIAL_ALLOWANCE_FIXED = 287;
 function calculateCTCBreakup(ctcMonthly, opts = {}) {
   const ctc = parseFloat(ctcMonthly) || 0;
   const ptDeduction = opts.pt_deduction ?? 200;
@@ -125,14 +128,12 @@ function calculateCTCBreakup(ctcMonthly, opts = {}) {
     + foodAllowance + transportAllowance + lta + medicalAllowance
     + mobileAllowance + incentive + washingAllowance;
 
-  // Special Allowance = CTC − fixed earnings − employer side costs
-  const specialAllowance = Math.max(
-    0,
-    ctc - earningsBeforeSpecial - employerPf - edli - epfAdmin - gratuity - employerEsic - employerLwf
-  );
+  // Special Allowance — fixed ₹287/month for all staff (not CTC-derived)
+  const specialAllowance = SPECIAL_ALLOWANCE_FIXED;
+  const basicReversal = opts.basic_reversal ?? 0;  // manual per-employee adjustment, entered separately
 
   const grossSalary   = earningsBeforeSpecial + specialAllowance;
-  const netPayMonthly = grossSalary - employeePf - ptDeduction - employeeEsic - employeeLwf;
+  const netPayMonthly = grossSalary - employeePf - ptDeduction - employeeEsic - employeeLwf - basicReversal;
 
   return {
     ctc_monthly: ctc, ctc_annual: ctc * 12,
@@ -147,6 +148,7 @@ function calculateCTCBreakup(ctcMonthly, opts = {}) {
     employer_esic: employerEsic, employer_lwf: employerLwf,
     employee_pf: employeePf, pt_deduction: ptDeduction,
     employee_esic: employeeEsic, employee_lwf: employeeLwf,
+    basic_reversal: basicReversal,
     net_pay_monthly: netPayMonthly,
     ctc_reconciled: grossSalary + employerPf + edli + epfAdmin + gratuity + employerEsic + employerLwf,
   };
@@ -256,10 +258,31 @@ router.patch('/employee-salaries/:id/mess-deduction', async (req, res) => {
     const { rows } = await query(
       `UPDATE hr_employee_salaries
           SET mess_deduction = $1,
-              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - $1
+              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - $1 - COALESCE(basic_reversal,0)
         WHERE id = $2
         RETURNING id, mess_deduction, net_pay_monthly`,
       [parseFloat(mess_deduction) || 0, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Salary record not found' });
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /:id/basic-reversal — manual per-employee adjustment, deducted from net pay
+// (e.g. clawing back an over-paid basic). Entered by hand, same pattern as mess deduction.
+router.patch('/employee-salaries/:id/basic-reversal', async (req, res) => {
+  try {
+    const { basic_reversal } = req.body;
+    if (basic_reversal === undefined || basic_reversal === null) {
+      return res.status(400).json({ error: 'basic_reversal is required' });
+    }
+    const { rows } = await query(
+      `UPDATE hr_employee_salaries
+          SET basic_reversal = $1,
+              net_pay_monthly = gross_monthly - COALESCE(employee_pf,0) - COALESCE(pt_deduction,0) - COALESCE(mess_deduction,0) - $1
+        WHERE id = $2
+        RETURNING id, basic_reversal, net_pay_monthly`,
+      [parseFloat(basic_reversal) || 0, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Salary record not found' });
     res.json({ data: rows[0] });
@@ -307,7 +330,7 @@ router.post('/employee-salaries', async (req, res) => {
       vda, lta, education_allowance, washing_allowance, mobile_allowance, project_allowance,
       accommodation_allowance, food_allowance, transport_allowance,
       employer_pf, employee_pf, gratuity, pt_deduction, net_pay_monthly, mess_deduction,
-      incentive, edli, epf_admin,
+      incentive, edli, epf_admin, basic_reversal,
     } = req.body;
 
     // Close any open salary record for this employee
@@ -327,10 +350,10 @@ router.post('/employee-salaries', async (req, res) => {
         vda, lta, education_allowance, washing_allowance, mobile_allowance, project_allowance,
         accommodation_allowance, food_allowance, transport_allowance,
         employer_pf, employee_pf, gratuity, pt_deduction, net_pay_monthly, mess_deduction,
-        incentive, edli, epf_admin)
+        incentive, edli, epf_admin, basic_reversal)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
                $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-               $31,$32,$33) RETURNING *`,
+               $31,$32,$33,$34) RETURNING *`,
       [user_id, structure_id || null, ctc_annual || null, basic || 0, hra || 0,
        conveyance || 0, medical || 0, special_allowance || 0, other_allowance || 0,
        gross_monthly || 0, pf_applicable ?? true, esi_applicable ?? true,
@@ -338,7 +361,7 @@ router.post('/employee-salaries', async (req, res) => {
        vda || 0, lta || 0, education_allowance || 0, washing_allowance || 0, mobile_allowance || 0, project_allowance || 0,
        accommodation_allowance || 0, food_allowance || 0, transport_allowance || 0,
        employer_pf || 0, employee_pf || 0, gratuity || 0, pt_deduction || 0, net_pay_monthly || 0, mess_deduction || 0,
-       incentive || 0, edli || 0, epf_admin || 0]
+       incentive || 0, edli || 0, epf_admin || 0, basic_reversal || 0]
     );
     res.status(201).json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -30,10 +30,11 @@ const DEFAULT_COMPONENTS = [
   { component_name:'Mobile Allowance',         component_type:'earning',   calc_type:'fixed',        amount:500, pct:0,     is_taxable:false },
   { component_name:'Incentive',                component_type:'earning',   calc_type:'pct_of_basic', amount:0,   pct:13.33, is_taxable:true  },
   { component_name:'Washing Allowance',        component_type:'earning',   calc_type:'pct_of_basic', amount:0,   pct:1,     is_taxable:false },
-  { component_name:'Special Allowance',        component_type:'earning',   calc_type:'fixed',        amount:0,   pct:0,     is_taxable:true  },
+  { component_name:'Special Allowance',        component_type:'earning',   calc_type:'fixed',        amount:287, pct:0,     is_taxable:true  },
   { component_name:'PF Employee',              component_type:'statutory', calc_type:'pct_of_basic', amount:0,   pct:12,    is_taxable:false },
   { component_name:'Professional Tax',         component_type:'statutory', calc_type:'fixed',        amount:200, pct:0,     is_taxable:false },
   { component_name:'Mess Deduction',           component_type:'deduction', calc_type:'fixed',        amount:0,   pct:0,     is_taxable:false },
+  { component_name:'Basic Reversal',           component_type:'deduction', calc_type:'fixed',        amount:0,   pct:0,     is_taxable:false },
 ];
 
 function StructureModal({ structure, onClose, onSave }) {
