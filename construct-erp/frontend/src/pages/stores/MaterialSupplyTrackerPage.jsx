@@ -914,7 +914,7 @@ export default function MaterialSupplyTrackerPage() {
     { key: 'open_pos',        label: 'Open POs',        icon: FileText,       color: 'blue',    filter: 'PO Created' },
     { key: 'in_transit',      label: 'In Transit',      icon: Truck,          color: 'indigo',  filter: 'In Transit' },
     { key: 'partial_delivery', label: 'Partial Delivery', icon: Package,       color: 'yellow',  filter: 'Partial Delivery' },
-    { key: 'pending_grn',     label: 'Pending GRN',     icon: Warehouse,      color: 'red',     filter: 'GRN Completed' },
+    { key: 'pending_grn',     label: 'Pending GRN',     icon: Warehouse,      color: 'red',     filter: 'Pending GRN' },
     { key: 'overdue',         label: 'Overdue',         icon: AlertTriangle,  color: 'red',     filter: null },
     { key: 'closed',          label: 'Closed',          icon: CheckCircle2,   color: 'green',   filter: 'Closed' },
   ];

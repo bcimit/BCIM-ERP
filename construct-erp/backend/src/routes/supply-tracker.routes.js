@@ -174,7 +174,12 @@ router.get('/', async (req, res) => {
     const cid = CID(req);
     const params = [cid];
     let i = 2;
-    const conditions = ['p.company_id = $1', "mr.status != 'cancelled'"];
+    // Cancelled MRs are excluded by default, but the Status filter offers
+    // "Cancelled" as an option — without this, it would always return zero
+    // rows no matter what, since the base filter would still be excluding them.
+    const conditions = status === 'Cancelled'
+      ? ['p.company_id = $1']
+      : ['p.company_id = $1', "mr.status != 'cancelled'"];
 
     if (project_id) { conditions.push(`mr.project_id = $${i++}`);  params.push(project_id); }
     if (vendor_id)  { conditions.push(`bp.vendor_id = $${i++}`);   params.push(vendor_id); }
@@ -189,11 +194,34 @@ router.get('/', async (req, res) => {
     }
 
     if (status) {
+      // Must mirror the /dashboard KPI FILTER conditions exactly — otherwise
+      // clicking a KPI card shows a different row set than the count on the
+      // card (or, for several that were missing entirely, no filter at all —
+      // silently showing every row instead).
+      //
+      // Note: "GRN Completed" here matches deriveStatus()'s definition
+      // (fully received — the Status *dropdown* option), which is the
+      // opposite of the dashboard's "pending_grn" KPI (nothing received yet).
+      // The KPI card is labelled "Pending GRN" and its filter value on the
+      // frontend must be the distinct string 'Pending GRN', not 'GRN
+      // Completed' — the two used to collide on the same string meaning
+      // opposite things.
+      const receivedQty = RECEIVED_QTY_SUB('mr', 'mi');
+      const orderedQty  = ORDERED_QTY_SUB('mr', 'mi');
       const statusMap = {
+        'Draft':            `bp.po_id IS NULL AND mr.status NOT IN (${PENDING_STATUSES}) AND mr.status != 'approved_md'`,
         'Pending Approval': `mr.status IN (${PENDING_STATUSES})`,
         'PO Pending':       `mr.status = 'approved_md' AND bp.po_id IS NULL`,
+        'PO Created':       `bp.po_status IN ('pending','approved','sent')`,
+        'In Transit':       `bp.po_status IN ('sent','approved') AND (${receivedQty}) = 0`,
+        'Partial Delivery': `(${receivedQty}) > 0 AND (${receivedQty}) < mi.quantity AND mr.status != 'closed'`,
+        'Pending GRN':      `bp.po_id IS NOT NULL AND (${receivedQty}) = 0 AND bp.po_status IN ('sent','approved')`,
+        'GRN Completed':    `(${receivedQty}) >= (${orderedQty}) AND (${orderedQty}) > 0`,
         'Closed':           `mr.status = 'closed'`,
-        'In Transit':       `bp.po_status IN ('sent','approved')`,
+        'Cancelled':        `mr.status = 'cancelled'`,
+        // 'Issued to Site' is not implemented — that concept lives in the
+        // Stores issue-slip module, which this endpoint doesn't join at all.
+        // Selecting it currently falls through to no additional filter.
       };
       if (statusMap[status]) conditions.push(statusMap[status]);
     }
@@ -508,7 +536,7 @@ router.get('/summary', async (req, res) => {
         COALESCE(SUM(${ORDERED_QTY_SUB('mr', 'mi')}), 0)  AS ordered_qty,
         COALESCE(SUM(${RECEIVED_QTY_SUB('mr', 'mi')}), 0) AS received_qty,
         COUNT(DISTINCT bp.po_id)                       AS po_count,
-        ${GRN_COUNT_SUB('mr', 'mi')}                   AS grn_count
+        COALESCE(SUM(${GRN_COUNT_SUB('mr', 'mi')}), 0) AS grn_count
       FROM material_requisitions mr
       JOIN projects p ON p.id = mr.project_id
       JOIN mrs_items mi ON mi.mrs_id = mr.id
