@@ -1168,6 +1168,52 @@ router.get('/debug/by-invoice/:invoiceNo', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /ign/debug/by-mr/:mrsNumber — read-only diagnostic for the MR side of
+// the same received-qty mismatch: shows each MR item, whether any po_items
+// row has mrs_item_id correctly pointing at it (the link Supply Tracker's
+// ordered/received-qty subqueries require), every po_items row that COULD
+// match via the header-level fallback (same project's PO linked to this MR by
+// mrs_id/mrs_ids) regardless of whether mrs_item_id was actually set, and the
+// live received qty computed directly from ign_items for each such candidate
+// — so a missing/failed mrs_item_id link is visible directly instead of
+// guessed at. Authenticated, scoped to the caller's company, no writes.
+router.get('/debug/by-mr/:mrsNumber', async (req, res) => {
+  try {
+    const { mrsNumber } = req.params;
+    const { rows: mrRows } = await query(
+      `SELECT mr.id, mr.mrs_number, mr.serial_no_formatted, mr.project_id, mr.status
+       FROM material_requisitions mr
+       JOIN projects p ON p.id = mr.project_id
+       WHERE p.company_id = $1
+         AND (mr.mrs_number ILIKE $2 OR mr.serial_no_formatted ILIKE $2)`,
+      [req.user.company_id, `%${mrsNumber}%`]
+    );
+    if (!mrRows.length) return res.json({ found: false, message: `No MR matching "${mrsNumber}"` });
+
+    const out = [];
+    for (const mr of mrRows) {
+      const { rows: mrItems } = await query(
+        `SELECT id, material_name, quantity FROM mrs_items WHERE mrs_id = $1`, [mr.id]
+      );
+      const { rows: candidatePoItems } = await query(
+        `SELECT pi.id, pi.material_name, pi.quantity, pi.mrs_item_id, pi.po_id, po.po_number, po.status AS po_status,
+           COALESCE((
+             SELECT SUM(COALESCE(ii.qty_inspected, ii.qty_as_per_dc, 0) - COALESCE(ii.qty_rejected, 0))
+             FROM ign_items ii JOIN ign n ON n.id = ii.ign_id
+             WHERE ii.po_item_id = pi.id AND n.status = 'approved'
+           ), 0) AS live_received_qty
+         FROM po_items pi
+         JOIN purchase_orders po ON po.id = pi.po_id
+         WHERE po.status NOT IN ('rejected','cancelled')
+           AND (po.mrs_id = $1 OR $1 = ANY(COALESCE(po.mrs_ids, ARRAY[]::uuid[])))`,
+        [mr.id]
+      );
+      out.push({ mr, mr_items: mrItems, candidate_po_items: candidatePoItems });
+    }
+    res.json({ found: true, results: out });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 async function notifyAccountsDept(companyId, subject, body, link = '/accounts') {
   try {
     const { rows } = await query(
