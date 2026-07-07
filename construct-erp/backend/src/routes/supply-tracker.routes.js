@@ -589,4 +589,45 @@ function deriveStatus(r) {
   return 'PO Created';
 }
 
+// ── Diagnostic: why does "No PO" show a nonzero GRN count? ─────────────────
+// (Read-only. Investigates the "No PO" vendor bucket in /summary — GRN count
+// and received qty use identical join logic, so if grn_count > 0 for a row
+// where the vendor lookup came up empty, that row's po_item is linked to an
+// approved IGN but its purchase_orders.vendor_id is missing/dangling, or its
+// received-qty subquery is silently returning 0 despite a matching IGN.)
+router.get('/debug/no-po-anomaly', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const cid = CID(req);
+    const params = [cid];
+    let extra = '';
+    if (project_id) { extra = `AND mr.project_id = $2`; params.push(project_id); }
+
+    const { rows } = await query(`
+      SELECT
+        mr.id AS mr_id, mr.mrs_number, mr.serial_no_formatted,
+        mi.id AS mi_id, mi.material_name, mi.quantity AS requested_qty,
+        bp.po_id, bp.po_number, bp.vendor_id,
+        v.name AS vendor_name,
+        ${ORDERED_QTY_SUB('mr', 'mi')}  AS ordered_qty,
+        ${RECEIVED_QTY_SUB('mr', 'mi')} AS received_qty,
+        ${GRN_COUNT_SUB('mr', 'mi')}    AS grn_count
+      FROM material_requisitions mr
+      JOIN projects p ON p.id = mr.project_id
+      JOIN mrs_items mi ON mi.mrs_id = mr.id
+      ${BEST_PO_LATERAL}
+      LEFT JOIN vendors v ON v.id = bp.vendor_id
+      WHERE p.company_id = $1 ${extra} AND mr.status != 'cancelled'
+        AND v.name IS NULL
+        AND ${GRN_COUNT_SUB('mr', 'mi')} > 0
+      ORDER BY mr.mrs_number
+    `, params);
+
+    res.json({ found: rows.length, rows });
+  } catch (e) {
+    console.error('[supply-tracker] no-po-anomaly debug error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
