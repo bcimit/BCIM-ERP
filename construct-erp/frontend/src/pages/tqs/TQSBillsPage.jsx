@@ -1361,6 +1361,102 @@ function sortRows(rows, col, dir) {
   });
 }
 
+// ── Untagged Items Modal — bulk-tag line items with no cost head ──────────
+function UntaggedItemsModal({ projectId, onClose }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState({}); // description -> boolean
+  const [costHeads, setCostHeads] = useState({}); // description -> cost_head
+
+  const { data: groups = [], isLoading } = useQuery({
+    queryKey: ['tqs-untagged-items', projectId],
+    queryFn: () => tqsBillsAPI.untaggedItems({ project_id: projectId || undefined }).then(r => r.data?.data ?? []),
+  });
+
+  const applyMut = useMutation({
+    mutationFn: ({ line_item_ids, cost_head }) => tqsBillsAPI.bulkTagCostHead({ line_item_ids, cost_head }),
+    onError: e => toast.error(e?.response?.data?.error || 'Failed to tag items'),
+  });
+
+  const handleApplyAll = async () => {
+    const toApply = groups.filter(g => selected[g.description] && costHeads[g.description]);
+    if (!toApply.length) { toast.error('Select at least one group and a cost head'); return; }
+    let tagged = 0;
+    for (const g of toApply) {
+      const res = await applyMut.mutateAsync({ line_item_ids: g.line_item_ids, cost_head: costHeads[g.description] });
+      tagged += res.data?.data?.tagged ?? 0;
+    }
+    toast.success(`Tagged ${tagged} line item${tagged === 1 ? '' : 's'}`);
+    qc.invalidateQueries({ queryKey: ['tqs-untagged-items'] });
+    qc.invalidateQueries({ queryKey: ['tqs-bills'] });
+    setSelected({});
+    setCostHeads({});
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-900 flex items-center gap-2"><Package className="w-4 h-4 text-indigo-600" /> Untagged Line Items</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Line items with no BOQ cost head, grouped by description — pick a cost head and tag them all in one go.</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-200 rounded-md text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-3">
+          {isLoading ? (
+            <div className="py-16 text-center text-slate-400 text-sm">Loading untagged items…</div>
+          ) : groups.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 text-sm">Every line item already has a cost head tagged. Nothing to do here.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <th className="py-1.5 pr-2 w-8"></th>
+                  <th className="py-1.5 pr-2">Description</th>
+                  <th className="py-1.5 pr-2">Bills</th>
+                  <th className="py-1.5 pr-2 text-right">Total (excl. GST)</th>
+                  <th className="py-1.5 pr-2">Cost Head</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map(g => (
+                  <tr key={g.description} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="py-1.5 pr-2">
+                      <input type="checkbox" checked={!!selected[g.description]}
+                        onChange={e => setSelected(prev => ({ ...prev, [g.description]: e.target.checked }))} />
+                    </td>
+                    <td className="py-1.5 pr-2 text-slate-800">{g.description}<span className="text-slate-400 ml-1">({g.item_count})</span></td>
+                    <td className="py-1.5 pr-2 text-xs text-slate-500 font-mono">{(g.bill_numbers || []).join(', ')}</td>
+                    <td className="py-1.5 pr-2 text-right font-medium">₹{Number(g.total_basic || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td className="py-1.5 pr-2">
+                      <select className="border border-slate-200 rounded-md px-2 py-1 text-xs outline-none"
+                        value={costHeads[g.description] || ''}
+                        onChange={e => setCostHeads(prev => ({ ...prev, [g.description]: e.target.value }))}>
+                        <option value="">— select —</option>
+                        {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="border-t border-slate-100 px-5 py-3 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Close</button>
+          <button
+            onClick={handleApplyAll}
+            disabled={applyMut.isPending || groups.length === 0}
+            className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 shadow-sm"
+          >
+            {applyMut.isPending ? 'Applying…' : 'Apply Tags'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // â"€â"€ Import Bills Modal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function ImportBillsModal({ projects, defaultProjectId, onClose, onDone }) {
   const [projectId, setProjectId] = useState(defaultProjectId || '');
@@ -2423,6 +2519,7 @@ export default function TQSBillsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [showAdvance, setShowAdvance] = useState(false);
+  const [showUntagged, setShowUntagged] = useState(false);
   const [search, setSearch] = useState('');
   // Default to the globally-selected project (top nav chip) so the Bill
   // Tracker doesn't show every project's bills under the active project context.
@@ -2730,6 +2827,10 @@ export default function TQSBillsPage() {
               <button onClick={() => setShowImport(true)} title="Import Bills"
                 className="p-2 rounded-lg transition-all hover:bg-white/10 text-slate-900 font-medium hover:text-white">
                 <Upload className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowUntagged(true)} title="Bulk-tag line items with no cost head"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-white/10 text-slate-900 hover:text-white">
+                <Package className="w-3.5 h-3.5" /> Untagged Items
               </button>
               <button onClick={() => setShowAdvance(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
@@ -3165,6 +3266,14 @@ export default function TQSBillsPage() {
           defaultProjectId={projectFilter}
           onClose={() => setShowImport(false)}
           onDone={() => { setShowImport(false); qc.invalidateQueries({ queryKey: ['tqs-bills'] }); }}
+        />
+      )}
+
+      {/* Untagged Items — bulk cost-head tagging */}
+      {showUntagged && (
+        <UntaggedItemsModal
+          projectId={projectFilter}
+          onClose={() => setShowUntagged(false)}
         />
       )}
 

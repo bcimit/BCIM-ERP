@@ -1182,6 +1182,62 @@ router.get('/ap-aging', async (req, res) => {
   }
 });
 
+// ── GET /tqs/bills/untagged-items ──────────────────────────────────────────
+// Line items with no cost head, grouped by description so they can be
+// bulk-tagged in one action instead of opening each bill individually.
+// MUST be defined before /:id routes so Express doesn't swallow it as a param
+router.get('/untagged-items', async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let conditions = [`b.company_id = $1`, `b.is_deleted = FALSE`, `li.cost_head IS NULL`];
+    const params = [req.user.company_id];
+    applyProjectScope(req, conditions, params, 'b', project_id);
+
+    const { rows } = await query(`
+      SELECT li.item_name AS description,
+             COUNT(*)::int AS item_count,
+             SUM(li.basic_amount) AS total_basic,
+             array_agg(li.id) AS line_item_ids,
+             array_agg(DISTINCT b.sl_number) AS bill_numbers
+      FROM tqs_bill_line_items li
+      JOIN tqs_bills b ON b.id = li.bill_id
+      WHERE ${conditions.join(' AND ')}
+      GROUP BY li.item_name
+      ORDER BY SUM(li.basic_amount) DESC
+    `, params);
+    res.json({ data: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// ── POST /tqs/bills/bulk-tag-cost-head ─────────────────────────────────────
+// Applies one cost head to a set of line items in a single action.
+router.post('/bulk-tag-cost-head', async (req, res) => {
+  try {
+    const { line_item_ids, cost_head } = req.body;
+    if (!Array.isArray(line_item_ids) || !line_item_ids.length) {
+      return res.status(400).json({ error: 'line_item_ids required' });
+    }
+    if (!BOQ_COST_HEADS.includes(cost_head)) {
+      return res.status(400).json({ error: 'Invalid cost head' });
+    }
+    // Scope to this company's own bills only.
+    const { rows } = await query(`
+      UPDATE tqs_bill_line_items li
+      SET cost_head = $1
+      FROM tqs_bills b
+      WHERE li.bill_id = b.id AND b.company_id = $2 AND li.id = ANY($3::uuid[])
+      RETURNING li.id
+    `, [cost_head, req.user.company_id, line_item_ids]);
+    res.json({ data: { tagged: rows.length } });
+  } catch (err) {
+    console.error(err);
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // ── GET /tqs/bills/vendor-ledger ───────────────────────────────────────────
 // Outstanding balance summary per vendor across all DQS bills
 // MUST be defined before /:id routes so Express doesn't swallow it as a param

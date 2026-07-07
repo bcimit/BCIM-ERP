@@ -1724,6 +1724,8 @@ export const tqsBillsAPI = {
   delete:       (id)       => api.delete(`/tqs/bills/${id}`),
   repairCertifiedNet: ()  => api.post('/tqs/bills/repair-certified-net'),
   backfillJV:   (data)    => api.post('/tqs/bills/backfill-jv', data || {}),
+  untaggedItems: (params) => api.get('/tqs/bills/untagged-items', { params }),
+  bulkTagCostHead: (data) => api.post('/tqs/bills/bulk-tag-cost-head', data),
   // ── Import ──
   downloadTemplate: ()         => api.get('/tqs/bills/import/template', { responseType: 'blob' }),
   bulkImport:       (fd)       => api.post('/tqs/bills/bulk-import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
