@@ -83,6 +83,20 @@ runSchemaInit('po_items_mrs_item_backfill', async () => {
   `);
 });
 
+// One-off targeted fix: PO item "M Sand for Block Work" on POLANLH10005 never
+// got an mrs_item_id because its name doesn't share a prefix with the MR item
+// "M - Sand / Robo Sand" (the prefix-match backfill above can't catch it).
+// This left received quantity (from IGN/invoice #24) unattributed to the MR
+// row in Supply Tracker, showing 0 received despite material having arrived.
+runSchemaInit('po_items_mrs_item_manual_link_msand_lanco', async () => {
+  await query(`
+    UPDATE po_items
+    SET mrs_item_id = 'a2032fda-cd61-4df8-b90b-30da0e449830'
+    WHERE id = 'ecebd7a9-54ad-4ed5-b601-7b517a13b5b3'
+      AND mrs_item_id IS NULL
+  `);
+});
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const esc = (value) => String(value ?? '')
