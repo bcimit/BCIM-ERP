@@ -10,9 +10,26 @@ const express = require('express');
 const router  = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { query }        = require('../config/database');
+const { runSchemaInit } = require('../utils/schemaInit');
 router.use(authenticate);
 
 const CID = req => req.user.company_id;
+
+// The list/dashboard/summary queries below run 3-4 correlated subqueries per
+// row (ordered/received qty, GRN count, last delivery date), each joining
+// po_items -> purchase_orders -> ign_items -> ign. None of the join columns
+// they correlate on had an index, so every subquery execution sequentially
+// scanned these tables — an N x M blowup that made the page take ~20s to
+// load. Indexes are purely additive (can't change query results), so this is
+// safe to add without touching any query logic.
+runSchemaInit('supply-tracker-indexes', async () => {
+  const safe = async (sql) => { try { await query(sql); } catch (_) {} };
+  await safe(`CREATE INDEX IF NOT EXISTS idx_po_items_mrs_item_id ON po_items(mrs_item_id)`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_po_items_po_id ON po_items(po_id)`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_purchase_orders_mrs_id ON purchase_orders(mrs_id)`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_ign_items_po_item_id ON ign_items(po_item_id)`);
+  await safe(`CREATE INDEX IF NOT EXISTS idx_mrs_items_mrs_id ON mrs_items(mrs_id)`);
+});
 
 // Received qty expression for an ign_items row
 const IGN_QTY = `(COALESCE(ii.qty_inspected, ii.qty_as_per_dc, 0) - COALESCE(ii.qty_rejected, 0))`;
