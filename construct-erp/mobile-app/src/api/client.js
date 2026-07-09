@@ -327,6 +327,29 @@ export const dprAPI = {
   create: (data)       => api.post('/planning/dpr', data),
 };
 
+// ── QS Dashboard helpers ──────────────────────────────────────────────────────
+export const tqsDashAPI = {
+  getAPAging:   (params) => api.get('/tqs/bills/ap-aging',      { params }),
+  listAdvances: (params) => api.get('/tqs/bills/advances',      { params }),
+};
+
+// ── Accounts Dashboard helpers ────────────────────────────────────────────────
+export const accountsDashAPI = {
+  pcPending: (params) => api.get('/tqs/bills/pc-pending', { params }),
+  apAging:   (params) => api.get('/tqs/bills/ap-aging',   { params }),
+  payments:  (params) => api.get('/payments',             { params }),
+};
+
+// ── HR Dashboard helpers ──────────────────────────────────────────────────────
+export const hrDashAPI = {
+  employees:       (params) => api.get('/hr-admin/employees',                         { params }),
+  leaveRequests:   (params) => api.get('/hr-admin/leave/requests',                    { params }),
+  payroll:         (params) => api.get('/hr-admin/payroll',                           { params }),
+  overtime:        (params) => api.get('/hr-admin/overtime',                          { params }),
+  serviceRequests: (params) => api.get('/hr-admin/advanced/service-requests',         { params }),
+  deptSummary:     (params) => api.get('/hr-admin/attendance/department-summary',     { params }),
+};
+
 export const approvalsAPI = {
   pending: (params = {}) => api.get('/approvals/pending', { params }),
   decide:  (entity_type, entity_id, action, comments) =>

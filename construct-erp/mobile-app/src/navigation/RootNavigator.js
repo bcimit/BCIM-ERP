@@ -71,6 +71,11 @@ import UsersScreen from '../screens/UsersScreen';
 import ModuleDashboardScreen from '../screens/ModuleDashboardScreen';
 import ProcurementDashboardScreen from '../screens/ProcurementDashboardScreen';
 import StoresDashboardScreen from '../screens/StoresDashboardScreen';
+import QSDashboardScreen from '../screens/QSDashboardScreen';
+import HRDashboardScreen from '../screens/HRDashboardScreen';
+import AccountsDashboardScreen from '../screens/AccountsDashboardScreen';
+import PMDashboardScreen from '../screens/PMDashboardScreen';
+import HSEDashboardScreen from '../screens/HSEDashboardScreen';
 import ProfitLossScreen from '../screens/ProfitLossScreen';
 import ReportsHubScreen from '../screens/ReportsHubScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -195,6 +200,11 @@ export default function RootNavigator() {
       <Stack.Screen name="ModuleDashboard" component={ModuleDashboardScreen} />
       <Stack.Screen name="ProcurementDashboard" component={ProcurementDashboardScreen} />
       <Stack.Screen name="StoresDashboard" component={StoresDashboardScreen} />
+      <Stack.Screen name="QSDashboard" component={QSDashboardScreen} />
+      <Stack.Screen name="HRDashboard" component={HRDashboardScreen} />
+      <Stack.Screen name="AccountsDashboard" component={AccountsDashboardScreen} />
+      <Stack.Screen name="PMDashboard" component={PMDashboardScreen} />
+      <Stack.Screen name="HSEDashboard" component={HSEDashboardScreen} />
       <Stack.Screen name="ProfitLoss" component={ProfitLossScreen} />
       <Stack.Screen name="ReportsHub" component={ReportsHubScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />

@@ -16,7 +16,7 @@ export const MODULE_GROUPS = [
     label: 'Planning',
     icon: 'chart-gantt',
     items: [
-      { label: 'P&E Dashboard',        screen: 'ModuleDashboard', params: { title: 'P&E Dashboard' } },
+      { label: 'P&E Dashboard',        screen: 'PMDashboard' },
       { label: 'Schedule & Activities',screen: 'Activities' },
       { label: 'Milestones',           screen: 'Milestones' },
       { label: 'Look-Ahead Plan',      screen: 'LookAhead' },
@@ -59,7 +59,7 @@ export const MODULE_GROUPS = [
     label: 'QS & Billing',
     icon: 'file-document-outline',
     items: [
-      { label: 'QS Dashboard',          screen: 'ModuleDashboard', params: { title: 'QS Dashboard' } },
+      { label: 'QS Dashboard',          screen: 'QSDashboard' },
       { label: 'BOQ & Estimation',      screen: 'BOQ' },
       { label: 'Budget Breakdown',       screen: 'BOQBudgetBreakdown' },
       { label: 'Budget Control',         screen: 'BudgetControl' },
@@ -73,7 +73,7 @@ export const MODULE_GROUPS = [
     label: 'Accounts',
     icon: 'bank-outline',
     items: [
-      { label: 'Accounts Dashboard',   screen: 'ModuleDashboard', params: { title: 'Accounts Dashboard' } },
+      { label: 'Accounts Dashboard',   screen: 'AccountsDashboard' },
       { label: 'Bank Accounts',       screen: 'BankAccounts' },
       { label: 'Invoices',            screen: 'Invoices' },
       { label: 'Bills',               screen: 'Bills' },
@@ -87,7 +87,7 @@ export const MODULE_GROUPS = [
     label: 'HR & Admin',
     icon: 'account-group-outline',
     items: [
-      { label: 'HR Dashboard',        screen: 'ModuleDashboard', params: { title: 'HR Dashboard' } },
+      { label: 'HR Dashboard',        screen: 'HRDashboard' },
       { label: 'Employee Directory',  screen: 'EmployeeDirectory' },
       { label: 'Attendance',          screen: 'ESS' },
       { label: 'Leave Management',    screen: 'ESS' },
@@ -136,6 +136,7 @@ export const MODULE_GROUPS = [
     label: 'HSE & Safety',
     icon: 'hard-hat',
     items: [
+      { label: 'HSE Dashboard',       screen: 'HSEDashboard' },
       { label: 'Incidents',           screen: 'Incidents' },
       { label: 'Permits',             screen: 'Permits' },
       { label: 'PPE Tracker',         screen: 'PPE' },
