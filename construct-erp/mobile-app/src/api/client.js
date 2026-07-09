@@ -309,8 +309,8 @@ export const taxDeclarationAPI = {
 };
 
 export const dprAPI = {
-  list:   (projectId) => api.get('/dpr', { params: { project_id: projectId } }),
-  create: (data)       => api.post('/dpr', data),
+  list:   (projectId) => api.get('/planning/dpr', { params: { project_id: projectId } }),
+  create: (data)       => api.post('/planning/dpr', data),
 };
 
 export const approvalsAPI = {
