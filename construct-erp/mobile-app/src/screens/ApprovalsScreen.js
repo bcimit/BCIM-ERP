@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Modal, Alert } from 'react-native';
+import { View, Text, SectionList, TouchableOpacity, TextInput, StyleSheet, Modal, Alert, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
@@ -14,18 +14,21 @@ import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 import { theme } from '../theme';
 
-// Mirrors ApprovalsPage.jsx's TYPE_META so icons/colors match the web app.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const TYPE_META = {
   'SC Bill':           { icon: 'receipt',                    color: '#4F46E5' },
   'Work Order':        { icon: 'briefcase-outline',          color: '#059669' },
-  'Measurement Book':  { icon: 'layers-outline',              color: '#0D9488' },
+  'Measurement Book':  { icon: 'layers-outline',             color: '#0D9488' },
   'NMR Muster Roll':   { icon: 'file-document-outline',      color: '#1D4ED8' },
   'Retention Release': { icon: 'shield-check-outline',       color: '#D97706' },
   'NCR':               { icon: 'alert-outline',              color: '#DC2626' },
   'Submittal':         { icon: 'file-document-outline',      color: '#7C3AED' },
   'Purchase Order':    { icon: 'cart-outline',                color: '#EA580C' },
-  'MRS':               { icon: 'package-variant-closed',      color: '#0891B2' },
-  'Petty Cash':        { icon: 'bank-outline',                color: '#D97706' },
+  'MRS':               { icon: 'package-variant-closed',     color: '#0891B2' },
+  'Petty Cash':        { icon: 'bank-outline',               color: '#D97706' },
 };
 const DEFAULT_META = { icon: 'file-outline', color: theme.colors.primary };
 
@@ -52,11 +55,13 @@ function daysAgoLabel(createdAt) {
   return d <= 0 ? 'Today' : d === 1 ? '1 day ago' : `${d} days ago`;
 }
 
+const TYPE_ORDER = ['MRS', 'Purchase Order', 'Work Order', 'SC Bill', 'Measurement Book', 'NMR Muster Roll', 'Petty Cash', 'Retention Release', 'NCR', 'Submittal'];
+
 export default function ApprovalsScreen() {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [modal, setModal] = useState(null); // { item, action }
+  const [collapsed, setCollapsed] = useState({});
+  const [modal, setModal] = useState(null);
   const [comments, setComments] = useState('');
 
   const { data: raw, isLoading, isError, refetch } = useQuery({
@@ -68,24 +73,35 @@ export default function ApprovalsScreen() {
   const summary = raw?.summary || {};
   const total = raw?.total || 0;
 
-  const tabs = useMemo(() => ['All', ...new Set(allItems.map(i => i.doc_type).filter(Boolean))], [allItems]);
+  const toggleSection = (type) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCollapsed(prev => ({ ...prev, [type]: !prev[type] }));
+  };
 
-  const filtered = useMemo(() => {
-    let list = filter === 'All' ? allItems : allItems.filter(i => i.doc_type === filter);
+  const sections = useMemo(() => {
+    let items = allItems;
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter(i => [i.ref_no, i.party_name, i.project_name, i.doc_type, i.extra_info].some(v => v?.toLowerCase().includes(q)));
+      items = items.filter(i => [i.ref_no, i.party_name, i.project_name, i.doc_type, i.extra_info].some(v => v?.toLowerCase().includes(q)));
     }
-    return list;
-  }, [allItems, filter, search]);
 
-  const urgent = filtered.filter(i => daysOld(i.created_at) >= 3);
-  const normal = filtered.filter(i => daysOld(i.created_at) < 3);
-  const sections = [
-    ...(urgent.length ? [{ title: `Urgent — 3+ Days (${urgent.length})`, data: urgent, urgent: true }] : []),
-    ...(normal.length ? [{ title: urgent.length ? `Recent (${normal.length})` : null, data: normal, urgent: false }] : []),
-  ];
-  const flatData = sections.flatMap(s => [{ __header: s.title, __urgent: s.urgent }, ...s.data]);
+    const grouped = {};
+    items.forEach(item => {
+      const type = item.doc_type || 'Other';
+      if (!grouped[type]) grouped[type] = [];
+      grouped[type].push(item);
+    });
+
+    const orderedTypes = TYPE_ORDER.filter(t => grouped[t]);
+    Object.keys(grouped).forEach(t => { if (!orderedTypes.includes(t)) orderedTypes.push(t); });
+
+    return orderedTypes.map(type => {
+      const data = grouped[type];
+      const urgentCount = data.filter(i => daysOld(i.created_at) >= 3).length;
+      data.sort((a, b) => daysOld(b.created_at) - daysOld(a.created_at));
+      return { type, data, urgentCount, totalAmount: data.reduce((s, i) => s + (Number(i.amount) || 0), 0) };
+    });
+  }, [allItems, search]);
 
   const decide = useMutation({
     mutationFn: ({ entity_type, entity_id, action, comments }) => approvalsAPI.decide(entity_type, entity_id, action, comments),
@@ -103,6 +119,16 @@ export default function ApprovalsScreen() {
     decide.mutate({ entity_type: modal.item.entity_type, entity_id: modal.item.id, action: modal.action, comments });
   };
 
+  const sectionListData = useMemo(() => {
+    return sections.map(s => ({
+      type: s.type,
+      urgentCount: s.urgentCount,
+      totalAmount: s.totalAmount,
+      data: collapsed[s.type] ? [] : s.data,
+      count: s.data.length,
+    }));
+  }, [sections, collapsed]);
+
   return (
     <Screen>
       <ScreenHeader title="My Approvals" subtitle={`${total} item${total !== 1 ? 's' : ''} waiting for your action`} />
@@ -115,107 +141,134 @@ export default function ApprovalsScreen() {
         <EmptyState icon="check-circle-outline" title="All caught up" subtitle="No pending approvals right now." />
       ) : (
         <>
-          {/* KPI summary */}
-          <View style={styles.kpiRow}>
-            <Card style={styles.kpiCard}>
-              <Text style={styles.kpiValue}>{total}</Text>
-              <Text style={styles.kpiLabel}>Total Pending</Text>
-            </Card>
-            <Card style={[styles.kpiCard, urgent.length > 0 && styles.kpiCardUrgent]}>
-              <Text style={[styles.kpiValue, urgent.length > 0 && styles.kpiValueUrgent]}>{urgent.length}</Text>
-              <Text style={styles.kpiLabel}>Urgent (3+ days)</Text>
-            </Card>
+          {/* KPI chips row */}
+          <View style={styles.chipRow}>
+            {sections.map(s => {
+              const meta = TYPE_META[s.type] || DEFAULT_META;
+              return (
+                <View key={s.type} style={[styles.chip, { borderColor: `${meta.color}40` }]}>
+                  <MaterialCommunityIcons name={meta.icon} size={13} color={meta.color} />
+                  <Text style={[styles.chipText, { color: meta.color }]}>{s.type}</Text>
+                  <View style={[styles.chipCount, { backgroundColor: `${meta.color}1A` }]}>
+                    <Text style={[styles.chipCountText, { color: meta.color }]}>{s.data.length}</Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
 
           {/* Search */}
           <View style={styles.searchWrap}>
             <MaterialCommunityIcons name="magnify" size={18} color={theme.colors.muted} />
             <TextInput value={search} onChangeText={setSearch} placeholder="Search ref, party, project…" placeholderTextColor={theme.colors.muted} style={styles.searchInput} />
+            {search ? (
+              <TouchableOpacity onPress={() => setSearch('')}>
+                <MaterialCommunityIcons name="close-circle" size={18} color={theme.colors.muted} />
+              </TouchableOpacity>
+            ) : null}
           </View>
 
-          {/* Type filter tabs */}
-          <FlatList
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={tabs}
-            keyExtractor={(t) => t}
-            contentContainerStyle={styles.tabsRow}
-            renderItem={({ item: tab }) => (
-              <TouchableOpacity onPress={() => setFilter(tab)} style={[styles.tab, filter === tab && styles.tabActive]}>
-                <Text style={[styles.tabText, filter === tab && styles.tabTextActive]}>
-                  {tab} ({tab === 'All' ? total : (summary[tab] || 0)})
-                </Text>
-              </TouchableOpacity>
-            )}
-          />
-
-          <FlatList
-            data={flatData}
-            keyExtractor={(item, i) => item.__header !== undefined ? `header-${i}` : `${item.entity_type}-${item.id}-${i}`}
-            contentContainerStyle={{ padding: theme.spacing.md, gap: 10 }}
-            renderItem={({ item }) => {
-              if (item.__header !== undefined) {
-                return item.__header ? (
-                  <View style={styles.sectionHeader}>
-                    <View style={[styles.sectionDot, { backgroundColor: item.__urgent ? theme.colors.danger : theme.colors.primary }]} />
-                    <Text style={[styles.sectionTitle, item.__urgent && styles.sectionTitleUrgent]}>{item.__header}</Text>
+          <SectionList
+            sections={sectionListData}
+            keyExtractor={(item, i) => `${item.entity_type}-${item.id}-${i}`}
+            contentContainerStyle={{ paddingBottom: 30 }}
+            stickySectionHeadersEnabled={false}
+            renderSectionHeader={({ section }) => {
+              const meta = TYPE_META[section.type] || DEFAULT_META;
+              const isCollapsed = collapsed[section.type];
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => toggleSection(section.type)}
+                  style={[styles.sectionHeader, { borderLeftColor: meta.color }]}
+                >
+                  <View style={[styles.sectionIconWrap, { backgroundColor: `${meta.color}1A` }]}>
+                    <MaterialCommunityIcons name={meta.icon} size={18} color={meta.color} />
                   </View>
-                ) : null;
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sectionTitle}>{section.type}</Text>
+                    <View style={styles.sectionSubRow}>
+                      <Text style={styles.sectionCount}>{section.count} pending</Text>
+                      {section.urgentCount > 0 && (
+                        <View style={styles.urgentChip}>
+                          <MaterialCommunityIcons name="alert" size={10} color={theme.colors.danger} />
+                          <Text style={styles.urgentChipText}>{section.urgentCount} urgent</Text>
+                        </View>
+                      )}
+                      {section.totalAmount > 0 && (
+                        <Text style={styles.sectionAmount}>₹{Number(section.totalAmount).toLocaleString('en-IN')}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <MaterialCommunityIcons
+                    name={isCollapsed ? 'chevron-down' : 'chevron-up'}
+                    size={22}
+                    color={theme.colors.muted}
+                  />
+                </TouchableOpacity>
+              );
+            }}
+            renderSectionFooter={({ section }) => {
+              if (collapsed[section.type]) {
+                return (
+                  <TouchableOpacity onPress={() => toggleSection(section.type)} style={styles.collapsedFooter}>
+                    <Text style={styles.collapsedFooterText}>Tap to expand {section.count} items</Text>
+                  </TouchableOpacity>
+                );
               }
+              return null;
+            }}
+            renderItem={({ item }) => {
               const meta = TYPE_META[item.doc_type] || DEFAULT_META;
               const urgentItem = daysOld(item.created_at) >= 3;
               return (
-                <Card style={[styles.itemCard, { borderLeftColor: urgentItem ? theme.colors.danger : meta.color }]}>
-                  <View style={styles.rowTop}>
-                    <View style={[styles.typeIconWrap, { backgroundColor: `${meta.color}1A` }]}>
-                      <MaterialCommunityIcons name={meta.icon} size={16} color={meta.color} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.badgeRow}>
-                        <View style={[styles.typeBadge, { backgroundColor: `${meta.color}1A` }]}>
-                          <Text style={[styles.typeBadgeText, { color: meta.color }]}>{item.doc_type}</Text>
+                <View style={styles.itemWrap}>
+                  <Card style={[styles.itemCard, { borderLeftColor: urgentItem ? theme.colors.danger : meta.color }]}>
+                    <View style={styles.rowTop}>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.badgeRow}>
+                          {urgentItem && (
+                            <View style={styles.urgentBadge}>
+                              <MaterialCommunityIcons name="alert" size={10} color={theme.colors.danger} />
+                              <Text style={styles.urgentBadgeText}>{daysOld(item.created_at)}d overdue</Text>
+                            </View>
+                          )}
+                          <Text style={styles.statusLabel}>{statusLabel(item)}</Text>
                         </View>
-                        {urgentItem && (
-                          <View style={styles.urgentBadge}>
-                            <MaterialCommunityIcons name="alert" size={10} color={theme.colors.danger} />
-                            <Text style={styles.urgentBadgeText}>{daysOld(item.created_at)}d</Text>
-                          </View>
-                        )}
                       </View>
-                      <Text style={styles.statusLabel}>{statusLabel(item)}</Text>
+                      {!!item.amount && <Text style={styles.amount}>₹{Number(item.amount).toLocaleString('en-IN')}</Text>}
                     </View>
-                    {!!item.amount && <Text style={styles.amount}>₹{Number(item.amount).toLocaleString('en-IN')}</Text>}
-                  </View>
 
-                  <Text style={styles.title}>{item.ref_no || item.party_name || `#${item.id}`}</Text>
-                  {item.party_name && item.ref_no ? <Text style={styles.sub}>{item.party_name}</Text> : null}
-                  {item.extra_info ? <Text style={styles.sub}>{item.extra_info}</Text> : null}
+                    <Text style={styles.title}>{item.ref_no || item.party_name || `#${item.id}`}</Text>
+                    {item.party_name && item.ref_no ? <Text style={styles.sub}>{item.party_name}</Text> : null}
+                    {item.extra_info ? <Text style={styles.sub}>{item.extra_info}</Text> : null}
 
-                  <View style={styles.metaRow}>
-                    {item.project_name ? <Text style={styles.meta}>{item.project_name}</Text> : null}
-                    {item.submitted_by ? (
-                      <View style={styles.submittedByWrap}>
-                        <Avatar name={item.submitted_by} size={16} style={styles.submittedByAvatar} />
-                        <Text style={styles.meta}>{item.submitted_by}</Text>
-                      </View>
-                    ) : null}
-                    <Text style={styles.meta}>{daysAgoLabel(item.created_at)}</Text>
-                  </View>
+                    <View style={styles.metaRow}>
+                      {item.project_name ? <Text style={styles.meta}>{item.project_name}</Text> : null}
+                      {item.submitted_by ? (
+                        <View style={styles.submittedByWrap}>
+                          <Avatar name={item.submitted_by} size={16} style={styles.submittedByAvatar} />
+                          <Text style={styles.meta}>{item.submitted_by}</Text>
+                        </View>
+                      ) : null}
+                      <Text style={styles.meta}>{daysAgoLabel(item.created_at)}</Text>
+                    </View>
 
-                  <View style={styles.actions}>
-                    <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => openModal(item, 'reject')}>
-                      <MaterialCommunityIcons name="close" size={16} color={theme.colors.danger} />
-                      <Text style={styles.rejectText}>Reject</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} onPress={() => openModal(item, 'approve')}>
-                      <MaterialCommunityIcons name="check" size={16} color="#fff" />
-                      <Text style={styles.approveText}>{item.entity_type === 'work_order' ? 'Authorise' : 'Approve'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </Card>
+                    <View style={styles.actions}>
+                      <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => openModal(item, 'reject')}>
+                        <MaterialCommunityIcons name="close" size={16} color={theme.colors.danger} />
+                        <Text style={styles.rejectText}>Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} onPress={() => openModal(item, 'approve')}>
+                        <MaterialCommunityIcons name="check" size={16} color="#fff" />
+                        <Text style={styles.approveText}>{item.entity_type === 'work_order' ? 'Authorise' : 'Approve'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Card>
+                </View>
               );
             }}
-            ListEmptyComponent={<EmptyState icon="magnify-close" title="No items match your filter" />}
+            ListEmptyComponent={<EmptyState icon="magnify-close" title="No items match your search" />}
           />
         </>
       )}
@@ -253,38 +306,59 @@ export default function ApprovalsScreen() {
 }
 
 const styles = StyleSheet.create({
-  kpiRow: { flexDirection: 'row', gap: 10, paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md },
-  kpiCard: { flex: 1 },
-  kpiCardUrgent: { borderColor: theme.colors.danger },
-  kpiValue: { fontSize: 22, fontWeight: '800', color: theme.colors.text },
-  kpiValueUrgent: { color: theme.colors.danger },
-  kpiLabel: { fontSize: 11, color: theme.colors.muted, marginTop: 2 },
+  chipRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md, paddingBottom: 4,
+  },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, backgroundColor: theme.colors.card,
+  },
+  chipText: { fontSize: 11, fontWeight: '700' },
+  chipCount: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 999, minWidth: 18, alignItems: 'center' },
+  chipCountText: { fontSize: 10, fontWeight: '800' },
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.card,
-    marginHorizontal: theme.spacing.md, marginTop: theme.spacing.md, paddingHorizontal: 12, height: 42,
+    marginHorizontal: theme.spacing.md, marginTop: 10, paddingHorizontal: 12, height: 42,
     borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border,
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.colors.text },
-  tabsRow: { paddingHorizontal: theme.spacing.md, gap: 8, paddingVertical: 10 },
-  tab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
-  tabActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  tabText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
-  tabTextActive: { color: '#fff' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 2 },
-  sectionDot: { width: 4, height: 16, borderRadius: 2 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary },
-  sectionTitleUrgent: { color: theme.colors.danger },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: theme.spacing.md, marginTop: 16, marginBottom: 6,
+    paddingVertical: 12, paddingHorizontal: 14,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.md,
+    borderWidth: 1, borderColor: theme.colors.border,
+    borderLeftWidth: 4,
+  },
+  sectionIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.text },
+  sectionSubRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  sectionCount: { fontSize: 11, fontWeight: '600', color: theme.colors.muted },
+  sectionAmount: { fontSize: 11, fontWeight: '700', color: theme.colors.primary },
+  urgentChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999,
+  },
+  urgentChipText: { fontSize: 10, fontWeight: '700', color: theme.colors.danger },
+  collapsedFooter: {
+    marginHorizontal: theme.spacing.md, marginBottom: 4,
+    paddingVertical: 8, alignItems: 'center',
+    backgroundColor: theme.colors.surface, borderRadius: theme.radius.sm,
+    borderWidth: 1, borderColor: theme.colors.border, borderStyle: 'dashed',
+  },
+  collapsedFooterText: { fontSize: 12, fontWeight: '600', color: theme.colors.muted },
+  itemWrap: { paddingHorizontal: theme.spacing.md, marginBottom: 8 },
   itemCard: { borderLeftWidth: 4 },
   rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  typeIconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  typeBadgeText: { fontSize: 10, fontWeight: '800' },
   urgentBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999 },
   urgentBadgeText: { fontSize: 10, fontWeight: '800', color: theme.colors.danger },
-  statusLabel: { fontSize: 11, color: theme.colors.muted, marginTop: 3, textTransform: 'capitalize' },
+  statusLabel: { fontSize: 11, color: theme.colors.muted, textTransform: 'capitalize' },
   amount: { fontSize: 13, fontWeight: '800', color: theme.colors.primary },
-  title: { fontSize: 14, fontWeight: '700', color: theme.colors.text, marginTop: 10 },
+  title: { fontSize: 14, fontWeight: '700', color: theme.colors.text, marginTop: 8 },
   sub: { fontSize: 12, color: theme.colors.muted, marginTop: 2 },
   metaRow: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' },
   meta: { fontSize: 11, color: theme.colors.muted, fontWeight: '600' },
