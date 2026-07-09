@@ -14,6 +14,7 @@ import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
 import { FileText, Plus, Search, ChevronRight, X, ChevronUp, ChevronDown, Pencil, Trash2, AlertTriangle, Upload, Download, CheckCircle2, IndianRupee, SlidersHorizontal, FileSpreadsheet, ChevronsRight, ExternalLink, Edit2, Building2, Truck, Receipt, StickyNote, Package } from 'lucide-react';
 import dayjs from 'dayjs';
+import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 
 const STATUS_CONFIG = {
   pending:             { label: 'Pending',       cls: 'bg-amber-100 text-amber-700' },
@@ -2783,84 +2784,78 @@ export default function TQSBillsPage() {
     return `Rs ${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Theme palette
-  const NAV_BG      = '#122d58'; // Dark Navy (top header)
-  const PRIMARY     = '#1a3a6b'; // Primary Navy (table header)
-  const ACCENT      = '#e8431a'; // Orange Red (accents, active states)
-  const PAGE_BG     = '#eef2f9'; // Page background
-  const BORDER      = '#c8d5e8'; // Border / Divider
+  const PRIMARY = Theme.navy;
+  const ACCENT  = Theme.accent;
+  const PAGE_BG = Theme.pageBg;
+  const BORDER  = Theme.border;
 
   return (
     <div className="min-h-full font-sans" style={{ background: PAGE_BG }}>
 
-      {/* ══ Unified Header + Tabs (dark navy) ══ */}
-      <div style={{ background: NAV_BG }}>
-        {/* Top row: logo + title + actions */}
-        <div className="flex items-center gap-3 px-5 py-4">
-          {/* Logo */}
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center font-medium text-white text-base flex-shrink-0"
-            style={{ background: ACCENT }}>B</div>
-          {/* Title */}
-          <div className="flex-1 min-w-0">
-            <div className="text-white font-medium text-[15px] leading-tight">BCIM Bills Tracker</div>
-            <div className="text-[11px] mt-0.5 flex items-center gap-1" style={{ color: '#94a3b8' }}>
-              <span>Bill Tracker</span>
-              <ChevronRight className="w-3 h-3" />
-              <span>Bills</span>
-              {activeProject && <><ChevronRight className="w-3 h-3" /><span className="truncate max-w-[200px]">{activeProject.name}</span></>}
-            </div>
-          </div>
-          {/* Right action buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {activeProject && (<>
-              <button onClick={async () => {
-                try {
-                  const res = await tqsBillsAPI.downloadTemplate();
-                  const url = URL.createObjectURL(new Blob([res.data]));
-                  const a = document.createElement('a'); a.href = url; a.download = 'DQS_Bills_Import_Template.xlsx'; a.click();
-                  URL.revokeObjectURL(url);
-                } catch { toast.error('Template download failed'); }
-              }} title="Download Template"
-                className="p-2 rounded-lg transition-all hover:bg-white/10 text-slate-900 font-medium hover:text-white">
-                <Download className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowImport(true)} title="Import Bills"
-                className="p-2 rounded-lg transition-all hover:bg-white/10 text-slate-900 font-medium hover:text-white">
-                <Upload className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowUntagged(true)} title="Bulk-tag line items with no cost head"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-white/10 text-slate-900 hover:text-white">
-                <Package className="w-3.5 h-3.5" /> Untagged Items
-              </button>
-              <button onClick={() => setShowAdvance(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={{ background: 'rgba(232,67,26,0.18)', color: '#ffb59a', border: '1px solid rgba(232,67,26,0.4)' }}>
-                <IndianRupee className="w-3.5 h-3.5" /> Advance
-              </button>
-            </>)}
-            <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all"
-              style={{ background: '#ffffff', color: NAV_BG, border: '1px solid rgba(255,255,255,0.4)' }}>
-              <Plus className="w-4 h-4" /> New Bill
+      <PageHeader
+        title="BCIM Bills Tracker"
+        subtitle="Bill Tracker — Bills"
+        breadcrumbs={[
+          { label: 'Bill Tracker' },
+          { label: 'Bills' },
+          ...(activeProject ? [{ label: activeProject.name }] : []),
+        ]}
+        pills={[
+          { label: 'Total Value',  value: inrCr(totalValue) },
+          { label: 'Balance Due',  value: inrCr(totalBalanceDue), color: '#f87171' },
+          { label: 'Paid',         value: inrCr(paidValue),       color: '#34d399' },
+        ]}
+        actions={<>
+          {activeProject && (<>
+            <button onClick={async () => {
+              try {
+                const res = await tqsBillsAPI.downloadTemplate();
+                const url = URL.createObjectURL(new Blob([res.data]));
+                const a = document.createElement('a'); a.href = url; a.download = 'DQS_Bills_Import_Template.xlsx'; a.click();
+                URL.revokeObjectURL(url);
+              } catch { toast.error('Template download failed'); }
+            }} title="Download Template"
+              className="p-2 rounded-lg transition-all hover:bg-white/10 text-white/70 hover:text-white">
+              <Download className="w-4 h-4" />
             </button>
-          </div>
-        </div>
+            <button onClick={() => setShowImport(true)} title="Import Bills"
+              className="p-2 rounded-lg transition-all hover:bg-white/10 text-white/70 hover:text-white">
+              <Upload className="w-4 h-4" />
+            </button>
+            <button onClick={() => setShowUntagged(true)} title="Bulk-tag line items with no cost head"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-white/10 text-white/70 hover:text-white">
+              <Package className="w-3.5 h-3.5" /> Untagged Items
+            </button>
+            <button onClick={() => setShowAdvance(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{ background: 'rgba(232,67,26,0.20)', color: '#ffb59a', border: '1px solid rgba(232,67,26,0.4)' }}>
+              <IndianRupee className="w-3.5 h-3.5" /> Advance
+            </button>
+          </>)}
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            style={{ background: '#ffffff', color: Theme.navy }}>
+            <Plus className="w-4 h-4" /> New Bill
+          </button>
+        </>}
+      />
 
-        {/* Status tabs inside header */}
-        <div className="flex items-center overflow-x-auto scrollbar-none px-4" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+      {/* Status Tabs — white bar below PageHeader */}
+      <div className="bg-white" style={{ borderBottom: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+        <div className="flex items-center overflow-x-auto scrollbar-none px-4">
           {STATUS_TABS.map(tab => (
             <button key={tab.key} onClick={() => setStatusFilter(tab.key)}
-              className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap flex-shrink-0 transition-all relative"
+              className="flex items-center gap-1.5 px-4 py-3 text-sm whitespace-nowrap flex-shrink-0 transition-all"
               style={{
-                color: statusFilter === tab.key ? ACCENT : '#cbd5e1',
+                color: statusFilter === tab.key ? ACCENT : '#64748b',
                 borderBottom: statusFilter === tab.key ? `2px solid ${ACCENT}` : '2px solid transparent',
                 fontWeight: statusFilter === tab.key ? 700 : 500,
               }}>
               {tab.label}
               <span className="text-[11px] px-1.5 py-0.5 rounded font-bold"
                 style={{
-                  background: statusFilter === tab.key ? ACCENT : 'rgba(255,255,255,0.10)',
-                  color: statusFilter === tab.key ? 'white' : '#94a3b8',
+                  background: statusFilter === tab.key ? ACCENT : '#f1f5f9',
+                  color: statusFilter === tab.key ? 'white' : '#64748b',
                 }}>
                 {tab.count}
               </span>
@@ -2871,31 +2866,48 @@ export default function TQSBillsPage() {
 
       <div className="p-4 space-y-4">
 
-        {/* ── KPI Row 1 ── */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <KPI label="Total Bills"  value={bills.length}                              sub={inrCr(totalValue)}    color="blue"    kpiIcon={FileText} />
-          <KPI label="Pending"      value={kpiPending}                                statusKey="pending"        color="amber"   kpiIcon={AlertTriangle} />
-          <KPI label="In Progress"  value={bills.length - kpiPaid - kpiPending}       statusKey=""               color="blue"    kpiIcon={ChevronsRight} />
-          <KPI label="Balance Due"  value={inrCr(totalBalanceDue)}                    color="red"    isAmount    kpiIcon={IndianRupee} />
-          <KPI label="Paid"         value={kpiPaid}                                   statusKey="paid"           color="emerald" kpiIcon={CheckCircle2} sub={inrCr(paidValue)} />
+        {/* ── KPI Grid ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+          <ThemeKpiCard label="Total Bills"  value={bills.length}                         sub={inrCr(totalValue)}  color="blue"    icon={FileText} />
+          <ThemeKpiCard label="Pending"      value={kpiPending}                           color="amber"            icon={AlertTriangle}
+            onClick={() => setStatusFilter(p => p === 'pending' ? '' : 'pending')}
+            active={statusFilter === 'pending'} />
+          <ThemeKpiCard label="In Progress"  value={bills.length - kpiPaid - kpiPending}  color="indigo"           icon={ChevronsRight} />
+          <ThemeKpiCard label="Balance Due"  value={inrCr(totalBalanceDue)}               color="red"              icon={IndianRupee} />
+          <ThemeKpiCard label="Paid"         value={kpiPaid}                              sub={inrCr(paidValue)}   color="emerald" icon={CheckCircle2}
+            onClick={() => setStatusFilter(p => p === 'paid' ? '' : 'paid')}
+            active={statusFilter === 'paid'} />
         </div>
 
-        {/* ── AP Aging KPI Row ── */}
+        {/* ── AP Aging Alert Banner ── */}
         {(aging30 > 0 || aging60 > 0 || aging90p > 0) && (
-          <div className="grid grid-cols-3 gap-3">
-            <KPI label="Due 0–30 Days"    value={inrCr(aging30)}  color="amber"  isAmount kpiIcon={IndianRupee} />
-            <KPI label="Due 31–60 Days"   value={inrCr(aging60)}  color="orange" isAmount kpiIcon={IndianRupee} />
-            <KPI label="Overdue 60+ Days" value={inrCr(aging90p)} color="red"    isAmount kpiIcon={AlertTriangle} />
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <span className="text-xs font-semibold text-amber-800 uppercase tracking-wide">AP Aging</span>
+            </div>
+            {aging30  > 0 && <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2.5 py-1 rounded-lg">0–30 days: {inrCr(aging30)}</span>}
+            {aging60  > 0 && <span className="text-xs font-medium text-orange-700 bg-orange-100 px-2.5 py-1 rounded-lg">31–60 days: {inrCr(aging60)}</span>}
+            {aging90p > 0 && <span className="text-xs font-semibold text-red-700 bg-red-100 px-2.5 py-1 rounded-lg">Overdue 60+: {inrCr(aging90p)}</span>}
           </div>
         )}
 
-        {/* ── Basic Amount Summary (excl. GST) — reconciles with Budget Control's Received figure ── */}
-        <div className="bg-white rounded-xl px-4 py-3 shadow-sm" style={{ border: `1px solid ${BORDER}` }}>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Basic Amount Summary (excl. GST) — matches Budget Control</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <KPI label="Total Basic Amount" value={inrCr(totalBasicValue)} color="slate" isAmount kpiIcon={IndianRupee} />
-            <KPI label="Total GST"          value={inrCr(totalGstValue)}   color="blue"  isAmount kpiIcon={IndianRupee} />
-            <KPI label="Total (incl. GST)"  value={inrCr(totalValue)}      color="emerald" isAmount kpiIcon={IndianRupee} />
+        {/* ── Basic Amount Summary ── */}
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2.5">Basic Amount Summary (excl. GST) — matches Budget Control</p>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-slate-500">Basic Amount</p>
+              <p className="text-sm font-semibold text-slate-800 mt-0.5">{inrCr(totalBasicValue)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Total GST</p>
+              <p className="text-sm font-semibold text-slate-800 mt-0.5">{inrCr(totalGstValue)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Total (incl. GST)</p>
+              <p className="text-sm font-semibold text-emerald-700 mt-0.5">{inrCr(totalValue)}</p>
+            </div>
           </div>
         </div>
 
@@ -2966,11 +2978,26 @@ export default function TQSBillsPage() {
           </div>
         </div>
 
-        {/* ── Table ── */}
+        {/* ── Bills Table ── */}
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">
+              {isLoading ? 'Loading…' : `${sorted.length} Bill${sorted.length !== 1 ? 's' : ''}`}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {statusFilter ? `Status: ${STATUS_CONFIG[statusFilter]?.label ?? statusFilter}` : 'All statuses'}
+              {projectFilter && activeProject ? ` · ${activeProject.name}` : ''}
+            </p>
+          </div>
+        </div>
+
         <div
           className="bg-white rounded-xl shadow-sm tqs-bills-grid"
           style={{
-            border: '1px solid #94a3b8',
+            border: '1px solid #cbd5e1',
             maxWidth: 'calc(100vw - 2rem)',
             maxHeight: 'calc(100vh - 315px)',
             overflow: 'auto',
@@ -2979,39 +3006,39 @@ export default function TQSBillsPage() {
           <style>{`
             .tqs-bills-grid {
               scrollbar-width: auto;
-              scrollbar-color: #1a3a6b #dbe4f0;
+              scrollbar-color: #94a3b8 #f1f5f9;
             }
             .tqs-bills-grid::-webkit-scrollbar {
-              width: 14px;
-              height: 14px;
+              width: 12px;
+              height: 12px;
             }
             .tqs-bills-grid::-webkit-scrollbar-track {
-              background: #dbe4f0;
+              background: #f1f5f9;
               border-radius: 999px;
             }
             .tqs-bills-grid::-webkit-scrollbar-thumb {
-              background: #1a3a6b;
-              border: 3px solid #dbe4f0;
+              background: #94a3b8;
+              border: 3px solid #f1f5f9;
               border-radius: 999px;
             }
-            .tqs-bills-table { border: 1px solid #94a3b8; }
+            .tqs-bills-table { border: 1px solid #e2e8f0; }
             .tqs-bills-table th {
               position: sticky;
               top: 0;
               z-index: 10;
-              background: ${PRIMARY};
-              border-right: 1px solid rgba(255,255,255,0.24);
-              border-bottom: 1px solid #64748b;
+              background: #f8fafc;
+              border-right: 1px solid #e2e8f0;
+              border-bottom: 2px solid #e2e8f0;
             }
             .tqs-bills-table th:last-child { border-right: none; }
             .tqs-bills-table td {
-              border-right: 1px solid #cbd5e1;
-              border-bottom: 1px solid #cbd5e1;
+              border-right: 1px solid #f1f5f9;
+              border-bottom: 1px solid #f1f5f9;
               vertical-align: middle;
             }
             .tqs-bills-table td:last-child { border-right: none; }
             .tqs-bills-table tbody tr:last-child td { border-bottom: none; }
-            .tqs-bills-table tbody tr:hover td { background-color: ${PAGE_BG} !important; }
+            .tqs-bills-table tbody tr:hover td { background-color: #f8fafc !important; }
             .tqs-bills-table tbody tr:hover td:first-child { box-shadow: inset 3px 0 0 ${ACCENT}; }
           `}</style>
           <table className="tqs-bills-table min-w-[1820px] w-full text-sm whitespace-nowrap table-fixed" style={{ borderCollapse: 'collapse' }}>
@@ -3020,23 +3047,23 @@ export default function TQSBillsPage() {
               {canManageBillActions && <col className="w-[104px]" />}
             </colgroup>
             <thead>
-              <tr style={{ background: PRIMARY }}>
+              <tr style={{ background: '#f8fafc' }}>
                 {COLUMNS.map(col => (
                   <th key={col.key} onClick={() => handleSort(col.key)}
-                    className={`px-2.5 py-2.5 text-[10px] font-medium uppercase tracking-[0.06em] cursor-pointer select-none transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
-                    style={{ color: '#ffffff' }}
-                    onMouseEnter={e => e.currentTarget.style.color='#fde6dc'}
-                    onMouseLeave={e => e.currentTarget.style.color='#ffffff'}>
+                    className={`px-2.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.07em] cursor-pointer select-none transition-colors ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                    style={{ color: '#475569' }}
+                    onMouseEnter={e => e.currentTarget.style.color='#1e293b'}
+                    onMouseLeave={e => e.currentTarget.style.color='#475569'}>
                     <span className="inline-flex items-center gap-1">
                       {col.label}
                       {sortCol === col.key
-                        ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" style={{ color: ACCENT }} /> : <ChevronDown className="w-3 h-3" style={{ color: ACCENT }} />)
-                        : <span className="flex flex-col opacity-40"><ChevronUp className="w-2.5 h-2.5 -mb-1" /><ChevronDown className="w-2.5 h-2.5" /></span>}
+                        ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-emerald-500" /> : <ChevronDown className="w-3 h-3 text-emerald-500" />)
+                        : <span className="flex flex-col opacity-30"><ChevronUp className="w-2.5 h-2.5 -mb-1" /><ChevronDown className="w-2.5 h-2.5" /></span>}
                     </span>
                   </th>
                 ))}
                 {canManageBillActions && (
-                  <th className="px-2.5 py-2.5 text-[10px] font-medium uppercase tracking-[0.06em] text-right" style={{ color: '#ffffff' }}>Actions</th>
+                  <th className="px-2.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-right" style={{ color: '#475569' }}>Actions</th>
                 )}
             </tr>
           </thead>
