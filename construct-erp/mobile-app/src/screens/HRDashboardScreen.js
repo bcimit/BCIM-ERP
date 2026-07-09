@@ -41,23 +41,27 @@ export default function HRDashboardScreen() {
     queryKey: ['hr-dash-employees'],
     queryFn: () => hrDashAPI.employees({ employment_status: 'active' })
       .then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const { data: leaves = [], isLoading: loadL } = useQuery({
     queryKey: ['hr-dash-leaves'],
     queryFn: () => hrDashAPI.leaveRequests({ status: 'pending' })
       .then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const { data: payrollData, isLoading: loadP } = useQuery({
     queryKey: ['hr-dash-payroll', month, year],
     queryFn: () => hrDashAPI.payroll({ month, year }).then(r => r.data?.data ?? []),
+    staleTime: 60_000,
   });
   const payroll = Array.isArray(payrollData) ? payrollData : [];
 
   const { data: otData } = useQuery({
     queryKey: ['hr-dash-overtime', month, year],
     queryFn: () => hrDashAPI.overtime({ month, year }).then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 60_000,
   });
   const otHoursTotal = Array.isArray(otData) ? otData.reduce((s, r) => s + parseFloat(r.ot_hours || 0), 0) : 0;
 
@@ -65,12 +69,14 @@ export default function HRDashboardScreen() {
     queryKey: ['hr-dash-requests'],
     queryFn: () => hrDashAPI.serviceRequests({})
       .then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
   const pendingRequests = Array.isArray(reqData) ? reqData.filter(r => ['open', 'in_progress'].includes(r.status)) : [];
 
   const { data: deptData } = useQuery({
     queryKey: ['hr-dash-dept', month, year],
     queryFn: () => hrDashAPI.deptSummary({ month, year }).then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 60_000,
   });
   const depts = Array.isArray(deptData) ? deptData : [];
 

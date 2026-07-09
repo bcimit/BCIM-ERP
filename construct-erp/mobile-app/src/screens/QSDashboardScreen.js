@@ -55,17 +55,20 @@ export default function QSDashboardScreen() {
   const { data: bills = [], isLoading: loadB } = useQuery({
     queryKey: ['qs-dash-bills', selectedProject?.id],
     queryFn: () => billsAPI.list(selectedProject?.id).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const { data: aging = [] } = useQuery({
     queryKey: ['qs-dash-aging', selectedProject?.id],
     queryFn: () => tqsDashAPI.getAPAging({ project_id: selectedProject?.id || undefined })
       .then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 60_000,
   });
 
   const { data: advances = [] } = useQuery({
     queryKey: ['qs-dash-advances'],
     queryFn: () => tqsDashAPI.listAdvances({}).then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 60_000,
   });
 
   const now = dayjs();

@@ -55,11 +55,13 @@ export default function PMDashboardScreen() {
       const d = r.data;
       return Array.isArray(d) ? d : (d?.data ?? d?.projects ?? []);
     }),
+    staleTime: 60_000,
   });
 
   const { data: bills = [], isLoading: loadB } = useQuery({
     queryKey: ['pm-dash-bills'],
     queryFn: () => billsAPI.list(null).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const now = dayjs();

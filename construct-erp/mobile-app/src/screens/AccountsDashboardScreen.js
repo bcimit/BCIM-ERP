@@ -44,22 +44,26 @@ export default function AccountsDashboardScreen() {
   const { data: bills = [], isLoading: loadB } = useQuery({
     queryKey: ['accts-dash-bills', projectId],
     queryFn: () => billsAPI.list(projectId).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const { data: pcList = [], isLoading: loadPC } = useQuery({
     queryKey: ['accts-dash-pc', projectId],
     queryFn: () => accountsDashAPI.pcPending({ project_id: projectId || undefined }).then(r => r.data?.data ?? []),
+    staleTime: 60_000,
   });
 
   const { data: aging = [] } = useQuery({
     queryKey: ['accts-dash-aging', projectId],
     queryFn: () => accountsDashAPI.apAging({ project_id: projectId || undefined }).then(r => r.data?.data ?? r.data ?? []),
+    staleTime: 60_000,
   });
 
   const { data: payments = [] } = useQuery({
     queryKey: ['accts-dash-payments', projectId],
     queryFn: () => accountsDashAPI.payments({ project_id: projectId || undefined })
       .then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const now = dayjs();

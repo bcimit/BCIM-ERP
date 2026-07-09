@@ -44,11 +44,13 @@ export default function HSEDashboardScreen() {
   const { data: incidents = [] } = useQuery({
     queryKey: ['hse-dash-incidents', projectId],
     queryFn: () => incidentAPI.list(projectId).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const { data: permits = [] } = useQuery({
     queryKey: ['hse-dash-permits', projectId],
     queryFn: () => permitAPI.list(projectId).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])),
+    staleTime: 60_000,
   });
 
   const now = dayjs();
