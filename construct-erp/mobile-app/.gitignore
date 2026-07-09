@@ -21,9 +21,6 @@ android/local.properties
 *.hprof
 android/app/release/
 
-# Gradle wrapper distribution (large, redownloaded automatically)
-android/gradle/wrapper/gradle-wrapper.jar
-
 # iOS
 ios/build/
 ios/Pods/
