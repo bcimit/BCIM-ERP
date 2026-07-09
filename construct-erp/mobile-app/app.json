@@ -16,7 +16,6 @@
         "backgroundColor": "#0F172A"
       },
       "permissions": ["NOTIFICATIONS"],
-      "usesCleartextTraffic": true,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
