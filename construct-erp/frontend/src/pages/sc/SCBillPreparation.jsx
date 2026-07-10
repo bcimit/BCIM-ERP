@@ -1176,7 +1176,7 @@ function EditBillModal({ bill, onClose }) {
 }
 
 // ─── Bill Detail Drawer ───────────────────────────────────────────────────────
-function BillDetailDrawer({ billId, onClose }) {
+function BillDetailPage({ billId, onClose }) {
   const qc = useQueryClient();
   const printRef = useRef(null);
   const { data: raw, isLoading } = useQuery({
@@ -1195,11 +1195,11 @@ function BillDetailDrawer({ billId, onClose }) {
     onError: e => toast.error(e?.response?.data?.error || 'Failed'),
   });
 
-  const b    = raw || {};
-  const sm   = STATUS_META[b.status] || STATUS_META.draft;
-  const items = b.items || [];
+  const b        = raw || {};
+  const sm       = STATUS_META[b.status] || STATUS_META.draft;
+  const items    = b.items || [];
   const approvals = b.approvals || [];
-  const payments = b.payments || [];
+  const payments  = b.payments || [];
   const printData = useMemo(() => toQSPrintBill(b), [b]);
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -1208,185 +1208,239 @@ function BillDetailDrawer({ billId, onClose }) {
   const [showEdit, setShowEdit] = useState(false);
   const canEdit = !['approved', 'paid'].includes(b.status);
 
+  // Resolve rate percentages — backend aliases WO rates as wo_gst_pct etc.
+  const gstPct = num(b.gst_pct || b.wo_gst_pct || 18);
+  const tdsPct = num(b.tds_pct || b.wo_tds_pct || 2);
+  const retPct = num(b.retention_pct || b.wo_ret_pct || 5);
+
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-3xl bg-white shadow-2xl flex flex-col overflow-hidden">
-        {/* Drawer header */}
-        <div className="px-5 py-4 flex items-center justify-between"
-          style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
-          <div>
-            <p className="font-bold text-white text-sm">{b.bill_number || '…'}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>{b.sc_name} · {b.project_name}</p>
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-50 overflow-hidden">
+
+      {/* ── Top bar ── */}
+      <div className="flex items-center justify-between px-6 py-4 flex-shrink-0 shadow-md"
+        style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
+        <div className="flex items-center gap-4 min-w-0">
+          <button onClick={onClose}
+            className="flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-semibold transition flex-shrink-0">
+            <X className="w-4 h-4" /> Close
+          </button>
+          <div className="w-px h-5 bg-white/20" />
+          <div className="min-w-0">
+            <p className="font-bold text-white text-base font-mono">{b.bill_number || '…'}</p>
+            <p className="text-xs mt-0.5 text-white/60 truncate">{b.sc_name} · {b.project_name}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {!isLoading && b?.id && (
-              <button onClick={() => handlePrint()}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition"
-                style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
-                <Printer className="w-3 h-3" /> Print RA Bill
-              </button>
-            )}
-            {!isLoading && b?.id && canEdit && (
-              <button onClick={() => setShowEdit(true)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition"
-                style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
-                <Pencil className="w-3 h-3" /> Edit
-              </button>
-            )}
-            {b.status === 'draft' && (
-              <button onClick={() => submitMut.mutate()}
-                disabled={submitMut.isPending}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition"
-                style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
-                <Send className="w-3 h-3" /> {submitMut.isPending ? '…' : 'Submit'}
-              </button>
-            )}
-            <button onClick={onClose}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-white"
-              style={{ background: 'rgba(255,255,255,0.10)' }}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {isLoading ? (
-            <div className="space-y-3">{[1,2,3].map(n => <div key={n} className="h-20 bg-slate-100 rounded-xl animate-pulse" />)}</div>
-          ) : (
-            <>
-              {/* Status + dates */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</p>
-                  <span className={clsx('text-xs px-2 py-0.5 rounded-full font-bold', sm.bg, sm.text)}>{sm.label}</span>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Bill Date</p>
-                  <p className="text-xs font-bold text-slate-800">{b.bill_date ? dayjs(b.bill_date).format('DD MMM YYYY') : '—'}</p>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">WO Number</p>
-                  <p className="text-xs font-bold text-indigo-700 font-mono">{b.wo_number}</p>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Bill Type</p>
-                  <p className="text-xs font-bold text-slate-800 capitalize">{(b.bill_type||'ra').replace('_',' ')}</p>
-                </div>
-              </div>
-
-              {/* Amount breakdown */}
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Bill Abstract</p>
-                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                  {[
-                    { l:'Gross Work Amount',     v: b.gross_amount,      c:'text-slate-800' },
-                    // Show CGST/SGST split if present, else single GST row
-                    num(b.cgst_amount) > 0
-                      ? { l:`CGST (${num(b.gst_pct)/2}%)`, v: b.cgst_amount, c:'text-indigo-600', sub:true }
-                      : null,
-                    num(b.sgst_amount) > 0
-                      ? { l:`SGST (${num(b.gst_pct)/2}%)`, v: b.sgst_amount, c:'text-indigo-600', sub:true }
-                      : null,
-                    num(b.igst_amount) > 0
-                      ? { l:`IGST (${b.gst_pct}%)`,        v: b.igst_amount, c:'text-indigo-600', sub:true }
-                      : null,
-                    (!num(b.cgst_amount) && !num(b.igst_amount))
-                      && { l:`GST (${b.gst_pct}%)`,        v: b.gst_amount,  c:'text-indigo-600', sub:true },
-                    num(b.retention_release_amount) > 0
-                      && { l:'+ Retention Release',         v: b.retention_release_amount, c:'text-emerald-600', sub:true },
-                    { l:`TDS (${b.tds_pct}%)`,             v:-b.tds_amount,        c:'text-red-600', sub:true },
-                    { l:`Retention (${b.retention_pct}%)`, v:-b.retention_amount,  c:'text-orange-600', sub:true },
-                    num(b.labour_cess_amount)  > 0 && { l:'Labour Cess',        v:-b.labour_cess_amount,  c:'text-amber-600', sub:true },
-                    num(b.advance_recovery)    > 0 && { l:'Advance Recovery',   v:-b.advance_recovery,   c:'text-red-600', sub:true },
-                    num(b.material_recovery)   > 0 && { l:'Material Recovery',  v:-b.material_recovery,  c:'text-red-600', sub:true },
-                    num(b.penalty_amount)      > 0 && { l:'Penalty',            v:-b.penalty_amount,     c:'text-red-600', sub:true },
-                    num(b.credit_note_amount)  > 0 && { l:'Credit Note',        v:-b.credit_note_amount, c:'text-red-600', sub:true },
-                  ].filter(Boolean).map(({ l, v, c, sub }) => (
-                    <div key={l} className={clsx('flex justify-between px-4 py-2 border-b border-slate-50 text-xs', sub && 'bg-slate-50/50')}>
-                      <span className={clsx(sub && 'pl-2', 'text-slate-600')}>{l}</span>
-                      <span className={clsx('font-semibold tabular-nums', c)}>{fmt2(Math.abs(num(v)))}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between px-4 py-3 font-bold">
-                    <span className="text-sm text-slate-800">Net Payable</span>
-                    <span className="text-base" style={{ color: Theme.navy }}>{fmt2(b.net_payable)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* BOQ items */}
-              {items.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">BOQ Items ({items.length})</p>
-                  <div className="space-y-2">
-                    {items.map((it, i) => (
-                      <div key={i} className="bg-white border border-slate-100 rounded-xl px-4 py-3 flex justify-between">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 truncate">{it.description}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            Curr: <span className="font-bold text-indigo-600">{it.curr_qty} {it.unit}</span>
-                            &nbsp;· Prev: {it.prev_qty} · WO: {it.wo_qty}
-                          </p>
-                        </div>
-                        <span className="text-xs font-bold text-indigo-700 ml-3 flex-shrink-0">{fmt(num(it.curr_qty)*num(it.rate))}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Approval trail */}
-              {approvals.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Approval Trail</p>
-                  <div className="space-y-2">
-                    {approvals.map((a, i) => (
-                      <div key={i} className="flex gap-3">
-                        <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold',
-                          a.action==='approved' ? 'bg-emerald-500' : a.action==='rejected' ? 'bg-red-500' : 'bg-blue-500')}>
-                          {a.action==='approved' ? '✓' : a.action==='rejected' ? '✗' : '→'}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-700 capitalize">{a.action}</span>
-                            <span className="text-[10px] text-slate-400">· {a.actor_name || 'System'}</span>
-                            <span className="text-[10px] text-slate-400 ml-auto">{dayjs(a.created_at).format('DD MMM · HH:mm')}</span>
-                          </div>
-                          {a.comments && <p className="text-[11px] text-slate-500 mt-0.5 italic">"{a.comments}"</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Payments */}
-              {payments.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Payments ({payments.length})</p>
-                  <div className="space-y-2">
-                    {payments.map((p, i) => (
-                      <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex justify-between items-center">
-                        <div>
-                          <p className="text-xs font-bold text-emerald-800">{fmt2(p.amount)}</p>
-                          <p className="text-[10px] text-emerald-600">{dayjs(p.payment_date).format('DD MMM YYYY')} · {p.payment_mode?.replace('_',' ')}</p>
-                          {p.reference_no && <p className="text-[10px] text-slate-500">Ref: {p.reference_no}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
+          {b.status && (
+            <span className={clsx('text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0', sm.bg, sm.text)}>{sm.label}</span>
           )}
         </div>
-        {!isLoading && b?.id && (
-          <div className="hidden print:block">
-            <RABillPrintTemplate ref={printRef} data={printData} variations={[]} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!isLoading && b?.id && canEdit && (
+            <button onClick={() => setShowEdit(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition"
+              style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
+              <Pencil className="w-3.5 h-3.5" /> Edit Bill
+            </button>
+          )}
+          {!isLoading && b?.id && (
+            <button onClick={() => handlePrint()}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition"
+              style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
+              <Printer className="w-3.5 h-3.5" /> Print RA Bill
+            </button>
+          )}
+          {b.status === 'draft' && (
+            <button onClick={() => submitMut.mutate()}
+              disabled={submitMut.isPending}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white transition disabled:opacity-60">
+              <Send className="w-3.5 h-3.5" /> {submitMut.isPending ? 'Submitting…' : 'Submit for Approval'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Body ── */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="p-8 grid grid-cols-3 gap-4">
+            {[1,2,3,4,5,6].map(n => <div key={n} className="h-28 bg-white rounded-2xl animate-pulse border border-slate-100" />)}
+          </div>
+        ) : (
+          <div className="p-6 max-w-7xl mx-auto space-y-6">
+
+            {/* ── Info cards row ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: 'WO Number',   value: b.wo_number,  mono: true, color: 'text-indigo-700' },
+                { label: 'Bill Date',   value: b.bill_date ? dayjs(b.bill_date).format('DD MMM YYYY') : '—' },
+                { label: 'Bill Type',   value: (b.bill_type||'ra').toUpperCase() },
+                { label: 'Subcontractor', value: b.sc_name },
+              ].map(({ label, value, mono, color }) => (
+                <div key={label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                  <p className={clsx('text-sm font-bold text-slate-800 truncate', mono && 'font-mono', color)}>{value || '—'}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* ── Left: BOQ items ── */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">BOQ Items ({items.length})</p>
+                  </div>
+                  {items.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-8">No items</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="text-left px-4 py-2.5 font-semibold text-slate-500">Description</th>
+                            <th className="text-center px-3 py-2.5 font-semibold text-slate-500">Unit</th>
+                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500">Rate</th>
+                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500">Prev Qty</th>
+                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500">This Bill Qty</th>
+                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500 pr-4">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((it, i) => (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <td className="px-4 py-2.5">
+                                <p className="font-semibold text-slate-800">{it.description || it.wo_item_desc}</p>
+                              </td>
+                              <td className="text-center px-3 py-2.5 text-slate-500">{it.unit || '—'}</td>
+                              <td className="text-right px-3 py-2.5 font-mono text-slate-600">{fmt2(it.rate)}</td>
+                              <td className="text-right px-3 py-2.5 font-mono text-slate-400">
+                                {num(it.cum_prev_qty ?? it.prev_qty ?? 0).toFixed(3)}
+                              </td>
+                              <td className="text-right px-3 py-2.5 font-mono font-bold text-indigo-700">
+                                {num(it.curr_qty ?? it.current_qty ?? 0).toFixed(3)}
+                              </td>
+                              <td className="text-right px-4 py-2.5 font-mono font-bold text-slate-800">
+                                {fmt2(num(it.curr_qty ?? it.current_qty ?? 0) * num(it.rate))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-slate-200 bg-indigo-50">
+                            <td colSpan={5} className="px-4 py-3 font-bold text-slate-700 text-xs">Gross Work Amount</td>
+                            <td className="text-right px-4 py-3 font-bold text-indigo-800 font-mono text-sm">{fmt2(b.gross_amount)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Approval trail */}
+                {approvals.length > 0 && (
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm">
+                    <div className="px-5 py-3 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">Approval Trail</p>
+                    </div>
+                    <div className="p-5 space-y-3">
+                      {approvals.map((a, i) => (
+                        <div key={i} className="flex gap-3">
+                          <div className={clsx('w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold',
+                            a.action==='approved' ? 'bg-emerald-500' : a.action==='rejected' ? 'bg-red-500' : 'bg-amber-500')}>
+                            {a.action==='approved' ? '✓' : a.action==='rejected' ? '✗' : '?'}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-slate-700 capitalize">{a.action}</span>
+                              <span className="text-xs text-slate-400">by {a.actor_name || 'System'}</span>
+                              <span className="text-xs text-slate-400 capitalize">({(a.stage||'').replace(/_/g,' ')})</span>
+                              <span className="text-xs text-slate-400 ml-auto">{dayjs(a.created_at).format('DD MMM YYYY · HH:mm')}</span>
+                            </div>
+                            {a.comments && <p className="text-xs text-slate-500 mt-1 italic bg-slate-50 rounded px-2 py-1">"{a.comments}"</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Payments */}
+                {payments.length > 0 && (
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm">
+                    <div className="px-5 py-3 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">Payment History</p>
+                    </div>
+                    <div className="p-5 space-y-2">
+                      {payments.map((p, i) => (
+                        <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-bold text-emerald-800">{fmt2(p.amount)}</p>
+                            <p className="text-xs text-emerald-600">{dayjs(p.payment_date).format('DD MMM YYYY')} · {p.payment_mode?.replace('_',' ')}</p>
+                            {p.reference_no && <p className="text-xs text-slate-500 mt-0.5">Ref: {p.reference_no}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Right: Bill Abstract ── */}
+              <div className="space-y-4">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-4">
+                  <div className="px-5 py-3 border-b border-slate-100">
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">Bill Abstract</p>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {[
+                      { l: 'Gross Work Amount', v: b.gross_amount, bold: true, c: 'text-slate-800' },
+                      num(b.cgst_amount) > 0
+                        ? { l: `CGST (${(gstPct/2).toFixed(1)}%)`, v: b.cgst_amount, c: 'text-indigo-600', sub: true }
+                        : null,
+                      num(b.sgst_amount) > 0
+                        ? { l: `SGST (${(gstPct/2).toFixed(1)}%)`, v: b.sgst_amount, c: 'text-indigo-600', sub: true }
+                        : null,
+                      num(b.igst_amount) > 0
+                        ? { l: `IGST (${gstPct}%)`, v: b.igst_amount, c: 'text-indigo-600', sub: true }
+                        : null,
+                      (!num(b.cgst_amount) && !num(b.igst_amount))
+                        && { l: `GST (${gstPct}%)`, v: b.gst_amount, c: 'text-indigo-600', sub: true },
+                      num(b.retention_release_amount) > 0
+                        && { l: '+ Retention Release', v: b.retention_release_amount, c: 'text-emerald-600', sub: true },
+                      { l: `TDS (${tdsPct}%)`,       v: -b.tds_amount,       c: 'text-red-500', sub: true },
+                      { l: `Retention (${retPct}%)`, v: -b.retention_amount, c: 'text-orange-500', sub: true },
+                      num(b.labour_cess_amount) > 0 && { l: 'Labour Cess', v: -b.labour_cess_amount, c: 'text-amber-600', sub: true },
+                      num(b.advance_recovery)   > 0 && { l: 'Advance Recovery', v: -b.advance_recovery, c: 'text-red-500', sub: true },
+                      num(b.material_recovery)  > 0 && { l: 'Material Recovery', v: -b.material_recovery, c: 'text-red-500', sub: true },
+                      num(b.penalty_amount)     > 0 && { l: 'Penalty', v: -b.penalty_amount, c: 'text-red-500', sub: true },
+                      num(b.other_deductions)   > 0 && { l: 'Other Deductions', v: -b.other_deductions, c: 'text-red-500', sub: true },
+                    ].filter(Boolean).map(({ l, v, c, sub, bold }) => (
+                      <div key={l} className={clsx('flex justify-between px-5 py-2.5 text-sm', sub && 'bg-slate-50/60 pl-8')}>
+                        <span className="text-slate-600">{l}</span>
+                        <span className={clsx('font-semibold tabular-nums', c, bold && 'font-bold text-slate-900')}>
+                          {num(v) < 0 ? `(${fmt2(Math.abs(num(v)))})` : fmt2(Math.abs(num(v)))}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between px-5 py-4 bg-indigo-50">
+                      <span className="font-bold text-slate-800 text-sm">Net Payable</span>
+                      <span className="text-lg font-black" style={{ color: Theme.navy }}>{fmt2(b.net_payable)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Hidden print template */}
+      {!isLoading && b?.id && (
+        <div className="hidden print:block">
+          <RABillPrintTemplate ref={printRef} data={printData} variations={[]} />
+        </div>
+      )}
+
       {showEdit && b?.id && (
         <EditBillModal bill={b} onClose={() => setShowEdit(false)} />
       )}
@@ -1612,7 +1666,7 @@ export default function SCBillPreparation() {
       </div>
 
       {showForm    && <RaiseBillModal wos={wos} onClose={() => setShowForm(false)} initialWoId={deepLinkWoId} />}
-      {drawerBillId && <BillDetailDrawer billId={drawerBillId} onClose={() => setDrawerBill(null)} />}
+      {drawerBillId && <BillDetailPage billId={drawerBillId} onClose={() => setDrawerBill(null)} />}
     </div>
   );
 }
