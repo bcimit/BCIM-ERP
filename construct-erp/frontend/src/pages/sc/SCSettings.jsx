@@ -12,12 +12,13 @@ import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 
 const APPROVAL_STAGE_OPTIONS=[
-  {value:'site_engineer',  label:'Site Engineer'},
-  {value:'project_manager',label:'Project Manager'},
-  {value:'qs_engineer',    label:'QS / Billing Engineer'},
-  {value:'accounts',       label:'Accounts'},
-  {value:'management',     label:'Management'},
-  {value:'finance_head',   label:'Finance Head'},
+  {value:'qs_engineer',       label:'QS Engineer — Quantity Verification'},
+  {value:'project_head',      label:'Project Head / Director'},
+  {value:'managing_director', label:'Managing Director'},
+  {value:'site_engineer',     label:'Site Engineer'},
+  {value:'project_manager',   label:'Project Manager'},
+  {value:'accounts',          label:'Accounts / Finance'},
+  {value:'management',        label:'Management'},
 ];
 
 const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300 transition';
@@ -34,7 +35,7 @@ export default function SCSettings() {
   const [activeTab, setTab] = useState('general');
   const [form, setForm] = useState({
     default_gst_pct:18, default_tds_pct:2, default_retention_pct:5,
-    approval_stages:['site_engineer','project_manager','qs_engineer','accounts'],
+    approval_stages:['qs_engineer','project_head','managing_director'],
     wo_prefix:'WO', bill_prefix:'BILL',
     require_wo_approval:true, block_overbilling:true,
     // ESSL
@@ -52,7 +53,7 @@ export default function SCSettings() {
   });
   useEffect(()=>{
     if(data) setForm(f=>({...f,...data,
-      approval_stages: Array.isArray(data.approval_stages)?data.approval_stages:['site_engineer','project_manager','qs_engineer','accounts'],
+      approval_stages: Array.isArray(data.approval_stages)?data.approval_stages:['qs_engineer','project_head','managing_director'],
       essl_password: data.essl_password==='***saved***' ? '' : (data.essl_password||''),
     }));
   },[data]);

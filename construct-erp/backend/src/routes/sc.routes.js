@@ -783,12 +783,43 @@ router.get('/bills', async (req, res) => {
 
 router.get('/bills/:id', async (req, res) => {
   try {
-    const bill = await query(`SELECT b.*, wo.wo_number, wo.contract_amount, wo.gst_pct AS wo_gst_pct, wo.tds_pct AS wo_tds_pct, wo.retention_pct AS wo_ret_pct, sc.name AS sc_name, sc.gst_number AS sc_gst, p.name AS project_name FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id JOIN sc_subcontractors sc ON sc.id=b.sc_id JOIN projects p ON p.id=b.project_id WHERE b.id=$1 AND b.company_id=$2`, [req.params.id, CID(req)]);
+    const bill = await query(`SELECT b.*, wo.wo_number, wo.contract_amount, wo.gst_pct AS wo_gst_pct, wo.tds_pct AS wo_tds_pct, wo.retention_pct AS wo_ret_pct, sc.name AS sc_name, sc.sc_code, sc.gst_number AS sc_gstin, p.name AS project_name, uc.name AS submitted_by_name, ua.name AS approved_by_name FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id JOIN sc_subcontractors sc ON sc.id=b.sc_id JOIN projects p ON p.id=b.project_id LEFT JOIN users uc ON uc.id=b.created_by LEFT JOIN users ua ON ua.id=b.approved_by WHERE b.id=$1 AND b.company_id=$2`, [req.params.id, CID(req)]);
     if (!bill.rows.length) return res.status(404).json({ error: 'Not found' });
-    const items = await query(`SELECT bi.*, wi.description AS wo_item_desc FROM sc_bill_items bi LEFT JOIN sc_wo_items wi ON wi.id=bi.wo_item_id WHERE bi.bill_id=$1 ORDER BY bi.sequence_no`, [req.params.id]);
+    const b = bill.rows[0];
+
+    // Items with cumulative previous qty from earlier non-rejected bills on same WO item
+    const items = await query(`
+      SELECT bi.*,
+             wi.description AS wo_item_desc,
+             wi.qty AS wo_total_qty,
+             COALESCE((
+               SELECT SUM(bi2.curr_qty)
+               FROM sc_bill_items bi2
+               JOIN sc_bills b2 ON b2.id = bi2.bill_id
+               WHERE bi2.wo_item_id = bi.wo_item_id
+                 AND b2.wo_id = $2
+                 AND b2.status NOT IN ('draft','rejected')
+                 AND b2.id != $1
+                 AND b2.created_at < (SELECT created_at FROM sc_bills WHERE id = $1)
+             ), 0) AS cum_prev_qty
+      FROM sc_bill_items bi
+      LEFT JOIN sc_wo_items wi ON wi.id = bi.wo_item_id
+      WHERE bi.bill_id = $1
+      ORDER BY bi.sequence_no
+    `, [req.params.id, b.wo_id]);
+
+    // Measurement book entries for this WO (approved), grouped by item
+    const mbEntries = await query(`
+      SELECT m.*, wi.description AS wo_item_desc
+      FROM sc_mb_entries m
+      LEFT JOIN sc_wo_items wi ON wi.id = m.wo_item_id
+      WHERE m.wo_id = $1 AND m.company_id = $2 AND m.status IN ('approved','checked')
+      ORDER BY m.mb_date, m.mb_number
+    `, [b.wo_id, CID(req)]);
+
     const approvals = await query(`SELECT a.*, u.name AS actor_name FROM sc_bill_approvals a LEFT JOIN users u ON u.id=a.actor_id WHERE a.bill_id=$1 ORDER BY a.created_at`, [req.params.id]);
     const payments  = await query(`SELECT * FROM sc_payments WHERE bill_id=$1 ORDER BY payment_date`, [req.params.id]);
-    res.json({ data: { ...bill.rows[0], items: items.rows, approvals: approvals.rows, payments: payments.rows } });
+    res.json({ data: { ...b, items: items.rows, mb_entries: mbEntries.rows, approvals: approvals.rows, payments: payments.rows } });
   } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
@@ -1078,7 +1109,7 @@ router.patch('/bills/:id/submit', authorize(...PLANNER), async (req, res) => {
 });
 
 // Approve bill (stage-wise) — next_stage computed server-side from sc_settings
-router.patch('/bills/:id/approve', authorize('super_admin','admin','project_manager','qs_engineer','accounts'), async (req, res) => {
+router.patch('/bills/:id/approve', authorize('super_admin','admin','project_manager','qs_engineer','accounts','project_head','managing_director'), async (req, res) => {
   try {
     const { comments } = req.body;
     const bill = await query(`SELECT * FROM sc_bills WHERE id=$1::uuid AND company_id=$2::uuid`, [req.params.id, CID(req)]);
@@ -1139,7 +1170,7 @@ router.patch('/bills/:id/approve', authorize('super_admin','admin','project_mana
 });
 
 // Query bill (send-back with remarks — does NOT fully reject)
-router.patch('/bills/:id/query', authorize('super_admin','admin','project_manager','qs_engineer','accounts'), async (req, res) => {
+router.patch('/bills/:id/query', authorize('super_admin','admin','project_manager','qs_engineer','accounts','project_head','managing_director'), async (req, res) => {
   try {
     const { comments } = req.body;
     if (!comments?.trim()) return res.status(400).json({ error: 'Query remarks are required' });
@@ -1159,7 +1190,7 @@ router.patch('/bills/:id/query', authorize('super_admin','admin','project_manage
 });
 
 // Reject bill
-router.patch('/bills/:id/reject', authorize('super_admin','admin','project_manager','qs_engineer','accounts'), async (req, res) => {
+router.patch('/bills/:id/reject', authorize('super_admin','admin','project_manager','qs_engineer','accounts','project_head','managing_director'), async (req, res) => {
   try {
     const { comments } = req.body;
     const result = await withTransaction(async (client) => {
@@ -1331,7 +1362,7 @@ router.get('/settings', async (req, res) => {
     const r = await query(`SELECT * FROM sc_settings WHERE company_id=$1`, [CID(req)]);
     if (!r.rows.length) {
       // Return defaults if not configured
-      return res.json({ data: { default_gst_pct:18, default_tds_pct:2, default_retention_pct:5, approval_stages:['site_engineer','project_manager','qs_engineer','accounts'], wo_prefix:'WO', bill_prefix:'BILL', require_wo_approval:true, block_overbilling:true } });
+      return res.json({ data: { default_gst_pct:18, default_tds_pct:2, default_retention_pct:5, approval_stages:['qs_engineer','project_head','managing_director'], wo_prefix:'WO', bill_prefix:'BILL', require_wo_approval:true, block_overbilling:true } });
     }
     res.json({ data: r.rows[0] });
   } catch(e){ res.status(500).json({ error: e.message }); }
@@ -1354,7 +1385,7 @@ router.post('/settings', authorize(...ADMIN), async (req, res) => {
       RETURNING *`,
       [CID(req),
        f.default_gst_pct||18, f.default_tds_pct||2, f.default_retention_pct||5,
-       JSON.stringify(f.approval_stages||['site_engineer','project_manager','qs_engineer','accounts']),
+       JSON.stringify(f.approval_stages||['qs_engineer','project_head','managing_director']),
        f.wo_prefix||'WO', f.bill_prefix||'BILL',
        f.require_wo_approval!==false, f.block_overbilling!==false,
        f.essl_host||null, f.essl_port||3306, f.essl_database||'att2000',
@@ -1389,7 +1420,7 @@ async function nextIPCNumber(client, cid, projId) {
 // Helper to load approval stages from settings (with fallback)
 async function getApprovalStages(cid) {
   const r = await query(`SELECT approval_stages FROM sc_settings WHERE company_id=$1`, [cid]);
-  return r.rows[0]?.approval_stages || ['site_engineer','project_manager','qs_engineer','accounts'];
+  return r.rows[0]?.approval_stages || ['qs_engineer','project_head','managing_director'];
 }
 
 router.get('/mb', async (req, res) => {
