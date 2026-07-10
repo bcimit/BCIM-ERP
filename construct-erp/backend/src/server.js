@@ -1,5 +1,11 @@
 // src/server.js
 require('dotenv').config();
+const fs   = require('fs');
+const path = require('path');
+// Ensure uploads directory exists (Railway ephemeral FS won't have it after deploy)
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
 const { isConfigured } = require('./services/onedrive.service');
 const logger = require('./utils/logger');
 
