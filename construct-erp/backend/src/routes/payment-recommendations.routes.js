@@ -89,45 +89,47 @@ router.get('/pending-bills', authorize(...RECOMMENDERS), async (req, res) => {
     excl.rows.forEach(r => exclIds[r.bill_type]?.add(r.bill_id));
 
     const [tqs, sc, hire] = await Promise.all([
-      // TQS bills: workflow_status = 'approved'
+      // TQS bills: all unpaid (any workflow_status except 'paid')
       query(
         `SELECT b.id, b.vendor_name, b.inv_number AS bill_number,
                 b.basic_amount, b.total_amount AS bill_amount,
                 b.inv_date AS bill_date, p.name AS project_name, b.project_id,
+                b.workflow_status AS status,
                 'tqs' AS bill_type
            FROM tqs_bills b
            JOIN projects p ON p.id = b.project_id
-          WHERE b.company_id=$1 AND b.workflow_status='approved' AND b.is_deleted=false
+          WHERE b.company_id=$1 AND b.workflow_status NOT IN ('paid','cancelled') AND b.is_deleted=false
             ${project_id ? 'AND b.project_id=$2' : ''}
           ORDER BY b.inv_date DESC`,
         params
       ),
-      // SC bills: status = 'approved'
+      // SC bills: all unpaid (submitted/approved, not paid/rejected/draft)
       query(
-        `SELECT b.id, v.name AS vendor_name, b.bill_number,
+        `SELECT b.id, sc.name AS vendor_name, b.bill_number,
                 b.gross_amount AS basic_amount, b.net_payable AS bill_amount,
                 b.bill_date, p.name AS project_name, b.project_id,
+                b.status,
                 'sc' AS bill_type
            FROM sc_bills b
-           JOIN sc_work_orders wo ON wo.id = b.wo_id
-           JOIN vendors v ON v.id = wo.vendor_id
-           JOIN projects p ON p.id = b.project_id
-          WHERE b.company_id=$1 AND b.status='approved'
+           JOIN sc_subcontractors sc ON sc.id = b.sc_id
+           LEFT JOIN projects p ON p.id = b.project_id
+          WHERE b.company_id=$1 AND b.status NOT IN ('paid','rejected','draft')
             ${project_id ? 'AND b.project_id=$2' : ''}
           ORDER BY b.bill_date DESC`,
         params
       ),
-      // Hire rental: status = 'approved'
+      // Hire rental: all unpaid
       query(
         `SELECT hvi.id, v.name AS vendor_name, hvi.invoice_no AS bill_number,
                 hvi.gross_amount AS basic_amount, hvi.certified_amount AS bill_amount,
                 hvi.invoice_date AS bill_date, p.name AS project_name, hvi.project_id,
+                hvi.status,
                 'hire' AS bill_type
            FROM hire_vendor_invoices hvi
            JOIN pm_hire_in_orders ho ON ho.id = hvi.hire_order_id
            JOIN vendors v ON v.id = ho.vendor_id
            JOIN projects p ON p.id = hvi.project_id
-          WHERE hvi.company_id=$1 AND hvi.status='approved'
+          WHERE hvi.company_id=$1 AND hvi.status NOT IN ('paid','cancelled')
             ${project_id ? 'AND hvi.project_id=$2' : ''}
           ORDER BY hvi.invoice_date DESC`,
         params

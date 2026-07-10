@@ -32,6 +32,15 @@ const BILL_TYPE_META = {
   hire: { label: 'Hire Rental',    cls: 'bg-orange-100 text-orange-700' },
 };
 
+const BILL_STATUS_META = {
+  approved:    { label: 'Approved',    cls: 'bg-emerald-100 text-emerald-700' },
+  submitted:   { label: 'Submitted',   cls: 'bg-amber-100 text-amber-700' },
+  pending:     { label: 'Pending',     cls: 'bg-slate-100 text-slate-600' },
+  qs_review:   { label: 'QS Review',   cls: 'bg-blue-100 text-blue-700' },
+  under_review:{ label: 'In Review',   cls: 'bg-blue-100 text-blue-700' },
+  processing:  { label: 'Processing',  cls: 'bg-purple-100 text-purple-700' },
+};
+
 // ─── Create PR Modal ──────────────────────────────────────────────────────────
 function CreatePRModal({ onClose }) {
   const qc = useQueryClient();
@@ -119,8 +128,8 @@ function CreatePRModal({ onClose }) {
           ) : allBills.length === 0 ? (
             <div className="p-10 text-center">
               <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-              <p className="font-semibold text-slate-700">No approved bills pending payment</p>
-              <p className="text-sm text-slate-400 mt-1">All approved bills have already been recommended or paid.</p>
+              <p className="font-semibold text-slate-700">No unpaid bills found</p>
+              <p className="text-sm text-slate-400 mt-1">All bills have been paid or are in draft / rejected state.</p>
             </div>
           ) : (
             <div className="p-5 space-y-3">
@@ -166,6 +175,7 @@ function CreatePRModal({ onClose }) {
                           <th className="w-8 px-3 py-2"></th>
                           <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Vendor</th>
                           <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Bill No.</th>
+                          <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Status</th>
                           <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Bill Amt</th>
                           <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Rec. Amount</th>
                         </tr>
@@ -173,6 +183,7 @@ function CreatePRModal({ onClose }) {
                       <tbody>
                         {rows.map((b, i) => {
                           const sel = selected.find(s => s.bill_id === b.id);
+                          const sm = BILL_STATUS_META[b.status] || { label: b.status || '—', cls: 'bg-slate-100 text-slate-500' };
                           return (
                             <tr key={b.id} className={clsx(i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50', sel && 'bg-indigo-50/60')}>
                               <td className="px-3 py-2.5 text-center">
@@ -184,6 +195,9 @@ function CreatePRModal({ onClose }) {
                                 <p className="text-xs text-slate-400">{b.project_name}</p>
                               </td>
                               <td className="px-3 py-2.5 text-sm text-indigo-600 font-mono">{b.bill_number || '—'}</td>
+                              <td className="px-3 py-2.5">
+                                <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', sm.cls)}>{sm.label}</span>
+                              </td>
                               <td className="px-3 py-2.5 text-right font-mono text-sm text-slate-700">{fmt(b.bill_amount)}</td>
                               <td className="px-3 py-2.5 text-right">
                                 {sel ? (
