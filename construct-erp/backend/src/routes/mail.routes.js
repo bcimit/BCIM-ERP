@@ -115,7 +115,7 @@ router.post('/erp-daily-report', async (req, res) => {
 
     // Also query today's ERP activity
     const cid = req.user.company_id;
-    const [scBills, tqsBills, mrsList, poList] = await Promise.all([
+    const [scBills, tqsBills, mrsList, poList, pettyCash] = await Promise.all([
       query(`SELECT COUNT(*)::int AS cnt, COALESCE(SUM(net_payable),0)::numeric AS total
                FROM sc_bills WHERE company_id=$1 AND created_at::date = $2`, [cid, todayISO]),
       query(`SELECT COUNT(*)::int AS cnt, COALESCE(SUM(total_amount),0)::numeric AS total
@@ -123,6 +123,8 @@ router.post('/erp-daily-report', async (req, res) => {
       query(`SELECT COUNT(*)::int AS cnt FROM material_requisitions mr JOIN projects p ON p.id = mr.project_id WHERE p.company_id=$1 AND mr.created_at::date = $2`, [cid, todayISO]),
       query(`SELECT COUNT(*)::int AS cnt, COALESCE(SUM(grand_total),0)::numeric AS total
                FROM purchase_orders WHERE company_id=$1 AND created_at::date = $2`, [cid, todayISO]),
+      query(`SELECT COUNT(*)::int AS cnt, COALESCE(SUM(total_amount),0)::numeric AS total
+               FROM stores_petty_cash_entries WHERE company_id=$1 AND created_at::date = $2`, [cid, todayISO]),
     ]);
 
     const inr = v => Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -175,6 +177,7 @@ router.post('/erp-daily-report', async (req, res) => {
         ${stat('TQS Bills', tqsBills.rows[0].cnt > 0 ? `${tqsBills.rows[0].cnt} <span style="font-size:13px;color:#64748b">· ₹${inr(tqsBills.rows[0].total)}</span>` : '—')}
         ${stat('MRS Raised', mrsList.rows[0].cnt || '—')}
         ${stat('POs Created', poList.rows[0].cnt > 0 ? `${poList.rows[0].cnt} <span style="font-size:13px;color:#64748b">· ₹${inr(poList.rows[0].total)}</span>` : '—')}
+        ${stat('Petty Cash', pettyCash.rows[0].cnt > 0 ? `${pettyCash.rows[0].cnt} <span style="font-size:13px;color:#64748b">· ₹${inr(pettyCash.rows[0].total)}</span>` : '—')}
       </tr>
     </table>
 
