@@ -155,30 +155,70 @@ const approvalEngineRoutes        = require('./routes/approval-engine.routes');
 const ewayBillRoutes              = require('./routes/ewayBill.routes');
 const searchRoutes                = require('./routes/search.routes');
 
-// ── One-time data migration: move 13 bills to DQS Tower project ──────────────
+// ── Data migration: move 13 bills to DQS Tower project ───────────────────────
 const { runSchemaInit } = require('./utils/schemaInit');
 const { query: dbQuery } = require('./config/database');
-runSchemaInit('data_migration_bills_to_dqs_tower_2026', async () => {
-  const billNumbers = [
-    '00511/26-27','00516/26-27','00321/26-27','00534/26-27','00540/26-27',
-    '00607/26-27','00612/26-27','00623/26-27','00672/26-27','00673/26-27',
-    '00785/26-27','00796/26-27','00797/26-27',
-  ];
+
+// Extract the numeric parts: ['511','516','321','534','540','607','612','623','672','673','785','796','797']
+const DQS_BILL_SERIALS = ['511','516','321','534','540','607','612','623','672','673','785','796','797'];
+
+runSchemaInit('data_migration_bills_to_dqs_tower_2026_v2', async () => {
   const projRes = await dbQuery(
-    `SELECT id FROM projects WHERE LOWER(name) LIKE '%dqs%' ORDER BY name LIMIT 1`
+    `SELECT id, name FROM projects WHERE LOWER(name) LIKE '%dqs%' ORDER BY name LIMIT 1`
   );
   if (!projRes.rows.length) {
-    console.warn('[migration] DQS Tower project not found — skipping bill reassignment');
+    console.warn('[migration-dqs] DQS Tower project not found — skipping');
     return;
   }
-  const dqsId = projRes.rows[0].id;
-  const updRes = await dbQuery(
+  const dqsId   = projRes.rows[0].id;
+  const dqsName = projRes.rows[0].name;
+
+  // Diagnostic: find bills matching any of the serial numbers in sl_number or inv_number
+  const diagRes = await dbQuery(
+    `SELECT id, sl_number, inv_number, vendor_name, project_id,
+            (SELECT name FROM projects WHERE id = tqs_bills.project_id) AS current_project
+       FROM tqs_bills
+      WHERE is_deleted = false
+        AND (
+          REGEXP_REPLACE(COALESCE(sl_number,''), '[^0-9]', '', 'g') = ANY($1)
+          OR REGEXP_REPLACE(COALESCE(inv_number,''), '[^0-9/\\-]', '', 'g') = ANY($2)
+        )`,
+    [
+      DQS_BILL_SERIALS,
+      ['00511/26-27','00516/26-27','00321/26-27','00534/26-27','00540/26-27',
+       '00607/26-27','00612/26-27','00623/26-27','00672/26-27','00673/26-27',
+       '00785/26-27','00796/26-27','00797/26-27'],
+    ]
+  );
+  console.log(`[migration-dqs] Diagnostic — found ${diagRes.rows.length} candidate bill(s):`);
+  diagRes.rows.forEach(r =>
+    console.log(`  sl=${r.sl_number} | inv=${r.inv_number} | vendor=${r.vendor_name} | project=${r.current_project}`)
+  );
+
+  // Move ALL candidate bills to DQS Tower (not yet there)
+  const toMove = diagRes.rows.filter(r => r.project_id !== dqsId).map(r => r.id);
+  if (toMove.length) {
+    const updRes = await dbQuery(
+      `UPDATE tqs_bills SET project_id = $1 WHERE id = ANY($2)`,
+      [dqsId, toMove]
+    );
+    console.log(`[migration-dqs] Moved ${updRes.rowCount} bill(s) → "${dqsName}" (${dqsId})`);
+  } else {
+    console.log(`[migration-dqs] All candidate bills already in "${dqsName}" — nothing to move`);
+  }
+
+  // Also try exact match on the original number strings
+  const exactRes = await dbQuery(
     `UPDATE tqs_bills SET project_id = $1
      WHERE (sl_number = ANY($2) OR inv_number = ANY($2))
-       AND project_id IS DISTINCT FROM $1`,
-    [dqsId, billNumbers]
+       AND project_id IS DISTINCT FROM $1
+       AND is_deleted = false`,
+    [dqsId, ['00511/26-27','00516/26-27','00321/26-27','00534/26-27','00540/26-27',
+              '00607/26-27','00612/26-27','00623/26-27','00672/26-27','00673/26-27',
+              '00785/26-27','00796/26-27','00797/26-27']]
   );
-  console.log(`[migration] Moved ${updRes.rowCount} bill(s) to DQS Tower project (${dqsId})`);
+  if (exactRes.rowCount)
+    console.log(`[migration-dqs] Exact-match also moved ${exactRes.rowCount} additional bill(s)`);
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
