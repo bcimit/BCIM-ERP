@@ -1529,6 +1529,15 @@ router.patch('/mb/:id/qaqc-clear', authorize('super_admin','admin','qs_engineer'
   } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
+router.delete('/mb/:id', authorize(...ADMIN,'project_manager','qs_engineer'), async (req, res) => {
+  try {
+    const r = await query(`DELETE FROM sc_mb_entries WHERE id=$1 AND company_id=$2 RETURNING id`,
+      [req.params.id, CID(req)]);
+    if (!r.rows.length) return res.status(404).json({ error: 'MB entry not found' });
+    res.json({ data: { id: r.rows[0].id } });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
 // ════════════════════════════════════════════════════════════════════
 // 11. ADVANCES
 // ════════════════════════════════════════════════════════════════════

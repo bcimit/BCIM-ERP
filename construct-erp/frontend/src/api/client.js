@@ -1609,6 +1609,7 @@ export const scAPI = {
   checkMB:            (id, d)   => api.patch(`/sc/mb/${id}/check`, d),
   approveMB:          (id, d)   => api.patch(`/sc/mb/${id}/approve`, d),
   rejectMB:           (id, d)   => api.patch(`/sc/mb/${id}/reject`, d),
+  deleteMB:           (id)      => api.delete(`/sc/mb/${id}`),
   // Advances
   listAdvances:       (p)       => api.get('/sc/advances', { params: p }),
   createAdvance:      (d)       => api.post('/sc/advances', d),

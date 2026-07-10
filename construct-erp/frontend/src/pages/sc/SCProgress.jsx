@@ -7,7 +7,7 @@ import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
   Plus, Search, RefreshCw, X, Eye, CheckCircle2,
   Clock, FileText, MapPin, Layers, Send, ThumbsUp,
-  ThumbsDown, ChevronRight, BookOpen,
+  ThumbsDown, ChevronRight, BookOpen, Trash2,
 } from 'lucide-react';
 import SCMeasurementBook from './mb/SCMeasurementBook';
 import toast from 'react-hot-toast';
@@ -47,7 +47,9 @@ function MBForm({ onClose }) {
 
   const { data: wos=[] } = useQuery({
     queryKey:['sc-wo-active-mb'],
-    queryFn:()=>scAPI.listWO({status:'active'}).then(r=>r.data?.data||[]),
+    // MB entries can be recorded against any WO regardless of workflow status
+    // (draft/active/approved) — a status filter here was silently hiding WOs.
+    queryFn:()=>scAPI.listWO({}).then(r=>r.data?.data||[]),
   });
 
   const loadWO = async (id) => {
@@ -170,6 +172,14 @@ function MBDrawer({ mbId, onClose }) {
   const checkMut   = useMutation({ mutationFn:()=>scAPI.checkMB(mbId,{remarks:comment}), ...mutOpts('Checked') });
   const approveMut = useMutation({ mutationFn:()=>scAPI.approveMB(mbId,{remarks:comment}), ...mutOpts('Approved') });
   const rejectMut  = useMutation({ mutationFn:()=>scAPI.rejectMB(mbId,{remarks:comment}), ...mutOpts('Rejected') });
+  const deleteMut  = useMutation({
+    mutationFn:()=>scAPI.deleteMB(mbId),
+    onSuccess:()=>{ toast.success('MB entry deleted'); qc.invalidateQueries({queryKey:['sc-mb']}); onClose(); },
+    onError:e=>toast.error(e?.response?.data?.error||'Failed to delete'),
+  });
+  const handleDelete = () => {
+    if (window.confirm(`Delete ${mb?.mb_number}? This cannot be undone.`)) deleteMut.mutate();
+  };
 
   const sm = STATUS_META[mb?.status] || STATUS_META.draft;
 
@@ -183,9 +193,15 @@ function MBDrawer({ mbId, onClose }) {
             <p className="font-bold text-white text-sm">{mb?.mb_number||'…'}</p>
             <p className="text-[10px] mt-0.5" style={{color:'rgba(255,255,255,0.6)'}}>{mb?.sc_name} · {mb?.project_name}</p>
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{background:'rgba(255,255,255,0.10)'}}>
-            <X className="w-4 h-4"/>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleDelete} disabled={deleteMut.isPending} title="Delete MB entry"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white disabled:opacity-50" style={{background:'rgba(239,68,68,0.25)'}}>
+              <Trash2 className="w-3.5 h-3.5"/>
+            </button>
+            <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{background:'rgba(255,255,255,0.10)'}}>
+              <X className="w-4 h-4"/>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -289,6 +305,7 @@ function MBDrawer({ mbId, onClose }) {
 }
 
 export default function SCProgress() {
+  const qc = useQueryClient();
   const [search,  setSearch]  = useState('');
   const { selectedProjectId } = useAuthStore();
   const [projFilt,setProj]    = useState(selectedProjectId || '');
@@ -323,6 +340,15 @@ export default function SCProgress() {
     approved: mbs.filter(m=>m.status==='approved').length,
     totalQty: mbs.filter(m=>m.status==='approved').reduce((s,m)=>s+num(m.executed_qty),0),
   }),[mbs]);
+
+  const deleteMut = useMutation({
+    mutationFn:(id)=>scAPI.deleteMB(id),
+    onSuccess:()=>{ toast.success('MB entry deleted'); qc.invalidateQueries({queryKey:['sc-mb']}); },
+    onError:e=>toast.error(e?.response?.data?.error||'Failed to delete'),
+  });
+  const handleRowDelete = (m) => {
+    if (window.confirm(`Delete ${m.mb_number}? This cannot be undone.`)) deleteMut.mutate(m.id);
+  };
 
   return (
     <div style={{ background: Theme.pageBg, minHeight:'100vh' }}>
@@ -462,9 +488,15 @@ export default function SCProgress() {
                           <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-bold',sm.bg,sm.text)}>{sm.label}</span>
                         </td>
                         <td className="px-4 py-3" onClick={e=>e.stopPropagation()}>
-                          <button onClick={()=>setDrawer(m.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50">
-                            <Eye className="w-4 h-4"/>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button onClick={()=>setDrawer(m.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50">
+                              <Eye className="w-4 h-4"/>
+                            </button>
+                            <button onClick={()=>handleRowDelete(m)} disabled={deleteMut.isPending} title="Delete"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50">
+                              <Trash2 className="w-4 h-4"/>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
