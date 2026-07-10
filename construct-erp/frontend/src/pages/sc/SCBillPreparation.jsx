@@ -15,7 +15,7 @@ import {
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
-import RABillPrintTemplate from '../qs/RABillPrintTemplate';
+import RABillPrintTemplate from './SCBillPrintTemplate';
 import { BOQ_COST_HEADS } from '../../constants/boqCostHeads';
 import SCMeasurementBook from './mb/SCMeasurementBook';
 
