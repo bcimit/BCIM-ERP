@@ -1102,6 +1102,9 @@ function RaiseBillModal({ wos, onClose, initialWoId }) {
 // ─── Edit Bill Modal — correct GST/TDS/Retention/other deductions ─────────────
 function EditBillModal({ bill, onClose }) {
   const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const canEditQty = ['super_admin', 'qs_engineer'].includes(user?.role);
+
   const [f, setF] = useState({
     gst_pct: bill.gst_pct, tds_pct: bill.tds_pct, retention_pct: bill.retention_pct,
     is_igst: !!bill.is_igst, labour_cess_pct: bill.gross_amount > 0 ? +(100 * bill.labour_cess_amount / bill.gross_amount).toFixed(2) : 0,
@@ -1111,7 +1114,15 @@ function EditBillModal({ bill, onClose }) {
   });
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
 
-  const grossAmt = num(bill.gross_amount);
+  // Item qty state — only used when canEditQty
+  const [itemQtys, setItemQtys] = useState(() =>
+    (bill.items || []).map(it => ({ id: it.id, curr_qty: it.curr_qty, rate: it.rate, description: it.description, unit: it.unit }))
+  );
+  const setItemQty = (id, val) => setItemQtys(prev => prev.map(it => it.id === id ? { ...it, curr_qty: val } : it));
+
+  const grossAmt = canEditQty && itemQtys.length > 0
+    ? itemQtys.reduce((s, it) => s + num(it.curr_qty) * num(it.rate), 0)
+    : num(bill.gross_amount);
   const gst = grossAmt * num(f.gst_pct) / 100;
   const tds = grossAmt * num(f.tds_pct) / 100;
   const ret = grossAmt * num(f.retention_pct) / 100;
@@ -1120,7 +1131,10 @@ function EditBillModal({ bill, onClose }) {
     - tds - ret - num(f.advance_recovery) - num(f.material_recovery) - num(f.penalty_amount) - num(f.other_deductions) - labourCess;
 
   const saveMut = useMutation({
-    mutationFn: () => scAPI.editBill(bill.id, f),
+    mutationFn: () => scAPI.editBill(bill.id, {
+      ...f,
+      ...(canEditQty && itemQtys.length > 0 ? { items: itemQtys.map(it => ({ id: it.id, curr_qty: num(it.curr_qty) })) } : {}),
+    }),
     onSuccess: () => {
       toast.success('Bill updated');
       qc.invalidateQueries({ queryKey: ['sc-bills'] });
@@ -1132,7 +1146,7 @@ function EditBillModal({ bill, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"
           style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
           <div>
@@ -1144,6 +1158,48 @@ function EditBillModal({ bill, onClose }) {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {canEditQty && itemQtys.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">BOQ Item Quantities</p>
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-semibold text-slate-600">Description</th>
+                      <th className="text-center px-2 py-2 font-semibold text-slate-600 w-14">Unit</th>
+                      <th className="text-right px-2 py-2 font-semibold text-slate-600 w-20">Rate</th>
+                      <th className="text-center px-2 py-2 font-semibold text-slate-600 w-24">This Bill Qty</th>
+                      <th className="text-right px-2 py-2 font-semibold text-slate-600 w-24">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itemQtys.map((it, idx) => (
+                      <tr key={it.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="px-3 py-2 text-slate-700">{it.description}</td>
+                        <td className="px-2 py-2 text-center text-slate-500">{it.unit}</td>
+                        <td className="px-2 py-2 text-right text-slate-600">{fmt(it.rate)}</td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="number" min="0" step="any"
+                            value={it.curr_qty}
+                            onChange={e => setItemQty(it.id, e.target.value)}
+                            className="w-full border border-indigo-300 rounded px-2 py-1 text-center text-sm font-medium outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right font-semibold text-slate-700">{fmt(num(it.curr_qty) * num(it.rate))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-indigo-50 border-t border-indigo-200">
+                    <tr>
+                      <td colSpan={4} className="px-3 py-2 text-right font-bold text-indigo-700 text-xs">Gross Work Amount</td>
+                      <td className="px-2 py-2 text-right font-bold text-indigo-700">{fmt(grossAmt)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <Field label="GST %"><input type="number" className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none" value={f.gst_pct} onChange={e => set('gst_pct', e.target.value)} /></Field>
             <Field label="TDS %"><input type="number" className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none" value={f.tds_pct} onChange={e => set('tds_pct', e.target.value)} /></Field>

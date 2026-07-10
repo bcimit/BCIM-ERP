@@ -1005,9 +1005,12 @@ router.patch('/bills/:id', authorize(...PLANNER), async (req, res) => {
       gst_pct, tds_pct, retention_pct, is_igst, labour_cess_pct,
       advance_recovery, material_recovery, penalty_amount, other_deductions,
       retention_release_amount, credit_note_amount,
+      items, // [{id, curr_qty}] — only qs_engineer / super_admin may send this
     } = req.body;
 
-    const grossAmt = parseFloat(bill.gross_amount);
+    // Only QS engineer and super admin can edit quantities
+    const canEditItems = ['super_admin', 'qs_engineer'].includes(req.user.role);
+    let grossAmt = parseFloat(bill.gross_amount);
     const effectiveGstPct = parseFloat(gst_pct ?? bill.gst_pct);
     const gst = grossAmt * effectiveGstPct / 100;
     const isIgst = is_igst ?? bill.is_igst;
@@ -1029,21 +1032,49 @@ router.patch('/bills/:id', authorize(...PLANNER), async (req, res) => {
     const net = grossAmt + gst + retRelease - creditNote - tds - ret - adv - mat - pen - labourCess - oth;
 
     const updated = await withTransaction(async (client) => {
+      // If item quantities were sent by an authorised role, update them and recompute gross
+      if (canEditItems && Array.isArray(items) && items.length > 0) {
+        for (const it of items) {
+          await client.query(
+            `UPDATE sc_bill_items SET curr_qty=$1, amount=curr_qty*rate, updated_at=NOW() WHERE id=$2 AND bill_id=$3`,
+            [parseFloat(it.curr_qty), it.id, req.params.id]
+          );
+        }
+        // Recompute gross from updated items
+        const gRow = await client.query(
+          `SELECT COALESCE(SUM(amount),0) AS gross FROM sc_bill_items WHERE bill_id=$1`,
+          [req.params.id]
+        );
+        grossAmt = parseFloat(gRow.rows[0].gross);
+      }
+
+      // Recompute all deductions based on (possibly updated) grossAmt
+      const gst2 = grossAmt * effectiveGstPct / 100;
+      const cgst2 = isIgst ? 0 : Math.round(gst2 / 2 * 100) / 100;
+      const sgst2 = isIgst ? 0 : gst2 - cgst2;
+      const igst2 = isIgst ? gst2 : 0;
+      const labourCess2 = grossAmt * labourCessPct / 100;
+      const tds2 = grossAmt * effectiveTdsPct / 100;
+      const ret2 = grossAmt * effectiveRetPct / 100;
+      const net2 = grossAmt + gst2 + retRelease - creditNote - tds2 - ret2 - adv - mat - pen - labourCess2 - oth;
+
       const r = await client.query(
         `UPDATE sc_bills SET
            bill_date=$1, period_from=$2, period_to=$3, description=$4,
-           gst_pct=$5, gst_amount=$6, is_igst=$7, cgst_amount=$8, sgst_amount=$9, igst_amount=$10,
-           tds_pct=$11, tds_amount=$12, retention_pct=$13, retention_amount=$14,
-           advance_recovery=$15, material_recovery=$16, penalty_amount=$17, other_deductions=$18,
-           labour_cess_amount=$19, retention_release_amount=$20, credit_note_amount=$21,
-           net_payable=$22, updated_at=NOW()
-         WHERE id=$23 RETURNING *`,
+           gross_amount=$5,
+           gst_pct=$6, gst_amount=$7, is_igst=$8, cgst_amount=$9, sgst_amount=$10, igst_amount=$11,
+           tds_pct=$12, tds_amount=$13, retention_pct=$14, retention_amount=$15,
+           advance_recovery=$16, material_recovery=$17, penalty_amount=$18, other_deductions=$19,
+           labour_cess_amount=$20, retention_release_amount=$21, credit_note_amount=$22,
+           net_payable=$23, updated_at=NOW()
+         WHERE id=$24 RETURNING *`,
         [bill_date || bill.bill_date, period_from ?? bill.period_from, period_to ?? bill.period_to, description ?? bill.description,
-         effectiveGstPct, gst, isIgst, cgst, sgst, igst,
-         effectiveTdsPct, tds, effectiveRetPct, ret,
+         grossAmt,
+         effectiveGstPct, gst2, isIgst, cgst2, sgst2, igst2,
+         effectiveTdsPct, tds2, effectiveRetPct, ret2,
          adv, mat, pen, oth,
-         labourCess, retRelease, creditNote,
-         net, req.params.id]
+         labourCess2, retRelease, creditNote,
+         net2, req.params.id]
       );
       await recalculateWOConsumption(bill.wo_id, client);
       return r.rows[0];
