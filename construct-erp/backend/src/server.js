@@ -155,6 +155,33 @@ const approvalEngineRoutes        = require('./routes/approval-engine.routes');
 const ewayBillRoutes              = require('./routes/ewayBill.routes');
 const searchRoutes                = require('./routes/search.routes');
 
+// ── One-time data migration: move 13 bills to DQS Tower project ──────────────
+const { runSchemaInit } = require('./utils/schemaInit');
+const { query: dbQuery } = require('./config/database');
+runSchemaInit('data_migration_bills_to_dqs_tower_2026', async () => {
+  const billNumbers = [
+    '00511/26-27','00516/26-27','00321/26-27','00534/26-27','00540/26-27',
+    '00607/26-27','00612/26-27','00623/26-27','00672/26-27','00673/26-27',
+    '00785/26-27','00796/26-27','00797/26-27',
+  ];
+  const projRes = await dbQuery(
+    `SELECT id FROM projects WHERE LOWER(name) LIKE '%dqs%' ORDER BY name LIMIT 1`
+  );
+  if (!projRes.rows.length) {
+    console.warn('[migration] DQS Tower project not found — skipping bill reassignment');
+    return;
+  }
+  const dqsId = projRes.rows[0].id;
+  const updRes = await dbQuery(
+    `UPDATE tqs_bills SET project_id = $1
+     WHERE (sl_number = ANY($2) OR inv_number = ANY($2))
+       AND project_id IS DISTINCT FROM $1`,
+    [dqsId, billNumbers]
+  );
+  console.log(`[migration] Moved ${updRes.rowCount} bill(s) to DQS Tower project (${dqsId})`);
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const http   = require('http');
 const { Server: SocketIO } = require('socket.io');
 const jwt    = require('jsonwebtoken');
