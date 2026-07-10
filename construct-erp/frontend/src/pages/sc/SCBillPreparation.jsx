@@ -1355,9 +1355,9 @@ function BillDetailPage({ billId, onClose }) {
                 { label: 'Bill Type',   value: (b.bill_type||'ra').toUpperCase() },
                 { label: 'Subcontractor', value: b.sc_name },
               ].map(({ label, value, mono, color }) => (
-                <div key={label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                  <p className={clsx('text-sm font-bold text-slate-800 truncate', mono && 'font-mono', color)}>{value || '—'}</p>
+                <div key={label} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+                  <p className={clsx('text-lg font-bold text-slate-800 truncate', mono && 'font-mono', color)}>{value || '—'}</p>
                 </div>
               ))}
             </div>
@@ -1367,39 +1367,39 @@ function BillDetailPage({ billId, onClose }) {
               {/* ── Left: BOQ items ── */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">BOQ Items ({items.length})</p>
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">BOQ Items ({items.length})</p>
                   </div>
                   {items.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-8">No items</p>
+                    <p className="text-base text-slate-400 text-center py-8">No items</p>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="w-full text-sm">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-100">
-                            <th className="text-left px-4 py-2.5 font-semibold text-slate-500">Description</th>
-                            <th className="text-center px-3 py-2.5 font-semibold text-slate-500">Unit</th>
-                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500">Rate</th>
-                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500">Prev Qty</th>
-                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500">This Bill Qty</th>
-                            <th className="text-right px-3 py-2.5 font-semibold text-slate-500 pr-4">Amount</th>
+                            <th className="text-left px-5 py-3.5 font-bold text-slate-600">Description</th>
+                            <th className="text-center px-4 py-3.5 font-bold text-slate-600">Unit</th>
+                            <th className="text-right px-4 py-3.5 font-bold text-slate-600">Rate</th>
+                            <th className="text-right px-4 py-3.5 font-bold text-slate-600">Prev Qty</th>
+                            <th className="text-right px-4 py-3.5 font-bold text-slate-600">This Bill Qty</th>
+                            <th className="text-right px-5 py-3.5 font-bold text-slate-600">Amount</th>
                           </tr>
                         </thead>
                         <tbody>
                           {items.map((it, i) => (
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                              <td className="px-4 py-2.5">
-                                <p className="font-semibold text-slate-800">{it.description || it.wo_item_desc}</p>
+                              <td className="px-5 py-4">
+                                <p className="font-semibold text-slate-800 text-sm">{it.description || it.wo_item_desc}</p>
                               </td>
-                              <td className="text-center px-3 py-2.5 text-slate-500">{it.unit || '—'}</td>
-                              <td className="text-right px-3 py-2.5 font-mono text-slate-600">{fmt2(it.rate)}</td>
-                              <td className="text-right px-3 py-2.5 font-mono text-slate-400">
+                              <td className="text-center px-4 py-4 text-slate-500 font-medium">{it.unit || '—'}</td>
+                              <td className="text-right px-4 py-4 font-mono font-semibold text-slate-600">{fmt2(it.rate)}</td>
+                              <td className="text-right px-4 py-4 font-mono text-slate-400 font-medium">
                                 {num(it.cum_prev_qty ?? it.prev_qty ?? 0).toFixed(3)}
                               </td>
-                              <td className="text-right px-3 py-2.5 font-mono font-bold text-indigo-700">
+                              <td className="text-right px-4 py-4 font-mono font-bold text-indigo-700 text-base">
                                 {num(it.curr_qty ?? it.current_qty ?? 0).toFixed(3)}
                               </td>
-                              <td className="text-right px-4 py-2.5 font-mono font-bold text-slate-800">
+                              <td className="text-right px-5 py-4 font-mono font-bold text-slate-800 text-base">
                                 {fmt2(num(it.curr_qty ?? it.current_qty ?? 0) * num(it.rate))}
                               </td>
                             </tr>
@@ -1407,8 +1407,8 @@ function BillDetailPage({ billId, onClose }) {
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-slate-200 bg-indigo-50">
-                            <td colSpan={5} className="px-4 py-3 font-bold text-slate-700 text-xs">Gross Work Amount</td>
-                            <td className="text-right px-4 py-3 font-bold text-indigo-800 font-mono text-sm">{fmt2(b.gross_amount)}</td>
+                            <td colSpan={5} className="px-5 py-4 font-bold text-slate-700 text-sm">Gross Work Amount</td>
+                            <td className="text-right px-5 py-4 font-bold text-indigo-800 font-mono text-lg">{fmt2(b.gross_amount)}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -1419,24 +1419,24 @@ function BillDetailPage({ billId, onClose }) {
                 {/* Approval trail */}
                 {approvals.length > 0 && (
                   <div className="bg-white border border-slate-100 rounded-2xl shadow-sm">
-                    <div className="px-5 py-3 border-b border-slate-100">
-                      <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">Approval Trail</p>
+                    <div className="px-5 py-4 border-b border-slate-100">
+                      <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">Approval Trail</p>
                     </div>
-                    <div className="p-5 space-y-3">
+                    <div className="p-5 space-y-4">
                       {approvals.map((a, i) => (
                         <div key={i} className="flex gap-3">
-                          <div className={clsx('w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold',
+                          <div className={clsx('w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold',
                             a.action==='approved' ? 'bg-emerald-500' : a.action==='rejected' ? 'bg-red-500' : 'bg-amber-500')}>
                             {a.action==='approved' ? '✓' : a.action==='rejected' ? '✗' : '?'}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-bold text-slate-700 capitalize">{a.action}</span>
-                              <span className="text-xs text-slate-400">by {a.actor_name || 'System'}</span>
-                              <span className="text-xs text-slate-400 capitalize">({(a.stage||'').replace(/_/g,' ')})</span>
-                              <span className="text-xs text-slate-400 ml-auto">{dayjs(a.created_at).format('DD MMM YYYY · HH:mm')}</span>
+                              <span className="text-base font-bold text-slate-700 capitalize">{a.action}</span>
+                              <span className="text-sm text-slate-500">by {a.actor_name || 'System'}</span>
+                              <span className="text-sm text-slate-400 capitalize">({(a.stage||'').replace(/_/g,' ')})</span>
+                              <span className="text-sm text-slate-400 ml-auto">{dayjs(a.created_at).format('DD MMM YYYY · HH:mm')}</span>
                             </div>
-                            {a.comments && <p className="text-xs text-slate-500 mt-1 italic bg-slate-50 rounded px-2 py-1">"{a.comments}"</p>}
+                            {a.comments && <p className="text-sm text-slate-500 mt-1 italic bg-slate-50 rounded px-3 py-2">"{a.comments}"</p>}
                           </div>
                         </div>
                       ))}
@@ -1468,10 +1468,10 @@ function BillDetailPage({ billId, onClose }) {
               {/* ── Right: Bill Abstract ── */}
               <div className="space-y-4">
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden sticky top-4">
-                  <div className="px-5 py-3 border-b border-slate-100">
-                    <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">Bill Abstract</p>
+                  <div className="px-5 py-4 border-b border-slate-100">
+                    <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">Bill Abstract</p>
                   </div>
-                  <div className="divide-y divide-slate-50">
+                  <div className="divide-y divide-slate-100">
                     {[
                       { l: 'Gross Work Amount', v: b.gross_amount, bold: true, c: 'text-slate-800' },
                       num(b.cgst_amount) > 0
@@ -1495,16 +1495,16 @@ function BillDetailPage({ billId, onClose }) {
                       num(b.penalty_amount)     > 0 && { l: 'Penalty', v: -b.penalty_amount, c: 'text-red-500', sub: true },
                       num(b.other_deductions)   > 0 && { l: 'Other Deductions', v: -b.other_deductions, c: 'text-red-500', sub: true },
                     ].filter(Boolean).map(({ l, v, c, sub, bold }) => (
-                      <div key={l} className={clsx('flex justify-between px-5 py-2.5 text-sm', sub && 'bg-slate-50/60 pl-8')}>
-                        <span className="text-slate-600">{l}</span>
-                        <span className={clsx('font-semibold tabular-nums', c, bold && 'font-bold text-slate-900')}>
+                      <div key={l} className={clsx('flex justify-between px-5 py-3.5', sub && 'bg-slate-50/60 pl-8')}>
+                        <span className="text-sm font-medium text-slate-600">{l}</span>
+                        <span className={clsx('text-sm font-bold tabular-nums', c, bold && 'text-base font-extrabold text-slate-900')}>
                           {num(v) < 0 ? `(${fmt2(Math.abs(num(v)))})` : fmt2(Math.abs(num(v)))}
                         </span>
                       </div>
                     ))}
-                    <div className="flex justify-between px-5 py-4 bg-indigo-50">
-                      <span className="font-bold text-slate-800 text-sm">Net Payable</span>
-                      <span className="text-lg font-black" style={{ color: Theme.navy }}>{fmt2(b.net_payable)}</span>
+                    <div className="flex justify-between px-5 py-5 bg-indigo-50">
+                      <span className="font-bold text-slate-800 text-base">Net Payable</span>
+                      <span className="text-2xl font-black" style={{ color: Theme.navy }}>{fmt2(b.net_payable)}</span>
                     </div>
                   </div>
                 </div>
