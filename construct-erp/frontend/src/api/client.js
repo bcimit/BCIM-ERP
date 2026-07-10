@@ -1640,6 +1640,11 @@ export const scAPI = {
   // Final Bills
   listFinalBills:     (p)       => api.get('/sc/final-bills', { params: p }),
   createFinalBill:    (d)       => api.post('/sc/final-bills', d),
+  // Bill file attachments
+  listBillFiles:      (id)      => api.get(`/sc/bills/${id}/files`),
+  uploadBillFile:     (id, fd)  => api.post(`/sc/bills/${id}/files`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteBillFile:     (id, fid) => api.delete(`/sc/bills/${id}/files/${fid}`),
+  serveBillFile:      (id, fid) => `/api/sc/bills/${id}/files/${fid}/serve`,
   // Enhanced Reports
   reportLedger:       (p)       => api.get('/sc/reports/ledger', { params: p }),
   reportBOQActual:    (p)       => api.get('/sc/reports/boq-actual', { params: p }),
@@ -1667,6 +1672,10 @@ export const hireLogAPI = {
   deleteEntry:   (woId, id)   => api.delete(`/hire-log/${woId}/${id}`),
   markBilled:    (woId, id, scBillId) => api.patch(`/hire-log/${woId}/${id}/mark-billed`, { sc_bill_id: scBillId }),
   categorizeItem:(woId, itemId, d) => api.patch(`/hire-log/${woId}/items/${itemId}/categorize`, d),
+  listFiles:     (woId, id)   => api.get(`/hire-log/${woId}/${id}/files`),
+  uploadFile:    (woId, id, fd) => api.post(`/hire-log/${woId}/${id}/files`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteFile:    (woId, id, fid) => api.delete(`/hire-log/${woId}/${id}/files/${fid}`),
+  serveFile:     (woId, id, fid) => `/api/hire-log/${woId}/${id}/files/${fid}/serve`,
 };
 
 export const analyticsAPI = {

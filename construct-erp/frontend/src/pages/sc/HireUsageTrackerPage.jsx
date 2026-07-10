@@ -3,12 +3,12 @@
 // category (Upto 3 Hours / After 3 Hours / For 1 Day...) across many invoices,
 // recording both vendor-Invoiced and site-Certified hours before raising the
 // actual bill — mirrors the manual tracking sheet used for this billing type.
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hireLogAPI, scAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
 import { PageHeader, Theme } from '../../theme';
-import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck, Settings, Pencil } from 'lucide-react';
+import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck, Settings, Pencil, Paperclip, Upload, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
@@ -38,6 +38,130 @@ function computeTieredQty(totalHrs) {
   }
   if (totalHrs > 3) return { shift: 1, hr: +(totalHrs - 3).toFixed(2), day: 0 };
   return { shift: 1, hr: 0, day: 0 };
+}
+
+// ─── Entry Files Modal ──────────────────────────────────────────────────────
+function EntryFilesModal({ wo, entry, onClose }) {
+  const qc = useQueryClient();
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const { data: filesData, isLoading } = useQuery({
+    queryKey: ['hire-log-files', entry.id],
+    queryFn: () => hireLogAPI.listFiles(wo.id, entry.id).then(r => r.data?.data || []),
+    staleTime: 30_000,
+  });
+  const files = filesData || [];
+
+  const deleteMut = useMutation({
+    mutationFn: (fid) => hireLogAPI.deleteFile(wo.id, entry.id, fid),
+    onSuccess: () => { toast.success('Removed'); qc.invalidateQueries({ queryKey: ['hire-log-files', entry.id] }); },
+    onError: () => toast.error('Failed to delete'),
+  });
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    setUploading(true);
+    try {
+      await hireLogAPI.uploadFile(wo.id, entry.id, fd);
+      toast.success('Log sheet uploaded');
+      qc.invalidateQueries({ queryKey: ['hire-log-files', entry.id] });
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const fileIcon = (type) => {
+    if (!type) return '📄';
+    if (type.includes('pdf')) return '📕';
+    if (type.includes('image')) return '🖼️';
+    return '📄';
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"
+          style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, #0f2a45 100%)` }}>
+          <div>
+            <h2 className="font-bold text-white text-sm flex items-center gap-2">
+              <Paperclip className="w-4 h-4 text-white/70" /> Log Sheet Attachments
+            </h2>
+            <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+              {entry.bill_no || 'Entry'} · {wo.wo_number}
+            </p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="p-6 text-sm text-slate-400 text-center">Loading…</div>
+          ) : files.length === 0 ? (
+            <div className="p-8 text-center">
+              <Paperclip className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">No log sheets attached yet</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {files.map(f => (
+                <div key={f.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition group">
+                  <span className="text-lg flex-shrink-0">{fileIcon(f.file_type)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{f.file_name}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {f.file_size ? `${(f.file_size / 1024).toFixed(0)} KB` : ''}
+                      {f.onedrive_web_url && <span className="ml-2 text-sky-500 font-medium">• OneDrive</span>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {f.onedrive_web_url ? (
+                      <a href={f.onedrive_web_url} target="_blank" rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    ) : (
+                      <a href={hireLogAPI.serveFile(wo.id, entry.id, f.id)} target="_blank" rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                    <button onClick={() => {
+                      if (!window.confirm(`Remove "${f.file_name}"?`)) return;
+                      deleteMut.mutate(f.id);
+                    }} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="text-xs text-slate-400">{files.length} file{files.length !== 1 ? 's' : ''}</div>
+          <div className="flex items-center gap-2">
+            <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileChange} />
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white transition disabled:opacity-60"
+              style={{ background: Theme.navy }}>
+              <Upload className="w-3.5 h-3.5" />
+              {uploading ? 'Uploading…' : 'Upload Log Sheet'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Add/Edit Entry Modal ───────────────────────────────────────────────────
@@ -215,7 +339,7 @@ function EntryModal({ wo, equipmentGroups, onClose, entry }) {
 }
 
 // ─── Equipment Group Table ──────────────────────────────────────────────────
-function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId, onEdit, onDelete }) {
+function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId, onEdit, onDelete, onFilesClick }) {
   const cats = group.categories;
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -261,9 +385,15 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId, onEdit
                   ))}
                   <td className="px-2 py-2 text-center">
                     {e.status === 'billed' ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        <CheckCircle2 className="w-3 h-3" /> {e.sc_bill_number || 'Billed'}
-                      </span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" /> {e.sc_bill_number || 'Billed'}
+                        </span>
+                        <button onClick={() => onFilesClick(e)} title="Attach log sheets"
+                          className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg">
+                          <Paperclip className="w-3 h-3" />
+                        </button>
+                      </div>
                     ) : (
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => onRaiseBill(e)} disabled={raisingId === e.id}
@@ -273,6 +403,10 @@ function GroupTable({ wo, group, entries, totals, onRaiseBill, raisingId, onEdit
                         <button onClick={() => onEdit(e)} title="Edit entry"
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
                           <Pencil className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => onFilesClick(e)} title="Attach log sheets"
+                          className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg">
+                          <Paperclip className="w-3 h-3" />
                         </button>
                         <button onClick={() => onDelete(e)} title="Delete entry"
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
@@ -471,6 +605,7 @@ export default function HireUsageTrackerPage() {
   const [woId, setWoId] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [filesEntry, setFilesEntry] = useState(null);
   const [showSetup, setShowSetup] = useState(false);
   const [raisingId,      setRaisingId]      = useState(null);
   const [raisingCombined, setRaisingCombined] = useState(false);
@@ -681,6 +816,7 @@ export default function HireUsageTrackerPage() {
               raisingId={raisingId}
               onEdit={setEditingEntry}
               onDelete={deleteEntry}
+              onFilesClick={setFilesEntry}
             />
           ))
         )}
@@ -688,6 +824,10 @@ export default function HireUsageTrackerPage() {
 
       {editingEntry && wo && (
         <EntryModal wo={wo} equipmentGroups={equipmentGroups} entry={editingEntry} onClose={() => setEditingEntry(null)} />
+      )}
+
+      {filesEntry && wo && (
+        <EntryFilesModal wo={wo} entry={filesEntry} onClose={() => setFilesEntry(null)} />
       )}
 
       {showAdd && wo && (

@@ -11,6 +11,7 @@ import {
   CheckCircle2, Clock, AlertTriangle, IndianRupee, FileText,
   ArrowRight, Building2, CalendarDays, Layers, Send,
   BarChart3, Info, HardHat, Printer, Pencil, Trash2,
+  Paperclip, Upload, ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -1231,6 +1232,124 @@ function EditBillModal({ bill, onClose }) {
   );
 }
 
+// ─── Bill Attachments Panel ───────────────────────────────────────────────────
+function BillAttachmentsPanel({ billId }) {
+  const qc = useQueryClient();
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const { data: filesData, isLoading } = useQuery({
+    queryKey: ['sc-bill-files', billId],
+    queryFn: () => scAPI.listBillFiles(billId).then(r => r.data?.data || []),
+    enabled: !!billId,
+    staleTime: 30_000,
+  });
+  const files = filesData || [];
+
+  const deleteMut = useMutation({
+    mutationFn: (fid) => scAPI.deleteBillFile(billId, fid),
+    onSuccess: () => { toast.success('Attachment removed'); qc.invalidateQueries({ queryKey: ['sc-bill-files', billId] }); },
+    onError: () => toast.error('Failed to delete'),
+  });
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    setUploading(true);
+    try {
+      await scAPI.uploadBillFile(billId, fd);
+      toast.success('File uploaded');
+      qc.invalidateQueries({ queryKey: ['sc-bill-files', billId] });
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = (fid, name) => {
+    if (!window.confirm(`Remove "${name}"?`)) return;
+    deleteMut.mutate(fid);
+  };
+
+  const fileIcon = (type) => {
+    if (!type) return '📄';
+    if (type.includes('pdf')) return '📕';
+    if (type.includes('image')) return '🖼️';
+    if (type.includes('excel') || type.includes('spreadsheet')) return '📊';
+    if (type.includes('word') || type.includes('document')) return '📝';
+    return '📄';
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Paperclip className="w-4 h-4 text-slate-400" />
+          <p className="text-sm font-bold text-slate-700">Attachments</p>
+          {files.length > 0 && (
+            <span className="text-xs font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">{files.length}</span>
+          )}
+        </div>
+        <div>
+          <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx" className="hidden" onChange={handleFileChange} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-700 border border-indigo-200 hover:bg-indigo-50 transition disabled:opacity-60"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            {uploading ? 'Uploading…' : 'Upload'}
+          </button>
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="p-4 text-sm text-slate-400">Loading…</div>
+      ) : files.length === 0 ? (
+        <div className="p-6 text-center">
+          <Paperclip className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+          <p className="text-sm text-slate-400">No attachments yet — upload invoices, log sheets, or other documents</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {files.map(f => (
+            <div key={f.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50/60 transition group">
+              <span className="text-lg flex-shrink-0">{fileIcon(f.file_type)}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 truncate">{f.file_name}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {f.file_size ? `${(f.file_size / 1024).toFixed(0)} KB` : ''}
+                  {f.onedrive_web_url && <span className="ml-2 text-sky-500 font-medium">• OneDrive</span>}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {f.onedrive_web_url ? (
+                  <a href={f.onedrive_web_url} target="_blank" rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition">
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                ) : (
+                  <a href={scAPI.serveBillFile(billId, f.id)} target="_blank" rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition">
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                <button onClick={() => handleDelete(f.id, f.file_name)}
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Bill Detail Drawer ───────────────────────────────────────────────────────
 function BillDetailPage({ billId, onClose }) {
   const qc = useQueryClient();
@@ -1447,6 +1566,9 @@ function BillDetailPage({ billId, onClose }) {
                     </div>
                   )}
             </div>
+
+            {/* ── Attachments ── */}
+            <BillAttachmentsPanel billId={billId} />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               {/* ── Left: approval trail + payments ── */}

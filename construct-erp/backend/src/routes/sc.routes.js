@@ -1,6 +1,9 @@
 // sc.routes.js — Complete Subcontractor Management Module
 const express = require('express');
 const router  = express.Router();
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
 const { authenticate, authorize } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const dayjs = require('dayjs');
@@ -8,6 +11,40 @@ const esslService = require('../services/essl.service');
 const { notifyScBillSubmitted, notifyScWoSubmitted } = require('../services/notif.helper');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { BOQ_COST_HEADS } = require('../constants/boqCostHeads');
+const { uploadToOneDrive, isConfigured } = require('../services/onedrive.service');
+
+// ── Multer storage for SC bill file attachments ────────────────────────────
+const scBillStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../../uploads/sc-bills', req.params.id || 'tmp');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${Date.now()}-${safe}`);
+  },
+});
+const scBillUpload = multer({ storage: scBillStorage, limits: { fileSize: 20 * 1024 * 1024 } });
+
+runSchemaInit('sc_bill_files_table', async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS sc_bill_files (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      bill_id          UUID REFERENCES sc_bills(id) ON DELETE CASCADE,
+      file_name        TEXT,
+      file_size        INT,
+      file_type        TEXT,
+      local_url        TEXT,
+      onedrive_id      TEXT,
+      onedrive_url     TEXT,
+      onedrive_web_url TEXT,
+      uploaded_by      UUID,
+      uploaded_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_sc_bill_files_bill ON sc_bill_files(bill_id)`);
+});
 
 runSchemaInit('sc_bill_items_cost_head', async () => {
   await query(`ALTER TABLE sc_bill_items ADD COLUMN IF NOT EXISTS cost_head TEXT`);
@@ -1268,6 +1305,88 @@ router.patch('/bills/:id/reject', authorize('super_admin','admin','project_manag
     });
     if (!result) return res.status(404).json({ error: 'Not found or already rejected' });
     res.json({ data: result });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /sc/bills/:id/files ───────────────────────────────────────────────────
+router.get('/bills/:id/files', async (req, res) => {
+  try {
+    const check = await query(`SELECT id FROM sc_bills WHERE id=$1 AND company_id=$2`, [req.params.id, CID(req)]);
+    if (!check.rows.length) return res.status(404).json({ error: 'Bill not found' });
+    const r = await query(`SELECT * FROM sc_bill_files WHERE bill_id=$1 ORDER BY uploaded_at DESC`, [req.params.id]);
+    res.json({ data: r.rows });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /sc/bills/:id/files ──────────────────────────────────────────────────
+router.post('/bills/:id/files', scBillUpload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const billRes = await query(
+      `SELECT b.id, p.name AS project_name FROM sc_bills b LEFT JOIN projects p ON p.id=b.project_id WHERE b.id=$1 AND b.company_id=$2`,
+      [req.params.id, CID(req)]
+    );
+    if (!billRes.rows.length) return res.status(404).json({ error: 'Bill not found' });
+    const projectName = billRes.rows[0].project_name || 'General';
+
+    const local_url = `/uploads/sc-bills/${req.params.id}/${req.file.filename}`;
+    let onedriveData = null;
+    try {
+      onedriveData = await uploadToOneDrive(req.file.path, req.file.originalname, 'Subcontractor Bills', projectName);
+    } catch (odErr) {
+      console.error('[SC bills] OneDrive upload failed:', odErr.message);
+    }
+
+    const r = await query(`
+      INSERT INTO sc_bill_files (bill_id, file_name, file_size, file_type, local_url, onedrive_id, onedrive_url, onedrive_web_url, uploaded_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+    `, [
+      req.params.id, req.file.originalname, req.file.size, req.file.mimetype, local_url,
+      onedriveData?.onedrive_id || null,
+      onedriveData?.onedrive_url || null,
+      onedriveData?.onedrive_web_url || null,
+      req.user.id,
+    ]);
+    res.status(201).json({ data: r.rows[0], onedrive_synced: !!onedriveData, onedrive_configured: isConfigured() });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /sc/bills/:id/files/:fid ──────────────────────────────────────────
+router.delete('/bills/:id/files/:fid', async (req, res) => {
+  try {
+    const check = await query(`SELECT id FROM sc_bills WHERE id=$1 AND company_id=$2`, [req.params.id, CID(req)]);
+    if (!check.rows.length) return res.status(404).json({ error: 'Bill not found' });
+    const f = await query(`SELECT * FROM sc_bill_files WHERE id=$1 AND bill_id=$2`, [req.params.fid, req.params.id]);
+    if (!f.rows.length) return res.status(404).json({ error: 'File not found' });
+    if (f.rows[0].local_url) {
+      const full = path.join(__dirname, '../../', f.rows[0].local_url);
+      if (fs.existsSync(full)) fs.unlinkSync(full);
+    }
+    await query(`DELETE FROM sc_bill_files WHERE id=$1`, [req.params.fid]);
+    res.json({ message: 'Deleted' });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /sc/bills/:id/files/:fid/serve ───────────────────────────────────────
+router.get('/bills/:id/files/:fid/serve', async (req, res) => {
+  try {
+    const check = await query(`SELECT id FROM sc_bills WHERE id=$1 AND company_id=$2`, [req.params.id, CID(req)]);
+    if (!check.rows.length) return res.status(404).json({ error: 'Bill not found' });
+    const r = await query(`SELECT * FROM sc_bill_files WHERE id=$1 AND bill_id=$2`, [req.params.fid, req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'File not found' });
+    const f = r.rows[0];
+
+    const safeFileName = encodeURIComponent(f.file_name || 'file');
+    if (f.local_url) {
+      const full = path.join(__dirname, '../../', f.local_url);
+      if (fs.existsSync(full)) {
+        res.setHeader('Content-Type', f.file_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${safeFileName}`);
+        return fs.createReadStream(full).pipe(res);
+      }
+    }
+    if (f.onedrive_web_url) return res.redirect(f.onedrive_web_url);
+    res.status(404).json({ error: 'File no longer available' });
   } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
