@@ -1201,7 +1201,7 @@ function BillDetailDrawer({ billId, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full max-w-3xl bg-white shadow-2xl flex flex-col overflow-hidden">
         {/* Drawer header */}
         <div className="px-5 py-4 flex items-center justify-between"
           style={{ background: `linear-gradient(135deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)` }}>
