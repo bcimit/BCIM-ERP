@@ -783,7 +783,7 @@ router.get('/bills', async (req, res) => {
 
 router.get('/bills/:id', async (req, res) => {
   try {
-    const bill = await query(`SELECT b.*, wo.wo_number, wo.contract_amount, wo.gst_pct AS wo_gst_pct, wo.tds_pct AS wo_tds_pct, wo.retention_pct AS wo_ret_pct, sc.name AS sc_name, sc.sc_code, sc.gst_number AS sc_gstin, p.name AS project_name, uc.name AS submitted_by_name, uv.name AS verified_by_name, ua.name AS approved_by_name FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id JOIN sc_subcontractors sc ON sc.id=b.sc_id JOIN projects p ON p.id=b.project_id LEFT JOIN users uc ON uc.id=b.created_by LEFT JOIN users uv ON uv.id=b.verified_by LEFT JOIN users ua ON ua.id=b.approved_by WHERE b.id=$1 AND b.company_id=$2`, [req.params.id, CID(req)]);
+    const bill = await query(`SELECT b.*, wo.wo_number, wo.contract_amount, wo.gst_pct AS wo_gst_pct, wo.tds_pct AS wo_tds_pct, wo.retention_pct AS wo_ret_pct, sc.name AS sc_name, sc.sc_code, sc.gst_number AS sc_gstin, p.name AS project_name, uc.name AS submitted_by_name, ua.name AS approved_by_name FROM sc_bills b JOIN sc_work_orders wo ON wo.id=b.wo_id JOIN sc_subcontractors sc ON sc.id=b.sc_id JOIN projects p ON p.id=b.project_id LEFT JOIN users uc ON uc.id=b.created_by LEFT JOIN users ua ON ua.id=b.approved_by WHERE b.id=$1 AND b.company_id=$2`, [req.params.id, CID(req)]);
     if (!bill.rows.length) return res.status(404).json({ error: 'Not found' });
     const b = bill.rows[0];
 
