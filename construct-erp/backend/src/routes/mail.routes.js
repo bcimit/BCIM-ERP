@@ -120,7 +120,7 @@ router.post('/erp-daily-report', async (req, res) => {
                FROM sc_bills WHERE company_id=$1 AND created_at::date = $2`, [cid, todayISO]),
       query(`SELECT COUNT(*)::int AS cnt, COALESCE(SUM(total_amount),0)::numeric AS total
                FROM tqs_bills WHERE company_id=$1 AND created_at::date = $2 AND is_deleted=false`, [cid, todayISO]),
-      query(`SELECT COUNT(*)::int AS cnt FROM material_requisitions WHERE company_id=$1 AND created_at::date = $2`, [cid, todayISO]),
+      query(`SELECT COUNT(*)::int AS cnt FROM material_requisitions mr JOIN projects p ON p.id = mr.project_id WHERE p.company_id=$1 AND mr.created_at::date = $2`, [cid, todayISO]),
       query(`SELECT COUNT(*)::int AS cnt, COALESCE(SUM(grand_total),0)::numeric AS total
                FROM purchase_orders WHERE company_id=$1 AND created_at::date = $2`, [cid, todayISO]),
     ]);
