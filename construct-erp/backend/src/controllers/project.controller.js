@@ -13,13 +13,48 @@ const attachProjectSpend = async (projects) => {
   if (!projects.length) return projects;
 
   const ids = projects.map((p) => p.id);
-  // Sum all spend sources matching Budget Control total: bills + advances + petty cash
+  // Mirror Budget Control's actualMap exactly:
+  //   receivedMap = RA bills (certified/paid) + SC bills (approved/paid)
+  //               + TQS bill line items (cost_head IS NOT NULL) + PO fallback
+  //   + advances (sc_advances, tqs_advance_vouchers, tqs_advances,
+  //               stores_petty_cash_entries, stores_pc_sc_advances)
   const spend = await query(
-    `WITH bills AS (
-       SELECT project_id, COALESCE(SUM(total_amount), 0) AS amount
-       FROM tqs_bills
-       WHERE project_id = ANY($1::uuid[]) AND COALESCE(is_deleted, FALSE) = FALSE
-       GROUP BY project_id
+    `WITH ra AS (
+       SELECT rb.project_id,
+         COALESCE(SUM(rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0)), 0) AS amount
+       FROM ra_bill_items rbi
+       JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
+       WHERE rb.project_id = ANY($1::uuid[]) AND rb.status IN ('certified','paid')
+       GROUP BY rb.project_id
+     ),
+     sc AS (
+       SELECT sb.project_id,
+         COALESCE(SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)), 0) AS amount
+       FROM sc_bill_items bi
+       JOIN sc_bills sb ON sb.id = bi.bill_id
+       WHERE sb.project_id = ANY($1::uuid[]) AND sb.status IN ('approved','paid')
+       GROUP BY sb.project_id
+     ),
+     tqs AS (
+       SELECT tb.project_id,
+         COALESCE(SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)), 0) AS amount
+       FROM tqs_bill_line_items li
+       JOIN tqs_bills tb ON tb.id = li.bill_id
+       WHERE tb.project_id = ANY($1::uuid[]) AND tb.is_deleted = FALSE AND li.cost_head IS NOT NULL
+       GROUP BY tb.project_id
+     ),
+     po_fallback AS (
+       SELECT po.project_id,
+         COALESCE(SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0)), 0) AS amount
+       FROM po_items pi
+       JOIN purchase_orders po ON po.id = pi.po_id
+       JOIN tqs_bill_line_items li ON li.po_item_id = pi.id
+       JOIN tqs_bills tb ON tb.id = li.bill_id
+       WHERE po.project_id = ANY($1::uuid[])
+         AND po.status NOT IN ('rejected','cancelled')
+         AND pi.cost_head IS NOT NULL AND li.cost_head IS NULL
+         AND tb.is_deleted = FALSE AND tb.workflow_status NOT IN ('rejected')
+       GROUP BY po.project_id
      ),
      adv_vouchers AS (
        SELECT project_id, COALESCE(SUM(paid_amount), 0) AS amount
@@ -53,7 +88,10 @@ const attachProjectSpend = async (projects) => {
        GROUP BY project_id
      )
      SELECT ids.id AS project_id,
-       COALESCE(bills.amount, 0)
+       COALESCE(ra.amount, 0)
+       + COALESCE(sc.amount, 0)
+       + COALESCE(tqs.amount, 0)
+       + COALESCE(po_fallback.amount, 0)
        + COALESCE(adv_vouchers.amount, 0)
        + COALESCE(tqs_adv.amount, 0)
        + COALESCE(pc.amount, 0)
@@ -61,7 +99,10 @@ const attachProjectSpend = async (projects) => {
        + COALESCE(store_pc_adv.amount, 0)
        AS total_spent
      FROM unnest($1::uuid[]) AS ids(id)
-     LEFT JOIN bills        ON bills.project_id        = ids.id
+     LEFT JOIN ra           ON ra.project_id           = ids.id
+     LEFT JOIN sc           ON sc.project_id           = ids.id
+     LEFT JOIN tqs          ON tqs.project_id          = ids.id
+     LEFT JOIN po_fallback  ON po_fallback.project_id  = ids.id
      LEFT JOIN adv_vouchers ON adv_vouchers.project_id = ids.id
      LEFT JOIN tqs_adv      ON tqs_adv.project_id      = ids.id
      LEFT JOIN pc           ON pc.project_id           = ids.id
@@ -88,12 +129,15 @@ const getProjects = async (req, res) => {
         qe.name as qs_name,
         (SELECT COUNT(*) FROM boq_items WHERE project_id = p.id) as boq_count,
         (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE project_id = p.id AND payment_status = 'paid') as amount_collected,
-        (SELECT COALESCE(SUM(total_amount),0) FROM tqs_bills WHERE project_id=p.id AND COALESCE(is_deleted,FALSE)=FALSE)
-        + (SELECT COALESCE(SUM(paid_amount),0) FROM tqs_advance_vouchers WHERE project_id=p.id AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0)
-        + (SELECT COALESCE(SUM(amount),0) FROM tqs_advances WHERE project_id=p.id AND COALESCE(status,'') NOT IN ('cancelled'))
-        + (SELECT COALESCE(SUM(amount),0) FROM stores_petty_cash_entries WHERE project_id=p.id AND status='Approved')
-        + (SELECT COALESCE(SUM(amount),0) FROM sc_advances WHERE project_id=p.id AND status NOT IN ('cancelled'))
-        + (SELECT COALESCE(SUM(amount),0) FROM stores_pc_sc_advances WHERE project_id=p.id AND status!='cancelled')
+        (SELECT COALESCE(SUM(rbi.current_qty*rbi.rate*(1+COALESCE(rb.gst_rate,18)/100.0)),0) FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id=rbi.ra_bill_id WHERE rb.project_id=p.id AND rb.status IN ('certified','paid'))
+        +(SELECT COALESCE(SUM(bi.curr_qty*bi.rate*(1+COALESCE(sb.gst_pct,18)/100.0)),0) FROM sc_bill_items bi JOIN sc_bills sb ON sb.id=bi.bill_id WHERE sb.project_id=p.id AND sb.status IN ('approved','paid'))
+        +(SELECT COALESCE(SUM(li.basic_amount+COALESCE(li.cgst_amt,0)+COALESCE(li.sgst_amt,0)+COALESCE(li.igst_amt,0)),0) FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id=li.bill_id WHERE tb.project_id=p.id AND tb.is_deleted=FALSE AND li.cost_head IS NOT NULL)
+        +(SELECT COALESCE(SUM(li.basic_amount+COALESCE(li.cgst_amt,0)+COALESCE(li.sgst_amt,0)+COALESCE(li.igst_amt,0)),0) FROM po_items pi JOIN purchase_orders po ON po.id=pi.po_id JOIN tqs_bill_line_items li ON li.po_item_id=pi.id JOIN tqs_bills tb ON tb.id=li.bill_id WHERE po.project_id=p.id AND po.status NOT IN ('rejected','cancelled') AND pi.cost_head IS NOT NULL AND li.cost_head IS NULL AND tb.is_deleted=FALSE AND tb.workflow_status NOT IN ('rejected'))
+        +(SELECT COALESCE(SUM(paid_amount),0) FROM tqs_advance_vouchers WHERE project_id=p.id AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0)
+        +(SELECT COALESCE(SUM(amount),0) FROM tqs_advances WHERE project_id=p.id AND COALESCE(status,'') NOT IN ('cancelled'))
+        +(SELECT COALESCE(SUM(amount),0) FROM stores_petty_cash_entries WHERE project_id=p.id AND status='Approved')
+        +(SELECT COALESCE(SUM(amount),0) FROM sc_advances WHERE project_id=p.id AND status NOT IN ('cancelled'))
+        +(SELECT COALESCE(SUM(amount),0) FROM stores_pc_sc_advances WHERE project_id=p.id AND status!='cancelled')
         as total_spent
       FROM projects p
       LEFT JOIN users pm ON p.project_manager_id = pm.id
@@ -138,12 +182,15 @@ const getProject = async (req, res) => {
         qe.name as qs_name,
         (SELECT COALESCE(SUM(amount),0) FROM boq_items WHERE project_id = p.id) as total_boq_value,
         (SELECT COALESCE(SUM(net_payable),0) FROM ra_bills WHERE project_id = p.id AND status = 'certified') as total_certified,
-        (SELECT COALESCE(SUM(total_amount),0) FROM tqs_bills WHERE project_id=p.id AND COALESCE(is_deleted,FALSE)=FALSE)
-        + (SELECT COALESCE(SUM(paid_amount),0) FROM tqs_advance_vouchers WHERE project_id=p.id AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0)
-        + (SELECT COALESCE(SUM(amount),0) FROM tqs_advances WHERE project_id=p.id AND COALESCE(status,'') NOT IN ('cancelled'))
-        + (SELECT COALESCE(SUM(amount),0) FROM stores_petty_cash_entries WHERE project_id=p.id AND status='Approved')
-        + (SELECT COALESCE(SUM(amount),0) FROM sc_advances WHERE project_id=p.id AND status NOT IN ('cancelled'))
-        + (SELECT COALESCE(SUM(amount),0) FROM stores_pc_sc_advances WHERE project_id=p.id AND status!='cancelled')
+        (SELECT COALESCE(SUM(rbi.current_qty*rbi.rate*(1+COALESCE(rb.gst_rate,18)/100.0)),0) FROM ra_bill_items rbi JOIN ra_bills rb ON rb.id=rbi.ra_bill_id WHERE rb.project_id=p.id AND rb.status IN ('certified','paid'))
+        +(SELECT COALESCE(SUM(bi.curr_qty*bi.rate*(1+COALESCE(sb.gst_pct,18)/100.0)),0) FROM sc_bill_items bi JOIN sc_bills sb ON sb.id=bi.bill_id WHERE sb.project_id=p.id AND sb.status IN ('approved','paid'))
+        +(SELECT COALESCE(SUM(li.basic_amount+COALESCE(li.cgst_amt,0)+COALESCE(li.sgst_amt,0)+COALESCE(li.igst_amt,0)),0) FROM tqs_bill_line_items li JOIN tqs_bills tb ON tb.id=li.bill_id WHERE tb.project_id=p.id AND tb.is_deleted=FALSE AND li.cost_head IS NOT NULL)
+        +(SELECT COALESCE(SUM(li.basic_amount+COALESCE(li.cgst_amt,0)+COALESCE(li.sgst_amt,0)+COALESCE(li.igst_amt,0)),0) FROM po_items pi JOIN purchase_orders po ON po.id=pi.po_id JOIN tqs_bill_line_items li ON li.po_item_id=pi.id JOIN tqs_bills tb ON tb.id=li.bill_id WHERE po.project_id=p.id AND po.status NOT IN ('rejected','cancelled') AND pi.cost_head IS NOT NULL AND li.cost_head IS NULL AND tb.is_deleted=FALSE AND tb.workflow_status NOT IN ('rejected'))
+        +(SELECT COALESCE(SUM(paid_amount),0) FROM tqs_advance_vouchers WHERE project_id=p.id AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0)
+        +(SELECT COALESCE(SUM(amount),0) FROM tqs_advances WHERE project_id=p.id AND COALESCE(status,'') NOT IN ('cancelled'))
+        +(SELECT COALESCE(SUM(amount),0) FROM stores_petty_cash_entries WHERE project_id=p.id AND status='Approved')
+        +(SELECT COALESCE(SUM(amount),0) FROM sc_advances WHERE project_id=p.id AND status NOT IN ('cancelled'))
+        +(SELECT COALESCE(SUM(amount),0) FROM stores_pc_sc_advances WHERE project_id=p.id AND status!='cancelled')
         as total_spent,
         (SELECT COUNT(*) FROM workers WHERE project_id = p.id AND is_active = true) as worker_count,
         (SELECT COUNT(*) FROM incidents WHERE project_id = p.id AND status != 'closed') as open_incidents
