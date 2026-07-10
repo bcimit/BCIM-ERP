@@ -13,26 +13,15 @@ const attachProjectSpend = async (projects) => {
   if (!projects.length) return projects;
 
   const ids = projects.map((p) => p.id);
+  // Use same source as Budget Control "Total Spent": sum of paid tqs_bills
   const spend = await query(
-    `WITH po_spend AS (
-       SELECT project_id, COALESCE(SUM(grand_total), 0) AS amount
-       FROM purchase_orders
-       WHERE project_id = ANY($1::uuid[])
-         AND status NOT IN ('cancelled', 'draft')
-       GROUP BY project_id
-     ),
-     wo_spend AS (
-       SELECT project_id, COALESCE(SUM(total_value), 0) AS amount
-       FROM work_orders
-       WHERE project_id = ANY($1::uuid[])
-         AND status NOT IN ('cancelled', 'draft', 'terminated')
-       GROUP BY project_id
-     )
-     SELECT id AS project_id,
-       COALESCE(po_spend.amount, 0) + COALESCE(wo_spend.amount, 0) AS total_spent
-     FROM unnest($1::uuid[]) AS ids(id)
-     LEFT JOIN po_spend ON po_spend.project_id = ids.id
-     LEFT JOIN wo_spend ON wo_spend.project_id = ids.id`,
+    `SELECT project_id,
+       COALESCE(SUM(total_amount), 0) AS total_spent
+     FROM tqs_bills
+     WHERE project_id = ANY($1::uuid[])
+       AND workflow_status = 'paid'
+       AND COALESCE(is_deleted, FALSE) = FALSE
+     GROUP BY project_id`,
     [ids]
   );
 
@@ -54,8 +43,7 @@ const getProjects = async (req, res) => {
         qe.name as qs_name,
         (SELECT COUNT(*) FROM boq_items WHERE project_id = p.id) as boq_count,
         (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE project_id = p.id AND payment_status = 'paid') as amount_collected,
-        (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE project_id = p.id AND status NOT IN ('cancelled','draft'))
-        + (SELECT COALESCE(SUM(total_value), 0) FROM work_orders WHERE project_id = p.id AND status NOT IN ('cancelled','draft','terminated'))
+        (SELECT COALESCE(SUM(total_amount), 0) FROM tqs_bills WHERE project_id = p.id AND workflow_status = 'paid' AND COALESCE(is_deleted, FALSE) = FALSE)
         as total_spent
       FROM projects p
       LEFT JOIN users pm ON p.project_manager_id = pm.id
@@ -100,8 +88,7 @@ const getProject = async (req, res) => {
         qe.name as qs_name,
         (SELECT COALESCE(SUM(amount),0) FROM boq_items WHERE project_id = p.id) as total_boq_value,
         (SELECT COALESCE(SUM(net_payable),0) FROM ra_bills WHERE project_id = p.id AND status = 'certified') as total_certified,
-        (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_orders WHERE project_id = p.id AND status NOT IN ('cancelled','draft'))
-        + (SELECT COALESCE(SUM(total_value), 0) FROM work_orders WHERE project_id = p.id AND status NOT IN ('cancelled','draft','terminated'))
+        (SELECT COALESCE(SUM(total_amount), 0) FROM tqs_bills WHERE project_id = p.id AND workflow_status = 'paid' AND COALESCE(is_deleted, FALSE) = FALSE)
         as total_spent,
         (SELECT COUNT(*) FROM workers WHERE project_id = p.id AND is_active = true) as worker_count,
         (SELECT COUNT(*) FROM incidents WHERE project_id = p.id AND status != 'closed') as open_incidents
