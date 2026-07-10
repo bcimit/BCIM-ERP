@@ -13,15 +13,60 @@ const attachProjectSpend = async (projects) => {
   if (!projects.length) return projects;
 
   const ids = projects.map((p) => p.id);
-  // Use same source as Budget Control "Total Spent": sum of paid tqs_bills
+  // Sum all spend sources matching Budget Control total: bills + advances + petty cash
   const spend = await query(
-    `SELECT project_id,
-       COALESCE(SUM(total_amount), 0) AS total_spent
-     FROM tqs_bills
-     WHERE project_id = ANY($1::uuid[])
-       AND workflow_status = 'paid'
-       AND COALESCE(is_deleted, FALSE) = FALSE
-     GROUP BY project_id`,
+    `WITH bills AS (
+       SELECT project_id, COALESCE(SUM(total_amount), 0) AS amount
+       FROM tqs_bills
+       WHERE project_id = ANY($1::uuid[]) AND COALESCE(is_deleted, FALSE) = FALSE
+       GROUP BY project_id
+     ),
+     adv_vouchers AS (
+       SELECT project_id, COALESCE(SUM(paid_amount), 0) AS amount
+       FROM tqs_advance_vouchers
+       WHERE project_id = ANY($1::uuid[]) AND is_deleted = false
+         AND status IN ('issued','partial','recovered') AND paid_amount > 0
+       GROUP BY project_id
+     ),
+     tqs_adv AS (
+       SELECT project_id, COALESCE(SUM(amount), 0) AS amount
+       FROM tqs_advances
+       WHERE project_id = ANY($1::uuid[]) AND COALESCE(status,'') NOT IN ('cancelled')
+       GROUP BY project_id
+     ),
+     pc AS (
+       SELECT project_id, COALESCE(SUM(amount), 0) AS amount
+       FROM stores_petty_cash_entries
+       WHERE project_id = ANY($1::uuid[]) AND status = 'Approved'
+       GROUP BY project_id
+     ),
+     sc_adv AS (
+       SELECT project_id, COALESCE(SUM(amount), 0) AS amount
+       FROM sc_advances
+       WHERE project_id = ANY($1::uuid[]) AND status NOT IN ('cancelled')
+       GROUP BY project_id
+     ),
+     store_pc_adv AS (
+       SELECT project_id, COALESCE(SUM(amount), 0) AS amount
+       FROM stores_pc_sc_advances
+       WHERE project_id = ANY($1::uuid[]) AND status != 'cancelled'
+       GROUP BY project_id
+     )
+     SELECT ids.id AS project_id,
+       COALESCE(bills.amount, 0)
+       + COALESCE(adv_vouchers.amount, 0)
+       + COALESCE(tqs_adv.amount, 0)
+       + COALESCE(pc.amount, 0)
+       + COALESCE(sc_adv.amount, 0)
+       + COALESCE(store_pc_adv.amount, 0)
+       AS total_spent
+     FROM unnest($1::uuid[]) AS ids(id)
+     LEFT JOIN bills        ON bills.project_id        = ids.id
+     LEFT JOIN adv_vouchers ON adv_vouchers.project_id = ids.id
+     LEFT JOIN tqs_adv      ON tqs_adv.project_id      = ids.id
+     LEFT JOIN pc           ON pc.project_id           = ids.id
+     LEFT JOIN sc_adv       ON sc_adv.project_id       = ids.id
+     LEFT JOIN store_pc_adv ON store_pc_adv.project_id = ids.id`,
     [ids]
   );
 
@@ -43,7 +88,12 @@ const getProjects = async (req, res) => {
         qe.name as qs_name,
         (SELECT COUNT(*) FROM boq_items WHERE project_id = p.id) as boq_count,
         (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE project_id = p.id AND payment_status = 'paid') as amount_collected,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM tqs_bills WHERE project_id = p.id AND workflow_status = 'paid' AND COALESCE(is_deleted, FALSE) = FALSE)
+        (SELECT COALESCE(SUM(total_amount),0) FROM tqs_bills WHERE project_id=p.id AND COALESCE(is_deleted,FALSE)=FALSE)
+        + (SELECT COALESCE(SUM(paid_amount),0) FROM tqs_advance_vouchers WHERE project_id=p.id AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0)
+        + (SELECT COALESCE(SUM(amount),0) FROM tqs_advances WHERE project_id=p.id AND COALESCE(status,'') NOT IN ('cancelled'))
+        + (SELECT COALESCE(SUM(amount),0) FROM stores_petty_cash_entries WHERE project_id=p.id AND status='Approved')
+        + (SELECT COALESCE(SUM(amount),0) FROM sc_advances WHERE project_id=p.id AND status NOT IN ('cancelled'))
+        + (SELECT COALESCE(SUM(amount),0) FROM stores_pc_sc_advances WHERE project_id=p.id AND status!='cancelled')
         as total_spent
       FROM projects p
       LEFT JOIN users pm ON p.project_manager_id = pm.id
@@ -88,7 +138,12 @@ const getProject = async (req, res) => {
         qe.name as qs_name,
         (SELECT COALESCE(SUM(amount),0) FROM boq_items WHERE project_id = p.id) as total_boq_value,
         (SELECT COALESCE(SUM(net_payable),0) FROM ra_bills WHERE project_id = p.id AND status = 'certified') as total_certified,
-        (SELECT COALESCE(SUM(total_amount), 0) FROM tqs_bills WHERE project_id = p.id AND workflow_status = 'paid' AND COALESCE(is_deleted, FALSE) = FALSE)
+        (SELECT COALESCE(SUM(total_amount),0) FROM tqs_bills WHERE project_id=p.id AND COALESCE(is_deleted,FALSE)=FALSE)
+        + (SELECT COALESCE(SUM(paid_amount),0) FROM tqs_advance_vouchers WHERE project_id=p.id AND is_deleted=false AND status IN ('issued','partial','recovered') AND paid_amount>0)
+        + (SELECT COALESCE(SUM(amount),0) FROM tqs_advances WHERE project_id=p.id AND COALESCE(status,'') NOT IN ('cancelled'))
+        + (SELECT COALESCE(SUM(amount),0) FROM stores_petty_cash_entries WHERE project_id=p.id AND status='Approved')
+        + (SELECT COALESCE(SUM(amount),0) FROM sc_advances WHERE project_id=p.id AND status NOT IN ('cancelled'))
+        + (SELECT COALESCE(SUM(amount),0) FROM stores_pc_sc_advances WHERE project_id=p.id AND status!='cancelled')
         as total_spent,
         (SELECT COUNT(*) FROM workers WHERE project_id = p.id AND is_active = true) as worker_count,
         (SELECT COUNT(*) FROM incidents WHERE project_id = p.id AND status != 'closed') as open_incidents
