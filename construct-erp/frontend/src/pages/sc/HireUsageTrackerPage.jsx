@@ -472,6 +472,11 @@ function DailyLogSection({ wo, equipmentGroups, onCreateBill }) {
 
   const selectedCat = allCats.find(c => c.id === newItemId);
   const qtyUnit = selectedCat?.unit || 'Qty';
+  const isMonthlyUnit = /month/i.test(qtyUnit);
+  const qtyLabel = isMonthlyUnit ? 'Days Worked' : qtyUnit;
+
+  // Hide "Create Bill from Log" if all WO categories are monthly-rated (bill raised manually)
+  const allMonthly = allCats.length > 0 && allCats.every(c => /month/i.test(c.unit || ''));
 
   const { data: raw = [] } = useQuery({
     queryKey: ['hire-daily-log', wo.id],
@@ -538,7 +543,7 @@ function DailyLogSection({ wo, equipmentGroups, onCreateBill }) {
           )}
         </div>
         <div className="flex gap-2">
-          {Object.keys(totalsPerItem).length > 0 && (
+          {Object.keys(totalsPerItem).length > 0 && !allMonthly && (
             <button onClick={handleCreateBill}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition">
               <Receipt className="w-3.5 h-3.5" /> Create Bill from Log
@@ -574,9 +579,9 @@ function DailyLogSection({ wo, equipmentGroups, onCreateBill }) {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{qtyUnit} *</label>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{qtyLabel} *</label>
             <input type="number" step="0.5" min="0" value={newQty} onChange={e => setNewQty(e.target.value)}
-              className={inp} style={{ width: 80 }} placeholder={qtyUnit === 'Day' || qtyUnit === 'Month' ? '1' : 'e.g. 5.5'} />
+              className={inp} style={{ width: 80 }} placeholder={isMonthlyUnit ? '1' : qtyUnit === 'Day' ? '1' : 'e.g. 5.5'} />
           </div>
           <div className="flex-1" style={{ minWidth: 140 }}>
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Notes</label>
