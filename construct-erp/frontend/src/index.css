@@ -9,7 +9,8 @@ html { scrollbar-gutter: stable; }
 @tailwind utilities;
 
 @layer base {
-  html { font-size: 12px; }
+  /* Fluid font: 11px @ 1024px wide → 13px @ 1920px wide — auto-fits all laptop sizes */
+  html { font-size: clamp(11px, 0.9vw, 13px); }
 
   body {
     /* text-slate-700 instead of 900 — softer base reading colour */
@@ -293,7 +294,7 @@ html { scrollbar-gutter: stable; }
 
 /* ── Mobile Responsive ─────────────────────────────────── */
 @media (max-width: 1023px) {
-  html { font-size: 13px; }
+  html { font-size: clamp(10px, 1.5vw, 12px); }
 
   /* Page headers: reduce padding */
   .page-header { @apply px-3 py-2 gap-2; }
