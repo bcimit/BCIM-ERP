@@ -164,6 +164,16 @@ function MBDrawer({ mbId, onClose }) {
     staleTime:0, enabled:!!mbId,
   });
 
+  // Fetch all approved MB entries for the same WO so we can show the count
+  const { data: siblingMBs = [] } = useQuery({
+    queryKey:['sc-mb-siblings', mb?.wo_id],
+    queryFn:()=>scAPI.listMB({ wo_id: mb.wo_id, status: 'approved' }).then(r=>r.data?.data||[]),
+    enabled: !!mb?.wo_id && mb?.status === 'approved',
+    staleTime: 30_000,
+  });
+  const siblingCount = siblingMBs.length;
+  const siblingTotalQty = siblingMBs.reduce((s,m)=>s+num(m.executed_qty),0);
+
   const mutOpts = (msg) => ({
     onSuccess:()=>{ toast.success(msg); qc.invalidateQueries({queryKey:['sc-mb']}); qc.invalidateQueries({queryKey:['sc-mb-detail',mbId]}); setComment(''); },
     onError:e=>toast.error(e?.response?.data?.error||'Failed'),
@@ -318,17 +328,43 @@ function MBDrawer({ mbId, onClose }) {
 
               {/* Approved — Link to Bill CTA */}
               {mb.status === 'approved' && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center justify-between shadow-sm">
-                  <div>
-                    <p className="text-sm font-bold text-emerald-800">This MB entry is Approved</p>
-                    <p className="text-xs text-emerald-600 mt-0.5">Click "Link to Bill" to raise a bill for this work order.</p>
-                    {mb.approve_remarks && <p className="text-xs text-emerald-700 mt-1 italic">✓ {mb.approve_remarks}</p>}
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-5 py-3 flex items-center justify-between" style={{background:'#059669'}}>
+                    <p className="text-sm font-bold text-white">✓ Approved — Ready to Bill</p>
+                    <button onClick={handleLinkToBill}
+                      className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold text-emerald-800 transition-colors"
+                      style={{background:'#fff'}}>
+                      <Link2 className="w-4 h-4"/> Link to Bill
+                    </button>
                   </div>
-                  <button onClick={handleLinkToBill}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white ml-4 flex-shrink-0 transition-colors"
-                    style={{background:'#10b981'}}>
-                    <Link2 className="w-4 h-4"/> Link to Bill
-                  </button>
+                  <div className="px-5 py-4">
+                    {siblingCount > 1 ? (
+                      <>
+                        <p className="text-sm font-semibold text-emerald-800">
+                          {siblingCount} approved MB entries for <span className="font-bold">{mb.wo_number}</span> will be combined into one bill.
+                        </p>
+                        <p className="text-xs text-emerald-600 mt-1">
+                          Total executed qty across all entries: <span className="font-bold">{siblingTotalQty.toLocaleString('en-IN')} {mb.unit||''}</span>
+                        </p>
+                        <div className="mt-3 space-y-1.5">
+                          {siblingMBs.map(s=>(
+                            <div key={s.id} className={clsx(
+                              'flex justify-between text-xs px-3 py-1.5 rounded-lg',
+                              s.id === mbId ? 'bg-emerald-200 font-bold text-emerald-900' : 'bg-white border border-emerald-100 text-emerald-700'
+                            )}>
+                              <span>{s.mb_number} — {s.description}</span>
+                              <span className="font-semibold">{num(s.executed_qty).toLocaleString('en-IN')} {s.unit||''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-emerald-700">
+                        Click <strong>Link to Bill</strong> to raise a bill for WO <strong>{mb.wo_number}</strong>.
+                      </p>
+                    )}
+                    {mb.approve_remarks && <p className="text-xs text-emerald-600 mt-2 italic">Approval note: {mb.approve_remarks}</p>}
+                  </div>
                 </div>
               )}
 
