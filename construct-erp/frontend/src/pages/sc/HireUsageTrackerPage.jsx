@@ -6,7 +6,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { hireLogAPI, scAPI } from '../../api/client';
-import { useAuthStore } from '../../store/authStore';
+import useAuthStore from '../../store/authStore';
 import { PageHeader, Theme } from '../../theme';
 import { Plus, X, Receipt, Trash2, CheckCircle2, Clock, Truck, Settings, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
