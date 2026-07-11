@@ -30,7 +30,10 @@ const netBg  = '#EAF1FB';
 
 const T = {
   page:     { fontFamily: "'Times New Roman',Times,serif", fontSize: '11px', color: '#0A0A0A', fontWeight: '500' },
-  sheet:    { width: '100%', background: '#fff', padding: '4mm 3mm 6mm 3mm', boxSizing: 'border-box', pageBreakAfter: 'always' },
+  // No forced pageBreakAfter here — each print mode (abstract/payment) shows
+  // exactly one visible .print-sheet at a time (the other is display:none),
+  // so an unconditional break-after just adds a wasted blank trailing page.
+  sheet:    { width: '100%', background: '#fff', padding: '4mm 3mm 6mm 3mm', boxSizing: 'border-box' },
   masthead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: `3px double ${navy}`, paddingBottom: '10px', marginBottom: '10px' },
   logoArea: { display: 'flex', alignItems: 'center', gap: '12px' },
   coName:   { fontSize: '15px', fontWeight: 'bold', color: navy, letterSpacing: '0.6px', lineHeight: 1.2 },
@@ -55,7 +58,10 @@ const T = {
   amtBox:   { marginTop: '10px', border: `1px solid ${navy}`, borderLeft: `4px solid ${navy}`, padding: '7px 14px', fontSize: '11px', background: netBg, lineHeight: 1.6, fontWeight: '600' },
   remarks:  { fontSize: '9.5px', color: '#111', marginTop: '8px', borderTop: `1px solid #C8D6E8`, paddingTop: '5px', fontWeight: '500' },
   sigGrid:  { display: 'flex', gap: '6px', marginTop: '16px', flexWrap: 'wrap' },
-  sigBox:   { flex: '1 1 110px', minWidth: '100px', border: `1px solid #BCC8DC`, padding: '7px 5px', textAlign: 'center', fontSize: '9px', background: '#FAFCFF' },
+  // breakInside avoid stops Chrome's print engine from splitting a single
+  // signature box across a page boundary (it was rendering the box's top
+  // half on one page and duplicating the bottom half on the next).
+  sigBox:   { flex: '1 1 110px', minWidth: '100px', border: `1px solid #BCC8DC`, padding: '7px 5px', textAlign: 'center', fontSize: '9px', background: '#FAFCFF', breakInside: 'avoid', WebkitColumnBreakInside: 'avoid' },
   stamp:    { width: '52px', height: '44px', border: '1px dashed #AAB8CC', margin: '0 auto 5px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7.5px', color: '#666', letterSpacing: '0.4px', fontWeight: 'bold' },
   sigRole:  { fontWeight: 'bold', color: navy, fontSize: '9px', marginBottom: '3px', lineHeight: '1.3' },
   sigDate:  { marginTop: '5px', fontSize: '8.5px', color: '#111', borderTop: '1px solid #C0C8D8', paddingTop: '3px', fontWeight: '500' },
