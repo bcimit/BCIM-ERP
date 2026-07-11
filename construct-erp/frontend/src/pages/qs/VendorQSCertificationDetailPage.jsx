@@ -212,21 +212,25 @@ function AbstractSheet({ cert }) {
           Total ≈ 281mm (A4 landscape 297mm − 8mm margins each side − 8mm sheet padding each side) */}
       <table style={T.tbl}>
         <colgroup>
-          <col style={{width:'20px'}}/>  {/* Sl */}
-          <col style={{width:'28px'}}/>  {/* RA */}
-          <col style={{width:'17%'}}/>   {/* Description — proportional */}
-          <col style={{width:'24px'}}/>  {/* Unit */}
-          <col style={{width:'34px'}}/>  {/* Order Qty */}
-          <col style={{width:'50px'}}/>  {/* Order Rate */}
-          <col style={{width:'56px'}}/>  {/* Order Amount */}
-          <col style={{width:'34px'}}/>  {/* Inv Prev Qty */}
-          <col style={{width:'34px'}}/>  {/* Inv Pres Qty */}
-          <col style={{width:'56px'}}/>  {/* Inv Amount */}
-          <col style={{width:'34px'}}/>  {/* QS Prev Qty */}
-          <col style={{width:'34px'}}/>  {/* QS Pres Qty */}
-          <col style={{width:'56px'}}/>  {/* QS Amount */}
-          <col style={{width:'34px'}}/>  {/* Bal Qty */}
-          <col style={{width:'60px'}}/>  {/* Bal Amount */}
+          <col style={{width:'18px'}}/>  {/* Sl */}
+          <col style={{width:'26px'}}/>  {/* RA */}
+          <col style={{width:'14%'}}/>   {/* Description — proportional */}
+          <col style={{width:'22px'}}/>  {/* Unit */}
+          <col style={{width:'30px'}}/>  {/* Order Qty */}
+          <col style={{width:'44px'}}/>  {/* Order Rate */}
+          <col style={{width:'50px'}}/>  {/* Order Amount */}
+          <col style={{width:'30px'}}/>  {/* Inv Prev Qty */}
+          <col style={{width:'30px'}}/>  {/* Inv Pres Qty */}
+          <col style={{width:'50px'}}/>  {/* Inv Amount */}
+          <col style={{width:'32px'}}/>  {/* Weighment Qty */}
+          <col style={{width:'32px'}}/>  {/* MSB */}
+          <col style={{width:'32px'}}/>  {/* IGN */}
+          <col style={{width:'32px'}}/>  {/* GRS */}
+          <col style={{width:'30px'}}/>  {/* QS Prev Qty */}
+          <col style={{width:'30px'}}/>  {/* QS Pres Qty */}
+          <col style={{width:'50px'}}/>  {/* QS Amount */}
+          <col style={{width:'30px'}}/>  {/* Bal Qty */}
+          <col style={{width:'54px'}}/>  {/* Bal Amount */}
         </colgroup>
         <thead>
           <tr>
@@ -236,6 +240,10 @@ function AbstractSheet({ cert }) {
             <th style={T.th} rowSpan={2}>Unit</th>
             <th style={T.th} colSpan={3}>As Per Work / Purchase Order</th>
             <th style={T.th} colSpan={3}>As Per Invoice</th>
+            <th style={T.th} rowSpan={2}>As Per<br/>Weighment</th>
+            <th style={T.th} rowSpan={2}>MSB</th>
+            <th style={T.th} rowSpan={2}>IGN</th>
+            <th style={T.th} rowSpan={2}>GRS</th>
             <th style={T.th} colSpan={3}>As Per QS Certified</th>
             <th style={T.th} colSpan={2}>Balance</th>
           </tr>
@@ -265,6 +273,10 @@ function AbstractSheet({ cert }) {
                 <td style={T.tdR}>{fq(it.inv_prev_qty)}</td>
                 <td style={T.tdR}>{fq(it.inv_pres_qty)}</td>
                 <td style={T.tdR}>{raw(invAmt)}</td>
+                <td style={T.tdR}>{fq(it.weighment_qty)}</td>
+                <td style={T.tdC}>{it.msb_ref || '—'}</td>
+                <td style={T.tdC}>{it.ign_ref || '—'}</td>
+                <td style={T.tdC}>{it.grs_ref || '—'}</td>
                 <td style={T.tdR}>{fq(it.qs_prev_qty)}</td>
                 <td style={T.tdR}>{fq(it.qs_pres_qty)}</td>
                 <td style={T.tdR}>{raw(qsAmt)}</td>
@@ -281,7 +293,7 @@ function AbstractSheet({ cert }) {
               <td style={T.tdC}>—</td>
               <td style={{...T.td, fontStyle:'italic', color:'#111', fontWeight:'600'}}>GST / Tax</td>
               <td style={T.tdC}>—</td>
-              <td colSpan={10} style={{...T.tdC, color:'#444', fontSize:'10px', fontWeight:'500'}}>Applicable</td>
+              <td colSpan={14} style={{...T.tdC, color:'#444', fontSize:'10px', fontWeight:'500'}}>Applicable</td>
               <td style={{...T.tdR, fontWeight:'bold'}}>{raw(tax)}</td>
             </tr>
           )}
@@ -289,13 +301,13 @@ function AbstractSheet({ cert }) {
           {/* Total Gross Certified */}
           <tr style={T.totRow}>
             <td colSpan={4} style={{...T.tdC, fontWeight:'bold', fontSize:'9.5px', color: navy}}>Total Gross Certified</td>
-            <td colSpan={8} style={T.tdC}></td>
+            <td colSpan={12} style={T.tdC}></td>
             <td colSpan={3} style={{...T.tdR, fontWeight:'bold', fontSize:'10px'}}>{raw(totalGross)}</td>
           </tr>
 
           {/* Deductions header */}
           <tr>
-            <td colSpan={15} style={{...T.td, background:'#FFF5CC', fontWeight:'bold', fontSize:'9.5px', color: gold, letterSpacing:'0.5px', textTransform:'uppercase', padding:'4px 10px'}}>
+            <td colSpan={19} style={{...T.td, background:'#FFF5CC', fontWeight:'bold', fontSize:'9.5px', color: gold, letterSpacing:'0.5px', textTransform:'uppercase', padding:'4px 10px'}}>
               Deductions
             </td>
           </tr>
@@ -305,20 +317,20 @@ function AbstractSheet({ cert }) {
               <td style={T.tdC}></td>
               <td style={T.tdC}></td>
               <td style={{...T.td, fontStyle: d.amt === 0 ? 'italic' : 'normal', color: d.amt === 0 ? '#555' : '#0A0A0A', fontWeight: d.amt ? 'bold' : '500'}} colSpan={2}>{d.label}</td>
-              <td colSpan={10} style={T.tdC}></td>
+              <td colSpan={14} style={T.tdC}></td>
               <td style={{...T.tdR, fontWeight: 'bold', color: d.amt ? rust : '#555'}}>{raw(d.amt)}</td>
             </tr>
           ))}
 
           {/* Total Deductions */}
           <tr style={T.totRow}>
-            <td colSpan={14} style={{...T.tdC, fontWeight:'bold', color: navy}}>Total Deductions</td>
+            <td colSpan={18} style={{...T.tdC, fontWeight:'bold', color: navy}}>Total Deductions</td>
             <td style={{...T.tdR, fontWeight:'bold', color: rust}}>{raw(totalDed)}</td>
           </tr>
 
           {/* Total Net Certified */}
           <tr style={T.netRow}>
-            <td colSpan={14} style={{...T.tdC, color:'#fff', fontWeight:'bold', fontSize:'10px', letterSpacing:'0.5px'}}>
+            <td colSpan={18} style={{...T.tdC, color:'#fff', fontWeight:'bold', fontSize:'10px', letterSpacing:'0.5px'}}>
               Total Net Certified (Current RA)
             </td>
             <td style={{...T.tdR, color:'#fff', fontWeight:'bold', fontSize:'11px'}}>{raw(netCert)}</td>

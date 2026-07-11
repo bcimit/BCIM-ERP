@@ -482,6 +482,10 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
                     <th rowSpan={2} className="px-2 py-2 border border-slate-700">Unit</th>
                     <th colSpan={3} className="px-2 py-2 border border-slate-700">As per PO / WO</th>
                     <th colSpan={3} className="px-2 py-2 border border-slate-700">As per Invoice</th>
+                    <th rowSpan={2} className="px-2 py-2 border border-slate-700">As per<br/>Weighment</th>
+                    <th rowSpan={2} className="px-2 py-2 border border-slate-700">MSB</th>
+                    <th rowSpan={2} className="px-2 py-2 border border-slate-700">IGN</th>
+                    <th rowSpan={2} className="px-2 py-2 border border-slate-700">GRS</th>
                     <th colSpan={3} className="px-2 py-2 border border-slate-700">As per QS Certified</th>
                     <th colSpan={2} className="px-2 py-2 border border-slate-700">Balance</th>
                     <th rowSpan={2} className="px-2 py-2 border border-slate-700">Remarks</th>
@@ -527,6 +531,18 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
                         </td>
                         <td className="px-2 py-1 border border-slate-200 text-right">{inr(invoiceAmount)}</td>
                         <td className="px-2 py-1 border border-slate-200">
+                          <input type="number" className="w-20 text-right bg-white border border-slate-200 rounded px-1 py-1" value={row.weighment_qty || 0} onChange={e => updateSummaryRow(idx, 'weighment_qty', e.target.value)} />
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
+                          <input className="w-20 bg-transparent outline-none text-center" value={row.msb_ref || ''} onChange={e => updateSummaryRow(idx, 'msb_ref', e.target.value)} />
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
+                          <input className="w-20 bg-transparent outline-none text-center" value={row.ign_ref || ''} onChange={e => updateSummaryRow(idx, 'ign_ref', e.target.value)} />
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
+                          <input className="w-20 bg-transparent outline-none text-center" value={row.grs_ref || ''} onChange={e => updateSummaryRow(idx, 'grs_ref', e.target.value)} />
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
                           <input type="number" className="w-20 text-right bg-white border border-slate-200 rounded px-1 py-1" value={row.qs_prev_qty || 0} onChange={e => updateSummaryRow(idx, 'qs_prev_qty', e.target.value)} />
                         </td>
                         <td className="px-2 py-1 border border-slate-200">
@@ -542,7 +558,7 @@ function CertificationModal({ onClose, projects, vendors, initialData = {} }) {
                     );
                   })}
                   {!summaryRows.length && (
-                    <tr><td colSpan={16} className="py-10 text-center text-slate-400">Select invoices and click Load / Refresh Summary to type the certification sheet.</td></tr>
+                    <tr><td colSpan={20} className="py-10 text-center text-slate-400">Select invoices and click Load / Refresh Summary to type the certification sheet.</td></tr>
                   )}
                 </tbody>
               </table>
