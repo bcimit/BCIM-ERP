@@ -99,12 +99,14 @@ function ExportBtn({ data, filename, headers, color = 'blue' }) {
   );
 }
 
-function StatCard({ label, value, sub }) {
+function StatCard({ label, value, sub, accent = '#4F46E5' }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 px-5 py-4" style={{boxShadow:'0 1px 6px rgba(10,31,92,0.06)'}}>
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
-      <p className="text-xl font-black text-gray-900 mt-1">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5"
+      style={{ boxShadow: '0 1px 6px rgba(10,31,92,0.06)' }}>
+      <div className="absolute top-0 left-0 right-0 h-[2.5px]" style={{ background: accent }}/>
+      <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wide">{label}</p>
+      <p className="text-lg font-black text-gray-900 mt-0.5" style={{ fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+      {sub && <p className="text-[10.5px] text-gray-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -2254,21 +2256,21 @@ export default function HRCompliancePage({ embedded = false }) {
           style={{ background: 'linear-gradient(135deg,#0A1F5C,#1e3a8a)', boxShadow: '0 4px 20px rgba(10,31,92,0.2)' }}>
           <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.07]"
             style={{ background: 'radial-gradient(circle,#fff,transparent 70%)', transform: 'translate(25%,-25%)' }}/>
-          <div className="relative z-10 px-7 py-6">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-white"/>
+          <div className="relative z-10 px-6 py-4">
+            <div className="flex items-center gap-2.5 mb-0.5">
+              <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4 text-white"/>
               </div>
-              <span className="text-white/60 text-sm font-semibold">HR & Admin</span>
+              <span className="text-white/60 text-xs font-semibold">HR & Admin</span>
             </div>
-            <h1 className="text-2xl font-black text-white">Compliance Reports</h1>
-            <p className="text-white/55 text-sm mt-1">Statutory registers, licences and filing calendar in one place</p>
+            <h1 className="text-lg font-black text-white">Compliance Reports</h1>
+            <p className="text-white/55 text-xs mt-0.5">Statutory registers, licences and filing calendar in one place</p>
           </div>
         </motion.div>
       )}
 
       {/* Sidebar + Content */}
-      <motion.div {...fade(0.06)} className="px-7 py-6 flex gap-4 items-start">
+      <motion.div {...fade(0.06)} className="px-5 py-4 flex gap-3.5 items-start">
 
         <div className="w-56 flex-shrink-0 bg-white rounded-2xl border border-gray-100 p-2.5 sticky top-4"
           style={{ boxShadow: '0 1px 6px rgba(10,31,92,0.06)' }}>
