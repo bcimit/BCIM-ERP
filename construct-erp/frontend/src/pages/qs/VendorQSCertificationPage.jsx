@@ -627,6 +627,7 @@ export default function VendorQSCertificationPage() {
   const [modalInitial, setModalInitial] = useState({});
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [statusTab, setStatusTab] = useState('all');
   const { user } = useAuthStore();
   const canApprove = (user?.email || '').toLowerCase() === CERT_APPROVER_EMAIL;
   const qc = useQueryClient();
@@ -735,47 +736,61 @@ export default function VendorQSCertificationPage() {
     return acc;
   }, { gross: 0, net: 0, deductions: 0 });
 
+  const STATUS_TABS = [
+    { key: 'all',       label: 'All'       },
+    { key: 'draft',     label: 'Draft'     },
+    { key: 'certified', label: 'Certified' },
+    { key: 'accounts',  label: 'Accounts'  },
+    { key: 'paid',      label: 'Paid'      },
+    { key: 'rejected',  label: 'Rejected'  },
+  ];
+  const statusCounts = certs.reduce((m, c) => { m[c.status] = (m[c.status] || 0) + 1; return m; }, {});
+  const visibleCerts = statusTab === 'all' ? certs : certs.filter(c => c.status === statusTab);
+  const STRIPE = {
+    draft: '#94A3B8', certified: '#059669', accounts: '#4F46E5',
+    paid: '#2563EB', cancelled: '#DC2626', rejected: '#EA580C',
+  };
+
   return (
     <div className="p-5 min-h-full space-y-4" style={{ background: '#EEF1F6', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
-            style={{ background: 'linear-gradient(135deg,#059669 0%,#047857 100%)' }}>
-            <Award className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">Vendor QS Certification</h1>
-            <p className="text-xs text-slate-500 mt-0.5">RA certification for PO / WO invoice batches</p>
-          </div>
-        </div>
-        <button onClick={() => { setModalInitial({}); setShowModal(true); }}
-          className="px-4 py-2.5 text-white rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-px"
-          style={{ background: 'linear-gradient(135deg,#059669 0%,#047857 100%)' }}>
-          <Plus className="w-4 h-4" /> New Certification
-        </button>
-      </div>
 
-      {/* ── KPI cards ── */}
-      <div className="grid md:grid-cols-4 gap-3">
-        {[
-          { label: 'Certifications', value: certs.length,             isCount: true,  color: '#0F172A', chip: '#F4F6FA', Icon: FileCheck2 },
-          { label: 'Gross Certified', value: totals.gross,            isCount: false, color: '#4F46E5', chip: '#EEF0FE', Icon: IndianRupee },
-          { label: 'Deductions',      value: totals.deductions,       isCount: false, color: '#B45309', chip: '#FEF6E7', Icon: FileText },
-          { label: 'Net Payable',     value: totals.net,              isCount: false, color: '#059669', chip: '#ECFDF5', Icon: Award },
-        ].map(k => (
-          <div key={k.label} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm transition-shadow hover:shadow-md">
-            <div className="flex items-center gap-2.5 mb-2.5">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: k.chip }}>
-                <k.Icon className="w-3.5 h-3.5" style={{ color: k.color }} />
-              </div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k.label}</p>
+      {/* ── Hero band: title + CTA + KPIs ── */}
+      <div className="rounded-2xl overflow-hidden shadow-md text-white"
+        style={{ background: 'linear-gradient(120deg,#064E3B 0%,#065F46 45%,#047857 100%)' }}>
+        <div className="px-6 pt-5 pb-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-white/10 border border-white/15 backdrop-blur">
+              <Award className="w-5 h-5 text-emerald-200" />
             </div>
-            <p className="font-extrabold leading-none" style={{ color: k.color, fontSize: k.isCount ? 26 : 19, fontVariantNumeric: 'tabular-nums' }}>
-              {k.isCount ? k.value : <><span className="text-[13px] opacity-60 mr-0.5">₹</span>{inr(k.value)}</>}
-            </p>
+            <div>
+              <h1 className="text-lg font-extrabold leading-tight tracking-tight">Vendor QS Certification</h1>
+              <p className="text-[11px] text-emerald-200/80 mt-0.5 font-medium">RA certification for PO / WO invoice batches</p>
+            </div>
           </div>
-        ))}
+          <button onClick={() => { setModalInitial({}); setShowModal(true); }}
+            className="px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 shadow transition-transform hover:-translate-y-px bg-white text-emerald-800">
+            <Plus className="w-4 h-4" /> New Certification
+          </button>
+        </div>
+        {/* KPI strip inside hero */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 border-t border-white/10">
+          {[
+            { label: 'Certifications',  value: certs.length,       isCount: true,  Icon: FileCheck2  },
+            { label: 'Gross Certified', value: totals.gross,       isCount: false, Icon: IndianRupee },
+            { label: 'Deductions',      value: totals.deductions,  isCount: false, Icon: FileText    },
+            { label: 'Net Payable',     value: totals.net,         isCount: false, Icon: Award       },
+          ].map(k => (
+            <div key={k.label} className="px-6 py-3.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <k.Icon className="w-3 h-3 text-emerald-300/70" />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-200/70">{k.label}</p>
+              </div>
+              <p className="font-extrabold leading-none text-white" style={{ fontSize: k.isCount ? 24 : 18, fontVariantNumeric: 'tabular-nums' }}>
+                {k.isCount ? k.value : <><span className="text-[12px] opacity-60 mr-0.5">₹</span>{inr(k.value)}</>}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Filter bar ── */}
@@ -800,126 +815,160 @@ export default function VendorQSCertificationPage() {
         )}
       </div>
 
-      {/* ── Table ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-sm">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="bg-slate-50 border-b-2 border-slate-200">
-              {canApprove && (
-                <th className="px-3 py-2.5 w-8">
-                  <input type="checkbox" className="accent-indigo-500"
-                    checked={selectedIds.length > 0 && selectedIds.length === certs.filter(c => c.status === 'certified').length}
-                    onChange={e => setSelectedIds(e.target.checked ? certs.filter(c => c.status === 'certified').map(c => c.id) : [])} />
-                </th>
-              )}
-              {['Cert No','RA No','Vendor','Project','Order','QS Received','QS Certified','Inv','Gross','Deductions','Net Payable','Status','Actions'].map(h => (
-                <th key={h} className={`px-3 py-2.5 font-bold uppercase tracking-wider text-[10px] text-slate-500 whitespace-nowrap ${['Gross','Deductions','Net Payable'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
-              <tr><td colSpan={canApprove ? 14 : 13} className="py-12 text-center text-slate-400">Loading certifications...</td></tr>
-            ) : certs.length ? certs.map(c => {
-              const deductions = Number(c.tds_amount || 0) + Number(c.advance_recovered || 0) + Number(c.retention_amount || 0) + Number(c.other_deductions || 0);
-              return (
-                <tr
-                  key={c.id}
-                  onClick={() => navigate(`${basePath}/${c.id}`)}
-                  className="hover:bg-indigo-50/40 cursor-pointer transition-colors"
-                  title="Open certification"
-                >
-                  {canApprove && (
-                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" className="accent-indigo-500"
-                        disabled={c.status !== 'certified'}
-                        checked={selectedIds.includes(c.id)}
-                        onChange={() => toggleSelected(c.id)} />
-                    </td>
-                  )}
-                  <td className="px-3 py-2.5 font-semibold text-indigo-700">{c.cert_number}</td>
-                  <td className="px-3 py-2.5 font-semibold text-slate-700">{c.ra_bill_number || `RA-${c.ra_sequence}`}</td>
-                  <td className="px-3 py-2.5 font-semibold text-slate-900">{c.vendor_name}</td>
-                  <td className="px-3 py-2.5 text-slate-500">{c.project_name || '-'}</td>
-                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold mr-1">{String(c.order_type || '').toUpperCase()}</span>
-                    {c.order_number || '-'}
-                  </td>
-                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(c.qs_received_date)}</td>
-                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(c.qs_certified_date)}</td>
-                  <td className="px-3 py-2.5 font-bold text-slate-700">{c.invoice_count}</td>
-                  <td className="px-3 py-2.5 text-right font-bold text-slate-900 whitespace-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>₹{inr(c.gross_amount)}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: '#B45309', fontVariantNumeric: 'tabular-nums' }}>₹{inr(deductions)}</td>
-                  <td className="px-3 py-2.5 text-right font-bold whitespace-nowrap" style={{ color: '#059669', fontVariantNumeric: 'tabular-nums' }}>₹{inr(c.net_payable)}</td>
-                  <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusClass(c.status)}`}>{c.status}</span></td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                      <Link
-                        to={`${basePath}/${c.id}`}
-                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                        title="Open / Edit"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Link>
-                      <Link
-                        to={`${basePath}/${c.id}?print=abstract`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold inline-flex items-center gap-1 transition-colors"
-                        title="Print Abstract of Measurement (A4 Landscape)"
-                      >
-                        <Printer className="w-3 h-3" /> Abstract
-                      </Link>
-                      <Link
-                        to={`${basePath}/${c.id}?print=payment`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold inline-flex items-center gap-1 transition-colors"
-                        title="Print Payment Certificate (A4 Portrait)"
-                      >
-                        <Printer className="w-3 h-3" /> Pay Cert
-                      </Link>
-                      <button
-                        onClick={() => statusMut.mutate({ id: c.id, status: 'accounts' })}
-                        disabled={c.status === 'accounts' || c.status === 'paid' || !canApprove}
-                        title={canApprove ? 'Approve and send to Accounts' : `Only ${CERT_APPROVER_EMAIL} can approve and send this to Accounts`}
-                        className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold disabled:opacity-40 inline-flex items-center gap-1 transition-colors"
-                      >
-                        <Send className="w-3 h-3" /> {canApprove ? 'Approve' : 'Accounts'}
-                      </button>
-                      {canApprove && (
-                        <button
-                          onClick={() => setRejectTarget(c)}
-                          disabled={c.status !== 'certified'}
-                          title="Reject and send back to QS with a reason"
-                          className="p-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={e => handleDelete(e, c)}
-                        disabled={deleteMut.isPending || c.status === 'paid'}
-                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 transition-colors"
-                        title={c.status === 'paid' ? 'Paid certifications cannot be deleted' : 'Delete certification'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+      {/* ── Status tabs ── */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {STATUS_TABS.map(t => {
+          const count = t.key === 'all' ? certs.length : (statusCounts[t.key] || 0);
+          const on = statusTab === t.key;
+          return (
+            <button key={t.key} onClick={() => setStatusTab(t.key)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                on ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+                   : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
+              {t.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${on ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}
+                style={{ fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Card rows ── */}
+      <div className="space-y-2.5">
+        {isLoading ? (
+          <div className="bg-white rounded-2xl border border-slate-200 py-14 text-center text-slate-400 text-sm shadow-sm">Loading certifications...</div>
+        ) : visibleCerts.length ? visibleCerts.map(c => {
+          const deductions = Number(c.tds_amount || 0) + Number(c.advance_recovered || 0) + Number(c.retention_amount || 0) + Number(c.other_deductions || 0);
+          const initials = String(c.vendor_name || '?').split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+          const stripe = STRIPE[c.status] || '#94A3B8';
+          return (
+            <div
+              key={c.id}
+              onClick={() => navigate(`${basePath}/${c.id}`)}
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer overflow-hidden flex items-stretch"
+              title="Open certification"
+            >
+              {/* Status stripe */}
+              <div style={{ width: 4, background: stripe, flexShrink: 0 }} />
+
+              <div className="flex-1 px-4 py-3 flex items-center gap-4 flex-wrap min-w-0">
+                {canApprove && (
+                  <span onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" className="accent-indigo-500 w-4 h-4"
+                      disabled={c.status !== 'certified'}
+                      checked={selectedIds.includes(c.id)}
+                      onChange={() => toggleSelected(c.id)} />
+                  </span>
+                )}
+
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-extrabold flex-shrink-0"
+                  style={{ background: `${stripe}18`, color: stripe, border: `1px solid ${stripe}33` }}>
+                  {initials}
+                </div>
+
+                {/* Identity */}
+                <div className="min-w-[190px] flex-1">
+                  <p className="text-[13px] font-bold text-slate-900 leading-tight truncate">{c.vendor_name}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className="text-[11px] font-semibold text-indigo-700">{c.cert_number}</span>
+                    <span className="text-slate-300 text-[10px]">·</span>
+                    <span className="text-[11px] font-semibold text-slate-600">{c.ra_bill_number || `RA-${c.ra_sequence}`}</span>
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[9px] font-bold">{String(c.order_type || '').toUpperCase()} {c.order_number || '—'}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5 truncate">{c.project_name || '—'}</p>
+                </div>
+
+                {/* Dates + invoices */}
+                <div className="hidden lg:flex flex-col gap-0.5 min-w-[130px]">
+                  <p className="text-[10px] text-slate-400"><span className="font-bold text-slate-500 uppercase text-[9px] tracking-wide mr-1">Recd</span>{fmtDate(c.qs_received_date)}</p>
+                  <p className="text-[10px] text-slate-400"><span className="font-bold text-slate-500 uppercase text-[9px] tracking-wide mr-1">Cert</span>{fmtDate(c.qs_certified_date)}</p>
+                  <p className="text-[10px] text-slate-400"><span className="font-bold text-slate-500 uppercase text-[9px] tracking-wide mr-1">Inv</span>{c.invoice_count}</p>
+                </div>
+
+                {/* Amounts */}
+                <div className="flex items-center gap-5 ml-auto">
+                  {[
+                    { label: 'Gross',      val: c.gross_amount, color: '#0F172A' },
+                    { label: 'Deductions', val: deductions,     color: '#B45309' },
+                    { label: 'Net',        val: c.net_payable,  color: '#059669' },
+                  ].map(a => (
+                    <div key={a.label} className="text-right min-w-[86px]">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{a.label}</p>
+                      <p className="text-[13px] font-extrabold whitespace-nowrap" style={{ color: a.color, fontVariantNumeric: 'tabular-nums' }}>₹{inr(a.val)}</p>
                     </div>
-                  </td>
-                </tr>
-              );
-            }) : (
-              <tr>
-                <td colSpan={canApprove ? 14 : 13} className="py-16 text-center">
-                  <Award className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-500">No certifications yet</p>
-                  <p className="text-xs text-slate-400 mt-1">Click “New Certification” to certify a vendor invoice batch.</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  ))}
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusClass(c.status)}`}>{c.status}</span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                  <Link
+                    to={`${basePath}/${c.id}`}
+                    className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    title="Open / Edit"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Link>
+                  <Link
+                    to={`${basePath}/${c.id}?print=abstract`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
+                    title="Print Abstract of Measurement (A4 Landscape)"
+                  >
+                    <Printer className="w-3 h-3" /> Abstract
+                  </Link>
+                  <Link
+                    to={`${basePath}/${c.id}?print=payment`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
+                    title="Print Payment Certificate (A4 Portrait)"
+                  >
+                    <Printer className="w-3 h-3" /> Pay Cert
+                  </Link>
+                  <button
+                    onClick={() => statusMut.mutate({ id: c.id, status: 'accounts' })}
+                    disabled={c.status === 'accounts' || c.status === 'paid' || !canApprove}
+                    title={canApprove ? 'Approve and send to Accounts' : `Only ${CERT_APPROVER_EMAIL} can approve and send this to Accounts`}
+                    className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-[11px] font-semibold disabled:opacity-40 inline-flex items-center gap-1 transition-colors"
+                  >
+                    <Send className="w-3 h-3" /> {canApprove ? 'Approve' : 'Accounts'}
+                  </button>
+                  {canApprove && (
+                    <button
+                      onClick={() => setRejectTarget(c)}
+                      disabled={c.status !== 'certified'}
+                      title="Reject and send back to QS with a reason"
+                      className="p-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={e => handleDelete(e, c)}
+                    disabled={deleteMut.isPending || c.status === 'paid'}
+                    className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 transition-colors"
+                    title={c.status === 'paid' ? 'Paid certifications cannot be deleted' : 'Delete certification'}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }) : (
+          <div className="bg-white rounded-2xl border border-slate-200 py-16 text-center shadow-sm">
+            <Award className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-500">
+              {statusTab === 'all' ? 'No certifications yet' : `No ${statusTab} certifications`}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              {statusTab === 'all' ? 'Click “New Certification” to certify a vendor invoice batch.' : 'Try a different status tab.'}
+            </p>
+          </div>
+        )}
       </div>
 
       {showModal && (
