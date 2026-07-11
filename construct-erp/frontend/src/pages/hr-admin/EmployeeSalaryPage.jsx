@@ -1,8 +1,11 @@
 // src/pages/hr-admin/EmployeeSalaryPage.jsx — 2026 Premium UI
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, Calculator, CheckCircle2, Edit2, IndianRupee, Plus, RotateCcw, Search, ShieldCheck, Users, Utensils, X } from 'lucide-react';
+import {
+  Calculator, CheckCircle2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2,
+  Eye, IndianRupee, MoreVertical, Plus, RotateCcw, Search, TrendingUp, Users, Utensils, Wallet, X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { hrEmployeesAPI, hrSalaryAPI } from '../../api/client';
 
@@ -325,9 +328,45 @@ function BasicReversalEditModal({ employee, salary, onClose, onSave, saving }) {
   );
 }
 
+function RowActionsMenu({ sal, emp, onView, onMess, onReversal }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(o => !o)}
+        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+        <MoreVertical className="w-4 h-4" />
+      </button>
+      {open && sal && (
+        <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl border border-gray-100 shadow-lg z-20 py-1.5 overflow-hidden">
+          <button onClick={() => { onMess(); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-bold text-gray-700 hover:bg-blue-50 transition-colors">
+            <Utensils className="w-3.5 h-3.5 text-gray-400" /> Edit Mess Deduction
+          </button>
+          <button onClick={() => { onReversal(); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-bold text-gray-700 hover:bg-blue-50 transition-colors">
+            <RotateCcw className="w-3.5 h-3.5 text-gray-400" /> Edit Basic Reversal
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PAGE_SIZES = [10, 25, 50];
+
 export default function EmployeeSalaryPage() {
   const qc = useQueryClient();
   const [search,    setSearch]    = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
+  const [desigFilter, setDesigFilter] = useState('');
+  const [page,      setPage]      = useState(1);
+  const [pageSize,  setPageSize]  = useState(10);
   const [showModal, setShowModal] = useState(false);
   const [editSalary, setEditSalary] = useState(null); // salary row being edited
   const [messEdit,  setMessEdit]  = useState(null); // { employee, salary }
@@ -356,16 +395,39 @@ export default function EmployeeSalaryPage() {
     return map;
   },[salaryRows]);
 
+  const departments = useMemo(() =>
+    [...new Set(employees.map(e => e.department_name).filter(Boolean))].sort(),
+  [employees]);
+  const designations = useMemo(() =>
+    [...new Set(employees.map(e => e.designation_name || e.designation).filter(Boolean))].sort(),
+  [employees]);
+
   const filtered = useMemo(()=>{
     const n = search.trim().toLowerCase();
     return employees.filter(e=>{
+      if (deptFilter && e.department_name !== deptFilter) return false;
+      if (desigFilter && (e.designation_name || e.designation) !== desigFilter) return false;
       if(!n) return true;
       return [e.name,e.employee_code,e.email,e.department_name,e.designation_name]
         .some(v=>String(v||'').toLowerCase().includes(n));
     });
-  },[employees,search]);
+  },[employees,search,deptFilter,desigFilter]);
+
+  // Reset to page 1 whenever the filtered set changes shape
+  useEffect(() => { setPage(1); }, [search, deptFilter, desigFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageRows = useMemo(() =>
+    filtered.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize),
+  [filtered, page, pageSize]);
 
   const configured  = employees.filter(e=>latestByUser.has(e.id)).length;
+
+  const configuredSalaries = employees
+    .map(e => latestByUser.get(e.id))
+    .filter(Boolean);
+  const totalPayroll = configuredSalaries.reduce((s, sal) => s + Number(sal.net_pay_monthly || 0), 0);
+  const avgSalary = configuredSalaries.length ? totalPayroll / configuredSalaries.length : 0;
 
   const saveMut = useMutation({
     mutationFn:(payload)=>hrSalaryAPI.assignSalary(payload),
@@ -399,39 +461,57 @@ export default function EmployeeSalaryPage() {
   });
 
   const kpis = [
-    { label:'Active Employees', value:employees.length,                  icon:Users,        bg:'bg-blue-50',    text:'text-blue-700'    },
-    { label:'Salary Configured', value:configured,                        icon:CheckCircle2, bg:'bg-emerald-50', text:'text-emerald-700' },
-    { label:'Pending Setup',     value:Math.max(0,employees.length-configured), icon:ShieldCheck, bg:'bg-amber-50',  text:'text-amber-700'  },
+    { label:'Total Employees',  value:employees.length,                icon:Users,      bg:'bg-blue-50',    text:'text-blue-700',    fmtCurrency:false },
+    { label:'Total Payroll',    value:totalPayroll,                    icon:Wallet,     bg:'bg-emerald-50', text:'text-emerald-700', fmtCurrency:true  },
+    { label:'Average Salary',   value:avgSalary,                       icon:TrendingUp, bg:'bg-amber-50',   text:'text-amber-700',   fmtCurrency:true  },
+    { label:'Salary Configured', value:`${configured}/${employees.length}`, icon:CheckCircle2, bg:'bg-indigo-50', text:'text-indigo-700', fmtCurrency:false },
   ];
+
+  const exportCsv = () => {
+    const header = ['Employee','Employee ID','Department','Designation','Basic Salary','Allowances','Deductions','Net Salary'];
+    const lines = filtered.map(emp => {
+      const sal = latestByUser.get(emp.id);
+      const basic = Number(sal?.basic || 0);
+      const allowances = sal ? Number(sal.gross_monthly || 0) - basic : 0;
+      const deductions = sal ? Math.max(0, Number(sal.employee_pf||0) + Number(sal.pt_deduction||0) + Number(sal.mess_deduction||0) - Number(sal.basic_reversal||0)) : 0;
+      return [
+        emp.name, emp.employee_code||'', emp.department_name||'', emp.designation_name||emp.designation||'',
+        basic.toFixed(2), allowances.toFixed(2), deductions.toFixed(2), Number(sal?.net_pay_monthly||0).toFixed(2),
+      ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+    });
+    const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `employee-salaries-${today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-6 space-y-6 min-h-screen" style={{background:'#F8FAFC'}}>
 
       {/* Header */}
-      <motion.div {...fade(0)} className="relative overflow-hidden rounded-2xl"
-        style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`,boxShadow:'0 8px 32px rgba(10,31,92,0.2)'}}>
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.07]"
-          style={{background:'radial-gradient(circle,#fff,transparent 70%)',transform:'translate(25%,-25%)'}}/>
-        <div className="relative z-10 px-8 py-6 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
-              <Banknote className="w-5 h-5 text-white"/>
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-white">Employee Salaries</h1>
-              <p className="text-white/55 text-sm mt-0.5">Assign real salary packages before generating payroll</p>
-            </div>
-          </div>
-          <button onClick={()=>setShowModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm"
-            style={{background:B.yellow,color:B.navy}}>
-            <Plus className="w-4 h-4"/> Assign Salary
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs font-bold text-gray-400 mb-1">HR &amp; Payroll <span className="mx-1">›</span> <span className="text-gray-600">Employee Salaries</span></p>
+          <h1 className="text-2xl font-black text-gray-900">Employee Salaries</h1>
+          <p className="text-sm text-gray-500 mt-0.5">View and manage employee salary details</p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button onClick={exportCsv}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+            <Download className="w-4 h-4"/> Export Salaries
+          </button>
+          <button onClick={()=>{ setEditSalary(null); setShowModal(true); }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm text-white"
+            style={{background:`linear-gradient(135deg,${B.blue},${B.navy})`}}>
+            <Plus className="w-4 h-4"/> Add Salary Record
           </button>
         </div>
-      </motion.div>
+      </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((k,i)=>(
           <motion.div key={k.label} {...fade(0.06+i*0.05)}
             className="bg-white rounded-2xl border border-gray-100 p-5"
@@ -442,7 +522,7 @@ export default function EmployeeSalaryPage() {
                 <k.icon className={`w-4 h-4 ${k.text}`}/>
               </div>
             </div>
-            <div className="text-3xl font-black text-gray-900">{k.value}</div>
+            <div className="text-2xl font-black text-gray-900">{k.fmtCurrency ? `₹${fmt(k.value)}` : k.value}</div>
           </motion.div>
         ))}
       </div>
@@ -451,22 +531,34 @@ export default function EmployeeSalaryPage() {
       <motion.div {...fade(0.18)} className="bg-white rounded-2xl border border-gray-100 overflow-hidden"
         style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
 
-        {/* Search Bar */}
-        <div className="px-5 py-4 border-b border-gray-100 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-            <input value={search} onChange={e=>setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:border-blue-400"
-              placeholder="Search employee, department, designation…"/>
+        {/* Filter Bar */}
+        <div className="px-5 py-4 border-b border-gray-100 flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 flex-1">
+            <select value={deptFilter} onChange={e=>setDeptFilter(e.target.value)}
+              className="px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-blue-400 min-w-[170px]">
+              <option value="">All Departments</option>
+              {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select value={desigFilter} onChange={e=>setDesigFilter(e.target.value)}
+              className="px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:border-blue-400 min-w-[170px]">
+              <option value="">All Designations</option>
+              {designations.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:border-blue-400"
+                placeholder="Search employee…"/>
+            </div>
           </div>
-          <span className="text-sm font-bold text-gray-500">{filtered.length} employee(s)</span>
+          <span className="text-sm font-bold text-gray-500 whitespace-nowrap">{filtered.length} employee(s)</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`}}>
-                {['Employee','Department','Structure','Gross Monthly','Annual CTC','Mess Deduction','Basic Reversal','Net Pay','Effective From','Status','Actions'].map(h=>(
+                {['Employee','Employee ID','Department','Designation','Basic Salary','Allowances','Deductions','Net Salary','Status','Actions'].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-xs font-black text-white/80 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -475,8 +567,11 @@ export default function EmployeeSalaryPage() {
               {(empLoading||salaryLoading) && (
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-gray-400 text-sm">Loading salary data…</td></tr>
               )}
-              {!empLoading && !salaryLoading && filtered.map(emp=>{
+              {!empLoading && !salaryLoading && pageRows.map(emp=>{
                 const sal = latestByUser.get(emp.id);
+                const basic = sal ? Number(sal.basic || 0) : 0;
+                const allowances = sal ? Number(sal.gross_monthly || 0) - basic : 0;
+                const deductions = sal ? Math.max(0, Number(sal.employee_pf||0) + Number(sal.pt_deduction||0) + Number(sal.mess_deduction||0) - Number(sal.basic_reversal||0)) : 0;
                 return (
                   <tr key={emp.id} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-4 py-3">
@@ -487,34 +582,17 @@ export default function EmployeeSalaryPage() {
                         </div>
                         <div>
                           <div className="font-black text-gray-900">{emp.name}</div>
-                          <div className="text-xs text-gray-400">{emp.employee_code||emp.email}</div>
+                          <div className="text-xs text-gray-400">{emp.email}</div>
                         </div>
                       </div>
                     </td>
+                    <td className="px-4 py-3 font-bold text-gray-700">{emp.employee_code||'—'}</td>
                     <td className="px-4 py-3 font-bold text-gray-700">{emp.department_name||'—'}</td>
-                    <td className="px-4 py-3 font-bold text-gray-700">{sal?.structure_name||'—'}</td>
-                    <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(sal.gross_monthly)}`:'—'}</td>
-                    <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(sal.ctc_annual)}`:'—'}</td>
-                    <td className="px-4 py-3">
-                      {sal ? (
-                        <button onClick={()=>setMessEdit({employee:emp,salary:sal})}
-                          className="flex items-center gap-2 group">
-                          <span className="font-bold text-gray-800">₹{fmt(sal.mess_deduction||0)}</span>
-                          <Edit2 className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors"/>
-                        </button>
-                      ) : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {sal ? (
-                        <button onClick={()=>setReversalEdit({employee:emp,salary:sal})}
-                          className="flex items-center gap-2 group">
-                          <span className="font-bold text-gray-800">₹{fmt(sal.basic_reversal||0)}</span>
-                          <Edit2 className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors"/>
-                        </button>
-                      ) : <span className="text-gray-300">—</span>}
-                    </td>
+                    <td className="px-4 py-3 font-bold text-gray-700">{emp.designation_name||emp.designation||'—'}</td>
+                    <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(basic)}`:'—'}</td>
+                    <td className="px-4 py-3 font-bold text-emerald-600">{sal?`₹${fmt(allowances)}`:'—'}</td>
+                    <td className="px-4 py-3 font-bold text-rose-600">{sal?`₹${fmt(deductions)}`:'—'}</td>
                     <td className="px-4 py-3 font-black text-gray-900">{sal?`₹${fmt(sal.net_pay_monthly)}`:'—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{sal?.effective_from?new Date(sal.effective_from).toLocaleDateString('en-IN'):'—'}</td>
                     <td className="px-4 py-3">
                       {sal ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black">
@@ -527,27 +605,74 @@ export default function EmployeeSalaryPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {sal ? (
-                        <button onClick={()=>setEditSalary(sal)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-black hover:bg-blue-100 transition-colors">
-                          <Edit2 className="w-3.5 h-3.5"/> Edit
-                        </button>
-                      ) : (
-                        <button onClick={()=>{ setEditSalary(null); setShowModal(true); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-black hover:bg-amber-100 transition-colors">
-                          <Plus className="w-3.5 h-3.5"/> Assign
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {sal ? (
+                          <button onClick={()=>setEditSalary(sal)} title="View / edit salary breakup"
+                            className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-colors">
+                            <Eye className="w-4 h-4"/>
+                          </button>
+                        ) : (
+                          <button onClick={()=>{ setEditSalary(null); setShowModal(true); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-black hover:bg-amber-100 transition-colors">
+                            <Plus className="w-3.5 h-3.5"/> Assign
+                          </button>
+                        )}
+                        <RowActionsMenu
+                          sal={sal} emp={emp}
+                          onMess={()=>setMessEdit({employee:emp,salary:sal})}
+                          onReversal={()=>setReversalEdit({employee:emp,salary:sal})}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
               })}
               {!empLoading && !salaryLoading && filtered.length===0 && (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-gray-400 text-sm">No employees found</td></tr>
+                <tr><td colSpan={10} className="px-4 py-12 text-center text-gray-400 text-sm">No employees found</td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {!empLoading && !salaryLoading && filtered.length > 0 && (
+          <div className="px-5 py-3.5 border-t border-gray-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <span className="text-xs font-bold text-gray-500">
+              Showing {(page-1)*pageSize+1} to {Math.min(page*pageSize, filtered.length)} of {filtered.length} entries
+            </span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}
+                  className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 disabled:opacity-40 hover:bg-gray-50 transition-colors">
+                  <ChevronLeft className="w-4 h-4"/>
+                </button>
+                {Array.from({length: totalPages}, (_,i)=>i+1)
+                  .filter(p => p===1 || p===totalPages || Math.abs(p-page)<=1)
+                  .reduce((acc,p,i,arr)=>{ if(i>0 && p-arr[i-1]>1) acc.push('…'); acc.push(p); return acc; }, [])
+                  .map((p,i) => p==='…' ? (
+                    <span key={`gap-${i}`} className="w-8 h-8 flex items-center justify-center text-gray-300 text-sm">…</span>
+                  ) : (
+                    <button key={p} onClick={()=>setPage(p)}
+                      className={`w-8 h-8 rounded-lg text-sm font-bold transition-colors ${p===page ? 'text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                      style={p===page ? {background:`linear-gradient(135deg,${B.blue},${B.navy})`} : undefined}>
+                      {p}
+                    </button>
+                  ))}
+                <button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}
+                  className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 disabled:opacity-40 hover:bg-gray-50 transition-colors">
+                  <ChevronRight className="w-4 h-4"/>
+                </button>
+              </div>
+              <div className="relative">
+                <select value={pageSize} onChange={e=>setPageSize(Number(e.target.value))}
+                  className="appearance-none pl-3 pr-8 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:border-blue-400">
+                  {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"/>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {messEdit && (
