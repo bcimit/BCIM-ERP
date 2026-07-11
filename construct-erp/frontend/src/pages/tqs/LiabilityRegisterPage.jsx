@@ -81,7 +81,7 @@ function buildPrint({ vendorName, fromDate, toDate, ledger, totals, selRow, proj
     const cfg = ENTRY[r.entry_type] || { label: r.entry_type, color: '#4B5563' };
     return `<tr style="background:${i % 2 ? '#f8fafc' : '#fff'}">
       <td>${fmt(r.txn_date)}</td>
-      <td><b>${r.narration || ''}</b>${r.invoice_ref ? `<br/><small style="color:#94a3b8">Inv: ${r.invoice_ref}</small>` : ''}</td>
+      <td><b>${r.narration || ''}</b>${r.invoice_date ? `<br/><small style="color:#94a3b8">Inv Date: ${fmt(r.invoice_date)}</small>` : ''}${r.po_ref ? `<br/><small style="color:#94a3b8">PO: ${r.po_ref}</small>` : ''}</td>
       <td><span style="color:${cfg.color};font-size:8pt;font-weight:700;border:1px solid ${cfg.color}44;padding:1px 6px;border-radius:3px">${cfg.label}</span></td>
       <td style="font-family:monospace">${r.vch_number || '—'}</td>
       <td style="color:#64748b">${r.project_name || '—'}</td>
@@ -404,12 +404,14 @@ export default function LiabilityRegisterPage() {
     ]);
     XLSX.utils.sheet_add_json(ws, ledger.map(r => ({
       Date: fmt(r.txn_date), Type: ENTRY[r.entry_type]?.label || r.entry_type || '',
-      Particulars: r.narration || '', 'Voucher No.': r.vch_number || '',
-      'Invoice Ref': r.invoice_ref || '', Project: r.project_name || '',
+      Particulars: r.narration || '', 'Invoice No.': r.invoice_ref || '',
+      'Invoice Date': r.invoice_date ? fmt(r.invoice_date) : '',
+      'PO No.': r.po_ref || '', 'Voucher No.': r.vch_number || '',
+      Project: r.project_name || '',
       'Debit': +r.debit_amount || 0, 'Credit': +r.credit_amount || 0,
       Balance: +r.running_balance || 0,
     })), { origin: -1 });
-    ws['!cols'] = [14, 14, 45, 18, 18, 26, 12, 12, 12].map(w => ({ wch: w }));
+    ws['!cols'] = [14, 14, 45, 18, 14, 18, 18, 26, 12, 12, 12].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ledger');
     XLSX.writeFile(wb, `Liability_${safeFile(selectedVendor)}_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -439,7 +441,10 @@ export default function LiabilityRegisterPage() {
       startY: doc.lastAutoTable.finalY + 5,
       head: [['Date', 'Particulars', 'Type', 'Voucher No.', 'Project', 'Debit', 'Credit', 'Balance']],
       body: ledger.map(r => [
-        fmt(r.txn_date), r.narration || '',
+        fmt(r.txn_date),
+        (r.narration || '')
+          + (r.invoice_date ? `\nInv Date: ${fmt(r.invoice_date)}` : '')
+          + (r.po_ref ? `\nPO: ${r.po_ref}` : ''),
         ENTRY[r.entry_type]?.label || r.entry_type || '',
         r.vch_number || '', r.project_name || '',
         +r.debit_amount > 0  ? `₹${inr(r.debit_amount, 2)}`  : '-',
@@ -951,11 +956,14 @@ export default function LiabilityRegisterPage() {
                                   </button>
                                 )}
                               </div>
-                              {(row.invoice_ref || row.invoice_date) && (
+                              {row.invoice_date && (
                                 <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>
-                                  {row.invoice_date && <span>Inv Date: {fmt(row.invoice_date)}</span>}
-                                  {row.invoice_ref && row.invoice_date && <span style={{ margin: '0 4px' }}>·</span>}
-                                  {row.invoice_ref && <span>Inv#: {row.invoice_ref}</span>}
+                                  Inv Date: {fmt(row.invoice_date)}
+                                </div>
+                              )}
+                              {row.po_ref && (
+                                <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>
+                                  PO: {row.po_ref}
                                 </div>
                               )}
                             </td>
