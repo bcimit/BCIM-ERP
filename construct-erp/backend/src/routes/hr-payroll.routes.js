@@ -243,7 +243,7 @@ router.post('/run', async (req, res) => {
          WHERE user_id = u.id
            AND effective_from <= make_date($3,$1,1)
            AND (effective_to IS NULL OR effective_to >= make_date($3,$1,1))
-         ORDER BY effective_from DESC
+         ORDER BY effective_from DESC, created_at DESC, id DESC
          LIMIT 1
        ) es ON TRUE
        LEFT JOIN employee_profiles ep ON ep.user_id = u.id
