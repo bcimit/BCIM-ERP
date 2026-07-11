@@ -159,9 +159,9 @@ function PFRegister({ depts }) {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-blue-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-blue-500">
                 {['#','Emp Code','Name','Father Name','UAN','PF A/C No.','Dept','Basic','PF Wage','Emp PF 12%','EPS 8.33%','EPF 3.67%','Admin 0.5%','Employer Total','Grand Total'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -240,9 +240,9 @@ function ESIRegister({ depts }) {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-emerald-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-emerald-500">
                 {['#','Emp Code','Name','ESI No.','Aadhaar','Dept','Designation','Gross','Emp ESI 0.75%','Employer 3.25%','Total ESI'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -325,9 +325,9 @@ function PTRegister() {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-violet-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-violet-500">
                 {['#','Emp Code','Name','PAN','Dept','Designation','Gross Monthly','PT Amount'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -401,9 +401,9 @@ function WageRegister({ depts }) {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-amber-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-amber-500">
                 {['#','Emp Code','Name','Dept','Bank A/C','IFSC','Basic','HRA','Conv','Medical','Special','Other','Gross','PF','ESI','PT','Deductions','Net Pay'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -495,9 +495,9 @@ function MusterRoll({ depts }) {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-[10px]">
             <thead>
-              <tr className="bg-rose-700 text-white">
-                <th className="px-3 py-3 text-left font-bold sticky left-0 bg-rose-700">#</th>
-                <th className="px-3 py-3 text-left font-bold sticky left-6 bg-rose-700 min-w-[120px]">Name</th>
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-rose-500">
+                <th className="px-3 py-3 text-left font-bold sticky left-0 bg-gray-50">#</th>
+                <th className="px-3 py-3 text-left font-bold sticky left-6 bg-gray-50 min-w-[120px]">Name</th>
                 <th className="px-3 py-3 text-left font-bold">Dept</th>
                 {days.map(d => (
                   <th key={d.day} className={`px-1.5 py-3 text-center font-bold w-8 ${d.is_sunday ? 'text-red-200' : ''}`}>{d.day}</th>
@@ -566,9 +566,9 @@ function EmploymentRegister() {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-teal-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-teal-500">
                 {['#','Emp Code','Name','Gender','Father Name','DOJ','DOB','Dept','Designation','Type','Location','UAN','PF A/C','ESI No.','PAN','Aadhaar','Bank A/C','IFSC','Status'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -652,9 +652,9 @@ function IncomeTaxRegister() {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-orange-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-orange-500">
                 {['#','Emp Code','Name','PAN','Dept','Monthly Gross','Annual Gross','PF (Annual)','Std. Deduction','Taxable Income','Est. Annual Tax','Monthly TDS'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -772,9 +772,9 @@ function LabourLicenses() {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-indigo-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-indigo-500">
                 {['#','Type','Licence Name','Number','Issuing Authority','Issue Date','Expiry Date','Status','Alert','Actions'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -966,9 +966,9 @@ function DocumentExpiry() {
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-red-700 text-white">
+              <tr className="bg-gray-50 text-gray-700 border-b-2 border-red-500">
                 {['#','Employee','Code','Dept','Doc Type','Doc Name','Doc Number','Issue Date','Expiry Date','Status','Edit'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1189,9 +1189,9 @@ function BOCWRegister() {
         {wLoading ? <LoadingTable/> : (
           <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
             <table className="w-full text-xs">
-              <thead><tr className="bg-amber-700 text-white">
+              <thead><tr className="bg-gray-50 text-gray-700 border-b-2 border-amber-500">
                 {['#','Worker Code','Name','Trade','BOCW No.','Aadhaar (Last 4)','Daily Rate','Project','Contractor','Status'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
@@ -1239,9 +1239,9 @@ function BOCWRegister() {
         {cLoading ? <LoadingTable/> : (
           <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
             <table className="w-full text-xs">
-              <thead><tr className="bg-amber-700 text-white">
+              <thead><tr className="bg-gray-50 text-gray-700 border-b-2 border-amber-500">
                 {['Project','Construction Cost','Cess Rate','Cess Due','Paid','Challan No.','Paid On','Balance','Actions'].map(h => (
-                  <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr></thead>
               <tbody className="divide-y divide-gray-100">
@@ -1351,9 +1351,9 @@ function GratuityRegister({ depts }) {
       {isLoading ? <LoadingTable/> : (
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
-            <thead><tr className="bg-emerald-700 text-white">
+            <thead><tr className="bg-gray-50 text-gray-700 border-b-2 border-emerald-500">
               {['#','Code','Name','Dept','Designation','DOJ','Years','Basic (₹)','Gratuity (₹)','Status'].map(h => (
-                <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
@@ -1441,7 +1441,7 @@ function BonusRegister({ depts }) {
           <table className="w-full text-xs">
             <thead><tr className="bg-yellow-600 text-white">
               {['#','Code','Name','Dept','DOJ','Yrs','Gross (₹)','Bonus Basis (Annual)','Bonus %','Bonus Amount','Eligibility'].map(h => (
-                <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
@@ -1515,9 +1515,9 @@ function LWFRegister() {
       {isLoading ? <LoadingTable/> : (
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
-            <thead><tr className="bg-rose-700 text-white">
+            <thead><tr className="bg-gray-50 text-gray-700 border-b-2 border-rose-500">
               {['#','Code','Name','Dept','Designation','Gross (₹)','Emp LWF','Employer LWF','Total'].map(h => (
-                <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
@@ -1607,9 +1607,9 @@ function MinWagesCheck({ depts }) {
       {isLoading ? <LoadingTable/> : (
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
-            <thead><tr className="bg-teal-700 text-white">
+            <thead><tr className="bg-gray-50 text-gray-700 border-b-2 border-teal-500">
               {['#','Code','Name','Dept','Designation','Category','Basic (₹)','Min Wage (₹)','Shortfall (₹)','Status'].map(h => (
-                <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
@@ -1771,9 +1771,9 @@ function ChallanTracker() {
       {isLoading ? <LoadingTable/> : (
         <div className="overflow-x-auto rounded-2xl border border-gray-100" style={{boxShadow:'0 2px 10px rgba(10,31,92,0.06)'}}>
           <table className="w-full text-xs">
-            <thead><tr className="bg-blue-700 text-white">
+            <thead><tr className="bg-gray-50 text-gray-700 border-b-2 border-blue-500">
               {['#','Type','Period','Amount','Filed On','Reference No.','Mode','Bank','Filed By','Actions'].map(h => (
-                <th key={h} className="px-3 py-3 text-left font-bold text-[11px] whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-3.5 text-left font-bold text-[10.5px] uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
             <tbody className="divide-y divide-gray-100">
