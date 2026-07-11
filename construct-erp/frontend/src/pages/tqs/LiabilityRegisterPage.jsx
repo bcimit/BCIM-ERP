@@ -29,34 +29,46 @@ const fmt = (d) => {
 const safeFile = (n) =>
   String(n || 'Vendor').replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
 
+// Professional, differentiated palette.
+//  · indigo  = brand / payable / selection
+//  · emerald = money paid out (debit)
+//  · amber   = watch / advances / 31–60d aging
+//  · rose    = overdue / 61d+ aging
+//  · slate   = neutral ink & surfaces
+// Legacy keys (blue/red/slate + *Bg/*Border) are kept so existing references
+// resolve, but now carry a genuinely distinct hue each.
 const C = {
-  blue: '#2563EB',
-  red: '#2563EB',
-  slate: '#0F172A',
-  blueBg: '#EFF6FF',
-  redBg: '#EFF6FF',
-  slateBg: '#F8FAFC',
-  blueBorder: '#BFDBFE',
-  redBorder: '#BFDBFE',
-  slateBorder: '#E2E8F0',
+  // brand / payable
+  blue: '#4F46E5', blueBg: '#EEF0FE', blueBorder: '#DADCFB',
+  // overdue
+  red: '#E11D48', redBg: '#FFF1F3', redBorder: '#FBD0D9',
+  // neutral
+  slate: '#334155', slateBg: '#F4F6FA', slateBorder: '#E5E9F0',
+  // paid
+  emerald: '#059669', emeraldBg: '#ECFDF5', emeraldBorder: '#B6EBD3',
+  // watch / advance
+  amber: '#B45309', amberBg: '#FEF6E7', amberBorder: '#F5DDA6',
+  // structural
+  ink: '#0F172A', sub: '#64748B', muted: '#94A3B8',
+  canvas: '#EEF1F6', line: '#E5E9F0', card: '#FFFFFF',
 };
 
 const ageTone = (row) => {
-  if (parseFloat(row.payable_90_plus || 0) > 0) return { label: '90+D', color: C.red, bg: C.redBg, border: C.redBorder };
-  if (parseFloat(row.payable_61_90 || 0) > 0) return { label: '61-90D', color: C.red, bg: C.redBg, border: C.redBorder };
-  if (parseFloat(row.payable_31_60 || 0) > 0) return { label: '31-60D', color: C.slate, bg: C.slateBg, border: C.slateBorder };
-  if (parseFloat(row.payable_0_30 || 0) > 0) return { label: '0-30D', color: C.blue, bg: C.blueBg, border: C.blueBorder };
+  if (parseFloat(row.payable_90_plus || 0) > 0) return { label: '90+D',   color: C.red,     bg: C.redBg,     border: C.redBorder };
+  if (parseFloat(row.payable_61_90 || 0) > 0) return { label: '61-90D',  color: C.red,     bg: C.redBg,     border: C.redBorder };
+  if (parseFloat(row.payable_31_60 || 0) > 0) return { label: '31-60D',  color: C.amber,   bg: C.amberBg,   border: C.amberBorder };
+  if (parseFloat(row.payable_0_30 || 0) > 0) return { label: '0-30D',   color: C.blue,    bg: C.blueBg,    border: C.blueBorder };
   return null;
 };
 
 // ─── Entry type config ───────────────────────────────────────────────────────
 const ENTRY = {
-  'Invoice':          { label: 'Invoice',      color: C.blue, bg: C.blueBg, border: C.blueBorder, side: 'credit' },
-  'Payment':          { label: 'Payment',      color: C.blue, bg: C.blueBg, border: C.blueBorder, side: 'debit'  },
-  'TDS Deduction':    { label: 'TDS',          color: C.slate, bg: C.slateBg, border: C.slateBorder, side: 'debit'  },
-  'Other Deduction':  { label: 'Deduction',    color: C.slate, bg: C.slateBg, border: C.slateBorder, side: 'debit'  },
-  'Advance Given':    { label: 'Advance',      color: C.red, bg: C.redBg, border: C.redBorder, side: 'debit'  },
-  'Advance Recovery': { label: 'Adv.Recovery', color: C.slate, bg: C.slateBg, border: C.slateBorder, side: 'debit'  },
+  'Invoice':          { label: 'Invoice',      color: C.blue,    bg: C.blueBg,    border: C.blueBorder,    side: 'credit' },
+  'Payment':          { label: 'Payment',      color: C.emerald, bg: C.emeraldBg, border: C.emeraldBorder, side: 'debit'  },
+  'TDS Deduction':    { label: 'TDS',          color: C.slate,   bg: C.slateBg,   border: C.slateBorder,   side: 'debit'  },
+  'Other Deduction':  { label: 'Deduction',    color: C.slate,   bg: C.slateBg,   border: C.slateBorder,   side: 'debit'  },
+  'Advance Given':    { label: 'Advance',      color: C.amber,   bg: C.amberBg,   border: C.amberBorder,   side: 'debit'  },
+  'Advance Recovery': { label: 'Adv.Recovery', color: C.slate,   bg: C.slateBg,   border: C.slateBorder,   side: 'debit'  },
 };
 
 function TxnBadge({ type }) {
@@ -467,13 +479,14 @@ export default function LiabilityRegisterPage() {
   const S = {
     root: {
       height: '100%', display: 'flex', flexDirection: 'column',
-      overflow: 'hidden', background: '#F1F5F9', minHeight: 0,
+      overflow: 'hidden', background: C.canvas, minHeight: 0,
       fontFamily: "'Inter','Segoe UI',system-ui,sans-serif",
     },
     // ── Top bar ──
     topBar: {
-      background: '#fff', borderBottom: '1px solid #E2E8F0',
+      background: C.card, borderBottom: `1px solid ${C.line}`,
       flexShrink: 0, padding: '0 20px',
+      boxShadow: '0 1px 2px rgba(15,23,42,.03)',
     },
     topRow: {
       display: 'flex', alignItems: 'center', gap: 10,
@@ -632,27 +645,25 @@ export default function LiabilityRegisterPage() {
           { label: `90+ Days (${vendorsOver90})`, val: totalOver90,         isN: false, accent: C.red, light: C.redBg, border: C.redBorder, Icon: Clock },
         ].map(k => (
           <div key={k.label} style={{
-            flex: '1 1 130px', minWidth: 130, position: 'relative',
-            background: '#fff', borderRadius: 12,
-            border: `1px solid ${k.border}`,
-            padding: '11px 14px 10px',
-            boxShadow: '0 1px 2px rgba(15,23,42,.04), 0 0 0 1px rgba(15,23,42,.01)',
+            flex: '1 1 132px', minWidth: 132, position: 'relative',
+            background: C.card, borderRadius: 14,
+            border: `1px solid ${C.line}`,
+            padding: '13px 15px 12px',
+            boxShadow: '0 1px 2px rgba(15,23,42,.05)',
             overflow: 'hidden',
-            transition: 'transform .15s, box-shadow .15s',
+            transition: 'transform .15s, box-shadow .15s, border-color .15s',
           }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15,23,42,.08)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(15,23,42,.04), 0 0 0 1px rgba(15,23,42,.01)'; }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(15,23,42,.09)'; e.currentTarget.style.borderColor = k.border; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(15,23,42,.05)'; e.currentTarget.style.borderColor = C.line; }}
           >
-            {/* Top accent strip */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${k.accent}, ${k.accent}80)` }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: k.light, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <k.Icon size={12} color={k.accent} strokeWidth={2.4} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 9 }}>
+              <div style={{ width: 26, height: 26, borderRadius: 8, background: k.light, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <k.Icon size={13} color={k.accent} strokeWidth={2.4} />
               </div>
-              <div style={{ fontSize: 9.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.2 }}>{k.label}</div>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: 0.6, lineHeight: 1.2 }}>{k.label}</div>
             </div>
-            <div style={{ fontSize: k.isN ? 24 : 18, fontWeight: 800, color: k.accent, lineHeight: 1, letterSpacing: -0.5 }}>
-              {k.isN ? k.val : <><span style={{ fontSize: k.isN ? 18 : 13, opacity: .6, marginRight: 1 }}>₹</span>{inr(k.val)}</>}
+            <div style={{ fontSize: k.isN ? 25 : 18, fontWeight: 800, color: k.isN ? C.ink : k.accent, lineHeight: 1, letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums' }}>
+              {k.isN ? k.val : <><span style={{ fontSize: 13, opacity: .55, marginRight: 1, fontWeight: 700 }}>₹</span>{inr(k.val)}</>}
             </div>
           </div>
         ))}
@@ -663,11 +674,11 @@ export default function LiabilityRegisterPage() {
 
         {/* ── LEFT: Vendor list ── */}
         <div style={{
-          width: 268, flexShrink: 0,
+          width: 272, flexShrink: 0,
           display: 'flex', flexDirection: 'column',
-          background: '#fff', borderRadius: 10,
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 1px 3px rgba(0,0,0,.05)',
+          background: C.card, borderRadius: 14,
+          border: `1px solid ${C.line}`,
+          boxShadow: '0 1px 3px rgba(15,23,42,.05)',
           overflow: 'hidden',
         }}>
           {/* Search */}
@@ -748,10 +759,11 @@ export default function LiabilityRegisterPage() {
                     </span>
                     <span style={{
                       fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
-                      padding: '2px 7px', borderRadius: 20, marginTop: 1,
-                      color: nil ? C.slate : C.red,
-                      background: nil ? C.slateBg : C.redBg,
-                      border: `1px solid ${nil ? C.slateBorder : C.redBorder}`,
+                      padding: '2px 8px', borderRadius: 20, marginTop: 1,
+                      fontVariantNumeric: 'tabular-nums',
+                      color: nil ? C.emerald : C.red,
+                      background: nil ? C.emeraldBg : C.redBg,
+                      border: `1px solid ${nil ? C.emeraldBorder : C.redBorder}`,
                     }}>
                       {nil ? '✓ Nil' : `₹${inr(Math.abs(bal))}`}
                     </span>
@@ -791,9 +803,9 @@ export default function LiabilityRegisterPage() {
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column',
           overflow: 'hidden', minWidth: 0, minHeight: 0,
-          background: '#fff', borderRadius: 10,
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 1px 3px rgba(0,0,0,.05)',
+          background: C.card, borderRadius: 14,
+          border: `1px solid ${C.line}`,
+          boxShadow: '0 1px 3px rgba(15,23,42,.05)',
         }}>
           {!selectedVendor ? (
             /* Empty state */
@@ -830,7 +842,7 @@ export default function LiabilityRegisterPage() {
                     border: `1.5px solid ${closingBal > 0 ? C.redBorder : C.slateBorder}`,
                   }}>
                     <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Balance Due</p>
-                    <p style={{ margin: '3px 0 0', fontSize: 20, fontWeight: 900, color: closingBal > 0 ? C.red : C.slate, lineHeight: 1, letterSpacing: -0.5 }}>
+                    <p style={{ margin: '3px 0 0', fontSize: 22, fontWeight: 900, color: closingBal > 0 ? C.red : C.slate, lineHeight: 1, letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums' }}>
                       ₹{inr(Math.abs(closingBal), 2)}
                     </p>
                     <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 600, color: closingBal > 0 ? C.red : '#94A3B8' }}>
@@ -845,12 +857,12 @@ export default function LiabilityRegisterPage() {
                     { label: 'Invoiced', val: selRow.total_invoiced,      color: C.blue, bg: C.blueBg, border: C.blueBorder },
                     { label: 'Paid',     val: selRow.total_paid,          color: C.blue, bg: C.blueBg, border: C.blueBorder },
                     { label: 'TDS',      val: selRow.total_tds,           color: C.slate, bg: C.slateBg, border: C.slateBorder },
-                    { label: 'Advance Open', val: selRow.total_advance_open || selRow.total_advance_given, color: C.red, bg: C.redBg, border: C.redBorder },
+                    { label: 'Advance Open', val: selRow.total_advance_open || selRow.total_advance_given, color: C.amber, bg: C.amberBg, border: C.amberBorder },
                     { label: '90+ Due',  val: selRow.payable_90_plus,     color: C.red, bg: C.redBg, border: C.redBorder },
                   ].map(s => (
-                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: '5px 12px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: s.color, letterSpacing: -0.3 }}>₹{inr(s.val)}</span>
+                    <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 9, padding: '6px 13px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: s.color, letterSpacing: -0.3, fontVariantNumeric: 'tabular-nums' }}>₹{inr(s.val)}</span>
                     </div>
                   ))}
                 </div>
@@ -858,13 +870,13 @@ export default function LiabilityRegisterPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(90px, 1fr))', gap: 8, marginTop: 10 }}>
                   {[
                     { label: '0-30 Days', val: selRow.payable_0_30, color: C.blue },
-                    { label: '31-60 Days', val: selRow.payable_31_60, color: C.slate },
+                    { label: '31-60 Days', val: selRow.payable_31_60, color: C.amber },
                     { label: '61-90 Days', val: selRow.payable_61_90, color: C.red },
                     { label: '90+ Days', val: selRow.payable_90_plus, color: C.red },
                   ].map(s => (
-                    <div key={s.label} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 9px' }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</div>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: s.color, marginTop: 2 }}>₹{inr(s.val)}</div>
+                    <div key={s.label} style={{ background: C.slateBg, border: `1px solid ${C.line}`, borderRadius: 9, padding: '7px 10px' }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: s.color, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>₹{inr(s.val)}</div>
                     </div>
                   ))}
                 </div>
@@ -936,9 +948,9 @@ export default function LiabilityRegisterPage() {
                         const even = idx % 2 === 0;
                         return (
                           <tr key={idx}
-                            style={{ background: even ? '#fff' : '#FAFAFA', borderBottom: '1px solid #F1F5F9', transition: 'background .1s' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#EFF6FF'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = even ? '#fff' : '#FAFAFA'; }}>
+                            style={{ background: even ? '#fff' : '#FAFBFD', borderBottom: '1px solid #F1F4F9', transition: 'background .1s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = C.blueBg; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = even ? '#fff' : '#FAFBFD'; }}>
 
                             <td style={{ padding: '9px 12px', fontSize: 11, color: '#64748B', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
                               {fmt(row.txn_date)}
@@ -978,19 +990,19 @@ export default function LiabilityRegisterPage() {
                             </td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
                               {parseFloat(row.debit_amount || 0) > 0
-                                ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: C.blue, fontSize: 12 }}>₹{inr(row.debit_amount, 2)}</span>
-                                : <span style={{ color: '#E2E8F0' }}>—</span>}
+                                ? <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: C.emerald, fontSize: 12 }}>₹{inr(row.debit_amount, 2)}</span>
+                                : <span style={{ color: '#CBD5E1' }}>—</span>}
                             </td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
                               {parseFloat(row.credit_amount || 0) > 0
-                                ? <span style={{ fontFamily: 'monospace', fontWeight: 700, color: C.blue, fontSize: 12 }}>₹{inr(row.credit_amount, 2)}</span>
-                                : <span style={{ color: '#E2E8F0' }}>—</span>}
+                                ? <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: C.blue, fontSize: 12 }}>₹{inr(row.credit_amount, 2)}</span>
+                                : <span style={{ color: '#CBD5E1' }}>—</span>}
                             </td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
                               {nil ? (
                                 <span style={{ color: '#CBD5E1' }}>—</span>
                               ) : (
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: bal > 0 ? C.red : C.slate }}>
+                                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 800, fontSize: 12, color: bal > 0 ? C.red : C.slate }}>
                                   ₹{inr(Math.abs(bal), 2)}
                                 </span>
                               )}
@@ -1000,23 +1012,23 @@ export default function LiabilityRegisterPage() {
                       })}
 
                       {/* Closing footer */}
-                      <tr style={{ background: '#1E293B' }}>
-                        <td colSpan={5} style={{ padding: '10px 14px' }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: '#F8FAFC', textTransform: 'uppercase', letterSpacing: 0.5 }}>Closing Balance</span>
+                      <tr style={{ background: 'linear-gradient(90deg,#111C34 0%,#1B2A4A 100%)' }}>
+                        <td colSpan={5} style={{ padding: '11px 14px', background: '#141F38' }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#F8FAFC', textTransform: 'uppercase', letterSpacing: 0.6 }}>Closing Balance</span>
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 12, color: '#BFDBFE' }}>₹{inr(totals.total_debit, 2)}</div>
-                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,.35)', marginTop: 1 }}>Total Debit</div>
+                        <td style={{ padding: '11px 12px', textAlign: 'right', background: '#141F38' }}>
+                          <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 800, fontSize: 12, color: '#6EE7B7' }}>₹{inr(totals.total_debit, 2)}</div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', marginTop: 1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Total Debit</div>
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 12, color: '#BFDBFE' }}>₹{inr(totals.total_credit, 2)}</div>
-                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,.35)', marginTop: 1 }}>Total Credit</div>
+                        <td style={{ padding: '11px 12px', textAlign: 'right', background: '#141F38' }}>
+                          <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 800, fontSize: 12, color: '#A5B4FC' }}>₹{inr(totals.total_credit, 2)}</div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', marginTop: 1, textTransform: 'uppercase', letterSpacing: 0.4 }}>Total Credit</div>
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <div style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: 14, color: closingBal > 0 ? '#BFDBFE' : '#BFDBFE', lineHeight: 1.1 }}>
+                        <td style={{ padding: '11px 12px', textAlign: 'right', background: '#141F38' }}>
+                          <div style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 900, fontSize: 15, color: closingBal > 0 ? '#FDA4AF' : '#6EE7B7', lineHeight: 1.1 }}>
                             ₹{inr(Math.abs(closingBal), 2)}
                           </div>
-                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,.35)', marginTop: 1 }}>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', marginTop: 1, textTransform: 'uppercase', letterSpacing: 0.4 }}>
                             {closingBal > 0 ? 'Payable' : closingBal < 0 ? 'Excess' : 'Settled'}
                           </div>
                         </td>
