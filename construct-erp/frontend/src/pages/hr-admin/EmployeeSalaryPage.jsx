@@ -1,5 +1,5 @@
 // src/pages/hr-admin/EmployeeSalaryPage.jsx — 2026 Premium UI
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, Calculator, CheckCircle2, Edit2, IndianRupee, Plus, RotateCcw, Search, ShieldCheck, Users, Utensils, X } from 'lucide-react';
@@ -14,8 +14,19 @@ const lbl = "text-xs font-bold text-gray-600 uppercase tracking-wide block mb-1.
 const fmt = (n) => Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const today = () => new Date().toISOString().slice(0,10);
 
-function SalaryModal({ employees, structures, onClose, onSave, saving, calculateBreakup, calculating }) {
-  const [form, setForm] = useState({
+function SalaryModal({ employees, structures, onClose, onSave, saving, calculateBreakup, calculating, editSalary }) {
+  const isEdit = !!editSalary;
+  const [form, setForm] = useState(() => isEdit ? {
+    user_id: editSalary.user_id,
+    structure_id: editSalary.structure_id || structures[0]?.id || '',
+    ctc_monthly: editSalary.ctc_annual ? String(Math.round(Number(editSalary.ctc_annual) / 12)) : '',
+    mess_deduction: editSalary.mess_deduction || '',
+    basic_reversal: editSalary.basic_reversal || '',
+    pf_applicable: editSalary.pf_applicable ?? true,
+    esi_applicable: editSalary.esi_applicable ?? false,
+    pt_applicable: editSalary.pt_applicable ?? true,
+    effective_from: (editSalary.effective_from || today()).slice(0, 10),
+  } : {
     user_id:'', structure_id:structures[0]?.id||'',
     ctc_monthly:'', mess_deduction:'', basic_reversal:'', pf_applicable:true, esi_applicable:false, pt_applicable:true,
     effective_from:today(),
@@ -37,11 +48,18 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
     }
   };
 
+  // When editing, auto-calculate the breakup on open so the form is ready to save.
+  useEffect(() => {
+    if (isEdit && form.ctc_monthly && Number(form.ctc_monthly) > 0) runCalculate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const submit = () => {
     if(!form.user_id) return toast.error('Select employee');
     if(!form.effective_from) return toast.error('Effective date is required');
     if(!breakup) return toast.error('Calculate the CTC breakup first');
     onSave({
+      id: isEdit ? editSalary.id : undefined,
       user_id:form.user_id, structure_id:form.structure_id||null,
       ctc_annual:breakup.ctc_annual, basic:breakup.basic, hra:breakup.hra,
       special_allowance:breakup.special_allowance, other_allowance:0,
@@ -71,8 +89,10 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
           <div className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-[0.07]"
             style={{background:'radial-gradient(circle,#fff,transparent 70%)',transform:'translate(25%,-25%)'}}/>
           <div className="relative z-10">
-            <h2 className="text-lg font-black text-white">Assign Employee Salary</h2>
-            <p className="text-white/55 text-sm mt-0.5">Use approved monthly salary. Existing active salary closes automatically.</p>
+            <h2 className="text-lg font-black text-white">{isEdit ? 'Edit Employee Salary' : 'Assign Employee Salary'}</h2>
+            <p className="text-white/55 text-sm mt-0.5">{isEdit
+              ? 'Updates this salary record in place — no new/duplicate rows are created.'
+              : 'Use approved monthly salary. Existing active salary closes automatically.'}</p>
           </div>
           <button onClick={onClose} className="relative z-10 w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
             <X className="w-4 h-4 text-white"/>
@@ -82,7 +102,8 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[65vh] overflow-y-auto">
           <div>
             <label className={lbl}>Employee</label>
-            <select value={form.user_id} onChange={e=>update('user_id',e.target.value)} className={inp}>
+            <select value={form.user_id} onChange={e=>update('user_id',e.target.value)} className={inp}
+              disabled={isEdit} style={isEdit ? {opacity:0.7, cursor:'not-allowed'} : undefined}>
               <option value="">Select employee…</option>
               {employees.map(e=><option key={e.id} value={e.id}>{e.name} — {e.employee_code||e.email}</option>)}
             </select>
@@ -192,7 +213,7 @@ function SalaryModal({ employees, structures, onClose, onSave, saving, calculate
           <button onClick={submit} disabled={saving||!breakup}
             className="px-6 py-2.5 rounded-xl text-sm font-black text-white disabled:opacity-50"
             style={{background:`linear-gradient(135deg,${B.blue},${B.navy})`}}>
-            {saving?'Saving…':'Save Salary'}
+            {saving?'Saving…':(isEdit?'Update Salary':'Save Salary')}
           </button>
         </div>
       </motion.div>
@@ -308,6 +329,7 @@ export default function EmployeeSalaryPage() {
   const qc = useQueryClient();
   const [search,    setSearch]    = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editSalary, setEditSalary] = useState(null); // salary row being edited
   const [messEdit,  setMessEdit]  = useState(null); // { employee, salary }
   const [reversalEdit, setReversalEdit] = useState(null); // { employee, salary }
 
@@ -350,6 +372,17 @@ export default function EmployeeSalaryPage() {
     onSuccess:()=>{ toast.success('Employee salary saved'); setShowModal(false); qc.invalidateQueries({queryKey:['hr-employee-salaries']}); },
     onError:(e)=>toast.error(e.response?.data?.error||'Failed to save salary'),
   });
+
+  const updateMut = useMutation({
+    mutationFn:({id, ...payload})=>hrSalaryAPI.updateEmpSalary(id, payload),
+    onSuccess:()=>{ toast.success('Salary updated'); setEditSalary(null); qc.invalidateQueries({queryKey:['hr-employee-salaries']}); },
+    onError:(e)=>toast.error(e.response?.data?.error||'Failed to update salary'),
+  });
+
+  const handleSave = (payload) => {
+    if (payload.id) updateMut.mutate(payload);
+    else saveMut.mutate(payload);
+  };
 
   const breakupMut = useMutation({ mutationFn:(payload)=>hrSalaryAPI.calculateBreakup(payload) });
 
@@ -433,7 +466,7 @@ export default function EmployeeSalaryPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`}}>
-                {['Employee','Department','Structure','Gross Monthly','Annual CTC','Mess Deduction','Basic Reversal','Net Pay','Effective From','Status'].map(h=>(
+                {['Employee','Department','Structure','Gross Monthly','Annual CTC','Mess Deduction','Basic Reversal','Net Pay','Effective From','Status','Actions'].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-xs font-black text-white/80 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -493,11 +526,24 @@ export default function EmployeeSalaryPage() {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {sal ? (
+                        <button onClick={()=>setEditSalary(sal)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-black hover:bg-blue-100 transition-colors">
+                          <Edit2 className="w-3.5 h-3.5"/> Edit
+                        </button>
+                      ) : (
+                        <button onClick={()=>{ setEditSalary(null); setShowModal(true); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-black hover:bg-amber-100 transition-colors">
+                          <Plus className="w-3.5 h-3.5"/> Assign
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {!empLoading && !salaryLoading && filtered.length===0 && (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-gray-400 text-sm">No employees found</td></tr>
+                <tr><td colSpan={11} className="px-4 py-12 text-center text-gray-400 text-sm">No employees found</td></tr>
               )}
             </tbody>
           </table>
@@ -524,15 +570,17 @@ export default function EmployeeSalaryPage() {
         />
       )}
 
-      {showModal && (
+      {(showModal || editSalary) && (
         <SalaryModal
+          key={editSalary?.id || 'new'}
           employees={employees}
           structures={structures}
-          saving={saveMut.isPending}
+          editSalary={editSalary}
+          saving={saveMut.isPending || updateMut.isPending}
           calculating={breakupMut.isPending}
           calculateBreakup={payload=>breakupMut.mutateAsync(payload)}
-          onClose={()=>setShowModal(false)}
-          onSave={payload=>saveMut.mutate(payload)}
+          onClose={()=>{ setShowModal(false); setEditSalary(null); }}
+          onSave={handleSave}
         />
       )}
     </div>

@@ -1909,6 +1909,7 @@ export const hrSalaryAPI = {
   listEmpSalaries:    (params) => api.get('/hr-admin/salary/employee-salaries', { params }),
   getCurrentSalary:   (uid)    => api.get(`/hr-admin/salary/employee-salaries/${uid}/current`),
   assignSalary:       (data)   => api.post('/hr-admin/salary/employee-salaries', data),
+  updateEmpSalary:    (id, d)  => api.put(`/hr-admin/salary/employee-salaries/${id}`, d),
   calculateBreakup:   (data)   => api.post('/hr-admin/salary/calculate-breakup', data),
   updateMess:         (id, d)  => api.patch(`/hr-admin/salary/employee-salaries/${id}/mess-deduction`, d),
   updateBasicReversal:(id, d)  => api.patch(`/hr-admin/salary/employee-salaries/${id}/basic-reversal`, d),

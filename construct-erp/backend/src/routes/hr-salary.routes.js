@@ -382,6 +382,46 @@ router.post('/employee-salaries', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// PUT /employee-salaries/:id — edit an existing salary record IN PLACE.
+// Unlike POST (which inserts a new row and closes the old one), this updates
+// the same row — so correcting a salary never creates duplicate/overlapping
+// rows. Employee (user_id) and the row's identity are preserved.
+router.put('/employee-salaries/:id', async (req, res) => {
+  try {
+    const b = req.body;
+    const existing = await query(
+      `SELECT es.* FROM hr_employee_salaries es
+       JOIN users u ON u.id = es.user_id
+       WHERE es.id = $1 AND u.company_id = $2`,
+      [req.params.id, req.user.company_id]
+    );
+    if (!existing.rows.length) return res.status(404).json({ error: 'Salary record not found' });
+    const p = existing.rows[0];
+    const v = (key) => (b[key] !== undefined && b[key] !== null ? b[key] : p[key]);
+
+    const { rows } = await query(
+      `UPDATE hr_employee_salaries SET
+         structure_id=$1, ctc_annual=$2, basic=$3, hra=$4, conveyance=$5, medical=$6,
+         special_allowance=$7, other_allowance=$8, gross_monthly=$9,
+         pf_applicable=$10, esi_applicable=$11, pt_applicable=$12, effective_from=$13,
+         vda=$14, lta=$15, education_allowance=$16, washing_allowance=$17, mobile_allowance=$18,
+         project_allowance=$19, accommodation_allowance=$20, food_allowance=$21, transport_allowance=$22,
+         employer_pf=$23, employee_pf=$24, gratuity=$25, pt_deduction=$26, net_pay_monthly=$27,
+         mess_deduction=$28, incentive=$29, edli=$30, epf_admin=$31, basic_reversal=$32
+       WHERE id=$33 RETURNING *`,
+      [v('structure_id'), v('ctc_annual'), v('basic'), v('hra'), v('conveyance'), v('medical'),
+       v('special_allowance'), v('other_allowance'), v('gross_monthly'),
+       v('pf_applicable'), v('esi_applicable'), v('pt_applicable'), v('effective_from'),
+       v('vda'), v('lta'), v('education_allowance'), v('washing_allowance'), v('mobile_allowance'),
+       v('project_allowance'), v('accommodation_allowance'), v('food_allowance'), v('transport_allowance'),
+       v('employer_pf'), v('employee_pf'), v('gratuity'), v('pt_deduction'), v('net_pay_monthly'),
+       v('mess_deduction'), v('incentive'), v('edli'), v('epf_admin'), v('basic_reversal'),
+       req.params.id]
+    );
+    res.json({ data: rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Professional Tax Slabs ────────────────────────────────────────────────────
 ;(async () => {
   const safe = async sql => { try { await query(sql); } catch(_) {} };
