@@ -2031,6 +2031,8 @@ export const mailAPI = {
   send:           (data) => api.post('/mail/send', data),
   resendWelcome:  (to)   => api.post('/mail/welcome', { to }),
   erpDailyReport: ()     => api.post('/mail/erp-daily-report'),
+  dailyDigest:    (data) => api.post('/mail/daily-digest', data || {}),
+  weeklySummary:  (data) => api.post('/mail/weekly-summary', data || {}),
 };
 
 const multipart = { headers: { 'Content-Type': undefined } };

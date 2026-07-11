@@ -209,4 +209,34 @@ router.post('/erp-daily-report', async (req, res) => {
   }
 });
 
+// POST /api/v1/mail/daily-digest   body: { recipients?, daysAgo? }
+// Sends the all-departments daily activity digest (today, or N days ago).
+router.post('/daily-digest', async (req, res) => {
+  try {
+    const { recipients, daysAgo } = req.body || {};
+    const { runDailyActivityDigest } = require('../utils/daily-activity-digest.service');
+    const result = await runDailyActivityDigest({
+      manual: true,
+      daysAgo: Number(daysAgo) || 0,
+      overrideRecipients: recipients || undefined,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/mail/weekly-summary   body: { fromDate?, toDate?, recipients? }
+// Sends the all-departments activity summary for a date range (defaults Mon–today).
+router.post('/weekly-summary', async (req, res) => {
+  try {
+    const { fromDate, toDate, recipients } = req.body || {};
+    const { runWeeklySummary } = require('../utils/daily-activity-digest.service');
+    const result = await runWeeklySummary({ fromDate, toDate, overrideRecipients: recipients || undefined });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
