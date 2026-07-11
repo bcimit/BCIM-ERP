@@ -736,47 +736,55 @@ export default function VendorQSCertificationPage() {
   }, { gross: 0, net: 0, deductions: 0 });
 
   return (
-    <div className="p-5 bg-slate-50 min-h-full space-y-4">
+    <div className="p-5 min-h-full space-y-4" style={{ background: '#EEF1F6', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm"
+            style={{ background: 'linear-gradient(135deg,#059669 0%,#047857 100%)' }}>
             <Award className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-medium text-slate-900">Vendor QS Certification</h1>
-            <p className="text-xs text-slate-500">Professional vendor RA certification for PO and WO invoice batches</p>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">Vendor QS Certification</h1>
+            <p className="text-xs text-slate-500 mt-0.5">RA certification for PO / WO invoice batches</p>
           </div>
         </div>
-        <button onClick={() => { setModalInitial({}); setShowModal(true); }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-2">
+        <button onClick={() => { setModalInitial({}); setShowModal(true); }}
+          className="px-4 py-2.5 text-white rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-transform hover:-translate-y-px"
+          style={{ background: 'linear-gradient(135deg,#059669 0%,#047857 100%)' }}>
           <Plus className="w-4 h-4" /> New Certification
         </button>
       </div>
 
+      {/* ── KPI cards ── */}
       <div className="grid md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <p className="text-[10px] font-medium uppercase text-slate-400">Certifications</p>
-          <p className="text-2xl font-medium text-slate-900">{certs.length}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <p className="text-[10px] font-medium uppercase text-slate-400">Gross Certified</p>
-          <p className="text-xl font-medium text-indigo-700">Rs {inr(totals.gross)}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <p className="text-[10px] font-medium uppercase text-slate-400">Deductions</p>
-          <p className="text-xl font-medium text-orange-600">Rs {inr(totals.deductions)}</p>
-        </div>
-        <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <p className="text-[10px] font-medium uppercase text-slate-400">Net Payable</p>
-          <p className="text-xl font-medium text-emerald-700">Rs {inr(totals.net)}</p>
-        </div>
+        {[
+          { label: 'Certifications', value: certs.length,             isCount: true,  color: '#0F172A', chip: '#F4F6FA', Icon: FileCheck2 },
+          { label: 'Gross Certified', value: totals.gross,            isCount: false, color: '#4F46E5', chip: '#EEF0FE', Icon: IndianRupee },
+          { label: 'Deductions',      value: totals.deductions,       isCount: false, color: '#B45309', chip: '#FEF6E7', Icon: FileText },
+          { label: 'Net Payable',     value: totals.net,              isCount: false, color: '#059669', chip: '#ECFDF5', Icon: Award },
+        ].map(k => (
+          <div key={k.label} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm transition-shadow hover:shadow-md">
+            <div className="flex items-center gap-2.5 mb-2.5">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: k.chip }}>
+                <k.Icon className="w-3.5 h-3.5" style={{ color: k.color }} />
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{k.label}</p>
+            </div>
+            <p className="font-extrabold leading-none" style={{ color: k.color, fontSize: k.isCount ? 26 : 19, fontVariantNumeric: 'tabular-nums' }}>
+              {k.isCount ? k.value : <><span className="text-[13px] opacity-60 mr-0.5">₹</span>{inr(k.value)}</>}
+            </p>
+          </div>
+        ))}
       </div>
 
-      <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 flex-1 min-w-[220px]">
+      {/* ── Filter bar ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 flex flex-wrap gap-3 items-center shadow-sm">
+        <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 flex-1 min-w-[220px] bg-slate-50 focus-within:bg-white focus-within:border-emerald-300 transition-colors">
           <Search className="w-4 h-4 text-slate-400" />
-          <input className="outline-none text-sm flex-1" placeholder="Search vendor..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="outline-none text-sm flex-1 bg-transparent" placeholder="Search vendor..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="border border-slate-200 rounded-lg px-3 py-2 text-sm" value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
+        <select className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none" value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
           <option value="">All projects</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -784,7 +792,7 @@ export default function VendorQSCertificationPage() {
           <button
             onClick={() => bulkApproveMut.mutate(selectedIds)}
             disabled={selectedIds.length === 0 || bulkApproveMut.isPending}
-            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 flex items-center gap-2"
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-40 flex items-center gap-2 shadow-sm"
           >
             <Send className="w-3.5 h-3.5" />
             {bulkApproveMut.isPending ? 'Approving…' : `Approve Selected (${selectedIds.length})`}
@@ -792,19 +800,20 @@ export default function VendorQSCertificationPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      {/* ── Table ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-sm">
         <table className="w-full text-xs">
-          <thead className="bg-slate-800 text-white">
-            <tr>
+          <thead>
+            <tr className="bg-slate-50 border-b-2 border-slate-200">
               {canApprove && (
-                <th className="px-3 py-2 w-8">
+                <th className="px-3 py-2.5 w-8">
                   <input type="checkbox" className="accent-indigo-500"
                     checked={selectedIds.length > 0 && selectedIds.length === certs.filter(c => c.status === 'certified').length}
                     onChange={e => setSelectedIds(e.target.checked ? certs.filter(c => c.status === 'certified').map(c => c.id) : [])} />
                 </th>
               )}
-              {['Cert No','RA No','Vendor','Project','Order','QS Received','QS Certified','Invoices','Gross','Deductions','Net Payable','Status','Actions'].map(h => (
-                <th key={h} className="px-3 py-2 text-left font-medium uppercase tracking-wide">{h}</th>
+              {['Cert No','RA No','Vendor','Project','Order','QS Received','QS Certified','Inv','Gross','Deductions','Net Payable','Status','Actions'].map(h => (
+                <th key={h} className={`px-3 py-2.5 font-bold uppercase tracking-wider text-[10px] text-slate-500 whitespace-nowrap ${['Gross','Deductions','Net Payable'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -817,44 +826,46 @@ export default function VendorQSCertificationPage() {
                 <tr
                   key={c.id}
                   onClick={() => navigate(`${basePath}/${c.id}`)}
-                  className="hover:bg-slate-50 cursor-pointer"
+                  className="hover:bg-indigo-50/40 cursor-pointer transition-colors"
                   title="Open certification"
                 >
                   {canApprove && (
-                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" className="accent-indigo-500"
                         disabled={c.status !== 'certified'}
                         checked={selectedIds.includes(c.id)}
                         onChange={() => toggleSelected(c.id)} />
                     </td>
                   )}
-                  <td className="px-3 py-2 font-medium text-indigo-700 underline decoration-indigo-200 underline-offset-2">{c.cert_number}</td>
-                  <td className="px-3 py-2 font-semibold">{c.ra_bill_number || `RA-${c.ra_sequence}`}</td>
-                  <td className="px-3 py-2 font-medium text-slate-800">{c.vendor_name}</td>
-                  <td className="px-3 py-2 text-slate-500">{c.project_name || '-'}</td>
-                  <td className="px-3 py-2 text-slate-500">{String(c.order_type || '').toUpperCase()} {c.order_number || '-'}</td>
-                  <td className="px-3 py-2 text-slate-500">{fmtDate(c.qs_received_date)}</td>
-                  <td className="px-3 py-2 text-slate-500">{fmtDate(c.qs_certified_date)}</td>
-                  <td className="px-3 py-2 font-bold">{c.invoice_count}</td>
-                  <td className="px-3 py-2 font-bold">Rs {inr(c.gross_amount)}</td>
-                  <td className="px-3 py-2 font-medium text-orange-600">Rs {inr(deductions)}</td>
-                  <td className="px-3 py-2 font-medium text-emerald-700">Rs {inr(c.net_payable)}</td>
-                  <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-[10px] font-medium uppercase ${statusClass(c.status)}`}>{c.status}</span></td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1">
+                  <td className="px-3 py-2.5 font-semibold text-indigo-700">{c.cert_number}</td>
+                  <td className="px-3 py-2.5 font-semibold text-slate-700">{c.ra_bill_number || `RA-${c.ra_sequence}`}</td>
+                  <td className="px-3 py-2.5 font-semibold text-slate-900">{c.vendor_name}</td>
+                  <td className="px-3 py-2.5 text-slate-500">{c.project_name || '-'}</td>
+                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold mr-1">{String(c.order_type || '').toUpperCase()}</span>
+                    {c.order_number || '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(c.qs_received_date)}</td>
+                  <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{fmtDate(c.qs_certified_date)}</td>
+                  <td className="px-3 py-2.5 font-bold text-slate-700">{c.invoice_count}</td>
+                  <td className="px-3 py-2.5 text-right font-bold text-slate-900 whitespace-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>₹{inr(c.gross_amount)}</td>
+                  <td className="px-3 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: '#B45309', fontVariantNumeric: 'tabular-nums' }}>₹{inr(deductions)}</td>
+                  <td className="px-3 py-2.5 text-right font-bold whitespace-nowrap" style={{ color: '#059669', fontVariantNumeric: 'tabular-nums' }}>₹{inr(c.net_payable)}</td>
+                  <td className="px-3 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusClass(c.status)}`}>{c.status}</span></td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                       <Link
                         to={`${basePath}/${c.id}`}
-                        onClick={e => e.stopPropagation()}
-                        className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 font-medium inline-flex items-center gap-1"
+                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        title="Open / Edit"
                       >
-                        <Pencil className="w-3 h-3" /> Open / Edit
+                        <Pencil className="w-3.5 h-3.5" />
                       </Link>
                       <Link
                         to={`${basePath}/${c.id}?print=abstract`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium inline-flex items-center gap-1"
+                        className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold inline-flex items-center gap-1 transition-colors"
                         title="Print Abstract of Measurement (A4 Landscape)"
                       >
                         <Printer className="w-3 h-3" /> Abstract
@@ -863,47 +874,49 @@ export default function VendorQSCertificationPage() {
                         to={`${basePath}/${c.id}?print=payment`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 font-medium inline-flex items-center gap-1"
+                        className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold inline-flex items-center gap-1 transition-colors"
                         title="Print Payment Certificate (A4 Portrait)"
                       >
                         <Printer className="w-3 h-3" /> Pay Cert
                       </Link>
                       <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          statusMut.mutate({ id: c.id, status: 'accounts' });
-                        }}
+                        onClick={() => statusMut.mutate({ id: c.id, status: 'accounts' })}
                         disabled={c.status === 'accounts' || c.status === 'paid' || !canApprove}
                         title={canApprove ? 'Approve and send to Accounts' : `Only ${CERT_APPROVER_EMAIL} can approve and send this to Accounts`}
-                        className="px-2 py-1 rounded bg-indigo-50 text-indigo-700 font-medium disabled:opacity-40 inline-flex items-center gap-1"
+                        className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold disabled:opacity-40 inline-flex items-center gap-1 transition-colors"
                       >
-                        <Send className="w-3 h-3" /> {canApprove ? 'Approve & Send' : 'Accounts'}
+                        <Send className="w-3 h-3" /> {canApprove ? 'Approve' : 'Accounts'}
                       </button>
                       {canApprove && (
                         <button
-                          onClick={e => { e.stopPropagation(); setRejectTarget(c); }}
+                          onClick={() => setRejectTarget(c)}
                           disabled={c.status !== 'certified'}
                           title="Reject and send back to QS with a reason"
-                          className="px-2 py-1 rounded bg-orange-50 text-orange-700 font-medium disabled:opacity-40 inline-flex items-center gap-1"
+                          className="p-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-40 transition-colors"
                         >
-                          <X className="w-3 h-3" /> Reject
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       )}
                       <button
                         onClick={e => handleDelete(e, c)}
                         disabled={deleteMut.isPending || c.status === 'paid'}
-                        className="px-2 py-1 rounded bg-red-50 text-red-600 font-medium disabled:opacity-40 inline-flex items-center gap-1"
+                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 transition-colors"
                         title={c.status === 'paid' ? 'Paid certifications cannot be deleted' : 'Delete certification'}
                       >
-                        <Trash2 className="w-3 h-3" /> Delete
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>
                 </tr>
               );
             }) : (
-              <tr><td colSpan={canApprove ? 14 : 13} className="py-16 text-center text-slate-400">No vendor QS certifications created yet.</td></tr>
+              <tr>
+                <td colSpan={canApprove ? 14 : 13} className="py-16 text-center">
+                  <Award className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-500">No certifications yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Click “New Certification” to certify a vendor invoice batch.</p>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
