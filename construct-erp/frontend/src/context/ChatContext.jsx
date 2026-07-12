@@ -2,7 +2,7 @@
 // DM popups. Mounted once at the app root so the socket connection (and any
 // open DM popup) survives navigation between ERP modules, not just while the
 // /chat page itself is open.
-import { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { io as socketIO } from 'socket.io-client';
 import { Minus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -218,7 +218,10 @@ export function ChatProvider({ children }) {
   // ── Screen share with laser pointer ──────────────────────────────────────────
   const ss = useScreenShare({ socketRef, connected, currentUser: user });
 
-  const value = {
+  // Memoized so consumers only re-render when a field they actually read
+  // changes, instead of on every provider render (sockets/typing update
+  // frequently, and this context wraps the whole app).
+  const value = useMemo(() => ({
     socketRef, connected, employees, unread, unreadTotal, previews, popups, typing,
     openPopup, closePopup, toggleMinimize, markRead, registerActive, findEmployeeForDm,
     // Call API
@@ -232,9 +235,12 @@ export function ChatProvider({ children }) {
     shareState:  ss.shareState,
     shareInfo:   ss.shareInfo,
     SHARE_STATE,
-    // previews exposed so ERPChat can show last-message in conv list
-    previews,
-  };
+  }), [
+    connected, employees, unread, unreadTotal, previews, popups, typing,
+    openPopup, closePopup, toggleMinimize, markRead, registerActive, findEmployeeForDm,
+    webrtc.startCall, webrtc.endCall, webrtc.callState, webrtc.callInfo,
+    ss.startShare, ss.stopShare, ss.shareState, ss.shareInfo,
+  ]);
 
   return (
     <ChatContext.Provider value={value}>
