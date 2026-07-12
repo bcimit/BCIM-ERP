@@ -2104,8 +2104,8 @@ export default function Layout() {
   const MD_NAV_ORDER = ['Overview', 'Procurement', 'Stores', 'QS & Billing', 'Planning', 'Bill Tracker'];
   const isMDNavUser = (() => {
     const r = String(user?.role || '').toLowerCase();
-    return ['md', 'managing_director'].includes(r)
-      || ['stephen@bcim.in'].includes(String(user?.email || '').toLowerCase());
+    return ['md', 'managing_director', 'super_admin'].includes(r)
+      || ['stephen@bcim.in', 'it@bcim.in'].includes(String(user?.email || '').toLowerCase());
   })();
   const isProcurementUser = (() => {
     if (isMDNavUser) return false; // MD already has its own bar
