@@ -54,6 +54,7 @@ import TDSScreen from '../screens/TDSScreen';
 import ProjectsScreen from '../screens/ProjectsScreen';
 import VendorPaymentsScreen from '../screens/VendorPaymentsScreen';
 import StoreLedgerScreen from '../screens/StoreLedgerScreen';
+import StoreLedgerDetailScreen from '../screens/StoreLedgerDetailScreen';
 import PettyCashScreen from '../screens/PettyCashScreen';
 import GatePassScreen from '../screens/GatePassScreen';
 import GatePassDetailScreen from '../screens/GatePassDetailScreen';
@@ -188,6 +189,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Projects" component={ProjectsScreen} />
       <Stack.Screen name="VendorPayments" component={VendorPaymentsScreen} />
       <Stack.Screen name="StoreLedger" component={StoreLedgerScreen} />
+      <Stack.Screen name="StoreLedgerDetail" component={StoreLedgerDetailScreen} />
       <Stack.Screen name="PettyCash" component={PettyCashScreen} />
       <Stack.Screen name="GatePass" component={GatePassScreen} />
       <Stack.Screen name="GatePassDetail" component={GatePassDetailScreen} />

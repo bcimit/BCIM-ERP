@@ -203,7 +203,8 @@ export const vendorPaymentsAPI = {
 };
 
 export const storeLedgerAPI = {
-  list: (projectId) => api.get('/inventory', { params: { project_id: projectId, limit: 100 } }),
+  list:   (projectId)   => api.get('/inventory', { params: { project_id: projectId, limit: 100 } }),
+  ledger: (inventoryId) => api.get('/inventory/ledger', { params: { inventory_id: inventoryId } }),
 };
 
 export const pettyCashAPI = {
