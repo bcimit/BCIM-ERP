@@ -723,6 +723,19 @@ io.on('connection', (socket) => {
     io.to(`user-${to}`).emit('call:busy', { from: socket.user.id });
   });
 
+  // ── Screen share signaling ────────────────────────────────────────────────────
+  socket.on('screenshare:offer', ({ to, offer }) => {
+    io.to(`user-${to}`).emit('screenshare:offer', {
+      from: socket.user.id,
+      sharerName:  socket.user.name || socket.user.username,
+      sharerPhoto: socket.user.profile_photo_url,
+      offer,
+    });
+  });
+  socket.on('screenshare:answer',        ({ to, answer })    => io.to(`user-${to}`).emit('screenshare:answer',        { from: socket.user.id, answer }));
+  socket.on('screenshare:ice-candidate', ({ to, candidate }) => io.to(`user-${to}`).emit('screenshare:ice-candidate', { from: socket.user.id, candidate }));
+  socket.on('screenshare:end',           ({ to })            => io.to(`user-${to}`).emit('screenshare:end',           { from: socket.user.id }));
+
   socket.on('disconnect', () => {
     logger.info(`💬 Chat: ${socket.user?.name || socket.user?.id} disconnected`);
   });

@@ -1,7 +1,7 @@
 // src/pages/ERPChat.jsx — ERP Team Chat with separate Channels / DMs tabs
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Pin, X, Hash, MessageSquare, Users, Phone, Video, ArrowLeft } from 'lucide-react';
+import { Search, Pin, X, Hash, MessageSquare, Users, Phone, Video, ArrowLeft, Monitor } from 'lucide-react';
 import toast from 'react-hot-toast';
 import useAuthStore from '../store/authStore';
 import api from '../api/client';
@@ -122,7 +122,7 @@ function EmptyPane({ tab }) {
 export default function ERPChat() {
   const { user } = useAuthStore();
   const [searchParams] = useSearchParams();
-  const { socketRef, connected, employees, unread, typing, markRead, registerActive, startCall, callState } = useChat();
+  const { socketRef, connected, employees, unread, typing, markRead, registerActive, startCall, callState, startShare, shareState, SHARE_STATE } = useChat();
 
   // ── Tab state ────────────────────────────────────────────────────────────────
   const [tab, setTab] = useState('channels');
@@ -594,6 +594,15 @@ export default function ERPChat() {
                       onMouseEnter={e => { if (callState === 'idle') e.currentTarget.style.background = '#dbeafe'; }}
                       onMouseLeave={e => { if (callState === 'idle') e.currentTarget.style.background = '#eff6ff'; }}>
                       <Video size={16} color={callState !== 'idle' ? '#9ca3af' : '#2563eb'} />
+                    </button>
+                    <button
+                      onClick={() => startShare(dmPeer).catch(e => toast.error(e.message || 'Could not start screen share'))}
+                      disabled={shareState !== SHARE_STATE?.IDLE && shareState !== 'idle'}
+                      title="Share screen"
+                      style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: shareState !== 'idle' ? '#e5e7eb' : '#f5f3ff', cursor: (shareState !== 'idle' && shareState !== undefined) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}
+                      onMouseEnter={e => { if (!shareState || shareState === 'idle') e.currentTarget.style.background = '#ede9fe'; }}
+                      onMouseLeave={e => { if (!shareState || shareState === 'idle') e.currentTarget.style.background = '#f5f3ff'; }}>
+                      <Monitor size={16} color={shareState && shareState !== 'idle' ? '#9ca3af' : '#7c3aed'} />
                     </button>
                   </div>
 

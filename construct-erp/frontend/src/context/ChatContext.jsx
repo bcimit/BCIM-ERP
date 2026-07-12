@@ -14,6 +14,10 @@ import {
 import { useWebRTC, CALL_STATE } from '../hooks/useWebRTC';
 import IncomingCallModal from '../components/chat/IncomingCallModal';
 import CallWindow from '../components/chat/CallWindow';
+import { useScreenShare, SHARE_STATE } from '../hooks/useScreenShare';
+import IncomingShareModal from '../components/chat/IncomingShareModal';
+import ScreenShareWindow from '../components/chat/ScreenShareWindow';
+import ScreenShareViewer from '../components/chat/ScreenShareViewer';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
 const MAX_OPEN_POPUPS = 3;
@@ -201,18 +205,25 @@ export function ChatProvider({ children }) {
   const unreadTotal = Object.values(unread).reduce((a, b) => a + b, 0);
 
   // ── WebRTC calls ─────────────────────────────────────────────────────────────
-  // Pass `connected` (reactive state) so the hook's effect re-runs when the
-  // socket connects — socketRef.current is a ref and is NOT reactive.
   const webrtc = useWebRTC({ socketRef, connected, currentUser: user });
+
+  // ── Screen share with laser pointer ──────────────────────────────────────────
+  const ss = useScreenShare({ socketRef, connected, currentUser: user });
 
   const value = {
     socketRef, connected, employees, unread, unreadTotal, previews, popups, typing,
     openPopup, closePopup, toggleMinimize, markRead, registerActive, findEmployeeForDm,
-    // Call API — consumers (ERPChat, DmPopup) use these
+    // Call API
     startCall:   webrtc.startCall,
     endCall:     webrtc.endCall,
     callState:   webrtc.callState,
     callInfo:    webrtc.callInfo,
+    // Screen share API
+    startShare:  ss.startShare,
+    stopShare:   ss.stopShare,
+    shareState:  ss.shareState,
+    shareInfo:   ss.shareInfo,
+    SHARE_STATE,
   };
 
   return (
@@ -243,6 +254,35 @@ export function ChatProvider({ children }) {
           onToggleCamera={webrtc.toggleCamera}
           onScreenShare={webrtc.isScreenSharing ? webrtc.stopScreenShare : webrtc.startScreenShare}
           onEnd={webrtc.endCall}
+        />
+      )}
+
+      {/* ── Incoming screen share modal (viewer side) ── */}
+      {ss.shareState === SHARE_STATE.INCOMING && (
+        <IncomingShareModal
+          shareInfo={ss.shareInfo}
+          onAccept={ss.acceptShare}
+          onDecline={ss.stopShare}
+        />
+      )}
+
+      {/* ── Sharer's floating preview with laser dot ── */}
+      {ss.shareState === SHARE_STATE.SHARING && (
+        <ScreenShareWindow
+          screenStream={ss.screenStream}
+          shareInfo={ss.shareInfo}
+          pointerPos={ss.pointerPos}
+          onStop={ss.stopShare}
+        />
+      )}
+
+      {/* ── Viewer's fullscreen stream ── */}
+      {ss.shareState === SHARE_STATE.VIEWING && (
+        <ScreenShareViewer
+          viewerStream={ss.viewerStream}
+          shareInfo={ss.shareInfo}
+          onStop={ss.stopShare}
+          sendPointer={ss.sendPointer}
         />
       )}
     </ChatContext.Provider>
