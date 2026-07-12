@@ -201,7 +201,9 @@ export function ChatProvider({ children }) {
   const unreadTotal = Object.values(unread).reduce((a, b) => a + b, 0);
 
   // ── WebRTC calls ─────────────────────────────────────────────────────────────
-  const webrtc = useWebRTC({ socketRef, currentUser: user });
+  // Pass `connected` (reactive state) so the hook's effect re-runs when the
+  // socket connects — socketRef.current is a ref and is NOT reactive.
+  const webrtc = useWebRTC({ socketRef, connected, currentUser: user });
 
   const value = {
     socketRef, connected, employees, unread, unreadTotal, previews, popups, typing,

@@ -2,11 +2,13 @@
 // The server acts as a pure signaling relay (call:offer / call:answer /
 // call:ice-candidate) via Socket.io user-rooms; no media ever hits the server.
 import { useRef, useState, useCallback, useEffect } from 'react';
+import api from '../api/client';
 
-const ICE_SERVERS = [
+// Base STUN servers — always used.
+// TURN credentials are fetched from the backend on mount (Railway env vars).
+const STUN_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
 export const CALL_STATE = {
@@ -16,7 +18,7 @@ export const CALL_STATE = {
   ACTIVE:   'active',    // both connected
 };
 
-export function useWebRTC({ socketRef, currentUser }) {
+export function useWebRTC({ socketRef, connected, currentUser }) {
   const [callState,      setCallState]      = useState(CALL_STATE.IDLE);
   const [callInfo,       setCallInfo]       = useState(null);
   const [localStream,    setLocalStream]    = useState(null);
@@ -32,6 +34,16 @@ export function useWebRTC({ socketRef, currentUser }) {
   const pendingCandidates  = useRef([]);
   const callStateRef       = useRef(CALL_STATE.IDLE);
   const callInfoRef        = useRef(null);
+  const iceServersRef      = useRef(STUN_SERVERS);
+
+  // Fetch TURN credentials from backend once on mount
+  useEffect(() => {
+    api.get('/chat/turn-credentials').then(r => {
+      if (r.data?.iceServers?.length) {
+        iceServersRef.current = r.data.iceServers;
+      }
+    }).catch(() => { /* TURN not configured — STUN only, still works on most networks */ });
+  }, []);
 
   // Keep refs in sync so socket callbacks (closed over stale state) still work
   useEffect(() => { localStreamRef.current  = localStream;  }, [localStream]);
@@ -61,7 +73,7 @@ export function useWebRTC({ socketRef, currentUser }) {
 
   // ── Create RTCPeerConnection ─────────────────────────────────────────────────
   const createPC = useCallback((peerId) => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -195,7 +207,11 @@ export function useWebRTC({ socketRef, currentUser }) {
   }, []);
 
   // ── Socket signaling listeners ───────────────────────────────────────────────
+  // IMPORTANT: depend on `connected` (reactive boolean state from ChatContext),
+  // NOT socketRef.current — refs are not reactive and the effect would never
+  // re-run after the socket connects, meaning the receiver never gets listeners.
   useEffect(() => {
+    if (!connected) return;
     const socket = socketRef.current;
     if (!socket) return;
 
@@ -247,9 +263,8 @@ export function useWebRTC({ socketRef, currentUser }) {
       socket.off('call:reject',        onReject);
       socket.off('call:busy',          onBusy);
     };
-  // Re-register whenever the socket instance changes (reconnect)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socketRef.current]);
+  }, [connected, cleanup]);
 
   return {
     callState, callInfo, localStream, remoteStream,

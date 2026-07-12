@@ -106,6 +106,31 @@ router.delete('/messages/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── GET /chat/turn-credentials — serve TURN config from Railway env vars ─────
+// Set TURN_USERNAME and TURN_CREDENTIAL in Railway to enable TURN.
+// Without them, the endpoint returns STUN-only (works for most office networks).
+router.get('/turn-credentials', (req, res) => {
+  const username   = process.env.TURN_USERNAME;
+  const credential = process.env.TURN_CREDENTIAL;
+  const turnUrl    = process.env.TURN_URL || 'turn:relay.metered.ca:80';
+
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  if (username && credential) {
+    iceServers.push(
+      { urls: turnUrl,                                    username, credential },
+      { urls: `${turnUrl}?transport=tcp`,                 username, credential },
+      { urls: turnUrl.replace(':80', ':443'),             username, credential },
+      { urls: `${turnUrl.replace(':80', ':443')}?transport=tcp`, username, credential },
+    );
+  }
+
+  res.json({ iceServers, turnConfigured: !!(username && credential) });
+});
+
 // ── GET /chat/channels — list channels with last message + unread count ───────
 router.get('/channels', async (req, res) => {
   await ensureTable();
