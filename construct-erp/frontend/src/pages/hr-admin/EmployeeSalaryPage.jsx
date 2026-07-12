@@ -557,9 +557,9 @@ export default function EmployeeSalaryPage() {
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`}}>
+              <tr className="bg-gray-50 border-b-2 border-indigo-500">
                 {['Employee','Employee ID','Department','Designation','Basic Salary','Allowances','Deductions','Net Salary','Status','Actions'].map(h=>(
-                  <th key={h} className="px-4 py-3 text-left text-xs font-black text-white/80 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-3.5 text-left text-[10.5px] font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
