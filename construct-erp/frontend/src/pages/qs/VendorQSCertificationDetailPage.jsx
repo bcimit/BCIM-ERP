@@ -1029,15 +1029,17 @@ export default function VendorQSCertificationDetailPage() {
             className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-slate-50">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleteMut.isPending || cert.status === 'paid'}
-            className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-red-50 disabled:opacity-40"
-            title={cert.status === 'paid' ? 'Paid certifications cannot be deleted' : 'Delete this certification'}
-          >
-            {deleteMut.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            Delete
-          </button>
+          {canEditSensitive && (
+            <button
+              onClick={handleDelete}
+              disabled={deleteMut.isPending || cert.status === 'paid'}
+              className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm hover:bg-red-50 disabled:opacity-40"
+              title={cert.status === 'paid' ? 'Paid certifications cannot be deleted' : 'Delete this certification'}
+            >
+              {deleteMut.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete
+            </button>
+          )}
           {/* Navigate to the linked invoice(s) */}
           {cert.bills?.length === 1 ? (
             <button
