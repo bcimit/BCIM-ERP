@@ -421,6 +421,7 @@ export const chatAPI = {
   search:     (q, channel, limit = 100)    => api.get('/chat/search', { params: { q, channel, limit } }),
   markRead:   (channel)                    => api.post('/chat/messages/mark-read', { channel }),
   callLogs:   (limit = 100)                => api.get('/chat/call-logs', { params: { limit } }),
+  saveCallLog:(data)                       => api.post('/chat/call-logs', data),
   meetings:   (limit = 30)                 => api.get('/chat/meetings', { params: { limit } }),
 };
 

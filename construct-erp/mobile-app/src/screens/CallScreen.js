@@ -13,6 +13,7 @@ import Avatar from '../components/Avatar';
 import { useChat } from '../context/ChatContext';
 import { useAuth } from '../context/AuthContext';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { chatAPI } from '../api/client';
 
 function ControlBtn({ icon, label, onPress, color = '#fff', bgColor = 'rgba(255,255,255,0.15)', size = 26 }) {
   return (
@@ -37,10 +38,24 @@ export default function CallScreen() {
     incomingOffer,
   } = route.params || {};
 
-  const endedRef = useRef(false);
-  const handleCallEnded = () => {
+  const endedRef   = useRef(false);
+  const startedAt  = useRef(Date.now());
+  const callStatus = useRef('missed'); // updated to 'answered' on connect, 'rejected' on reject
+
+  const handleCallEnded = (status) => {
     if (endedRef.current) return;
     endedRef.current = true;
+    const duration = Math.round((Date.now() - startedAt.current) / 1000);
+    const finalStatus = status || callStatus.current;
+    // Save call log — best effort, never block navigation
+    chatAPI.saveCallLog({
+      callee_id:     incoming ? user?.id : peerId,
+      callee_name:   incoming ? (user?.full_name || user?.name) : peerName,
+      call_type:     callType,
+      status:        finalStatus,
+      duration_secs: finalStatus === 'answered' ? duration : 0,
+      started_at:    new Date(startedAt.current).toISOString(),
+    }).catch(() => {});
     if (navigation.canGoBack()) navigation.goBack();
   };
 
@@ -51,7 +66,7 @@ export default function CallScreen() {
     startCall, answerCall, rejectCall, endCall,
     startScreenShare,
     toggleMute, toggleVideo, toggleSpeaker,
-  } = useWebRTC({ socketRef, user, onCallEnded: handleCallEnded });
+  } = useWebRTC({ socketRef, user, onCallEnded: () => handleCallEnded() });
 
   // Request Android permissions before accessing camera/mic, then start the call
   useEffect(() => {
