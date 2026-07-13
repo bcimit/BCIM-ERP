@@ -3634,28 +3634,42 @@ router.patch('/:id/procurement', requireTqsStageAccess('procurement'), async (re
       { key: 'proc_handed_over_to_accounts_date', label: 'Handed to QS Date' },
     ]);
 
+    // If this bill belongs to a PC with multiple invoices, apply dates to all of them
+    const certRes = await query(`
+      SELECT cb.bill_id FROM vendor_qs_certification_bills cb
+      WHERE cb.certification_id = (
+        SELECT cb2.certification_id FROM vendor_qs_certification_bills cb2 WHERE cb2.bill_id = $1 LIMIT 1
+      )
+    `, [req.params.id]);
+
+    const billIds = certRes.rows.length > 0
+      ? certRes.rows.map(r => r.bill_id)
+      : [req.params.id];
+
     await query(`
       UPDATE tqs_bill_updates SET
         proc_received_from_accounts_date=$1,
         proc_handed_over_to_accounts_date=$2,
         procurement_remarks=$3,
         updated_at=NOW()
-      WHERE bill_id=$4
+      WHERE bill_id = ANY($4::uuid[])
     `, [
       proc_received_from_accounts_date || null,
       proc_handed_over_to_accounts_date || null,
       procurement_remarks || null,
-      req.params.id,
+      billIds,
     ]);
 
-    await query(`UPDATE tqs_bills SET workflow_status='qs_sign', updated_at=NOW() WHERE id=$1`, [req.params.id]);
+    await query(`UPDATE tqs_bills SET workflow_status='qs_sign', updated_at=NOW() WHERE id = ANY($1::uuid[])`, [billIds]);
 
-    await logHistory(req.params.id, 'procurement',
-      `Received from Accounts: ${proc_received_from_accounts_date || '—'}, Handed to QS for MD Signature: ${proc_handed_over_to_accounts_date || '—'}`,
-      req.user.id);
-    await logHistory(req.params.id, 'system', 'Moved to QS for MD Signature', req.user.id);
+    for (const bid of billIds) {
+      await logHistory(bid, 'procurement',
+        `Received from Accounts: ${proc_received_from_accounts_date || '—'}, Handed to QS for MD Signature: ${proc_handed_over_to_accounts_date || '—'}${billIds.length > 1 ? ` (applied to all ${billIds.length} invoices in PC)` : ''}`,
+        req.user.id);
+      await logHistory(bid, 'system', 'Moved to QS for MD Signature', req.user.id);
+    }
 
-    res.json({ data: { workflow_status: 'qs_sign' } });
+    res.json({ data: { workflow_status: 'qs_sign', bills_updated: billIds.length } });
   } catch (err) {
     console.error(err);
     res.status(err.statusCode || 500).json({ error: err.message });
