@@ -1,7 +1,7 @@
-// BCIM ERP Service Worker v39.0
+// BCIM ERP Service Worker v40.0
 // Bump CACHE_NAME on every release that ships new frontend code so the
 // activate handler purges the previous cache and clients drop stale bundles.
-const CACHE_NAME = 'bcim-erp-v39';
+const CACHE_NAME = 'bcim-erp-v40';
 
 // App shell files to cache on install
 const SHELL_FILES = [
