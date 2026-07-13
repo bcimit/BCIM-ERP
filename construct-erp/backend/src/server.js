@@ -751,7 +751,10 @@ io.on('connection', (socket) => {
 
   socket.on('call:offer', ({ to, offer, callerName, callerPhoto, callType }) => {
     if (isRateLimited(socket, 'call:offer', 10, 60_000)) return; // >10 call attempts/min — drop (prevents ring-spam)
-    io.to(`user-${to}`).emit('call:offer', {
+    const targetRoom = `user-${to}`;
+    const roomSockets = io.sockets.adapter.rooms.get(targetRoom);
+    logger.info(`📞 call:offer from ${socket.user.id} → ${targetRoom} (${roomSockets?.size ?? 0} sockets in room)`);
+    io.to(targetRoom).emit('call:offer', {
       from: socket.user.id,
       callerName: callerName || socket.user.name,
       callerPhoto: callerPhoto || null,
