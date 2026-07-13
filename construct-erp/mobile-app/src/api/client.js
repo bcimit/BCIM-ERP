@@ -64,10 +64,11 @@ export const projectAPI = {
 };
 
 export const mrsAPI = {
-  list:   (projectId) => api.get('/stores/mrs', { params: { project_id: projectId, limit: 50 } }),
-  detail: (id)         => api.get(`/stores/mrs/${id}`),
-  create: (data)       => api.post('/stores/mrs', data),
-  reject: (id, reason) => api.patch(`/stores/mrs/${id}/reject`, { reason }),
+  list:    (projectId) => api.get('/stores/mrs', { params: { project_id: projectId, limit: 50 } }),
+  detail:  (id)        => api.get(`/stores/mrs/${id}`),
+  create:  (data)      => api.post('/stores/mrs', data),
+  reject:  (id, reason)=> api.patch(`/stores/mrs/${id}/reject`, { reason }),
+  approve: (id, stage) => api.patch(`/stores/mrs/${id}/${stage}`),
 };
 
 export const storesAPI = {
@@ -75,9 +76,13 @@ export const storesAPI = {
 };
 
 export const ignAPI = {
-  list:   (projectId) => api.get('/ign', { params: { project_id: projectId, limit: 50 } }),
-  detail: (id)         => api.get(`/ign/${id}`),
-  create: (data)        => api.post('/ign', data),
+  list:    (projectId) => api.get('/ign', { params: { project_id: projectId, limit: 50 } }),
+  detail:  (id)        => api.get(`/ign/${id}`),
+  create:  (data)      => api.post('/ign', data),
+  receive: (id)        => api.patch(`/ign/${id}/receive`),
+  inspect: (id)        => api.patch(`/ign/${id}/inspect`),
+  approve: (id)        => api.patch(`/ign/${id}/approve`),
+  cancel:  (id)        => api.patch(`/ign/${id}/cancel`),
 };
 
 export const grsAPI = {
@@ -108,8 +113,10 @@ export const poAPI = {
 };
 
 export const workOrderAPI = {
-  list:   (projectId) => api.get('/sc/work-orders', { params: { project_id: projectId, limit: 50 } }),
-  detail: (id)         => api.get(`/sc/work-orders/${id}`),
+  list:    (projectId) => api.get('/sc/work-orders', { params: { project_id: projectId, limit: 50 } }),
+  detail:  (id)        => api.get(`/sc/work-orders/${id}`),
+  approve: (id)        => api.patch(`/sc/work-orders/${id}/approve`),
+  close:   (id)        => api.patch(`/sc/work-orders/${id}/close`),
 };
 
 export const boqAPI = {
@@ -123,19 +130,26 @@ export const boqBudgetAPI = {
 };
 
 export const raBillAPI = {
-  list:   (projectId) => api.get('/ra-bills', { params: { project_id: projectId } }),
-  detail: (id)         => api.get(`/ra-bills/${id}`),
+  list:    (projectId) => api.get('/ra-bills', { params: { project_id: projectId } }),
+  detail:  (id)        => api.get(`/ra-bills/${id}`),
+  verify:  (id)        => api.patch(`/ra-bills/${id}/verify`),
+  approve: (id)        => api.patch(`/ra-bills/${id}/approve`),
+  reject:  (id, reason)=> api.patch(`/ra-bills/${id}/reject`, { reason }),
+  pay:     (id)        => api.patch(`/ra-bills/${id}/pay`),
 };
 
 export const variationAPI = {
-  list:   (projectId) => api.get('/variations', { params: { project_id: projectId } }),
-  detail: (id)         => api.get(`/variations/${id}`),
+  list:    (projectId) => api.get('/variations', { params: { project_id: projectId } }),
+  detail:  (id)        => api.get(`/variations/${id}`),
+  approve: (id)        => api.patch(`/variations/${id}/approve`),
 };
 
 export const invoiceAPI = {
-  list:      (projectId) => api.get('/invoices', { params: { project_id: projectId } }),
-  detail:    (id)         => api.get(`/invoices/${id}`),
-  gstSummary:(projectId)  => api.get('/invoices/gst-summary', { params: { project_id: projectId } }),
+  list:       (projectId) => api.get('/invoices', { params: { project_id: projectId } }),
+  detail:     (id)        => api.get(`/invoices/${id}`),
+  gstSummary: (projectId) => api.get('/invoices/gst-summary', { params: { project_id: projectId } }),
+  verify:     (id)        => api.patch(`/invoices/${id}/verify`),
+  authorize:  (id)        => api.patch(`/invoices/${id}/authorize`),
 };
 
 export const chartOfAccountsAPI = {
@@ -160,15 +174,21 @@ export const tenderAPI = {
 };
 
 export const incidentAPI = {
-  list: (projectId) => api.get('/incidents', { params: { project_id: projectId } }),
+  list:   (projectId) => api.get('/incidents', { params: { project_id: projectId } }),
+  detail: (id)        => api.get(`/incidents/${id}`),
+  create: (data)      => api.post('/incidents', data),
+  close:  (id)        => api.patch(`/incidents/${id}/close`),
 };
 
 export const itAssetAPI = {
-  list: (projectId) => api.get('/it-assets', { params: { project_id: projectId } }),
+  list:           (projectId) => api.get('/it-assets', { params: { project_id: projectId } }),
+  detail:         (id)        => api.get(`/it-assets/${id}`),
+  addMaintenance: (id, data)  => api.post(`/it-assets/${id}/maintenance`, data),
 };
 
 export const plantAPI = {
-  list: (projectId) => api.get('/plant/equipment', { params: { project_id: projectId } }),
+  list:   (projectId) => api.get('/plant/equipment', { params: { project_id: projectId } }),
+  detail: (id)        => api.get(`/plant/equipment/${id}`),
 };
 
 export const hireRentalAPI = {
@@ -237,21 +257,35 @@ export const employeeDirectoryAPI = {
 };
 
 export const qualityAPI = {
-  itp:    (projectId) => api.get('/quality/itp',    { params: { project_id: projectId } }),
-  mir:    (projectId) => api.get('/quality/mir',    { params: { project_id: projectId } }),
-  audits: (projectId) => api.get('/quality/audits', { params: { project_id: projectId } }),
+  itp:               (projectId) => api.get('/quality/itp',    { params: { project_id: projectId } }),
+  itpDetail:         (id)        => api.get(`/quality/itp/${id}`),
+  itpApprove:        (id)        => api.patch(`/quality/itp/${id}/approve`),
+  mir:               (projectId) => api.get('/quality/mir',    { params: { project_id: projectId } }),
+  mirDetail:         (id)        => api.get(`/quality/mir/${id}`),
+  mirStartInspection:(id)        => api.patch(`/quality/mir/${id}/start-inspection`),
+  mirApprove:        (id)        => api.patch(`/quality/mir/${id}/approve`),
+  mirReject:         (id, reason)=> api.patch(`/quality/mir/${id}/reject`, { reason }),
+  audits:            (projectId) => api.get('/quality/audits', { params: { project_id: projectId } }),
 };
 
 export const permitAPI = {
-  list: (projectId) => api.get('/permits', { params: { project_id: projectId } }),
+  list:   (projectId) => api.get('/permits', { params: { project_id: projectId } }),
+  create: (data)      => api.post('/permits', data),
+  close:  (id)        => api.patch(`/permits/${id}/close`),
 };
 
 export const ppeAPI = {
-  list: (projectId) => api.get('/ppe', { params: { project_id: projectId } }),
+  list:   (projectId) => api.get('/ppe', { params: { project_id: projectId } }),
+  create: (data)      => api.post('/ppe', data),
+  return: (id)        => api.patch(`/ppe/${id}/return`),
 };
 
 export const itTicketAPI = {
-  list: () => api.get('/it-tickets'),
+  list:    ()          => api.get('/it-tickets'),
+  detail:  (id)        => api.get(`/it-tickets/${id}`),
+  create:  (data)      => api.post('/it-tickets', data),
+  update:  (id, data)  => api.patch(`/it-tickets/${id}`, data),
+  resolve: (id, notes) => api.patch(`/it-tickets/${id}/resolve`, { resolution_notes: notes }),
 };
 
 export const lookAheadAPI = {
@@ -259,7 +293,9 @@ export const lookAheadAPI = {
 };
 
 export const engineerLogAPI = {
-  list: (projectId) => api.get('/engineer-logs', { params: { project_id: projectId } }),
+  list:   (projectId) => api.get('/engineer-logs', { params: { project_id: projectId } }),
+  detail: (id)        => api.get(`/engineer-logs/${id}`),
+  create: (data)      => api.post('/engineer-logs', data),
 };
 
 export const methodStatementAPI = {
@@ -291,8 +327,9 @@ export const reportsAPI = {
 };
 
 export const billsAPI = {
-  list:   (projectId) => api.get('/tqs/bills', { params: { project_id: projectId, limit: 50 } }),
-  detail: (id)         => api.get(`/tqs/bills/${id}`),
+  list:          (projectId) => api.get('/tqs/bills', { params: { project_id: projectId, limit: 50 } }),
+  detail:        (id)        => api.get(`/tqs/bills/${id}`),
+  advanceStage:  (id)        => api.patch(`/tqs/bills/${id}/advance-stage`),
 };
 
 export const assetAPI = {

@@ -46,6 +46,7 @@ import MilestonesScreen from '../screens/MilestonesScreen';
 import ActivitiesScreen from '../screens/ActivitiesScreen';
 import TendersScreen from '../screens/TendersScreen';
 import IncidentsScreen from '../screens/IncidentsScreen';
+import IncidentDetailScreen from '../screens/IncidentDetailScreen';
 import ITAssetsScreen from '../screens/ITAssetsScreen';
 import PlantScreen from '../screens/PlantScreen';
 import HireRentalScreen from '../screens/HireRentalScreen';
@@ -63,11 +64,14 @@ import CreateGatePassScreen from '../screens/CreateGatePassScreen';
 import PayrollScreen from '../screens/PayrollScreen';
 import EmployeeDirectoryScreen from '../screens/EmployeeDirectoryScreen';
 import QualityITPScreen from '../screens/QualityITPScreen';
+import ITPDetailScreen from '../screens/ITPDetailScreen';
 import QualityMIRScreen from '../screens/QualityMIRScreen';
+import MIRDetailScreen from '../screens/MIRDetailScreen';
 import QualityAuditsScreen from '../screens/QualityAuditsScreen';
 import PermitsScreen from '../screens/PermitsScreen';
 import PPEScreen from '../screens/PPEScreen';
 import ITTicketsScreen from '../screens/ITTicketsScreen';
+import ITTicketDetailScreen from '../screens/ITTicketDetailScreen';
 import LookAheadScreen from '../screens/LookAheadScreen';
 import EngineerLogScreen from '../screens/EngineerLogScreen';
 import MethodStatementsScreen from '../screens/MethodStatementsScreen';
@@ -195,6 +199,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Activities" component={ActivitiesScreen} />
       <Stack.Screen name="Tenders" component={TendersScreen} />
       <Stack.Screen name="Incidents" component={IncidentsScreen} />
+      <Stack.Screen name="IncidentDetail" component={IncidentDetailScreen} />
       <Stack.Screen name="ITAssets" component={ITAssetsScreen} />
       <Stack.Screen name="Plant" component={PlantScreen} />
       <Stack.Screen name="HireRental" component={HireRentalScreen} />
@@ -216,11 +221,14 @@ export default function RootNavigator() {
       <Stack.Screen name="Payroll" component={PayrollScreen} />
       <Stack.Screen name="EmployeeDirectory" component={EmployeeDirectoryScreen} />
       <Stack.Screen name="QualityITP" component={QualityITPScreen} />
+      <Stack.Screen name="ITPDetail" component={ITPDetailScreen} />
       <Stack.Screen name="QualityMIR" component={QualityMIRScreen} />
+      <Stack.Screen name="MIRDetail" component={MIRDetailScreen} />
       <Stack.Screen name="QualityAudits" component={QualityAuditsScreen} />
       <Stack.Screen name="Permits" component={PermitsScreen} />
       <Stack.Screen name="PPE" component={PPEScreen} />
       <Stack.Screen name="ITTickets" component={ITTicketsScreen} />
+      <Stack.Screen name="ITTicketDetail" component={ITTicketDetailScreen} />
       <Stack.Screen name="LookAhead" component={LookAheadScreen} />
       <Stack.Screen name="EngineerLog" component={EngineerLogScreen} />
       <Stack.Screen name="MethodStatements" component={MethodStatementsScreen} />
