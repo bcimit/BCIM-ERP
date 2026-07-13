@@ -446,7 +446,7 @@ function PdfImportModal({ onClose, vendors, projects, onImported }) {
                     <option value="">Select vendor…</option>
                     {(vendors || []).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
-                  {extracted?.header?.vendor_name && <p className="text-[11px] text-slate-900 font-medium mt-1">Extracted: <em>{extracted.header.vendor_name}</em></p>}
+                  {extracted?.header?.vendor_name && <p className="text-[11px] text-slate-900 font-medium mt-1">Extracted: <em>{(extracted.header.vendor_name || '').toUpperCase()}</em></p>}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-900 font-medium mb-1">WO Number</label>
@@ -779,7 +779,7 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
               <div className="mx-4 mb-4 rounded-md border border-blue-100 bg-blue-50/50 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Building2 className="w-4 h-4 text-blue-600" />
-                  <p className="text-sm font-bold text-slate-800">{vendor.name}</p>
+                  <p className="text-sm font-bold text-slate-800">{(vendor.name || '').toUpperCase()}</p>
                   {vendor.vendor_type && <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{vendor.vendor_type.replace(/_/g,' ')}</span>}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -957,8 +957,8 @@ function CreateWOModal({ onClose, vendors, projects, mrsList = [], onCreate, onU
         {/* ── Footer ── */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-white flex-shrink-0">
           <div className="text-xs text-slate-400">
-            {project && <span className="font-medium text-slate-600">{project.name}</span>}
-            {vendor && <span> · {vendor.name}</span>}
+            {project && <span className="font-medium text-slate-600">{(project.name || '').toUpperCase()}</span>}
+            {vendor && <span> · {(vendor.name || '').toUpperCase()}</span>}
             <span className="ml-2 font-mono font-bold text-blue-700">₹{inr(grandTotal)}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -1012,7 +1012,7 @@ function WORejectModal({ wo, onClose, onConfirm, isPending }) {
         </div>
         <div className="px-5 py-4 space-y-3">
           <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm">
-            <p className="font-semibold text-red-800">{wo?.vendor_name}</p>
+            <p className="font-semibold text-red-800">{(wo?.vendor_name || '').toUpperCase()}</p>
             <p className="text-xs text-red-600 mt-0.5">₹{inr(wo?.total_value || wo?.contract_amount)}</p>
           </div>
           <div>
@@ -1112,7 +1112,7 @@ function WODetailPanel({ wo, onClose, onEdit, onApprove, onMDApprove, onReject, 
             <div>
               <p className="text-base font-medium text-slate-900 font-mono">{displayWO.wo_number}</p>
               <p className="text-xs text-slate-900 font-medium mt-0.5">
-                {displayWO.vendor_name || '—'} · {displayWO.start_date ? dayjs(displayWO.start_date).format('DD-MM-YYYY') : (displayWO.created_at ? dayjs(displayWO.created_at).format('DD-MM-YYYY') : '—')}
+                {(displayWO.vendor_name || '—').toUpperCase()} · {displayWO.start_date ? dayjs(displayWO.start_date).format('DD-MM-YYYY') : (displayWO.created_at ? dayjs(displayWO.created_at).format('DD-MM-YYYY') : '—')}
                 {displayWO.mrs_number && <> · Against MR <span className="font-mono">{displayWO.mrs_number}</span></>}
               </p>
             </div>
@@ -1159,8 +1159,8 @@ function WODetailPanel({ wo, onClose, onEdit, onApprove, onMDApprove, onReject, 
           {/* Info grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              ['Vendor / Sub-Con', displayWO.vendor_name || '—'],
-              ['Project',          displayWO.project_name || '—'],
+              ['Vendor / Sub-Con', (displayWO.vendor_name || '—').toUpperCase()],
+              ['Project',          (displayWO.project_name || '—').toUpperCase()],
               ['Start Date',       displayWO.start_date ? dayjs(displayWO.start_date).format('DD-MM-YYYY') : '—'],
               ['End Date',         displayWO.end_date   ? dayjs(displayWO.end_date).format('DD-MM-YYYY')   : '—'],
               ['Contract Amount',  `₹ ${inr(displayWO.contract_amount || val)}`],
@@ -1890,12 +1890,12 @@ export default function WorkOrderPage() {
                             </td>
                             {/* Contractor */}
                             <td className="px-4 py-3">
-                              <p className="font-semibold text-slate-800 truncate max-w-[140px]">{wo.vendor_name || '—'}</p>
+                              <p className="font-semibold text-slate-800 truncate max-w-[140px]">{(wo.vendor_name || '—').toUpperCase()}</p>
                               {wo.vendor_type && <p className="text-[10px] text-slate-400 capitalize mt-0.5">{wo.vendor_type.replace(/_/g,' ')}</p>}
                             </td>
                             {/* Project */}
                             <td className="px-4 py-3">
-                              <p className="text-slate-600 truncate max-w-[130px]">{wo.project_name || '—'}</p>
+                              <p className="text-slate-600 truncate max-w-[130px]">{(wo.project_name || '—').toUpperCase()}</p>
                             </td>
                             {/* Category */}
                             <td className="px-4 py-3">
