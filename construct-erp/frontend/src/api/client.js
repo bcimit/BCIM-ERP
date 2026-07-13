@@ -1914,6 +1914,11 @@ export const hrSalaryAPI = {
   calculateBreakup:   (data)   => api.post('/hr-admin/salary/calculate-breakup', data),
   updateMess:         (id, d)  => api.patch(`/hr-admin/salary/employee-salaries/${id}/mess-deduction`, d),
   updateBasicReversal:(id, d)  => api.patch(`/hr-admin/salary/employee-salaries/${id}/basic-reversal`, d),
+  importSalaries:     (file)   => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/hr-admin/salary/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
 };
 
 export const hrPayrollAPI = {

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Calculator, CheckCircle2, ChevronLeft, ChevronRight, ChevronDown, Download, Edit2,
-  Eye, IndianRupee, MoreVertical, Plus, RotateCcw, Search, TrendingUp, Users, Utensils, Wallet, X,
+  Eye, IndianRupee, MoreVertical, Plus, RotateCcw, Search, TrendingUp, Upload, Users, Utensils, Wallet, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { hrEmployeesAPI, hrSalaryAPI } from '../../api/client';
@@ -360,6 +360,66 @@ function RowActionsMenu({ sal, emp, onView, onMess, onReversal }) {
 
 const PAGE_SIZES = [10, 25, 50];
 
+function ImportResultModal({ result, onClose }) {
+  const { total = 0, imported = 0, skipped = [] } = result;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <motion.div initial={{opacity:0,scale:0.97}} animate={{opacity:1,scale:1}} transition={{duration:0.2}}
+        className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 max-h-[85vh] flex flex-col">
+        <div className="relative px-6 py-5 flex items-center justify-between flex-shrink-0"
+          style={{background:`linear-gradient(135deg,#0A1F5C,#1e3a8a)`}}>
+          <div>
+            <h2 className="text-lg font-black text-white">Import Results</h2>
+            <p className="text-white/55 text-sm mt-0.5">{imported} of {total} row{total!==1?'s':''} imported</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
+            <X className="w-4 h-4 text-white"/>
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-center">
+              <div className="text-xl font-black text-gray-900">{total}</div>
+              <div className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Total Rows</div>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3 text-center">
+              <div className="text-xl font-black text-emerald-700">{imported}</div>
+              <div className="text-[10px] font-bold text-emerald-500 uppercase mt-0.5">Imported</div>
+            </div>
+            <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-3 text-center">
+              <div className="text-xl font-black text-red-700">{skipped.length}</div>
+              <div className="text-[10px] font-bold text-red-400 uppercase mt-0.5">Skipped</div>
+            </div>
+          </div>
+
+          {skipped.length > 0 && (
+            <div>
+              <p className={lbl}>Skipped Rows</p>
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                {skipped.map((s,i)=>(
+                  <div key={i} className={`flex items-center gap-3 px-3 py-2 text-xs ${i%2?'bg-white':'bg-gray-50'}`}>
+                    <span className="font-bold text-gray-500 flex-shrink-0">Row {s.row}</span>
+                    <span className="text-red-600 truncate">{s.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex-shrink-0">
+          <button onClick={onClose}
+            className="w-full py-2.5 rounded-xl text-white text-sm font-black"
+            style={{background:`linear-gradient(135deg,${B.blue},${B.navy})`}}>
+            Done
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function EmployeeSalaryPage() {
   const qc = useQueryClient();
   const [search,    setSearch]    = useState('');
@@ -371,6 +431,8 @@ export default function EmployeeSalaryPage() {
   const [editSalary, setEditSalary] = useState(null); // salary row being edited
   const [messEdit,  setMessEdit]  = useState(null); // { employee, salary }
   const [reversalEdit, setReversalEdit] = useState(null); // { employee, salary }
+  const [importResult, setImportResult] = useState(null); // { total, imported, skipped }
+  const importInputRef = useRef(null);
 
   const { data:empData,     isLoading:empLoading     } = useQuery({
     queryKey:['hr-employees-active'],
@@ -460,6 +522,24 @@ export default function EmployeeSalaryPage() {
     onError:(e)=>toast.error(e.response?.data?.error||'Failed to update basic reversal'),
   });
 
+  const importMut = useMutation({
+    mutationFn:(file)=>hrSalaryAPI.importSalaries(file),
+    onSuccess:(res)=>{
+      const d = res.data?.data || {};
+      setImportResult(d);
+      if (d.imported > 0) qc.invalidateQueries({queryKey:['hr-employee-salaries']});
+      if (d.imported > 0) toast.success(`Imported ${d.imported} of ${d.total} salaries`);
+      else toast.error('No rows were imported — see details');
+    },
+    onError:(e)=>toast.error(e.response?.data?.error||'Import failed'),
+  });
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (file) importMut.mutate(file);
+    e.target.value = '';
+  };
+
   const kpis = [
     { label:'Total Employees',  value:employees.length,                icon:Users,      bg:'bg-blue-50',    text:'text-blue-700',    fmtCurrency:false },
     { label:'Total Payroll',    value:totalPayroll,                    icon:Wallet,     bg:'bg-emerald-50', text:'text-emerald-700', fmtCurrency:true  },
@@ -498,6 +578,12 @@ export default function EmployeeSalaryPage() {
           <p className="text-sm text-gray-500 mt-0.5">View and manage employee salary details</p>
         </div>
         <div className="flex items-center gap-2.5">
+          <input ref={importInputRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleImportFile}/>
+          <button onClick={()=>importInputRef.current?.click()} disabled={importMut.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
+            {importMut.isPending ? <RotateCcw className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
+            {importMut.isPending ? 'Importing…' : 'Import Salaries'}
+          </button>
           <button onClick={exportCsv}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4"/> Export Salaries
@@ -693,6 +779,10 @@ export default function EmployeeSalaryPage() {
           onClose={()=>setReversalEdit(null)}
           onSave={(amount)=>reversalMut.mutate({id:reversalEdit.salary.id, basic_reversal:amount})}
         />
+      )}
+
+      {importResult && (
+        <ImportResultModal result={importResult} onClose={()=>setImportResult(null)}/>
       )}
 
       {(showModal || editSalary) && (
