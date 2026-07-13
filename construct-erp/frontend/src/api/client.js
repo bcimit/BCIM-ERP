@@ -1843,6 +1843,7 @@ export const vendorQSCertificationAPI = {
   refreshFromBills:(id)     => api.post(`/vendor-qs-certifications/${id}/refresh-from-bills`),
   updateAmounts:   (id, d)  => api.patch(`/vendor-qs-certifications/${id}/amounts`, d),
   updateStatus:    (id, d)  => api.patch(`/vendor-qs-certifications/${id}/status`, d),
+  updateItems:     (id, d)  => api.patch(`/vendor-qs-certifications/${id}/items`, d),
   recordPayment:   (id, d)  => api.post(`/vendor-qs-certifications/${id}/payment`, d),
   delete:          (id)     => api.delete(`/vendor-qs-certifications/${id}`),
 };

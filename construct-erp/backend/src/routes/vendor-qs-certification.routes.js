@@ -1166,6 +1166,65 @@ router.patch('/:id/amounts', async (req, res) => {
   }
 });
 
+// PATCH /vendor-qs-certifications/:id/items — update qs_pres_qty (and inv_pres_qty)
+// per item. Restricted to CERT_APPROVER_EMAIL / super_admin / admin.
+// Body: { items: [{ id, qs_pres_qty, inv_pres_qty? }] }
+router.patch('/:id/items', async (req, res) => {
+  try {
+    const email = (req.user.email || '').toLowerCase();
+    const role  = (req.user.role  || '').toLowerCase();
+    if (email !== CERT_APPROVER_EMAIL && role !== 'super_admin' && role !== 'admin') {
+      return res.status(403).json({ error: `Only ${CERT_APPROVER_EMAIL} can edit certified quantities.` });
+    }
+    const { items } = req.body;
+    if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'items array required' });
+
+    const result = await withTransaction(async (client) => {
+      // Verify cert belongs to this company and is not paid/cancelled
+      const certRes = await client.query(
+        `SELECT * FROM vendor_qs_certifications WHERE id=$1 AND company_id=$2 FOR UPDATE`,
+        [req.params.id, req.user.company_id]
+      );
+      if (!certRes.rows.length) throw new Error('Certification not found');
+      const cert = certRes.rows[0];
+      if (cert.status === 'paid')      throw new Error('Paid certification cannot be edited');
+      if (cert.status === 'cancelled') throw new Error('Cancelled certification cannot be edited');
+
+      for (const it of items) {
+        const qsQty = parseFloat(it.qs_pres_qty) || 0;
+        await client.query(
+          `UPDATE vendor_qs_certification_items
+           SET qs_pres_qty = $1,
+               inv_pres_qty = COALESCE($2, inv_pres_qty),
+               amount = $1 * order_rate,
+               updated_at = NOW()
+           WHERE id = $3 AND certification_id = $4`,
+          [qsQty, it.inv_pres_qty != null ? parseFloat(it.inv_pres_qty) : null, it.id, req.params.id]
+        );
+      }
+
+      // Recalculate gross_amount on the cert header from the updated items
+      const totals = await client.query(
+        `SELECT COALESCE(SUM(amount),0) AS gross FROM vendor_qs_certification_items WHERE certification_id=$1`,
+        [req.params.id]
+      );
+      const newGross = parseFloat(totals.rows[0].gross) || 0;
+      const newNet   = newGross + n(cert.tax_amount)
+                       - n(cert.tds_amount) - n(cert.advance_recovered)
+                       - n(cert.retention_amount) - n(cert.other_deductions);
+      await client.query(
+        `UPDATE vendor_qs_certifications SET gross_amount=$1, net_payable=$2, updated_at=NOW() WHERE id=$3`,
+        [newGross, newNet, req.params.id]
+      );
+      return { gross_amount: newGross, net_payable: newNet };
+    });
+
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.patch('/:id/status', async (req, res) => {
   try {
     const { status, remarks } = req.body;
