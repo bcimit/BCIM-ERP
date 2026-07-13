@@ -554,6 +554,7 @@ function AccountsTab({ bill, billId }) {
 
 function ProcurementTab({ bill, billId }) {
   const qc  = useQueryClient();
+  const navigate = useNavigate();
   const upd = bill.bill_updates || {};
   const [form, setForm] = useState({
     proc_received_from_accounts_date: upd.proc_received_from_accounts_date?.slice(0, 10) || '',
@@ -575,14 +576,25 @@ function ProcurementTab({ bill, billId }) {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <SectionTitle>Procurement Handoff</SectionTitle>
-        <a
-          href={`/tqs/bills/${billId}/payment-cert`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-medium rounded-lg flex items-center gap-1.5 border border-orange-200"
-        >
-          <FileText className="w-3.5 h-3.5" /> View Certification (Claim Summary)
-        </a>
+        <div className="flex items-center gap-2 flex-wrap">
+          {upd.certification_id && (
+            <button
+              onClick={() => navigate(`/tqs/vendor-certifications/${upd.certification_id}`)}
+              className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium rounded-lg flex items-center gap-1.5 border border-blue-200"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              {upd.pc_number ? `PC: ${upd.pc_number}` : 'View Certification'}
+            </button>
+          )}
+          <a
+            href={`/tqs/bills/${billId}/payment-cert`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-medium rounded-lg flex items-center gap-1.5 border border-orange-200"
+          >
+            <FileText className="w-3.5 h-3.5" /> View Certification (Claim Summary)
+          </a>
+        </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div>

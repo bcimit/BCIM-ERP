@@ -2776,7 +2776,7 @@ router.get('/:id', async (req, res) => {
         LEFT JOIN grn g              ON g.id  = b.grn_id
         WHERE ${billConds.join(' AND ')}
       `, billParams),
-      query(`SELECT * FROM tqs_bill_updates WHERE bill_id = $1`, [req.params.id]),
+      query(`SELECT u.*, cb.certification_id FROM tqs_bill_updates u LEFT JOIN vendor_qs_certification_bills cb ON cb.bill_id = u.bill_id WHERE u.bill_id = $1 LIMIT 1`, [req.params.id]),
       query(`
         SELECT li.*,
                pi.material_name AS po_item_name,
