@@ -479,8 +479,6 @@ export default function VendorPaymentsPage() {
                             <span style={{ fontSize:12, fontWeight:600, color:'#64748b', background:'#f1f5f9', borderRadius:6, padding:'3px 8px' }}>
                               {row.latest_payment.payment_mode||row.latest_payment.mode||'—'}
                             </span>
-                          ) : row.source_type==='tqs' ? (
-                            <span style={{ fontSize:11, color:'#7c3aed', fontWeight:700 }}>DQS</span>
                           ) : <span style={{ color:'#cbd5e1' }}>—</span>}
                         </td>
 
