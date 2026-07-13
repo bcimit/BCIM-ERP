@@ -1624,90 +1624,44 @@ export default function WorkOrderPage() {
       <div className="max-w-[1400px] mx-auto px-6 py-5 space-y-5">
 
         {/* ── KPI Cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Total WOs */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                <FileText className="w-4 h-4 text-indigo-600" />
-              </div>
-              <span className="text-[10px] font-semibold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">TOTAL</span>
+        {(() => {
+          const kpiStats = [
+            { key: '',           label: 'Work Orders',     count: allWOs.length,            icon: FileText,    iconBg: 'bg-indigo-50', iconText: 'text-indigo-600' },
+            { key: '__value__',  label: 'Contract Value',  value: `₹${(totalValue/100000).toFixed(1)}L`, icon: IndianRupee, iconBg: 'bg-blue-50',    iconText: 'text-blue-600' },
+            { key: 'active',     label: 'Active',          count: activeWOs.length,         icon: Activity,    iconBg: 'bg-teal-50',   iconText: 'text-teal-600'   },
+            { key: '__pending__',label: 'Pending Approval',count: pendingApproval.length,   icon: Clock,       iconBg: 'bg-amber-50',  iconText: 'text-amber-600'  },
+            { key: '__expire__', label: 'Expiring Soon',   count: expiringSoon.length,      icon: AlertCircle, iconBg: 'bg-orange-50', iconText: 'text-orange-500' },
+            { key: 'completed',  label: overdueWOs.length > 0 ? 'Overdue' : 'Completed', count: overdueWOs.length > 0 ? overdueWOs.length : completedWOs.length, icon: overdueWOs.length > 0 ? XCircle : CheckCircle2, iconBg: overdueWOs.length > 0 ? 'bg-red-50' : 'bg-emerald-50', iconText: overdueWOs.length > 0 ? 'text-red-500' : 'text-emerald-600' },
+          ];
+          const isClickable = s => s.key !== '__value__' && s.key !== '__expire__';
+          const isActive = s => filterStatus === s.key || (s.key === '' && !filterStatus) || (s.key === '__pending__' && filterStatus === 'pending');
+          const handleKpiClick = s => {
+            if (!isClickable(s)) return;
+            if (s.key === '') setFilterStatus('');
+            else if (s.key === '__pending__') setFilterStatus('pending');
+            else setFilterStatus(prev => prev === s.key ? '' : s.key);
+          };
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {kpiStats.map(s => (
+                <button key={s.key} onClick={() => handleKpiClick(s)}
+                  className={clsx(
+                    'bg-white border rounded-xl p-4 shadow-sm text-left transition-colors',
+                    isClickable(s) ? 'cursor-pointer' : 'cursor-default',
+                    isActive(s) ? 'border-indigo-400 ring-1 ring-indigo-100' : 'border-slate-200 hover:border-slate-300'
+                  )}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={clsx('w-8 h-8 rounded-md flex items-center justify-center', s.iconBg)}>
+                      <s.icon className={clsx('w-4 h-4', s.iconText)} />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-semibold text-slate-800">{s.value ?? s.count}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
+                </button>
+              ))}
             </div>
-            <div className="text-2xl font-bold text-slate-900 font-mono">{allWOs.length}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Work Orders</div>
-          </div>
-
-          {/* Total Contract Value */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                <IndianRupee className="w-4 h-4 text-blue-600" />
-              </div>
-              <span className="text-[10px] font-semibold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full">VALUE</span>
-            </div>
-            <div className="text-base font-bold text-slate-900 font-mono leading-tight">₹{Number(totalValue/100000).toFixed(1)}L</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Contract Value</div>
-          </div>
-
-          {/* Active */}
-          <div className="bg-white border border-teal-200 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center">
-                <Activity className="w-4 h-4 text-teal-600" />
-              </div>
-              <span className="text-[10px] font-semibold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded-full">ACTIVE</span>
-            </div>
-            <div className="text-2xl font-bold text-teal-700 font-mono">{activeWOs.length}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">₹{Number(activeValue/100000).toFixed(1)}L ongoing</div>
-          </div>
-
-          {/* Pending Approval */}
-          <div className={clsx('bg-white border rounded-xl p-4 shadow-sm', pendingApproval.length > 0 ? 'border-amber-300' : 'border-slate-200')}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-amber-600" />
-              </div>
-              {pendingApproval.length > 0 && (
-                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full animate-pulse">ACTION</span>
-              )}
-            </div>
-            <div className={clsx('text-2xl font-bold font-mono', pendingApproval.length > 0 ? 'text-amber-600' : 'text-slate-900')}>{pendingApproval.length}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Pending Approval</div>
-          </div>
-
-          {/* Expiring Soon */}
-          <div className={clsx('bg-white border rounded-xl p-4 shadow-sm', expiringSoon.length > 0 ? 'border-orange-300' : 'border-slate-200')}>
-            <div className="flex items-center justify-between mb-3">
-              <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center', expiringSoon.length > 0 ? 'bg-orange-50' : 'bg-slate-50')}>
-                <AlertCircle className={clsx('w-4 h-4', expiringSoon.length > 0 ? 'text-orange-500' : 'text-slate-400')} />
-              </div>
-              {expiringSoon.length > 0 && (
-                <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">≤30 DAYS</span>
-              )}
-            </div>
-            <div className={clsx('text-2xl font-bold font-mono', expiringSoon.length > 0 ? 'text-orange-600' : 'text-slate-900')}>{expiringSoon.length}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Expiring Soon</div>
-          </div>
-
-          {/* Overdue / Completed */}
-          <div className={clsx('bg-white border rounded-xl p-4 shadow-sm', overdueWOs.length > 0 ? 'border-red-300' : 'border-slate-200')}>
-            <div className="flex items-center justify-between mb-3">
-              <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center', overdueWOs.length > 0 ? 'bg-red-50' : 'bg-emerald-50')}>
-                {overdueWOs.length > 0
-                  ? <XCircle className="w-4 h-4 text-red-500" />
-                  : <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-              </div>
-              <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
-                overdueWOs.length > 0 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50')}>
-                {overdueWOs.length > 0 ? 'OVERDUE' : 'DONE'}
-              </span>
-            </div>
-            <div className={clsx('text-2xl font-bold font-mono', overdueWOs.length > 0 ? 'text-red-600' : 'text-emerald-700')}>
-              {overdueWOs.length > 0 ? overdueWOs.length : completedWOs.length}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">{overdueWOs.length > 0 ? 'Overdue WOs' : 'Completed'}</div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* ── Series Filter Pills ── */}
         <div className="flex items-center gap-1.5">
