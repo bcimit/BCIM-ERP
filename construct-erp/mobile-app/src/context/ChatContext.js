@@ -135,11 +135,12 @@ export function ChatProvider({ children }) {
 
   const value = {
     connected, previews, employees, typing, socketRef,
-    incomingCall, dismissIncomingCall,
+    incomingCall, setIncomingCall, dismissIncomingCall,
     subscribe, joinChannel, refreshPreviews: loadPreviews,
     emitTyping, emitStopTyping,
   };
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
 
+export { ChatContext };
 export const useChat = () => useContext(ChatContext);

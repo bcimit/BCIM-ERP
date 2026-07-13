@@ -422,6 +422,7 @@ export const chatAPI = {
   markRead:   (channel)                    => api.post('/chat/messages/mark-read', { channel }),
   callLogs:   (limit = 100)                => api.get('/chat/call-logs', { params: { limit } }),
   saveCallLog:(data)                       => api.post('/chat/call-logs', data),
+  pendingCall:()                           => api.get('/chat/pending-call'),
   meetings:   (limit = 30)                 => api.get('/chat/meetings', { params: { limit } }),
 };
 

@@ -61,7 +61,7 @@ const INVALID_TOKEN_CODES = new Set([
  * @param {string} userId
  * @param {{ title: string, body: string, data?: object }} payload
  */
-async function sendPushToUser(userId, payload) {
+async function sendPushToUser(userId, payload, { channelId = 'erp-alerts', fullScreen = false } = {}) {
   const admin = getAdmin();
   if (!admin || !userId) return;
 
@@ -84,7 +84,11 @@ async function sendPushToUser(userId, payload) {
           data,
           android: {
             priority: 'high',
-            notification: { channelId: 'erp-alerts', priority: 'high' },
+            notification: {
+              channelId,
+              priority: 'high',
+              ...(fullScreen ? { defaultVibrateTimings: false, vibrateTimingsMillis: [0, 400, 200, 400, 200, 400] } : {}),
+            },
           },
         })
       )

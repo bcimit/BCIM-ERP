@@ -35,6 +35,17 @@ export async function registerForPushNotifications() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#2563EB',
       });
+      // Separate high-importance channel for incoming calls so they ring
+      // at max volume and show as heads-up even in DND (user must grant DND access).
+      await Notifications.setNotificationChannelAsync('erp-calls', {
+        name: 'Incoming Calls',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 400, 200, 400, 200, 400],
+        lightColor: '#22C55E',
+        sound: 'default',
+        bypassDnd: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      });
     }
 
     const { data: token } = await Notifications.getDevicePushTokenAsync();

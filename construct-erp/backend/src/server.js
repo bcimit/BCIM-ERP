@@ -603,6 +603,15 @@ app.use(`${API}/automation-ideas`, automationIdeasRoutes);
 app.use(`${API}/approval-engine`, approvalEngineRoutes);
 app.use(`${API}/search`, searchRoutes);
 
+// GET /api/v1/chat/pending-call — returns the stored call:offer for this user (if any, not expired).
+// Called by the mobile app after it wakes from an FCM incoming-call push notification.
+const { authenticate: authMw } = require('./middleware/auth');
+app.get(`${API}/chat/pending-call`, authMw, (req, res) => {
+  const entry = getPendingCall(req.user.id);
+  if (!entry) return res.json({ pending: null });
+  res.json({ pending: entry });
+});
+
 // ============================================
 // SOCKET.IO — Real-time Chat
 // ============================================
@@ -638,6 +647,20 @@ const CHAT_CHANNELS = [
   'general', 'finance', 'procurement', 'stores', 'qs-billing', 'tqs',
   'hr', 'planning', 'quality', 'subcontractors', 'tender', 'it-support',
 ];
+
+// Pending call store — holds the last call:offer for each callee for up to 45 s.
+// Used by the mobile app after waking from an FCM notification to fetch the offer.
+const pendingCalls = new Map(); // userId → { from, callerName, callerPhoto, callType, offer, expiresAt }
+function setPendingCall(userId, data) {
+  pendingCalls.set(String(userId), { ...data, expiresAt: Date.now() + 45_000 });
+}
+function getPendingCall(userId) {
+  const entry = pendingCalls.get(String(userId));
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { pendingCalls.delete(String(userId)); return null; }
+  return entry;
+}
+function clearPendingCall(userId) { pendingCalls.delete(String(userId)); }
 
 // Minimal per-socket flood guard. The REST POST that persists a chat message
 // sits behind the general /api/ limiter, but `send_message` itself is only a
@@ -753,17 +776,41 @@ io.on('connection', (socket) => {
     if (isRateLimited(socket, 'call:offer', 10, 60_000)) return; // >10 call attempts/min — drop (prevents ring-spam)
     const targetRoom = `user-${to}`;
     const roomSockets = io.sockets.adapter.rooms.get(targetRoom);
+    const callerDisplay = callerName || socket.user.name || 'Someone';
+    const resolvedCallType = callType || 'video';
     logger.info(`📞 call:offer from ${socket.user.id} → ${targetRoom} (${roomSockets?.size ?? 0} sockets in room)`);
     io.to(targetRoom).emit('call:offer', {
       from: socket.user.id,
-      callerName: callerName || socket.user.name,
+      callerName: callerDisplay,
       callerPhoto: callerPhoto || null,
-      callType: callType || 'video',
+      callType: resolvedCallType,
       offer,
     });
+    // Store offer so the mobile can fetch it after waking from FCM notification
+    setPendingCall(to, {
+      from: socket.user.id, callerName: callerDisplay, callerPhoto: callerPhoto || null,
+      callType: resolvedCallType, offer,
+    });
+    // FCM push so the callee is alerted when the app is backgrounded/killed
+    try {
+      const { sendPushToUser } = require('./services/fcm.service');
+      const callLabel = resolvedCallType === 'video' ? 'Video call' : resolvedCallType === 'screen' ? 'Screen share' : 'Voice call';
+      sendPushToUser(to, {
+        title: `📞 Incoming ${callLabel}`,
+        body: `${callerDisplay} is calling you — tap to answer`,
+        data: {
+          type:         'incoming_call',
+          call_type:    resolvedCallType,
+          from:         String(socket.user.id),
+          caller_name:  callerDisplay,
+          caller_photo: callerPhoto || '',
+        },
+      }, { channelId: 'erp-calls', fullScreen: true });
+    } catch (_) {}
   });
 
   socket.on('call:answer', ({ to, answer }) => {
+    clearPendingCall(socket.user.id); // callee answered — no longer pending
     io.to(`user-${to}`).emit('call:answer', { from: socket.user.id, answer });
   });
 
@@ -772,14 +819,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call:end', ({ to }) => {
+    clearPendingCall(to);
     io.to(`user-${to}`).emit('call:end', { from: socket.user.id });
   });
 
   socket.on('call:reject', ({ to }) => {
+    clearPendingCall(socket.user.id); // callee rejected
     io.to(`user-${to}`).emit('call:reject', { from: socket.user.id });
   });
 
   socket.on('call:busy', ({ to }) => {
+    clearPendingCall(to);
     io.to(`user-${to}`).emit('call:busy', { from: socket.user.id });
   });
 

@@ -6,13 +6,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { View, ActivityIndicator } from 'react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { ChatProvider } from './src/context/ChatContext';
+import { ChatProvider, ChatContext } from './src/context/ChatContext';
 import { addChatNotificationListener } from './src/utils/pushNotifications';
 import { CHANNELS } from './src/constants/chatChannels';
 import LoginScreen from './src/screens/LoginScreen';
 import ProjectSelectScreen from './src/screens/ProjectSelectScreen';
 import RootNavigator from './src/navigation/RootNavigator';
 import IncomingCallModal from './src/components/IncomingCallModal';
+import { chatAPI } from './src/api/client';
 import { theme } from './src/theme';
 
 const queryClient = new QueryClient({
@@ -29,7 +30,13 @@ const navigationRef = createNavigationContainerRef();
 // sender's id at tap time (no guarantee ChatContext's employee list has
 // loaded yet on a cold start), so it opens with a generic title — the thread
 // itself still loads correctly since it's keyed by channel id, not title.
+//
+// Tapping an incoming_call push notification fetches the stored call offer
+// from the backend (set when the call:offer socket event arrived) and shows
+// the IncomingCallModal so the user can accept or decline.
 function useChatNotificationNavigation() {
+  const chatCtx = React.useContext(ChatContext);
+
   useEffect(() => {
     const sub = addChatNotificationListener((data) => {
       if (!navigationRef.isReady()) return;
@@ -38,10 +45,18 @@ function useChatNotificationNavigation() {
         navigationRef.navigate('ChatThread', { channel: data.channel, title: ch?.label || 'Chat', isGroup: true });
       } else if (data.type === 'dm') {
         navigationRef.navigate('ChatThread', { channel: data.channel, title: 'Chat', isGroup: false });
+      } else if (data.type === 'incoming_call') {
+        // App woke from a call FCM tap — fetch the pending offer from backend
+        chatAPI.pendingCall().then(r => {
+          const pending = r.data?.pending;
+          if (pending && chatCtx?.setIncomingCall) {
+            chatCtx.setIncomingCall(pending);
+          }
+        }).catch(() => {});
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [chatCtx]);
 }
 
 function AppContent() {
