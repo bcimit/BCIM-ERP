@@ -210,7 +210,10 @@ export const storeLedgerAPI = {
 };
 
 export const pettyCashAPI = {
-  list: (projectId) => api.get('/stores-petty-cash/entries', { params: { project_id: projectId } }),
+  list:         (projectId) => api.get('/stores-petty-cash/entries', { params: { project_id: projectId, limit: 200 } }),
+  detail:       (id)        => api.get(`/stores-petty-cash/entries/${id}`),
+  create:       (data)      => api.post('/stores-petty-cash/entries', data),
+  updateStatus: (id, data)  => api.patch(`/stores-petty-cash/entries/${id}/status`, data),
 };
 
 export const gatePassAPI = {
