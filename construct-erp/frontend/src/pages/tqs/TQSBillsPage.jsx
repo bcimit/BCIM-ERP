@@ -222,6 +222,25 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
     staleTime: 60000,
   });
 
+  // Vendor outstanding summary — shown once a vendor is selected
+  const { data: vendorOutstanding } = useQuery({
+    queryKey: ['vendor-outstanding', form.vendor_id, form.vendor_name],
+    queryFn: () => tqsBillsAPI.vendorOutstanding(
+      form.vendor_id ? { vendor_id: form.vendor_id } : { vendor_name: form.vendor_name }
+    ).then(r => r.data?.data),
+    enabled: !!(form.vendor_id || form.vendor_name?.trim().length > 1),
+    staleTime: 30000,
+  });
+
+  // Duplicate invoice number detection — fires when vendor + inv_number both filled
+  const { data: dupBills = [] } = useQuery({
+    queryKey: ['dup-check', form.vendor_name, form.inv_number],
+    queryFn: () => tqsBillsAPI.checkDuplicate({ vendor_name: form.vendor_name, inv_number: form.inv_number })
+      .then(r => r.data?.data ?? []),
+    enabled: !!(form.vendor_name?.trim() && form.inv_number?.trim().length >= 2),
+    staleTime: 10000,
+  });
+
   // Approved POs available for invoicing (filtered by project once selected)
   const { data: availablePOs = [] } = useQuery({
     queryKey: ['tqs-lookup-pos', form.project_id, form.vendor_id, form.vendor_name],
@@ -770,6 +789,17 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
 
               </div>
 
+              {/* Vendor outstanding summary card */}
+              {vendorOutstanding && vendorOutstanding.bill_count > 0 && (
+                <div className="col-span-2 md:col-span-3 flex items-center gap-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span className="text-amber-800">
+                    This vendor has <strong>{vendorOutstanding.bill_count} unpaid bill{vendorOutstanding.bill_count > 1 ? 's' : ''}</strong> with ₹{Number(vendorOutstanding.total_outstanding || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} outstanding
+                    {vendorOutstanding.oldest_inv_date && ` — oldest since ${dayjs(vendorOutstanding.oldest_inv_date).format('DD MMM YYYY')}`}.
+                  </span>
+                </div>
+              )}
+
               {/* Work Description - only for WO */}
               {form.bill_type === 'wo' && (
                 <div className="col-span-2 md:col-span-3">
@@ -890,10 +920,19 @@ export function NewBillModal({ onClose, projects, defaultProjectId }) {
               )}
 
               {/* Invoice Number */}
-              <div>
+              <div className="col-span-2 md:col-span-1">
                 <Lbl req>Invoice Number</Lbl>
-                <input className={F} placeholder="INV-001"
+                <input className={`${F}${dupBills.length > 0 ? ' border-red-400 focus:border-red-500 focus:ring-red-500/30' : ''}`} placeholder="INV-001"
                   value={form.inv_number} onChange={e => set('inv_number', e.target.value.toUpperCase())} required style={{ textTransform: 'uppercase' }} />
+                {dupBills.length > 0 && (
+                  <div className="mt-1.5 flex items-start gap-1.5 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-md px-2.5 py-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Duplicate: <strong>{form.inv_number}</strong> already exists for this vendor
+                      {dupBills.map(b => ` (SL ${b.sl_number}${b.project_name ? ` — ${b.project_name}` : ''})`).join(', ')}.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Invoice Date - auto-derives Invoice Month */}

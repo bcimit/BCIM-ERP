@@ -2754,6 +2754,54 @@ router.patch('/:id/advance-stage', async (req, res) => {
   }
 });
 
+// ── GET /tqs/bills/check-duplicate ─────────────────────────────────────────
+router.get('/check-duplicate', async (req, res) => {
+  try {
+    const { vendor_name, inv_number, exclude_id } = req.query;
+    if (!vendor_name || !inv_number) return res.json({ data: [] });
+    const params = [req.user.company_id, vendor_name.trim(), inv_number.trim().toUpperCase()];
+    const where = [`b.company_id=$1`, `b.vendor_name ILIKE $2`, `UPPER(TRIM(b.inv_number))=$3`, `b.is_deleted=FALSE`];
+    if (exclude_id) { where.push(`b.id <> $${params.length + 1}`); params.push(exclude_id); }
+    const { rows } = await query(`
+      SELECT b.id, b.sl_number, b.inv_number, b.inv_date, b.total_amount, b.workflow_status,
+             p.name AS project_name
+      FROM tqs_bills b
+      LEFT JOIN projects p ON p.id = b.project_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY b.created_at DESC LIMIT 5
+    `, params);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /tqs/bills/vendor-outstanding ──────────────────────────────────────
+router.get('/vendor-outstanding', async (req, res) => {
+  try {
+    const { vendor_name, vendor_id } = req.query;
+    if (!vendor_name && !vendor_id) return res.json({ data: null });
+    const params = [req.user.company_id];
+    const where = [`b.company_id=$1`, `b.is_deleted=FALSE`, `b.workflow_status NOT IN ('paid')`];
+    if (vendor_id) { where.push(`b.vendor_id=$${params.length+1}`); params.push(vendor_id); }
+    else { where.push(`b.vendor_name ILIKE $${params.length+1}`); params.push(vendor_name.trim()); }
+    const { rows } = await query(`
+      SELECT COUNT(*)::int AS bill_count,
+             COALESCE(SUM(b.total_amount),0) AS total_invoiced,
+             COALESCE(SUM(COALESCE(u.paid_amount,0)),0) AS total_paid,
+             MIN(b.inv_date) AS oldest_inv_date,
+             MAX(b.workflow_status) AS latest_status
+      FROM tqs_bills b
+      LEFT JOIN tqs_bill_updates u ON u.bill_id = b.id
+      WHERE ${where.join(' AND ')}
+    `, params);
+    const r = rows[0];
+    res.json({ data: { bill_count: r.bill_count, total_outstanding: r.total_invoiced - r.total_paid, oldest_inv_date: r.oldest_inv_date } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /tqs/bills/:id ─────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
@@ -3692,25 +3740,40 @@ router.patch('/:id/qs-sign', requireTqsStageAccess('qs_sign'), async (req, res) 
       { key: 'qs_sign_handed_to_accounts_date', label: 'Handed to Accounts Date' },
     ]);
 
-    await query(`
-      INSERT INTO tqs_bill_updates (bill_id, qs_sign_received_from_procurement_date, qs_sign_date, qs_sign_handed_to_accounts_date, qs_sign_remarks, updated_at)
-      VALUES ($1, $2, $3, $4, $5, NOW())
-      ON CONFLICT (bill_id) DO UPDATE SET
-        qs_sign_received_from_procurement_date = COALESCE(EXCLUDED.qs_sign_received_from_procurement_date, tqs_bill_updates.qs_sign_received_from_procurement_date),
-        qs_sign_date                   = COALESCE(EXCLUDED.qs_sign_date, tqs_bill_updates.qs_sign_date),
-        qs_sign_handed_to_accounts_date = COALESCE(EXCLUDED.qs_sign_handed_to_accounts_date, tqs_bill_updates.qs_sign_handed_to_accounts_date),
-        qs_sign_remarks                = COALESCE(EXCLUDED.qs_sign_remarks, tqs_bill_updates.qs_sign_remarks),
-        updated_at                     = NOW()
-    `, [req.params.id, qs_sign_received_from_procurement_date || null, qs_sign_date || null, qs_sign_handed_to_accounts_date || null, qs_sign_remarks || null]);
+    // If this bill belongs to a PC with multiple invoices, apply to all of them
+    const certRes = await query(`
+      SELECT cb.bill_id FROM vendor_qs_certification_bills cb
+      WHERE cb.certification_id = (
+        SELECT cb2.certification_id FROM vendor_qs_certification_bills cb2 WHERE cb2.bill_id = $1 LIMIT 1
+      )
+    `, [req.params.id]);
 
-    await query(`UPDATE tqs_bills SET workflow_status='accounts', updated_at=NOW() WHERE id=$1`, [req.params.id]);
+    const billIds = certRes.rows.length > 0
+      ? certRes.rows.map(r => r.bill_id)
+      : [req.params.id];
 
-    await logHistory(req.params.id, 'qs_sign',
-      `Received from Procurement${qs_sign_received_from_procurement_date ? ` on ${qs_sign_received_from_procurement_date}` : ''}; MD Signature collected${qs_sign_date ? ` on ${qs_sign_date}` : ''}${qs_sign_handed_to_accounts_date ? `, handed to Accounts: ${qs_sign_handed_to_accounts_date}` : ''}`,
-      req.user.id);
-    await logHistory(req.params.id, 'system', 'Moved to Accounts for Payment', req.user.id);
+    for (const bid of billIds) {
+      await query(`
+        INSERT INTO tqs_bill_updates (bill_id, qs_sign_received_from_procurement_date, qs_sign_date, qs_sign_handed_to_accounts_date, qs_sign_remarks, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (bill_id) DO UPDATE SET
+          qs_sign_received_from_procurement_date = COALESCE(EXCLUDED.qs_sign_received_from_procurement_date, tqs_bill_updates.qs_sign_received_from_procurement_date),
+          qs_sign_date                    = COALESCE(EXCLUDED.qs_sign_date, tqs_bill_updates.qs_sign_date),
+          qs_sign_handed_to_accounts_date = COALESCE(EXCLUDED.qs_sign_handed_to_accounts_date, tqs_bill_updates.qs_sign_handed_to_accounts_date),
+          qs_sign_remarks                 = COALESCE(EXCLUDED.qs_sign_remarks, tqs_bill_updates.qs_sign_remarks),
+          updated_at                      = NOW()
+      `, [bid, qs_sign_received_from_procurement_date || null, qs_sign_date || null, qs_sign_handed_to_accounts_date || null, qs_sign_remarks || null]);
+    }
 
-    res.json({ data: { workflow_status: 'accounts' } });
+    await query(`UPDATE tqs_bills SET workflow_status='accounts', updated_at=NOW() WHERE id = ANY($1::uuid[])`, [billIds]);
+
+    const histNote = `Received from Procurement${qs_sign_received_from_procurement_date ? ` on ${qs_sign_received_from_procurement_date}` : ''}; MD Signature collected${qs_sign_date ? ` on ${qs_sign_date}` : ''}${qs_sign_handed_to_accounts_date ? `, handed to Accounts: ${qs_sign_handed_to_accounts_date}` : ''}${billIds.length > 1 ? ` (applied to all ${billIds.length} invoices in PC)` : ''}`;
+    for (const bid of billIds) {
+      await logHistory(bid, 'qs_sign', histNote, req.user.id);
+      await logHistory(bid, 'system', 'Moved to Accounts for Payment', req.user.id);
+    }
+
+    res.json({ data: { workflow_status: 'accounts', bills_updated: billIds.length } });
   } catch (err) {
     console.error(err);
     res.status(err.statusCode || 500).json({ error: err.message });

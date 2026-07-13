@@ -1745,6 +1745,9 @@ export const tqsBillsAPI = {
   // ── Import ──
   downloadTemplate: ()         => api.get('/tqs/bills/import/template', { responseType: 'blob' }),
   bulkImport:       (fd)       => api.post('/tqs/bills/bulk-import', fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  // ── Duplicate & outstanding checks ──
+  checkDuplicate:      (params) => api.get('/tqs/bills/check-duplicate',    { params }),
+  vendorOutstanding:   (params) => api.get('/tqs/bills/vendor-outstanding', { params }),
   // ── Cross-module lookups ──
   lookupPOs:        (params)   => api.get('/tqs/bills/lookup/pos',        { params }),
   lookupWOs:        (params)   => api.get('/tqs/bills/lookup/wos',        { params }),
