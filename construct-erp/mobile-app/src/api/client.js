@@ -100,8 +100,11 @@ export const vendorAPI = {
 };
 
 export const poAPI = {
-  list:   (projectId) => api.get('/purchase-orders', { params: { project_id: projectId, limit: 50 } }),
-  detail: (id)         => api.get(`/purchase-orders/${id}`),
+  list:    (projectId) => api.get('/purchase-orders', { params: { project_id: projectId, limit: 50 } }),
+  detail:  (id)        => api.get(`/purchase-orders/${id}`),
+  bills:   (id)        => api.get(`/purchase-orders/${id}/bills`),
+  approve: (id, stage) => api.patch(`/purchase-orders/${id}/${stage}`),
+  reject:  (id, reason) => api.patch(`/purchase-orders/${id}/reject`, { reason }),
 };
 
 export const workOrderAPI = {
