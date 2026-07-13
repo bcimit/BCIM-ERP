@@ -33,10 +33,18 @@ const avatarColor = name => AVATAR_COLORS[(name || '').charCodeAt(0) % AVATAR_CO
 const initials    = name => (name || '??').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
 const STATUS_CFG = {
-  Paid:    { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0', icon: CheckCircle2 },
-  Partial: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', icon: Clock },
-  Pending: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', icon: Clock },
-  Overdue: { bg: '#fff1f2', text: '#e11d48', border: '#fecdd3', icon: AlertCircle },
+  Paid:                { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0', icon: CheckCircle2 },
+  Partial:             { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', icon: Clock },
+  Pending:             { bg: '#fffbeb', text: '#d97706', border: '#fde68a', icon: Clock },
+  Overdue:             { bg: '#fff1f2', text: '#e11d48', border: '#fecdd3', icon: AlertCircle },
+  // TQS workflow stages
+  pending:             { bg: '#fffbeb', text: '#d97706', border: '#fde68a', icon: Clock,         label: 'Pending' },
+  stores:              { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', icon: Clock,         label: 'Stores' },
+  document_controller: { bg: '#ecfeff', text: '#0e7490', border: '#a5f3fc', icon: Clock,         label: 'Doc Control' },
+  qs:                  { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe', icon: Clock,         label: 'QS' },
+  accounts:            { bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe', icon: Clock,         label: 'Accounts' },
+  procurement:         { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa', icon: Clock,         label: 'Procurement' },
+  paid:                { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0', icon: CheckCircle2,  label: 'Paid' },
 };
 
 /* ── Tiny SVG Sparkline ──────────────────────────────────────────────── */
@@ -85,12 +93,15 @@ function VendorAvatar({ name, size = 36 }) {
 }
 
 /* ── Status Badge ────────────────────────────────────────────────────── */
-function StatusBadge({ status }) {
-  const cfg = STATUS_CFG[status] || STATUS_CFG.Pending;
+function StatusBadge({ status, workflowStatus }) {
+  // For TQS bills, show the workflow stage badge using the raw workflow_status key
+  const key = workflowStatus || status;
+  const cfg = STATUS_CFG[key] || STATUS_CFG[status] || STATUS_CFG.Pending;
   const Icon = cfg.icon;
+  const displayLabel = cfg.label || status;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, background: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}` }}>
-      <Icon size={12} strokeWidth={2.5} /> {status}
+      <Icon size={12} strokeWidth={2.5} /> {displayLabel}
     </span>
   );
 }
@@ -217,7 +228,8 @@ export default function VendorPaymentsPage() {
         vendor_code:vend.code||vend.vendor_code||`VND-${String(bill.vendor_id||'').padStart(5,'0')}`,
         project_id:bill.project_id, project_name:bill.project_name||'—',
         invoice_total:total, paid_amount:paid, balance:bal,
-        status_view:status, due_date:bill.inv_date||bill.received_date||bill.created_at||null,
+        status_view:status, workflow_status:bill.workflow_status||null,
+        due_date:bill.inv_date||bill.received_date||bill.created_at||null,
         latest_payment:null, all_payments:[],
       };
     });
@@ -471,7 +483,7 @@ export default function VendorPaymentsPage() {
                         </td>
 
                         <td style={{ ...S.td, textAlign:'center' }}>
-                          <StatusBadge status={row.status_view} />
+                          <StatusBadge status={row.status_view} workflowStatus={row.source_type === 'tqs' ? row.workflow_status : null} />
                         </td>
 
                         <td style={S.td}>
@@ -608,7 +620,7 @@ export default function VendorPaymentsPage() {
               ))}
 
               <div style={{ marginTop:2 }}>
-                <StatusBadge status={detailRow.status_view} />
+                <StatusBadge status={detailRow.status_view} workflowStatus={detailRow.source_type === 'tqs' ? detailRow.workflow_status : null} />
               </div>
 
               {/* record payment CTA */}
