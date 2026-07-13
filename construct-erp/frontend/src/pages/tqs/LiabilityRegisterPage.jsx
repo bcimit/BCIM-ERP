@@ -756,7 +756,7 @@ export default function LiabilityRegisterPage() {
 
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
                     <span style={{ fontSize: 12, fontWeight: sel ? 700 : 600, color: sel ? '#1E40AF' : '#1E293B', flex: 1, lineHeight: 1.35, wordBreak: 'break-word' }}>
-                      {v.vendor_name}
+                      {(v.vendor_name || '').toUpperCase()}
                     </span>
                     <span style={{
                       fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,

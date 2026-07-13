@@ -1883,7 +1883,7 @@ function EditBillModal({ bill, projects, onClose }) {
             Bill Tracker <span className="text-slate-300">›</span> Bills <span className="text-slate-300">›</span>{' '}
             <b className="text-slate-700">Edit Bill — SL #{bill.sl_number}</b>
           </div>
-          <span className="text-xs text-slate-400">{bill.vendor_name} · {bill.inv_number}</span>
+          <span className="text-xs text-slate-400">{(bill.vendor_name || '').toUpperCase()} · {bill.inv_number}</span>
         </div>
         <button
           onClick={onClose}
@@ -3126,7 +3126,7 @@ export default function TQSBillsPage() {
                       </td>;
                     case 'vendor_name':
                       return <td key={col.key} className={cls}>
-                        <span className="font-medium text-slate-900 text-[13px] block whitespace-normal leading-snug" title={b.vendor_name}>{b.vendor_name}</span>
+                        <span className="font-medium text-slate-900 text-[13px] block whitespace-normal leading-snug" title={(b.vendor_name || '').toUpperCase()}>{(b.vendor_name || '').toUpperCase()}</span>
                       </td>;
                     case 'project_name':
                       return <td key={col.key} className={cls}>

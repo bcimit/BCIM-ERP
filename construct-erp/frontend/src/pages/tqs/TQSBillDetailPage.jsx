@@ -1137,7 +1137,7 @@ export default function TQSBillDetailPage() {
               )}
             </div>
             <p className="text-xs mt-1 truncate" style={{ color: 'rgba(255,255,255,0.65)' }}>
-              <span className="font-medium text-white">{bill.vendor_name}</span>
+              <span className="font-medium text-white">{(bill.vendor_name || '').toUpperCase()}</span>
               <span className="mx-2" style={{ color: 'rgba(255,255,255,0.30)' }}>·</span>
               <span>{(bill.inv_number || '').toUpperCase()}</span>
             </p>

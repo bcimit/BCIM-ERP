@@ -735,7 +735,7 @@ export default function TQSReportsPage() {
                           return (
                             <tr key={b.id||i} className="hover:bg-slate-50 transition-colors">
                               <Td mono>{b.sl_number}</Td>
-                              <Td bold nowrap={false}><span className="max-w-[140px] block truncate">{b.vendor_name}</span></Td>
+                              <Td bold nowrap={false}><span className="max-w-[140px] block truncate">{(b.vendor_name || '').toUpperCase()}</span></Td>
                               <Td mono>{b.inv_number||'—'}</Td>
                               <Td small>{fmts(b.inv_date)}</Td>
                               <Td small color="text-slate-400">{b.inv_month||'—'}</Td>
@@ -866,7 +866,7 @@ export default function TQSReportsPage() {
                           return (
                             <tr key={b.id||i} className="hover:bg-slate-50 transition-colors">
                               <Td mono>{b.sl_number}</Td>
-                              <Td bold>{b.vendor_name}</Td>
+                              <Td bold>{(b.vendor_name || '').toUpperCase()}</Td>
                               <Td mono>{b.inv_number||'—'}</Td>
                               <Td small>{fmts(b.inv_date)}</Td>
                               <Td mono>{b.po_number||'—'}</Td>
@@ -923,7 +923,7 @@ export default function TQSReportsPage() {
                           return (
                             <tr key={b.id||i} className="hover:bg-slate-50">
                               <Td mono>{b.sl_number}</Td>
-                              <Td bold>{b.vendor_name}</Td>
+                              <Td bold>{(b.vendor_name || '').toUpperCase()}</Td>
                               <Td mono>{b.inv_number||'—'}</Td>
                               <Td small>{fmts(b.inv_date)}</Td>
                               <Td mono color="text-blue-600">{b.pc_number||'—'}</Td>
@@ -1238,7 +1238,7 @@ export default function TQSReportsPage() {
                           <tbody className="divide-y divide-slate-50">
                             {stageBills.map((b, i) => (
                               <tr key={b.id||i} className="hover:bg-slate-50">
-                                <Td mono>{b.sl_number}</Td><Td bold>{b.vendor_name}</Td>
+                                <Td mono>{b.sl_number}</Td><Td bold>{(b.vendor_name || '').toUpperCase()}</Td>
                                 <Td mono>{b.inv_number||'—'}</Td><Td small>{fmts(b.inv_date)}</Td>
                                 <Td mono>{b.po_number||'—'}</Td>
                                 <Td right>{inrFmt(b.basic_amount)}</Td>

@@ -273,7 +273,7 @@ export default function BillsScreen() {
                       <Text style={styles.tdBillNo} numberOfLines={1}>{billNo}</Text>
                     </View>
                     <Text style={[styles.tdVendor, { flex: 2 }]} numberOfLines={1}>
-                      {item.vendor_name || '—'}
+                      {(item.vendor_name || '').toUpperCase() || '—'}
                     </Text>
                     <View style={{ flex: 1.5, alignItems: 'center' }}>
                       <View style={[styles.badge, { backgroundColor: sc.bg }]}>
