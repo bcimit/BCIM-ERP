@@ -419,11 +419,11 @@ export default function VendorPaymentsPage() {
                 <tbody className="divide-y divide-slate-50">
                   {filtered.map(inv => (
                     <tr key={inv.id} className="hover:bg-indigo-50/30 transition-colors group">
-                      <td className="px-4 py-3 align-middle">
+                      <td className="px-4 py-2 align-middle">
                         <div className="font-semibold text-slate-800 text-sm leading-tight">{inv.invoice_number || inv.invNo || '—'}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[180px]">{inv.po_number || inv.poRef || 'No PO'}</div>
+                        <div className="text-[11px] text-slate-400 truncate max-w-[180px]">{inv.po_number || inv.poRef || 'No PO'}</div>
                       </td>
-                      <td className="px-3 py-3 align-middle">
+                      <td className="px-3 py-2 align-middle">
                         <span className={clsx('inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide border',
                           inv.source_type === 'tqs'
                             ? 'bg-violet-50 text-violet-700 border-violet-200'
@@ -431,38 +431,38 @@ export default function VendorPaymentsPage() {
                           {inv.source_label}
                         </span>
                       </td>
-                      <td className="px-3 py-3 align-middle">
-                        <div className="text-slate-800 font-medium truncate max-w-[160px]">{inv.vendor_name}</div>
+                      <td className="px-3 py-2 align-middle">
+                        <div className="text-slate-800 font-medium truncate max-w-[160px] text-sm">{inv.vendor_name}</div>
                       </td>
-                      <td className="px-3 py-3 align-middle">
+                      <td className="px-3 py-2 align-middle">
                         <div className="text-slate-600 text-xs truncate max-w-[160px]">{inv.project_name}</div>
                       </td>
-                      <td className="px-3 py-3 align-middle text-right">
-                        <div className="font-semibold text-indigo-600 tabular-nums">{money(inv.invoice_total)}</div>
+                      <td className="px-3 py-2 align-middle text-right">
+                        <div className="font-semibold text-indigo-600 tabular-nums text-sm">{money(inv.invoice_total)}</div>
                       </td>
-                      <td className="px-3 py-3 align-middle text-right">
-                        <div className="text-emerald-600 font-medium tabular-nums">{money(inv.paid_amount)}</div>
+                      <td className="px-3 py-2 align-middle text-right">
+                        <div className="text-emerald-600 font-medium tabular-nums text-sm">{money(inv.paid_amount)}</div>
                       </td>
-                      <td className="px-3 py-3 align-middle text-right">
-                        <div className={clsx('font-semibold tabular-nums', inv.balance > 0 ? 'text-rose-600' : 'text-slate-400')}>
+                      <td className="px-3 py-2 align-middle text-right">
+                        <div className={clsx('font-semibold tabular-nums text-sm', inv.balance > 0 ? 'text-rose-600' : 'text-slate-400')}>
                           {money(inv.balance)}
                         </div>
                       </td>
-                      <td className="px-3 py-3 align-middle text-center">
+                      <td className="px-3 py-2 align-middle text-center">
                         <div className="text-xs text-slate-600 font-mono tabular-nums">{fmt(inv.due_date || inv.dueDate)}</div>
                         {dayjs(inv.due_date || inv.dueDate).isValid() && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">{dayjs(inv.due_date || inv.dueDate).fromNow()}</div>
+                          <div className="text-[10px] text-slate-400">{dayjs(inv.due_date || inv.dueDate).fromNow()}</div>
                         )}
                       </td>
-                      <td className="px-3 py-3 align-middle text-center">
+                      <td className="px-3 py-2 align-middle text-center">
                         <span className={clsx('inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold border', STATUS_STYLE[inv.status_view])}>
                           {inv.status_view}
                         </span>
                         {inv.latest_payment && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">{inv.latest_payment.payment_mode || 'Payment'}</div>
+                          <div className="text-[10px] text-slate-400">{inv.latest_payment.payment_mode || 'Payment'}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 align-middle text-right vp-no-print">
+                      <td className="px-4 py-2 align-middle text-right vp-no-print">
                         {inv.source_type === 'finance' && inv.balance > 0 ? (
                           <button onClick={() => openPay(inv)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition shadow-sm">
