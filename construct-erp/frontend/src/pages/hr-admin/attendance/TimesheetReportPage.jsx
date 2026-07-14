@@ -33,6 +33,22 @@ function Pill({ status }) {
   );
 }
 
+const COL_KEYS = {
+  'EMP ID':      'emp_id',
+  'Name':        'name',
+  'Designation': 'designation',
+  'Department':  'department',
+  'Company':     'company',
+  'P/A':         'attendance_status',
+  'In Time':     'in_time',
+  'Out Time':    'out_time',
+  'Late\nMin':   'late_minutes',
+  'Shift':       'shift',
+  'Location':    'location',
+  'Emp Status':  'status',
+  'Reason':      'reason',
+};
+
 export default function TimesheetReportPage() {
   const [date, setDate]             = useState(today());
   const [category, setCategory]     = useState('staff');
@@ -42,6 +58,26 @@ export default function TimesheetReportPage() {
   const [meta, setMeta]             = useState({ companyName:'BCIM', projectName:'', projectCode:'' });
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState(null);
+  const [sortKey, setSortKey]       = useState(null);
+  const [sortDir, setSortDir]       = useState('asc');
+
+  const handleSort = (col) => {
+    const key = COL_KEYS[col];
+    if (!key) return;
+    setSortKey(prev => {
+      if (prev === key) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); return key; }
+      setSortDir('asc'); return key;
+    });
+  };
+
+  const sortedRows = sortKey ? [...rows].sort((a, b) => {
+    let av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
+    if (sortKey === 'late_minutes') { av = Number(av)||0; bv = Number(bv)||0; }
+    else { av = String(av).toLowerCase(); bv = String(bv).toLowerCase(); }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  }) : rows;
 
   const { data: projectsData } = useQuery({
     queryKey: ['projects-active-ts'],
@@ -73,7 +109,7 @@ export default function TimesheetReportPage() {
 
   const handleExport = () => {
     const headers = ['S.No','EMP ID','Name','Designation','Department','Company','P/A','In Time','Out Time','Late Min','Shift','Location','Emp Status','Reason'];
-    const csvRows = rows.map((r, i) => [
+    const csvRows = sortedRows.map((r, i) => [
       i+1, r.emp_id||'', r.name, r.designation, r.department,
       r.company, r.attendance_status, r.in_time||'', r.out_time||'',
       r.late_minutes||0, r.shift, r.location, r.status, r.reason||'',
@@ -257,23 +293,39 @@ export default function TimesheetReportPage() {
                 <tr style={{ background:'#1B3A6B', color:'#fff' }}>
                   {['S.No','EMP ID','Name','Designation','Department','Company',
                     'P/A','In Time','Out Time','Late\nMin','Shift','Location','Emp Status','Reason',
-                  ].map(h=>(
-                    <th key={h} style={{
-                      padding:'7px 8px', whiteSpace:'pre', textAlign:'left',
-                      fontWeight:700, fontSize:11, letterSpacing:0.3,
-                      borderRight:'1px solid #2d527a',
-                    }}>{h}</th>
-                  ))}
+                  ].map(h=>{
+                    const key = COL_KEYS[h];
+                    const active = sortKey === key;
+                    return (
+                      <th key={h} onClick={()=>handleSort(h)} style={{
+                        padding:'7px 8px', whiteSpace:'pre', textAlign:'left',
+                        fontWeight:700, fontSize:11, letterSpacing:0.3,
+                        borderRight:'1px solid #2d527a',
+                        cursor: key ? 'pointer' : 'default',
+                        userSelect:'none',
+                        background: active ? '#2d527a' : undefined,
+                      }}>
+                        <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                          {h}
+                          {key && (
+                            <span style={{ opacity: active ? 1 : 0.35, fontSize:9, lineHeight:1 }}>
+                              {active ? (sortDir==='asc' ? '▲' : '▼') : '⇅'}
+                            </span>
+                          )}
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 ? (
+                {sortedRows.length === 0 ? (
                   <tr>
                     <td colSpan={14} style={{ textAlign:'center', padding:40, color:'#6B7280', fontSize:13 }}>
                       No records found for {date}
                     </td>
                   </tr>
-                ) : rows.map((r,i)=>(
+                ) : sortedRows.map((r,i)=>(
                   <tr key={r.user_id||i} style={{ background: i%2===0 ? '#fff' : '#F8FAFC' }}>
                     <td style={td}>{i+1}</td>
                     <td style={{ ...td, fontWeight:600, color:'#2563EB' }}>{r.emp_id||'—'}</td>
