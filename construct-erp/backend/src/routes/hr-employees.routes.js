@@ -135,6 +135,17 @@ const initTables = async () => {
 };
 runSchemaInit('hr-employees', initTables);
 
+// Add columns that may be missing from older deployments
+runSchemaInit('hr-employees-cols-v2', async () => {
+  const { query: q } = require('../config/database');
+  await q(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS employment_status TEXT DEFAULT 'active'`);
+  await q(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS date_of_leaving DATE`);
+  await q(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS leaving_reason TEXT`);
+  await q(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
+  await q(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS probation_end_date DATE`);
+  await q(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS notice_period_days INT DEFAULT 30`);
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const employeeSelect = `
   SELECT u.id, u.employee_code, u.name, u.email, u.phone, u.role, u.designation,
