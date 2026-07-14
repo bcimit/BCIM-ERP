@@ -108,7 +108,7 @@ router.get('/summary', async (req, res) => {
 
     if (department_id) { sql += ` AND ep.department_id=$${idx}`; params.push(department_id); idx++; }
 
-    sql += ' GROUP BY u.id, u.name, u.employee_code, dep.name ORDER BY u.name';
+    sql += ' GROUP BY u.id, u.name, u.employee_code, ep.department_id, dep.name ORDER BY u.name';
     const { rows } = await query(sql, params);
     res.json({ data: rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
