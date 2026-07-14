@@ -8,6 +8,14 @@ const fs     = require('fs');
 const { authenticate, authorize } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
+const { uploadToSharePoint, deleteFromOneDrive } = require('../services/azureService');
+
+const SHAREPOINT_ENABLED = !!(
+  process.env.ONEDRIVE_TENANT_ID &&
+  process.env.ONEDRIVE_CLIENT_ID &&
+  process.env.ONEDRIVE_CLIENT_SECRET &&
+  process.env.SHAREPOINT_SITE_ID
+);
 const { sendWelcomeLoginMail } = require('../services/mail.service');
 const { createPasswordResetToken, getResetBaseUrl } = require('../controllers/auth.controller');
 
@@ -93,6 +101,8 @@ const initTables = async () => {
       uploaded_by UUID REFERENCES users(id)
     )
   `);
+  await query(`ALTER TABLE employee_documents ADD COLUMN IF NOT EXISTS sharepoint_id TEXT`);
+  await query(`ALTER TABLE employee_documents ADD COLUMN IF NOT EXISTS sharepoint_url TEXT`);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS reporting_manager_id UUID REFERENCES users(id)`);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS work_location TEXT`);
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id)`);
@@ -670,17 +680,42 @@ router.patch('/:id/lifecycle/:itemId', async (req, res) => {
 router.post('/:id/documents', upload.single('file'), async (req, res) => {
   try {
     const { doc_type, doc_name } = req.body;
-    const fileUrl = req.file ? `/uploads/hr-docs/${req.file.filename}` : req.body.file_url;
+    const localUrl = req.file ? `/uploads/hr-docs/${req.file.filename}` : req.body.file_url;
+    const displayName = doc_name || req.file?.originalname || doc_type;
+
+    let spId = null, spUrl = null, fileUrl = localUrl;
+
+    // Upload to SharePoint if configured; fall back to local on error
+    if (SHAREPOINT_ENABLED && req.file) {
+      try {
+        const empRow = await query(`SELECT name, employee_code FROM users WHERE id=$1`, [req.params.id]);
+        const emp = empRow.rows[0];
+        const folderPath = `HR Documents/${emp?.employee_code || req.params.id} - ${(emp?.name || 'Employee').replace(/[<>:"|?*]/g,'_')}`;
+        const fileBuffer = fs.readFileSync(req.file.path);
+        const sp = await uploadToSharePoint(req.file.originalname, fileBuffer, folderPath);
+        spId  = sp.id;
+        spUrl = sp.webUrl;
+        fileUrl = sp.downloadUrl || sp.webUrl;
+        // Remove local copy after successful SP upload
+        fs.unlink(req.file.path, () => {});
+        console.log(`[HR-Docs] Uploaded to SharePoint: ${spUrl}`);
+      } catch (spErr) {
+        console.error('[HR-Docs] SharePoint upload failed, keeping local copy:', spErr.message);
+        // fileUrl stays as localUrl — graceful fallback
+      }
+    }
+
     const { rows } = await query(
-      `INSERT INTO employee_documents (user_id, doc_type, doc_name, file_url, uploaded_by)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [req.params.id, doc_type, doc_name || req.file?.originalname, fileUrl, req.user.id]
+      `INSERT INTO employee_documents
+         (user_id, doc_type, doc_name, file_url, sharepoint_id, sharepoint_url, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.params.id, doc_type, displayName, fileUrl, spId, spUrl, req.user.id]
     );
     await query(
       `INSERT INTO employee_timeline
-       (user_id, company_id, event_type, title, description, created_by)
+         (user_id, company_id, event_type, title, description, created_by)
        VALUES ($1,$2,'document','Document uploaded',$3,$4)`,
-      [req.params.id, req.user.company_id, doc_name || req.file?.originalname || doc_type, req.user.id]
+      [req.params.id, req.user.company_id, displayName, req.user.id]
     );
     res.status(201).json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -689,12 +724,22 @@ router.post('/:id/documents', upload.single('file'), async (req, res) => {
 router.delete('/:id/documents/:docId', async (req, res) => {
   try {
     const { rows } = await query(
-      `DELETE FROM employee_documents WHERE id=$1 AND user_id=$2 RETURNING file_url`,
+      `DELETE FROM employee_documents WHERE id=$1 AND user_id=$2
+       RETURNING file_url, sharepoint_id`,
       [req.params.docId, req.params.id]
     );
-    if (rows[0]?.file_url) {
-      const fp = path.join(__dirname, '../..', rows[0].file_url);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    if (rows[0]) {
+      const { file_url, sharepoint_id } = rows[0];
+      if (sharepoint_id) {
+        // Delete from SharePoint
+        deleteFromOneDrive(sharepoint_id).catch(e =>
+          console.error('[HR-Docs] SharePoint delete failed:', e.message)
+        );
+      } else if (file_url && file_url.startsWith('/uploads/')) {
+        // Delete local file
+        const fp = path.join(__dirname, '../..', file_url);
+        if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      }
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

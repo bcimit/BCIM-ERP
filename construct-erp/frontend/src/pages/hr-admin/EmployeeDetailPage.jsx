@@ -780,12 +780,22 @@ function DocumentsTab({ emp, refetch }) {
                 <FileText className="w-4 h-4 text-blue-600"/>
               </div>
               <div>
-                <div className="text-gray-900 text-sm font-bold">{doc.doc_name}</div>
+                <div className="text-gray-900 text-sm font-bold flex items-center gap-2">
+                  {doc.doc_name}
+                  {doc.sharepoint_id && (
+                    <span style={{
+                      fontSize:10, fontWeight:700, background:'#EFF6FF', color:'#1D4ED8',
+                      border:'1px solid #BFDBFE', borderRadius:4, padding:'1px 6px',
+                    }}>
+                      ☁ SharePoint
+                    </span>
+                  )}
+                </div>
                 <div className="text-gray-400 text-xs capitalize">{doc.doc_type?.replace(/_/g,' ')} · {new Date(doc.uploaded_at).toLocaleDateString('en-IN')}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <a href={doc.file_url} target="_blank" rel="noreferrer"
+              <a href={doc.sharepoint_url || doc.file_url} target="_blank" rel="noreferrer"
                 className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
                 <Download className="w-4 h-4"/>
               </a>
