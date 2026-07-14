@@ -392,6 +392,7 @@ export default function Dashboard() {
   const role = user?.role || '';
   const dept = (user?.department || '').toLowerCase();
   const isMdRole = isMDDashboardUser(user);
+  const isStrictMd = MD_DASHBOARD_ROLES.includes(String(role).toLowerCase()) || MD_DASHBOARD_EMAILS.includes((user?.email || '').toLowerCase());
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -697,7 +698,7 @@ export default function Dashboard() {
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: 20, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Budget vs Cost Overview</h3>
-              <Link to="/finance/reports" style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>Report →</Link>
+              <Link to="/procurement/budget-control" style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>Report →</Link>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, fontSize: 11, color: '#64748b' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 24, height: 2, background: '#3b82f6', display: 'inline-block', borderRadius: 1 }} /> Budget</span>
@@ -989,7 +990,7 @@ export default function Dashboard() {
             </div>
             <div style={{ padding: '4px 0' }}>
               <Suspense fallback={<DashLoader />}>
-                <ApprovalsPage embedded mdMode />
+                <ApprovalsPage embedded mdMode={isStrictMd} />
               </Suspense>
             </div>
           </div>
