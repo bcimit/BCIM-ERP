@@ -510,7 +510,7 @@ router.put('/:id', async (req, res) => {
     await client.query('BEGIN');
 
     const {
-      name, email, phone, role,
+      name, email, phone, role, employee_code,
       department_id, designation_id, date_of_joining, date_of_birth, gender,
       father_name, mother_name, marital_status, blood_group, nationality,
       pan_number, aadhaar_number, uan_number, pf_account_number, esi_number,
@@ -544,11 +544,27 @@ router.put('/:id', async (req, res) => {
     const effectiveRole = isProtectedAdmin ? 'super_admin' : (role || 'viewer');
     const effectiveEmail = curEmail === 'it@bcim.in' ? cur.rows[0].email : email;
 
+    // Only update employee_code if a non-empty value was submitted and it's not already taken
+    let effectiveCode = null;
+    if (employee_code && String(employee_code).trim()) {
+      const codeCheck = await client.query(
+        `SELECT id FROM users WHERE employee_code=$1 AND company_id=$2 AND id<>$3`,
+        [employee_code.trim(), req.user.company_id, req.params.id]
+      );
+      if (codeCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: `Employee code '${employee_code}' is already in use by another employee.` });
+      }
+      effectiveCode = employee_code.trim();
+    }
+
     await client.query(
       `UPDATE users SET name=$1, email=$2, phone=$3, role=$4, designation=$5, department=$6
+         ${effectiveCode ? ', employee_code=$9' : ''}
        WHERE id=$7 AND company_id=$8`,
-      [name, effectiveEmail, phone || null, effectiveRole, desigName, deptName,
-       req.params.id, req.user.company_id]
+      effectiveCode
+        ? [name, effectiveEmail, phone || null, effectiveRole, desigName, deptName, req.params.id, req.user.company_id, effectiveCode]
+        : [name, effectiveEmail, phone || null, effectiveRole, desigName, deptName, req.params.id, req.user.company_id]
     );
 
     await client.query(
