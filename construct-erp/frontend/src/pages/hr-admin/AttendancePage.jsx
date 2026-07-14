@@ -294,11 +294,12 @@ export default function AttendancePage() {
   const [view,      setView]      = useState('summary');
   const [syncing,   setSyncing]   = useState(false);
   const [syncResult,setSyncResult]= useState(null);
+  const [dailyDate, setDailyDate] = useState(now.toISOString().split('T')[0]);
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const { data: deptData } = useQuery({ queryKey:['hr-departments'], queryFn:()=>hrMastersAPI.listDepts().then(r=>r.data) });
-  const { data: empData  } = useQuery({ queryKey:['hr-employees-active'], queryFn:()=>hrEmployeesAPI.list({employment_status:'active'}).then(r=>r.data) });
+  const { data: empData  } = useQuery({ queryKey:['hr-employees-all'], queryFn:()=>hrEmployeesAPI.list({}).then(r=>r.data) });
 
   const allEmployees = useMemo(() => empData?.data || [], [empData]);
 
@@ -309,6 +310,11 @@ export default function AttendancePage() {
   const { data: summaryData } = useQuery({
     queryKey:['hr-attendance-summary', month, year, deptFilter],
     queryFn:()=>hrAttendanceAPI.summary({ month, year, department_id: deptFilter||undefined }).then(r=>r.data),
+  });
+  const { data: dailyData, isLoading: dailyLoading } = useQuery({
+    queryKey:['hr-attendance-daily', dailyDate, deptFilter],
+    queryFn:()=>hrAttendanceAPI.list({ date: dailyDate, department_id: deptFilter||undefined }).then(r=>r.data),
+    enabled: view === 'daily',
   });
 
   const employees = useMemo(() => {
@@ -454,6 +460,7 @@ export default function AttendancePage() {
           <button onClick={()=>setView('summary')}   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='summary'  ?'bg-white text-blue-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Summary</button>
           <button onClick={()=>setView('grid')}      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='grid'     ?'bg-white text-blue-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Grid</button>
           <button onClick={()=>setView('timesheet')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='timesheet'?'bg-white text-indigo-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Timesheet</button>
+          <button onClick={()=>setView('daily')}     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='daily'    ?'bg-white text-emerald-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Daily Punch</button>
         </div>
       </motion.div>
 
@@ -545,6 +552,98 @@ export default function AttendancePage() {
       {view==='timesheet' && (
         <motion.div {...fade(0.12)}>
           <TimesheetView month={month} year={year} allEmployees={allEmployees} qc={qc} />
+        </motion.div>
+      )}
+
+      {/* Daily Punch View */}
+      {view==='daily' && (
+        <motion.div {...fade(0.12)} className="space-y-4">
+          {/* Date picker */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-wrap items-center gap-3"
+            style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+            <Clock className="w-4 h-4 text-emerald-500 shrink-0"/>
+            <span className="text-sm font-semibold text-slate-600">Punch Report for</span>
+            <input type="date" value={dailyDate} onChange={e=>setDailyDate(e.target.value)}
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:border-emerald-400"/>
+            <span className="text-xs text-slate-400">
+              {dailyData?.data?.length || 0} of {allEmployees.length} employees have records
+            </span>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden"
+            style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
+            {dailyLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 rounded-full border-2 border-emerald-200 border-t-emerald-600 animate-spin"/>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 font-black">
+                      <th className="text-left px-4 py-3">#</th>
+                      <th className="text-left px-4 py-3">Employee</th>
+                      <th className="text-left px-4 py-3">Department</th>
+                      <th className="text-center px-4 py-3">Status</th>
+                      <th className="text-center px-4 py-3">IN Time</th>
+                      <th className="text-center px-4 py-3">OUT Time</th>
+                      <th className="text-center px-4 py-3">Hours</th>
+                      <th className="text-center px-4 py-3">Late (min)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {allEmployees.filter(e => !deptFilter || e.department_id === deptFilter).map((emp, i) => {
+                      const rec = (dailyData?.data || []).find(r => r.user_id === emp.id);
+                      const inM  = toMins(rec?.in_time);
+                      const outM = toMins(rec?.out_time);
+                      const hrs  = (inM != null && outM != null && outM > inM) ? fmtHrs(outM - inM) : '—';
+                      const st   = rec?.status;
+                      const stCell = STATUS_CELL[st] || { bg:'bg-gray-50', text:'text-gray-400', label:'—' };
+                      return (
+                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-gray-400 text-xs">{i+1}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-gray-900">{emp.name}</div>
+                            {emp.employee_code && <div className="text-xs text-gray-400">{emp.employee_code}</div>}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{emp.department_name || '—'}</td>
+                          <td className="px-4 py-3 text-center">
+                            {st ? (
+                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-black ${stCell.bg} ${stCell.text}`}>
+                                {stCell.label}
+                              </span>
+                            ) : <span className="text-gray-300 text-xs">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {rec?.in_time
+                              ? <span className="font-mono text-emerald-700 font-bold text-sm">{rec.in_time.slice(0,5)}</span>
+                              : <span className="text-gray-300 text-xs">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {rec?.out_time
+                              ? <span className="font-mono text-red-500 font-bold text-sm">{rec.out_time.slice(0,5)}</span>
+                              : <span className="text-gray-300 text-xs">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-gray-700 font-semibold text-xs">{hrs}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {rec?.late_minutes > 0
+                              ? <span className="text-amber-600 font-bold text-xs">{rec.late_minutes} min</span>
+                              : <span className="text-gray-300 text-xs">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {allEmployees.length === 0 && (
+                      <tr><td colSpan={8} className="px-4 py-16 text-center text-gray-400 text-sm">No employees found</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </motion.div>
       )}
 
