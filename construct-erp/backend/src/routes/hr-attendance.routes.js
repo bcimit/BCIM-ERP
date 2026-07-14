@@ -408,14 +408,14 @@ router.get('/timesheet-report', async (req, res) => {
     const projectName  = projectRes.rows[0]?.name  || null;
     const projectCode  = projectRes.rows[0]?.project_code || null;
 
-    const { rows } = await query(`
+    // ── Staff query ─────────────────────────────────────────────────────────────
+    const staffParams = [...params];
+    const staffRows = category !== 'labour' ? (await query(`
       SELECT
-        ROW_NUMBER() OVER (ORDER BY u.name) AS sno,
         u.employee_code                     AS emp_id,
         u.name,
         COALESCE(des.name, u.designation, '—')             AS designation,
         COALESCE(dep.name, u.department, '—')              AS department,
-        COALESCE(dep.name, u.department, '—')              AS trade,
         'BCIM STAFF'                        AS company,
         COALESCE(a.status, 'absent')        AS attendance_status,
         TO_CHAR(a.in_time,  'HH12:MI AM')  AS in_time,
@@ -426,7 +426,8 @@ router.get('/timesheet-report', async (req, res) => {
         'DAY'                               AS shift,
         CASE WHEN COALESCE(ep.employment_status,'active') = 'active'
              THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
-        u.id                                AS user_id
+        u.id::text                          AS user_id,
+        'staff'                             AS row_type
       FROM users u
       LEFT JOIN employee_profiles ep   ON ep.user_id = u.id
       LEFT JOIN hr_departments dep     ON dep.id = ep.department_id
@@ -440,9 +441,52 @@ router.get('/timesheet-report', async (req, res) => {
         ${deptFilter}
         ${projectFilter}
       ORDER BY dep.name NULLS LAST, u.name
-    `, params);
+    `, staffParams)).rows : [];
+
+    // ── SC Workers (Labour) query ─────────────────────────────────────────────
+    let scRows = [];
+    if (category === 'labour' || category === 'all') {
+      const scParams = [cid, reportDate];
+      let scProjectFilter = '';
+      let scPIdx = 3;
+      if (effectiveProjectId) {
+        scProjectFilter = ` AND w.project_id = $${scPIdx++}`;
+        scParams.push(effectiveProjectId);
+      }
+      scRows = (await query(`
+        SELECT
+          w.worker_code                       AS emp_id,
+          w.worker_name                       AS name,
+          w.skill_type                        AS designation,
+          'CIVIL'                             AS department,
+          sc.name                             AS company,
+          COALESCE(a.status, 'absent')        AS attendance_status,
+          NULL::text                          AS in_time,
+          NULL::text                          AS out_time,
+          0                                   AS late_minutes,
+          NULL::text                          AS reason,
+          COALESCE(p.name, '—')              AS location,
+          'DAY'                               AS shift,
+          CASE WHEN w.status = 'active' THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
+          w.id::text                          AS user_id,
+          'labour'                            AS row_type
+        FROM sc_workers w
+        LEFT JOIN sc_subcontractors sc ON sc.id = w.sc_id
+        LEFT JOIN projects p           ON p.id  = w.project_id
+        LEFT JOIN sc_attendance a      ON a.worker_id = w.id
+                                     AND a.attendance_date = $2
+                                     AND a.company_id = $1
+        WHERE w.company_id = $1
+          AND w.status = 'active'
+          ${scProjectFilter}
+        ORDER BY sc.name, w.worker_name
+      `, scParams)).rows;
+    }
+
+    const rows = [...staffRows, ...scRows];
 
     const present = rows.filter(r => r.attendance_status === 'present').length;
+    const half    = rows.filter(r => r.attendance_status === 'half_day').length;
     const absent  = rows.filter(r => r.attendance_status === 'absent').length;
     const leave   = rows.filter(r => r.attendance_status === 'leave').length;
 
@@ -452,7 +496,7 @@ router.get('/timesheet-report', async (req, res) => {
       companyName,
       projectName,
       projectCode,
-      summary: { total: rows.length, present, absent, leave },
+      summary: { total: rows.length, present, half, absent, leave },
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

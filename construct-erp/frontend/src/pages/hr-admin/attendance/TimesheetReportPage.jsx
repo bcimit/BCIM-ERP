@@ -54,7 +54,7 @@ export default function TimesheetReportPage() {
   const [category, setCategory]     = useState('staff');
   const [projectFilter, setProject] = useState('');
   const [rows, setRows]             = useState([]);
-  const [summary, setSummary]       = useState({ total:0, present:0, absent:0, leave:0 });
+  const [summary, setSummary]       = useState({ total:0, present:0, half:0, absent:0, leave:0 });
   const [meta, setMeta]             = useState({ companyName:'BCIM', projectName:'', projectCode:'' });
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState(null);
@@ -171,7 +171,8 @@ export default function TimesheetReportPage() {
         <select value={category} onChange={e=>setCategory(e.target.value)}
           style={{ border:'1px solid #D1D5DB', borderRadius:6, padding:'5px 10px', fontSize:13 }}>
           <option value="staff">Staff Only</option>
-          <option value="all">All Employees</option>
+          <option value="labour">Labour / SC Workers</option>
+          <option value="all">All (Staff + Labour)</option>
         </select>
         <select value={projectFilter} onChange={e=>setProject(e.target.value)}
           style={{ border:'1px solid #D1D5DB', borderRadius:6, padding:'5px 10px', fontSize:13, minWidth:160 }}>
@@ -208,10 +209,11 @@ export default function TimesheetReportPage() {
       {/* ── SCREEN KPI CARDS ──────────────────────────── */}
       <div className="no-print" style={{ padding:'16px 24px 0', display:'flex', gap:12, flexWrap:'wrap' }}>
         {[
-          { label:'Total',   val:summary.total,   bg:'#F0F9FF', border:'#BAE6FD', text:'#0369A1' },
-          { label:'Present', val:summary.present, bg:'#F0FDF4', border:'#86EFAC', text:'#15803D' },
-          { label:'Absent',  val:summary.absent,  bg:'#FEF2F2', border:'#FECACA', text:'#B91C1C' },
-          { label:'On Leave',val:summary.leave,   bg:'#FFFBEB', border:'#FDE68A', text:'#B45309' },
+          { label:'Total',    val:summary.total,   bg:'#F0F9FF', border:'#BAE6FD', text:'#0369A1' },
+          { label:'Present',  val:summary.present, bg:'#F0FDF4', border:'#86EFAC', text:'#15803D' },
+          { label:'Half Day', val:summary.half||0, bg:'#EFF6FF', border:'#BFDBFE', text:'#1D4ED8' },
+          { label:'Absent',   val:summary.absent,  bg:'#FEF2F2', border:'#FECACA', text:'#B91C1C' },
+          { label:'On Leave', val:summary.leave,   bg:'#FFFBEB', border:'#FDE68A', text:'#B45309' },
         ].map(k=>(
           <div key={k.label} style={{
             background:k.bg, border:`1px solid ${k.border}`,
@@ -246,7 +248,7 @@ export default function TimesheetReportPage() {
                   ? <>Project: <strong>{meta.projectName}</strong>{meta.projectCode ? ` (${meta.projectCode})` : ''}&emsp;|&emsp;</>
                   : null}
                 Date: <strong>{fmtDate(date)}</strong>&emsp;|&emsp;
-                Category: <strong>{category === 'staff' ? 'STAFF' : 'ALL EMPLOYEES'}</strong>
+                Category: <strong>{category === 'staff' ? 'STAFF ONLY' : category === 'labour' ? 'LABOUR / SC WORKERS' : 'ALL (STAFF + LABOUR)'}</strong>
               </div>
             </div>
             {/* Summary box */}
@@ -255,6 +257,7 @@ export default function TimesheetReportPage() {
                 {[
                   ['Total Strength', summary.total],
                   ['Present (P)',    summary.present],
+                  ['Half Day (HD)',  summary.half||0],
                   ['Absent (A)',     summary.absent],
                   ['On Leave (L)',   summary.leave],
                 ].map(([l,v])=>(
