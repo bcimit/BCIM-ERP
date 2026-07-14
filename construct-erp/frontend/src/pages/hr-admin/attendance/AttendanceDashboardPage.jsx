@@ -150,31 +150,37 @@ export default function AttendanceDashboardPage() {
   }));
   const depts = deptData?.data || [];
 
+  // Each row = one employee's monthly totals (days). Count unique employees per category.
   const totals = useMemo(() => rows.reduce((acc, r) => ({
-    total:    acc.total + 1,
-    present:  acc.present  + (parseInt(r.present)  || 0),
-    absent:   acc.absent   + (parseInt(r.absent)   || 0),
-    half_day: acc.half_day + (parseInt(r.half_day) || 0),
-    on_leave: acc.on_leave + (parseInt(r.on_leave) || 0),
-    late:     acc.late     + (parseInt(r.total_late_minutes) > 0 ? 1 : 0),
-  }), { total: 0, present: 0, absent: 0, half_day: 0, on_leave: 0, late: 0 }), [rows]);
+    total:         acc.total + 1,
+    presentEmps:   acc.presentEmps  + (parseInt(r.present)             > 0 ? 1 : 0),
+    absentEmps:    acc.absentEmps   + (parseInt(r.absent)              > 0 ? 1 : 0),
+    leaveEmps:     acc.leaveEmps    + (parseInt(r.on_leave)            > 0 ? 1 : 0),
+    halfEmps:      acc.halfEmps     + (parseInt(r.half_day)            > 0 ? 1 : 0),
+    lateEmps:      acc.lateEmps     + (parseInt(r.total_late_minutes)  > 0 ? 1 : 0),
+    presentDays:   acc.presentDays  + (parseInt(r.present)             || 0),
+    absentDays:    acc.absentDays   + (parseInt(r.absent)              || 0),
+    leaveDays:     acc.leaveDays    + (parseInt(r.on_leave)            || 0),
+    halfDays:      acc.halfDays     + (parseInt(r.half_day)            || 0),
+  }), { total: 0, presentEmps: 0, absentEmps: 0, leaveEmps: 0, halfEmps: 0, lateEmps: 0,
+        presentDays: 0, absentDays: 0, leaveDays: 0, halfDays: 0 }), [rows]);
 
-  const attPct = totals.total ? Math.round(totals.present / totals.total * 100) : 0;
+  const attPct = totals.total ? Math.round(totals.presentEmps / totals.total * 100) : 0;
 
   const donutData = [
-    { name: 'Present', value: totals.present,  color: '#059669' },
-    { name: 'Absent',  value: totals.absent,   color: '#EF4444' },
-    { name: 'Leave',   value: totals.on_leave, color: '#7C3AED' },
-    { name: 'Half Day',value: totals.half_day, color: '#F59E0B' },
+    { name: 'Present',  value: totals.presentEmps, color: '#059669' },
+    { name: 'Absent',   value: totals.absentEmps,  color: '#EF4444' },
+    { name: 'On Leave', value: totals.leaveEmps,   color: '#7C3AED' },
+    { name: 'Half Day', value: totals.halfEmps,     color: '#F59E0B' },
   ].filter(d => d.value > 0);
 
   const KPI_TILES = [
-    { label: 'Total Employees', value: totals.total,    color: '#2563EB', sub: 'Active this month' },
-    { label: 'Present',         value: totals.present,  color: '#059669', sub: `${attPct}% attendance` },
-    { label: 'Absent',          value: totals.absent,   color: '#EF4444', sub: 'This month' },
-    { label: 'On Leave',        value: totals.on_leave, color: '#7C3AED', sub: 'Approved leave' },
-    { label: 'Late Arrivals',   value: totals.late,     color: '#F97316', sub: 'Employees late' },
-    { label: 'Half Days',       value: totals.half_day, color: '#F59E0B', sub: 'Partial days' },
+    { label: 'Total Employees', value: totals.total,        color: '#2563EB', sub: 'With records this month' },
+    { label: 'Present',         value: totals.presentEmps,  color: '#059669', sub: `${totals.presentDays} man-days` },
+    { label: 'Had Absence',     value: totals.absentEmps,   color: '#EF4444', sub: `${totals.absentDays} absent days` },
+    { label: 'On Leave',        value: totals.leaveEmps,    color: '#7C3AED', sub: `${totals.leaveDays} leave days` },
+    { label: 'Late Arrivals',   value: totals.lateEmps,     color: '#F97316', sub: 'Employees late ≥1 day' },
+    { label: 'Half Days',       value: totals.halfEmps,     color: '#F59E0B', sub: `${totals.halfDays} half-day occ.` },
   ];
 
   return (
