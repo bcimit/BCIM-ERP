@@ -742,12 +742,12 @@ export default function Dashboard() {
               <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: '0 0 14px' }}>Quick Actions</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 {[
-                  { label: 'Create MRS',    icon: Clipboard,    to: '/procurement/mrs/new',    bg: '#ede9fe', color: '#4f46e5' },
-                  { label: 'Create PO',     icon: ShoppingCart, to: '/procurement/po/new',     bg: '#dbeafe', color: '#2563eb' },
-                  { label: 'Material Issue',icon: Boxes,        to: '/stores/mis/new',         bg: '#dcfce7', color: '#16a34a' },
-                  { label: 'Add Expense',   icon: FileCheck,  to: '/finance/petty-cash',     bg: '#fef3c7', color: '#d97706' },
-                  { label: 'Create BOQ',    icon: FilePlus,     to: '/boq',                    bg: '#f0fdf4', color: '#15803d' },
-                  { label: 'Daily Report',  icon: FileText,     to: '/site/daily-progress',    bg: '#fdf2f8', color: '#9d174d' },
+                  { label: 'Create MRS',    icon: Clipboard,    to: '/stores/mrs',                     bg: '#ede9fe', color: '#4f46e5' },
+                  { label: 'Create PO',     icon: ShoppingCart, to: '/procurement/po',                 bg: '#dbeafe', color: '#2563eb' },
+                  { label: 'Material Issue',icon: Boxes,        to: '/stores/issue',                   bg: '#dcfce7', color: '#16a34a' },
+                  { label: 'Add Expense',   icon: FileCheck,    to: '/accounts/banking/petty-cash',    bg: '#fef3c7', color: '#d97706' },
+                  { label: 'Create BOQ',    icon: FilePlus,     to: '/qs/boq',                         bg: '#f0fdf4', color: '#15803d' },
+                  { label: 'Daily Report',  icon: FileText,     to: '/planning/dpr-console',           bg: '#fdf2f8', color: '#9d174d' },
                 ].map(({ label, icon: Icon, to, bg, color }) => (
                   <Link key={label} to={to} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '12px 6px', borderRadius: 10, border: '1px solid #f1f5f9', background: '#fafafa', transition: 'box-shadow .15s' }}
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'; e.currentTarget.style.background = '#fff'; }}
