@@ -729,11 +729,21 @@ router.post('/:id/documents', upload.single('file'), async (req, res) => {
 
 router.delete('/:id/documents/:docId', async (req, res) => {
   try {
-    const { rows } = await query(
-      `DELETE FROM employee_documents WHERE id=$1 AND user_id=$2
-       RETURNING file_url, sharepoint_id`,
+    // Fetch before delete so we don't reference potentially-missing columns in RETURNING
+    const sel = await query(
+      `SELECT file_url,
+              CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                                WHERE table_name='employee_documents' AND column_name='sharepoint_id')
+                   THEN (SELECT sharepoint_id::text FROM employee_documents WHERE id=$1)
+                   ELSE NULL END AS sharepoint_id
+       FROM employee_documents WHERE id=$1 AND user_id=$2`,
       [req.params.docId, req.params.id]
     );
+    await query(
+      `DELETE FROM employee_documents WHERE id=$1 AND user_id=$2`,
+      [req.params.docId, req.params.id]
+    );
+    const rows = sel.rows;
     if (rows[0]) {
       const { file_url, sharepoint_id } = rows[0];
       if (sharepoint_id) {
