@@ -299,12 +299,6 @@ export default function AttendancePage() {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const { data: deptData } = useQuery({ queryKey:['hr-departments'], queryFn:()=>hrMastersAPI.listDepts().then(r=>r.data) });
-  const { data: empData  } = useQuery({ queryKey:['hr-employees-all'], queryFn:()=>hrEmployeesAPI.list({}).then(r=>r.data) });
-
-  const allEmployees = useMemo(() => (summaryData?.data || []).map(s => ({
-    id: s.user_id, name: s.name, employee_code: s.employee_code,
-    department_id: s.department_id, department_name: s.department_name,
-  })), [summaryData]);
 
   const { data: attData, isLoading } = useQuery({
     queryKey:['hr-attendance-grid', month, year, deptFilter],
@@ -314,6 +308,11 @@ export default function AttendancePage() {
     queryKey:['hr-attendance-summary', month, year, deptFilter],
     queryFn:()=>hrAttendanceAPI.summary({ month, year, department_id: deptFilter||undefined }).then(r=>r.data),
   });
+
+  const allEmployees = useMemo(() => (summaryData?.data || []).map(s => ({
+    id: s.user_id, name: s.name, employee_code: s.employee_code,
+    department_id: s.department_id, department_name: s.department_name,
+  })), [summaryData]);
   const { data: dailyData, isLoading: dailyLoading } = useQuery({
     queryKey:['hr-attendance-daily', dailyDate, deptFilter],
     queryFn:()=>hrAttendanceAPI.list({ date: dailyDate, department_id: deptFilter||undefined }).then(r=>r.data),
