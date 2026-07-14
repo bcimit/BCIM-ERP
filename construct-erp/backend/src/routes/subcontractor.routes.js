@@ -21,6 +21,16 @@ runSchemaInit('work_orders_mrs_columns', async () => {
   `);
 });
 
+// Ensure sc_attendance cannot have duplicate (worker_id, attendance_date) pairs
+// which would silently double payroll SUM aggregations.
+runSchemaInit('sc_attendance_unique_worker_date', async () => {
+  await query(`
+    ALTER TABLE sc_attendance
+      ADD CONSTRAINT IF NOT EXISTS sc_attendance_worker_date_unique
+      UNIQUE (worker_id, attendance_date)
+  `);
+});
+
 // Public verification endpoint (no auth — QR scan)
 router.get('/public/verify/:id', async (req, res) => {
   try {

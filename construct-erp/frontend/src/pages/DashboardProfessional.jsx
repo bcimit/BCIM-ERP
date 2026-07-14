@@ -393,41 +393,31 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  // Role-based routing
-  if (!['super_admin', 'admin'].includes(role) && !isMdRole) {
-    let RoleDash = null;
-    if (role === 'project_manager')      RoleDash = PMDashboard;
-    else if (role === 'site_engineer')   RoleDash = SiteEngineerDashboard;
-    else if (role === 'qs_engineer')     RoleDash = QSDashboard;
-    else if (role === 'accountant')      RoleDash = AccountsDashboard;
-    else if (['hr', 'hr_admin', 'hr_manager'].includes(role)) RoleDash = HRDashboard;
-    else if (role === 'hse_officer')     RoleDash = HSEDashboard;
-    else if (dept.includes('store'))     RoleDash = StoresDashboard;
-    else if (dept.includes('procurement') || dept.includes('purchase')) RoleDash = ProcurementDashboard;
-    if (RoleDash) return <Suspense fallback={<DashLoader />}><RoleDash /></Suspense>;
-  }
-
+  // All hooks must be called unconditionally before any early return (Rules of Hooks)
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const executiveParams = useMemo(() => ({}), [refreshKey]);
+  const isAdminOrMd = ['super_admin', 'admin'].includes(role) || isMdRole;
 
   const { data: dashboard, isLoading: dashLoading } = useQuery({
     queryKey: ['analytics-executive', refreshKey],
     queryFn: () => analyticsAPI.executive({}).then(r => r.data?.data || null).catch(() => null),
     staleTime: 0,
     refetchOnMount: 'always',
+    enabled: isAdminOrMd,
   });
 
   const { data: companyProjects = [] } = useQuery({
     queryKey: ['dashboard-projects-main'],
     queryFn: () => projectAPI.list().then(toArray).catch(() => []),
     staleTime: 5 * 60 * 1000,
+    enabled: isAdminOrMd,
   });
 
   const { data: tqsBills = [] } = useQuery({
     queryKey: ['dashboard-tqs-bills-main'],
     queryFn: () => tqsBillsAPI.list({ limit: 500 }).then(r => Array.isArray(r.data) ? r.data : (r.data?.data ?? [])).catch(() => []),
     staleTime: 60 * 1000,
+    enabled: isAdminOrMd,
   });
 
   const { data: pendingMDAdvances = [] } = useQuery({
@@ -445,6 +435,22 @@ export default function Dashboard() {
     },
     onError: (e) => toast.error(e?.response?.data?.message || 'Authorization failed'),
   });
+
+  // Role-based routing — after all hooks
+  if (!isAdminOrMd) {
+    let RoleDash = null;
+    if (role === 'project_manager')      RoleDash = PMDashboard;
+    else if (role === 'site_engineer')   RoleDash = SiteEngineerDashboard;
+    else if (role === 'qs_engineer')     RoleDash = QSDashboard;
+    else if (role === 'accountant')      RoleDash = AccountsDashboard;
+    else if (['hr', 'hr_admin', 'hr_manager'].includes(role)) RoleDash = HRDashboard;
+    else if (role === 'hse_officer')     RoleDash = HSEDashboard;
+    else if (dept.includes('store'))     RoleDash = StoresDashboard;
+    else if (dept.includes('procurement') || dept.includes('purchase')) RoleDash = ProcurementDashboard;
+    if (RoleDash) return <Suspense fallback={<DashLoader />}><RoleDash /></Suspense>;
+  }
+
+  const executiveParams = {};
 
   /* ── Derived ── */
   const kpis    = dashboard?.kpis    || {};

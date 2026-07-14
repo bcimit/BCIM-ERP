@@ -164,8 +164,8 @@ router.get('/global', async (req, res) => {
          COUNT(*) as total,
          COUNT(*) FILTER (WHERE status = 'pm_approved' OR status = 'verified' OR (metadata->>'passed')::boolean = true) as passed
        FROM quality_checklists qc
-       WHERE qc.company_id = $1`,
-      [req.user.company_id]
+       WHERE ${withProjectScope('qc', scope)}`,
+      scope.params
     );
     const totalChecklists = Number.parseInt(quality.rows[0]?.total || 0, 10);
     const qualityScore = totalChecklists > 0
