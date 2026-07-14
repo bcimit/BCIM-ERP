@@ -294,13 +294,13 @@ export default function AttendancePage() {
   const [view,      setView]      = useState('summary');
   const [syncing,   setSyncing]   = useState(false);
   const [syncResult,setSyncResult]= useState(null);
-  const allEmployees = useMemo(() => empData?.data || [], [empData]);
-
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const { data: deptData } = useQuery({ queryKey:['hr-departments'], queryFn:()=>hrMastersAPI.listDepts().then(r=>r.data) });
   const { data: empData  } = useQuery({ queryKey:['hr-employees-active'], queryFn:()=>hrEmployeesAPI.list({employment_status:'active'}).then(r=>r.data) });
+
+  const allEmployees = useMemo(() => empData?.data || [], [empData]);
 
   const { data: attData, isLoading } = useQuery({
     queryKey:['hr-attendance-grid', month, year, deptFilter],
