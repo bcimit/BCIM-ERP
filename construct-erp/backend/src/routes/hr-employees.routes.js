@@ -219,7 +219,7 @@ router.get('/', async (req, res) => {
         params.push(department_id); idx++;
       }
       if (employment_status) {
-        sql += ` AND ep.employment_status = $${idx}`;
+        sql += ` AND COALESCE(ep.employment_status, 'active') = $${idx}`;
         params.push(employment_status); idx++;
       }
       if (employment_type) {
