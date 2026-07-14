@@ -50,7 +50,7 @@ function buildMssqlCfg() {
       encrypt:               false,
       trustServerCertificate: true,
       connectTimeout:        15000,
-      requestTimeout:        30000,
+      requestTimeout:        120000,
     },
   };
   // For named instances (SQLEXPRESS), do NOT set port — SQL Browser resolves it
