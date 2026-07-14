@@ -469,17 +469,20 @@ router.get('/executive', async (req, res) => {
     const qualityScore = totalQualityItems > 0 ? Math.max(0, 100 - (((openRFIs + openNCRs) / totalQualityItems) * 100)) : 100;
 
     const months = buildMonthSeries(filters.dateFrom, filters.dateTo);
+    // Build cumulative certified cost per month (RA bills with certified/paid status)
+    const certifiedBills = raBills.filter((b) =>
+      ['certified', 'authorized', 'verified', 'paid'].includes(String(b.status || '').toLowerCase())
+    );
+    let cumulativeCost = 0;
     const financeTrend = months.map((month) => {
-      const billed = raBills
+      const monthCost = certifiedBills
         .filter((bill) => String(bill.bill_date || '').slice(0, 7) === month.key)
-        .reduce((sum, bill) => sum + toNumber(bill.bill_value || bill.net_payable || bill.gross_amount), 0);
-      const collected = collections
-        .filter((payment) => String(payment.payment_date || '').slice(0, 7) === month.key)
-        .reduce((sum, payment) => sum + toNumber(payment.net_amount || payment.amount), 0);
+        .reduce((sum, bill) => sum + toNumber(bill.net_payable || bill.bill_value || bill.gross_amount), 0);
+      cumulativeCost += monthCost;
       return {
         month: month.label,
-        billed: Number((billed / 100000).toFixed(2)),
-        collected: Number((collected / 100000).toFixed(2)),
+        budget: Number((totalContractValue / 10000000).toFixed(2)),   // flat budget reference line in Cr
+        cost:   Number((cumulativeCost / 10000000).toFixed(2)),        // cumulative cost in Cr
       };
     });
 

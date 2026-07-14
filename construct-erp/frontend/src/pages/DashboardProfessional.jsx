@@ -726,10 +726,10 @@ export default function Dashboard() {
                     <LineChart data={financeTrend} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}L`} />
-                      <Tooltip formatter={(v, n) => [`₹${v}L`, n === 'billed' ? 'Budget' : 'Cost Incurred']} contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
-                      <Line type="monotone" dataKey="billed"    stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} name="billed" />
-                      <Line type="monotone" dataKey="collected" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: '#22c55e', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} name="collected" />
+                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}Cr`} />
+                      <Tooltip formatter={(v, n) => [`₹${v} Cr`, n === 'budget' ? 'Budget' : 'Cost Incurred']} contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
+                      <Line type="monotone" dataKey="budget" stroke="#3b82f6" strokeWidth={2.5} strokeDasharray="5 4" dot={false} name="budget" />
+                      <Line type="monotone" dataKey="cost"   stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: '#22c55e', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} name="cost" />
                     </LineChart>
                   </ResponsiveContainer>
                 )
