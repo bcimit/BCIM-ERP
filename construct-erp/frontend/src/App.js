@@ -300,7 +300,10 @@ const HRDashboardPage       = lazy(() => import('./pages/hr-admin/HRDashboardPag
 const HREmployeeListPage    = lazy(() => import('./pages/hr-admin/EmployeeListPage'));
 const HREmployeeFormPage    = lazy(() => import('./pages/hr-admin/EmployeeFormPage'));
 const HREmployeeDetailPage  = lazy(() => import('./pages/hr-admin/EmployeeDetailPage'));
-const HRAttendancePage      = lazy(() => import('./pages/hr-admin/AttendancePage'));
+const HRAttendancePage            = lazy(() => import('./pages/hr-admin/AttendancePage'));
+const HRAttendanceDashboardPage   = lazy(() => import('./pages/hr-admin/attendance/AttendanceDashboardPage'));
+const HRBiometricAttendancePage   = lazy(() => import('./pages/hr-admin/attendance/BiometricAttendancePage'));
+const HRAttendanceRegularizationPage = lazy(() => import('./pages/hr-admin/attendance/AttendanceRegularizationPage'));
 const HRLeaveManagementPage = lazy(() => import('./pages/hr-admin/LeaveManagementPage'));
 const HRPayrollPage         = lazy(() => import('./pages/hr-admin/PayrollPage'));
 const HRPayslipPrintPage    = lazy(() => import('./pages/hr-admin/PayslipPrintPage'));
@@ -848,6 +851,9 @@ export default function App() {
                 <Route path="hr-admin/employees/:id" element={<RequireModule module="HR & Admin"><HREmployeeDetailPage /></RequireModule>} />
                 <Route path="hr-admin/employees/:id/edit" element={<RequireModule module="HR & Admin"><HREmployeeFormPage /></RequireModule>} />
                 <Route path="hr-admin/attendance" element={<RequireModule module="HR & Admin"><HRAttendancePage /></RequireModule>} />
+                <Route path="hr-admin/attendance/dashboard" element={<RequireModule module="HR & Admin"><HRAttendanceDashboardPage /></RequireModule>} />
+                <Route path="hr-admin/attendance/biometric" element={<RequireModule module="HR & Admin"><HRBiometricAttendancePage /></RequireModule>} />
+                <Route path="hr-admin/attendance/regularization" element={<RequireModule module="HR & Admin"><HRAttendanceRegularizationPage /></RequireModule>} />
                 <Route path="hr-admin/leaves" element={<RequireModule module="HR & Admin"><HRLeaveManagementPage /></RequireModule>} />
                 <Route path="hr-admin/payroll" element={<RequireModule module="HR & Admin"><HRPayrollPage /></RequireModule>} />
                 <Route path="hr-admin/payroll/:id/payslip" element={<RequireModule module="HR & Admin"><HRPayslipPrintPage /></RequireModule>} />
