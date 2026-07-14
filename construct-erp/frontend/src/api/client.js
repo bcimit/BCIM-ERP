@@ -22,6 +22,7 @@ const PROJECT_INJECT_SKIP = [
   /\/documents/,        // many document routes already filter by project_id explicitly
   /\/vendor/,           // vendor master data is company-wide
   /\/quotations\/vendor-rfq/,
+  /\/hr-admin\/employees/,  // HR-only endpoint; all employees visible regardless of project context
 ];
 
 function shouldInjectProject(url) {
