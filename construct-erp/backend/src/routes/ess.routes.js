@@ -655,7 +655,7 @@ router.patch('/onboarding/:id', async (req, res) => {
        SET status = $1,
            remarks = $2,
            completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
-           completed_by = CASE WHEN $1 = 'completed' THEN $3 ELSE NULL END
+           completed_by = CASE WHEN $1 = 'completed' THEN $3::uuid ELSE NULL END
        WHERE id = $4 AND user_id = $5 AND company_id = $6
        RETURNING *`,
       [status, remarks || null, ownUser(req), req.params.id, ownUser(req), ownCompany(req)]

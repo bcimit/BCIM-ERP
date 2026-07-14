@@ -621,7 +621,7 @@ router.patch('/:id/lifecycle/:itemId', async (req, res) => {
            remarks=$2,
            due_date=$3,
            completed_at=CASE WHEN $1 = 'done' THEN NOW() ELSE NULL END,
-           completed_by=CASE WHEN $1 = 'done' THEN $4 ELSE NULL END,
+           completed_by=CASE WHEN $1 = 'done' THEN $4::uuid ELSE NULL END,
            updated_at=NOW()
        WHERE id=$5 AND user_id=$6 AND company_id=$7
        RETURNING *`,
