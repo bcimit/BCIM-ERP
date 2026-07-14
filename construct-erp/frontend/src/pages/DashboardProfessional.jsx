@@ -3,19 +3,21 @@ import React, { Suspense, lazy, useMemo, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
 import {
   Building2, Wallet, Receipt, Clock, ShieldCheck,
   Package, FileText, AlertTriangle, RefreshCw, ChevronRight,
   FileWarning, ClipboardList, CheckCircle2, Activity,
-  FileSpreadsheet, Search, LayoutGrid, List, Upload,
-  IndianRupee, HardHat, TrendingUp, Plus,
+  FileSpreadsheet, Search, LayoutGrid, List,
+  IndianRupee, HardHat, Plus, Settings, Calendar,
+  ChevronDown, Zap, Users, BarChart2, Clipboard,
+  TrendingUp, ShoppingCart, Boxes, FileCheck, FilePlus,
 } from 'lucide-react';
 import { projectAPI, analyticsAPI, tqsBillsAPI, procurementAdvanceAPI } from '../api/client';
 import useAuthStore from '../store/authStore';
-import { PageHeader, Theme } from '../theme';
+import { Theme } from '../theme';
 import toast from 'react-hot-toast';
 import dayjs from 'dayjs';
 
@@ -529,489 +531,459 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+  /* ── Derived extras ── */
+  const overdueTasks = openIncidents + openRFIs + openNCRs + delayedProjects;
+  const avgProgress  = companyProjects.length > 0
+    ? Math.round(companyProjects.reduce((s, p) => s + parseFloat(p.progress_pct || 0), 0) / companyProjects.length)
+    : 0;
+
+  const upcomingMilestones = useMemo(() =>
+    [...companyProjects]
+      .filter(p => p.end_date && dayjs(p.end_date).isAfter(dayjs()))
+      .sort((a, b) => dayjs(a.end_date).unix() - dayjs(b.end_date).unix())
+      .slice(0, 4),
+    [companyProjects]
+  );
+
+  // Blend recent activity feed: payments + ra_bills + POs, sorted by date desc
+  const activityFeed = useMemo(() => {
+    const items = [
+      ...safePayments.map(p => ({ ...p, _kind: 'payment',  _date: p.payment_date || p.created_at, _label: p.entity_name || 'Payment', _sub: `${(p.payment_type||'').replace(/_/g,' ')} · ${inrCr(p.net_amount||p.amount)}` })),
+      ...safePOs.map(po  => ({ ...po,  _kind: 'po',        _date: po.po_date || po.created_at,    _label: po.po_number || 'Purchase Order', _sub: `${po.project_name||''} · ${inrCr(po.order_value)}` })),
+      ...safeBills.map(b  => ({ ...b,   _kind: 'bill',      _date: b.bill_date || b.created_at,    _label: b.bill_number || 'RA Bill', _sub: `${b.project_name||''} · ${(b.status||'').replace(/_/g,' ')}` })),
+    ];
+    return items.sort((a, b) => dayjs(b._date).unix() - dayjs(a._date).unix()).slice(0, 8);
+  }, [safePayments, safePOs, safeBills]);
+
+  const KIND_CFG = {
+    payment: { icon: Wallet,    bg: '#dcfce7', color: '#16a34a' },
+    po:      { icon: ShoppingCart, bg: '#dbeafe', color: '#2563eb' },
+    bill:    { icon: FileCheck,  bg: '#fef3c7', color: '#d97706' },
+  };
+
+  /* ── Status badge helper ── */
+  const projStatusBadge = (status) => {
+    const s = (status||'active').toLowerCase();
+    if (s === 'active')    return { label: 'On Track', bg: '#dcfce7', color: '#15803d' };
+    if (s === 'delayed')   return { label: 'Delayed',  bg: '#fee2e2', color: '#b91c1c' };
+    if (s === 'planning')  return { label: 'Planning', bg: '#dbeafe', color: '#1d4ed8' };
+    if (s === 'on_hold')   return { label: 'At Risk',  bg: '#fef3c7', color: '#d97706' };
+    if (s === 'completed') return { label: 'Completed',bg: '#f3e8ff', color: '#6d28d9' };
+    return { label: 'Active', bg: '#dcfce7', color: '#15803d' };
+  };
+
+  /* ── Donut ── */
+  const donutSize = 140, donutStroke = 28;
+  const donutR    = (donutSize - donutStroke) / 2;
+  const donutCirc = 2 * Math.PI * donutR;
+  const donutSum  = financeSegments.reduce((s, x) => s + x.value, 0) || 1;
+  let   donutOff  = 0;
+
+  /* ── Work progress circle ── */
+  const circR    = 58;
+  const circCirc = 2 * Math.PI * circR;
+  const circDash = (avgProgress / 100) * circCirc;
+
   /* ── Render ── */
   return (
-    <div style={{ background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ background: '#f1f5f9', minHeight: '100vh', fontFamily: 'system-ui,-apple-system,sans-serif' }}>
 
-      <PageHeader
-        title="Executive Dashboard"
-        subtitle={`${greeting}, ${user?.name?.split(' ')[0] || 'Admin'} · ${dayjs().format('dddd, D MMMM YYYY')}`}
-        breadcrumbs={[{ label: 'BCIM ERP' }, { label: 'Executive Dashboard' }]}
-        actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setRefreshKey(k => k + 1)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              <RefreshCw size={13} /> Refresh
-            </button>
-            <Link to="/projects/new" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 9, background: '#fff', color: Theme.navyDark, fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
-              <Plus size={13} /> New Project
-            </Link>
+      {/* ── Page Header ── */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '16px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>Dashboard</h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>Overview of your project performance and key metrics</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', fontSize: 13, color: '#374151', cursor: 'default', userSelect: 'none' }}>
+            <Calendar size={14} style={{ color: '#64748b' }} />
+            <span>{dayjs().subtract(12, 'day').format('DD MMM YYYY')} – {dayjs().format('DD MMM YYYY')}</span>
+            <ChevronDown size={13} style={{ color: '#64748b' }} />
           </div>
-        }
-      />
+          <button onClick={() => setRefreshKey(k => k + 1)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 8, background: '#3b82f6', color: '#fff', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+            <Settings size={14} /> Customize
+          </button>
+        </div>
+      </div>
 
-      <div style={{ padding: '20px 24px', maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ padding: '20px 28px', maxWidth: 1600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-        {/* Last updated */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontSize: 11, color: '#94a3b8' }}>
-          <Clock size={12} />
-          {dashLoading ? 'Loading data…' : `Updated: ${dayjs().format('hh:mm A, DD MMM YYYY')}`}
+        {/* ── 6 KPI Cards ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14 }}>
+          {[
+            { label: 'Total Projects',   value: totalProjects,           sub: `${activeProjects} Active Projects`,    icon: Building2,    iconBg: '#ede9fe', iconColor: '#4f46e5', trend: `${activeProjects > 0 ? `+${activeProjects}` : '0'} active`, trendUp: true },
+            { label: 'Budget (All Projects)', value: inrCr(totalContractValue), sub: 'Total Budget',                icon: Wallet,       iconBg: '#dbeafe', iconColor: '#2563eb', trend: 'Total contract value', trendUp: true },
+            { label: 'Cost Incurred',    value: inrCr(totalCertified),   sub: `${pct(totalCertified, totalContractValue)}% of Budget`, icon: Receipt, iconBg: '#dcfce7', iconColor: '#16a34a', trend: `${pct(totalCertified, totalContractValue)}% of Budget`, trendUp: true },
+            { label: 'Commitments',      value: inrCr(tqsTotalCertified),sub: `${pct(tqsTotalCertified, totalContractValue)}% of Budget`, icon: ClipboardList, iconBg: '#fef3c7', iconColor: '#d97706', trend: `${pct(tqsTotalCertified, totalContractValue)}% of Budget`, trendUp: true },
+            { label: 'Expected Cost',    value: inrCr(totalCertified + tqsTotalCertified), sub: `${pct(totalCertified + tqsTotalCertified, totalContractValue)}% of Budget`, icon: TrendingUp, iconBg: '#f0fdf4', iconColor: '#15803d', trend: `${pct(totalCertified + tqsTotalCertified, totalContractValue)}% of Budget`, trendUp: false },
+            { label: 'Overdue Tasks',    value: overdueTasks,            sub: 'Requires Attention',                  icon: AlertTriangle, iconBg: '#fee2e2', iconColor: '#dc2626', trend: overdueTasks > 0 ? `${overdueTasks} issues open` : 'All clear', trendUp: false },
+          ].map(({ label, value, sub, icon: Icon, iconBg, iconColor, trend, trendUp }) => (
+            <div key={label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{label}</span>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon size={16} style={{ color: iconColor }} />
+                </div>
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#0f172a', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginBottom: 6 }}>{value}</div>
+              <div style={{ fontSize: 11, color: '#64748b' }}>{sub}</div>
+              {trend && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: trendUp ? '#16a34a' : '#dc2626' }}>
+                  <span>{trendUp ? '↑' : '↓'}</span>
+                  <span>{trend}</span>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
-        {/* ── KPI Cards ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <KpiSparkCard icon={Building2}    label="Portfolio Value"   value={inrCr(totalContractValue)} sub={`${totalProjects} projects total`}                       color="#4f46e5" accentBg="#ede9fe" sparkData={billedSpark}                         to="/projects" />
-          <KpiSparkCard icon={Receipt}      label="Certified Billing" value={inrCr(totalCertified)}     sub={`${kpis.pending_ra_bills ?? 0} bills pending`}          color="#0891b2" accentBg="#e0f2fe" sparkData={billedSpark}                         to="/qs/ra-bills" />
-          <KpiSparkCard icon={Wallet}       label="Collections (YTD)" value={inrCr(totalCollections)}   sub={`${collectionRate}% collection rate`}                   color="#22c55e" accentBg="#dcfce7" sparkData={collectedSpark}                      to="/finance/payments" />
-          <KpiSparkCard icon={IndianRupee}  label="Receivables"       value={inrCr(receivables)}        sub={receivables > 0 ? 'Outstanding from clients' : 'Fully collected'} color="#ef4444" accentBg="#fee2e2" sparkData={collectedSpark.map(v => Math.max(0, (billedSpark[0]||0) - v))} to="/finance/payments" />
-          <KpiSparkCard icon={Activity}     label="Active Projects"   value={activeProjects}            sub={`${delayedProjects} delayed · ${planningProjects} planning`} color="#f59e0b" accentBg="#fef3c7" sparkData={[...Array(7)].map(() => activeProjects)} to="/projects" />
-          <KpiSparkCard icon={ShieldCheck}  label="Safety Score"      value={safetyScore != null ? `${Math.round(safetyScore)}/100` : 'N/A'} sub={`${openIncidents} open incidents`} color={safetyScore != null && safetyScore < 70 ? '#f59e0b' : '#22c55e'} accentBg={safetyScore != null && safetyScore < 70 ? '#fef3c7' : '#dcfce7'} sparkData={[...Array(7)].map(() => safetyScore ?? 100)} to="/hse" />
-        </div>
+        {/* ── Main 3-col row ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '5fr 4fr 3fr', gap: 16 }}>
 
-        {/* ── Alert banners ── */}
-        {(delayedProjects > 0 || lowStockCount > 0 || overduePOs > 0 || pendingMDAdvances.length > 0) && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {pendingMDAdvances.length > 0 && (
-              <div style={{ background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: 12, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Wallet size={14} style={{ color: '#7c3aed', flexShrink: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#5b21b6' }}>{pendingMDAdvances.length} advance voucher{pendingMDAdvances.length > 1 ? 's' : ''} awaiting your authorization</span>
-                <button onClick={() => navigate('/procurement/advances')} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer' }}>Review →</button>
-              </div>
-            )}
-            {delayedProjects > 0 && (
-              <div style={{ background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: 12, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <AlertTriangle size={14} style={{ color: '#dc2626', flexShrink: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#7f1d1d' }}>{delayedProjects} project{delayedProjects > 1 ? 's' : ''} are behind schedule</span>
-                <Link to="/projects" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#dc2626', textDecoration: 'none' }}>View →</Link>
-              </div>
-            )}
-            {lowStockCount > 0 && (
-              <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Package size={14} style={{ color: '#d97706', flexShrink: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>{lowStockCount} inventory item{lowStockCount > 1 ? 's' : ''} below reorder level</span>
-                <Link to="/procurement/inventory" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#d97706', textDecoration: 'none' }}>View Inventory →</Link>
-              </div>
-            )}
+          {/* Project Performance Table */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Project Performance</h3>
+              <Link to="/projects" style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>View All Projects</Link>
+            </div>
+            <div style={{ overflowX: 'auto', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    {['Project Name', 'Overall Progress', 'Budget', 'Due Date', 'Status'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {companyProjects.length === 0
+                    ? <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>No projects found</td></tr>
+                    : companyProjects.slice(0, 6).map((p, i) => {
+                      const pctN  = Math.max(0, Math.min(100, parseFloat(p.progress_pct || 0)));
+                      const barC  = pctN < 30 ? '#ef4444' : pctN < 60 ? '#f59e0b' : '#3b82f6';
+                      const badge = projStatusBadge(p.status);
+                      return (
+                        <tr key={p.id} style={{ borderBottom: '1px solid #f8fafc' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}>
+                          <td style={{ padding: '12px 14px', maxWidth: 180 }}>
+                            <Link to={`/projects/${p.id}`} style={{ fontWeight: 700, color: '#0f172a', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</Link>
+                            {p.project_code && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{p.project_code}</div>}
+                          </td>
+                          <td style={{ padding: '12px 14px', minWidth: 130 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ flex: 1, height: 6, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
+                                <div style={{ width: `${pctN}%`, height: '100%', borderRadius: 999, background: barC, transition: 'width .4s' }} />
+                              </div>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', minWidth: 28, fontVariantNumeric: 'tabular-nums' }}>{pctN}%</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{inrCr(p.contract_value)}</td>
+                          <td style={{ padding: '12px 14px', color: '#64748b', whiteSpace: 'nowrap' }}>{p.end_date ? dayjs(p.end_date).format('DD MMM YYYY') : '—'}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{ padding: '3px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: badge.bg, color: badge.color, whiteSpace: 'nowrap' }}>{badge.label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  }
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
 
-        {/* ── Pending MD Approvals ── */}
-        {isMdRole && (
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Pending Approvals</h3>
+          {/* Budget vs Cost Line Chart */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: 20, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Budget vs Cost Overview</h3>
+              <Link to="/finance/reports" style={{ fontSize: 12, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>Report →</Link>
             </div>
-            <div style={{ padding: '4px 0' }}>
-              <Suspense fallback={<DashLoader />}>
-                <ApprovalsPage embedded mdMode />
-              </Suspense>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, fontSize: 11, color: '#64748b' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 24, height: 2, background: '#3b82f6', display: 'inline-block', borderRadius: 1 }} /> Budget</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 24, height: 2, background: '#22c55e', display: 'inline-block', borderRadius: 1 }} /> Cost Incurred</span>
             </div>
-          </div>
-        )}
-
-        {/* ── 3-col analytics ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-
-          {/* Finance Overview donut */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Finance Overview</h3>
-              <Link to="/finance" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>Details →</Link>
+            <div style={{ flex: 1, minHeight: 200 }}>
+              {financeTrend.length === 0
+                ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#94a3b8', fontSize: 13 }}>No data available</div>
+                : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={financeTrend} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}L`} />
+                      <Tooltip formatter={(v, n) => [`₹${v}L`, n === 'billed' ? 'Budget' : 'Cost Incurred']} contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
+                      <Line type="monotone" dataKey="billed"    stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} name="billed" />
+                      <Line type="monotone" dataKey="collected" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: '#22c55e', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} name="collected" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )
+              }
             </div>
-            {financeSegments.length === 0
-              ? <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: 13 }}>No financial data</div>
-              : <FinanceDonut segments={financeSegments} total={totalContractValue} />
-            }
-            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
               {[
-                { label: 'Collection Rate', value: `${collectionRate}%`, color: collectionRate >= 70 ? '#22c55e' : '#ef4444' },
-                { label: 'DQS Balance',     value: inrCr(tqsBalance),  color: '#ef4444' },
+                { label: 'Total Certified', value: inrCr(totalCertified),  color: '#3b82f6' },
+                { label: 'Collections',     value: inrCr(totalCollections), color: '#22c55e' },
+                { label: 'Receivables',     value: inrCr(receivables),      color: '#ef4444' },
+                { label: 'DQS Balance',     value: inrCr(tqsBalance),       color: '#f59e0b' },
               ].map(({ label, value, color }) => (
                 <div key={label}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color }}>{value}</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', marginBottom: 2 }}>{label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Project Status bars */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Project Status</h3>
-              <Link to="/projects" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View All</Link>
-            </div>
-            {projStatusRows.length === 0
-              ? <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: 13 }}>No projects</div>
-              : projStatusRows.map(r => <StatusBar key={r.label} label={r.label} count={r.count} total={totalProjects} color={r.color} bg={r.bg} />)
-            }
-            {delayedWatch.length > 0 && (
-              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Delayed Projects</div>
-                {delayedWatch.map(p => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
-                    <Link to={`/projects/${p.id}`} style={{ fontSize: 12, fontWeight: 600, color: '#374151', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{p.name}</Link>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', flexShrink: 0 }}>{parseFloat(p.progress_pct || 0).toFixed(0)}%</span>
-                  </div>
+          {/* Quick Actions + Alerts */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Quick Actions */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 20px' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: '0 0 14px' }}>Quick Actions</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                {[
+                  { label: 'Create MRS',    icon: Clipboard,    to: '/procurement/mrs/new',    bg: '#ede9fe', color: '#4f46e5' },
+                  { label: 'Create PO',     icon: ShoppingCart, to: '/procurement/po/new',     bg: '#dbeafe', color: '#2563eb' },
+                  { label: 'Material Issue',icon: Boxes,        to: '/stores/mis/new',         bg: '#dcfce7', color: '#16a34a' },
+                  { label: 'Add Expense',   icon: FileCheck,  to: '/finance/petty-cash',     bg: '#fef3c7', color: '#d97706' },
+                  { label: 'Create BOQ',    icon: FilePlus,     to: '/boq',                    bg: '#f0fdf4', color: '#15803d' },
+                  { label: 'Daily Report',  icon: FileText,     to: '/site/daily-progress',    bg: '#fdf2f8', color: '#9d174d' },
+                ].map(({ label, icon: Icon, to, bg, color }) => (
+                  <Link key={label} to={to} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '12px 6px', borderRadius: 10, border: '1px solid #f1f5f9', background: '#fafafa', transition: 'box-shadow .15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'; e.currentTarget.style.background = '#fff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.background = '#fafafa'; }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon size={17} style={{ color }} />
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#374151', textAlign: 'center', lineHeight: 1.3 }}>{label}</span>
+                  </Link>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Top Projects by Value */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Top Projects by Value</h3>
-              <Link to="/projects" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View All</Link>
             </div>
-            {topProjects.length === 0
-              ? <div style={{ textAlign: 'center', padding: '40px 0', color: '#94a3b8', fontSize: 13 }}>No projects</div>
-              : topProjects.map((p, i) => (
-                <ProjectRankRow key={p.id} rank={i + 1} name={p.name} value={parseFloat(p.contract_value || 0)} max={maxProjValue} pctVal={parseFloat(p.progress_pct || 0)} />
-              ))
-            }
-          </div>
-        </div>
 
-        {/* ── Billing vs Collections Trend ── */}
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: 0 }}>Billing vs Collections Trend</h3>
-            <Link to="/finance/reports" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View Report →</Link>
-          </div>
-          <div style={{ height: 220 }}>
-            {financeTrend.length === 0 || financeTrend.every(m => !m.billed && !m.collected)
-              ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', fontSize: 13 }}>No billing data for selected range</div>
-              : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={financeTrend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                    <defs>
-                      <linearGradient id="execBill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#4f46e5" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="execColl" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}L`} />
-                    <Tooltip formatter={(v, n) => [`₹ ${v} L`, n === 'billed' ? 'Billed' : 'Collected']} labelStyle={{ fontSize: 12, fontWeight: 700 }} contentStyle={{ border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12 }} />
-                    <Area type="monotone" dataKey="billed"    stroke="#4f46e5" strokeWidth={2.5} fill="url(#execBill)" dot={{ r: 3, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} />
-                    <Area type="monotone" dataKey="collected" stroke="#22c55e" strokeWidth={2.5} fill="url(#execColl)" dot={{ r: 3, fill: '#22c55e', strokeWidth: 2, stroke: '#fff' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )
-            }
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
-            {[
-              { label: 'Total Certified',    value: inrCr(totalCertified),   color: '#4f46e5' },
-              { label: 'Total Collected',    value: inrCr(totalCollections),  color: '#22c55e' },
-              { label: 'Receivables',        value: inrCr(receivables),       color: '#ef4444' },
-              { label: 'DQS Vendor Balance', value: inrCr(tqsBalance),        color: '#f59e0b' },
-            ].map(({ label, value, color }) => (
-              <div key={label}>
-                <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color }}>{value}</div>
+            {/* Alerts & Notifications */}
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 20px', flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Alerts & Notifications</h3>
+                <Link to="/projects" style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>View All</Link>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Projects Portfolio ── */}
-        {companyProjects.length > 0 && <ProjectCards projects={companyProjects} />}
-
-        {/* ── Procurement & Stores ── */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>Procurement & Stores</h2>
-            <Link to="/procurement/po" style={{ fontSize: 12, fontWeight: 700, color: '#4f46e5', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>View Procurement <ChevronRight size={13} /></Link>
-          </div>
-
-          {/* Procurement KPI mini row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
-            {[
-              { label: 'Total POs',        value: totalPOs,        color: '#4f46e5', bg: '#ede9fe', icon: ClipboardList },
-              { label: 'POs Pending',      value: overduePOs,      color: '#f59e0b', bg: '#fef3c7', icon: Clock },
-              { label: 'Low Stock Items',  value: lowStockCount,   color: '#ef4444', bg: '#fee2e2', icon: Package },
-              { label: 'Workforce',        value: workforceCount,  color: '#0891b2', bg: '#e0f2fe', icon: HardHat },
-              { label: 'DQS Bills',        value: tqsBills.length, color: '#7c3aed', bg: '#f5f3ff', icon: Receipt },
-            ].map(({ label, value, color, bg, icon: Icon }) => (
-              <div key={label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={13} style={{ color }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {pendingMDAdvances.length > 0 && (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 9, background: '#faf5ff', border: '1px solid #e9d5ff' }}>
+                    <Wallet size={14} style={{ color: '#7c3aed', flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#1e1b4b' }}>{pendingMDAdvances.length} advance voucher{pendingMDAdvances.length > 1 ? 's' : ''} pending</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>Awaiting MD authorization</div>
+                    </div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Low Stock */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Low Stock Alerts <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444', marginLeft: 6 }}>{lowStockCount} items</span></h3>
-                <Link to="/procurement/inventory" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>Inventory →</Link>
-              </div>
-              <div style={{ padding: 16 }}>
-                {safeLowStock.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                    <CheckCircle2 size={28} style={{ color: '#22c55e', margin: '0 auto 8px', display: 'block' }} />
-                    <p style={{ fontSize: 13, color: '#64748b', fontWeight: 600, margin: 0 }}>All stock levels healthy</p>
+                )}
+                {lowStockCount > 0 && (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 9, background: '#fffbeb', border: '1px solid #fde68a' }}>
+                    <AlertTriangle size={14} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#451a03' }}>Material delivery delayed</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{lowStockCount} items below reorder level</div>
+                    </div>
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {safeLowStock.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                          <AlertTriangle size={13} style={{ color: '#ef4444', flexShrink: 0 }} />
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.material_name}</div>
-                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{item.project_name || '—'}</div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: '#ef4444' }}>{parseFloat(item.closing_stock || 0).toFixed(1)}</span>
-                          <span style={{ fontSize: 11, color: '#94a3b8' }}> / {parseFloat(item.reorder_level || 0).toFixed(1)}</span>
-                        </div>
-                      </div>
-                    ))}
+                )}
+                {totalContractValue > 0 && totalCertified / totalContractValue > 0.8 && (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 9, background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                    <AlertTriangle size={14} style={{ color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#450a0a' }}>Budget threshold exceeded</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{pct(totalCertified, totalContractValue)}% of budget utilized</div>
+                    </div>
+                  </div>
+                )}
+                {pendingMDAdvances.length === 0 && (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 9, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                    <ClipboardList size={14} style={{ color: '#2563eb', flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#1e3a5f' }}>Pending Approvals</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>MRS requests awaiting approval</div>
+                    </div>
+                  </div>
+                )}
+                {delayedProjects > 0 && (
+                  <div style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 9, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <Clock size={14} style={{ color: '#64748b', flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>Site inspection due</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{delayedProjects} project{delayedProjects > 1 ? 's' : ''} behind schedule</div>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Recent POs */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent Purchase Orders</h3>
-                <Link to="/procurement/po" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View All →</Link>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      {['PO No.', 'Project', 'Date', 'Value', 'Status'].map(h => (
-                        <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {safePOs.length === 0
-                      ? <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No purchase orders</td></tr>
-                      : safePOs.map((po, i) => {
-                        const s = String(po.status || 'pending').toLowerCase();
-                        const sc = s === 'approved' || s === 'received' || s === 'fully_received' ? '#22c55e' : s === 'rejected' || s === 'cancelled' ? '#ef4444' : '#f59e0b';
-                        return (
-                          <tr key={po.id} style={{ borderBottom: i < safePOs.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                            <td style={{ padding: '11px 14px', fontSize: 12, fontWeight: 700, color: '#4f46e5' }}>{po.po_number || '—'}</td>
-                            <td style={{ padding: '11px 14px', fontSize: 12, color: '#64748b', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{po.project_name || '—'}</td>
-                            <td style={{ padding: '11px 14px', fontSize: 12, color: '#94a3b8', whiteSpace: 'nowrap' }}>{po.po_date ? dayjs(po.po_date).format('DD MMM') : '—'}</td>
-                            <td style={{ padding: '11px 14px', fontSize: 12, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{inrCr(po.order_value)}</td>
-                            <td style={{ padding: '11px 14px' }}>
-                              <span style={{ padding: '2px 9px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: `${sc}18`, color: sc, textTransform: 'capitalize' }}>{s}</span>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* ── Quality, Safety & HSE ── */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>Quality, Safety & HSE</h2>
-            <Link to="/hse" style={{ fontSize: 12, fontWeight: 700, color: '#4f46e5', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>HSE Dashboard <ChevronRight size={13} /></Link>
+        {/* ── Bottom 5-col row ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
+
+          {/* Cost Breakdown Donut */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 18px' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', margin: '0 0 14px' }}>Cost Breakdown</h3>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+              <div style={{ position: 'relative' }}>
+                <svg width={donutSize} height={donutSize} style={{ transform: 'rotate(-90deg)' }}>
+                  <circle cx={donutSize/2} cy={donutSize/2} r={donutR} fill="none" stroke="#f1f5f9" strokeWidth={donutStroke - 4} />
+                  {financeSegments.length === 0
+                    ? <circle cx={donutSize/2} cy={donutSize/2} r={donutR} fill="none" stroke="#e2e8f0" strokeWidth={donutStroke - 4} />
+                    : financeSegments.map((seg, i) => {
+                      const dash = (seg.value / donutSum) * donutCirc;
+                      const el   = <circle key={i} cx={donutSize/2} cy={donutSize/2} r={donutR} fill="none"
+                        stroke={seg.color} strokeWidth={donutStroke - 4}
+                        strokeDasharray={`${dash} ${donutCirc - dash}`} strokeDashoffset={-donutOff} />;
+                      donutOff += dash;
+                      return el;
+                    })
+                  }
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{inrCr(totalContractValue)}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>Total Cost</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {financeSegments.map(seg => (
+                <div key={seg.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: '#374151' }}>{seg.label}</span>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{pct(seg.value, donutSum)}%</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>{inrCr(seg.value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
-            {[
-              { label: 'Safety Score',   value: safetyScore != null ? `${Math.round(safetyScore)}/100` : 'N/A', color: safetyScore != null && safetyScore < 70 ? '#f59e0b' : '#22c55e', bg: safetyScore != null && safetyScore < 70 ? '#fef3c7' : '#dcfce7', icon: ShieldCheck },
-              { label: 'Open Incidents', value: openIncidents, color: openIncidents > 0 ? '#ef4444' : '#22c55e', bg: openIncidents > 0 ? '#fee2e2' : '#dcfce7', icon: AlertTriangle },
-              { label: 'Expiring Permits',value: expiringPermits, color: '#f59e0b', bg: '#fef3c7', icon: FileWarning },
-              { label: 'Open RFIs',      value: openRFIs,      color: '#0891b2', bg: '#e0f2fe', icon: FileText },
-              { label: 'Open NCRs',      value: openNCRs,      color: openNCRs > 0 ? '#ef4444' : '#22c55e', bg: openNCRs > 0 ? '#fee2e2' : '#dcfce7', icon: FileWarning },
-              { label: 'Documents',      value: kpis.documents_count ?? 0, color: '#7c3aed', bg: '#f5f3ff', icon: FileSpreadsheet },
-            ].map(({ label, value, color, bg, icon: Icon }) => (
-              <div key={label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={13} style={{ color }} />
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+          {/* Work Progress Summary */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 18px' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', margin: '0 0 14px' }}>Work Progress Summary</h3>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+              <div style={{ position: 'relative' }}>
+                <svg width={130} height={130} style={{ transform: 'rotate(-90deg)' }}>
+                  <circle cx={65} cy={65} r={circR} fill="none" stroke="#e2e8f0" strokeWidth={10} />
+                  <circle cx={65} cy={65} r={circR} fill="none" stroke="#3b82f6" strokeWidth={10}
+                    strokeDasharray={`${circDash} ${circCirc - circDash}`} strokeLinecap="round" />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: '#0f172a' }}>{avgProgress}%</div>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.05em' }}>Avg Progress</div>
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 900, color, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { label: 'Completed Projects',  count: completedProjects, color: '#3b82f6' },
+                { label: 'Active Projects',      count: activeProjects,    color: '#22c55e' },
+                { label: 'Pending / Planning',   count: planningProjects,  color: '#f59e0b' },
+                { label: 'Total Projects',       count: totalProjects,     color: '#94a3b8', bold: true },
+              ].map(({ label, count, color, bold }) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: bold ? 8 : 0, borderTop: bold ? '1px solid #f1f5f9' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: '#374151', fontWeight: bold ? 700 : 400 }}>{label}</span>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: bold ? '#0f172a' : color, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Recent Activities */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 18px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent Activities</h3>
+              <Link to="/finance/payments" style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>View All</Link>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {activityFeed.length === 0
+                ? <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 12 }}>No recent activity</div>
+                : activityFeed.map((item, i) => {
+                  const cfg = KIND_CFG[item._kind] || KIND_CFG.payment;
+                  const Icon = cfg.icon;
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Icon size={13} style={{ color: cfg.color }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item._label}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item._sub}</div>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', flexShrink: 0, marginTop: 2 }}>{item._date ? dayjs(item._date).fromNow ? dayjs().diff(dayjs(item._date), 'hour') + 'h ago' : dayjs(item._date).format('DD MMM') : ''}</div>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          </div>
+
+          {/* Upcoming Milestones */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', margin: 0 }}>Upcoming Milestones</h3>
+              <Link to="/projects" style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', textDecoration: 'none' }}>View All</Link>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {upcomingMilestones.length === 0
+                ? <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 12 }}>No upcoming milestones</div>
+                : upcomingMilestones.map(p => {
+                  const daysLeft = dayjs(p.end_date).diff(dayjs(), 'day');
+                  const monthName = dayjs(p.end_date).format('MMM').toUpperCase();
+                  const dayNum   = dayjs(p.end_date).format('DD');
+                  const urgency  = daysLeft < 7 ? '#dc2626' : daysLeft < 30 ? '#d97706' : '#16a34a';
+                  return (
+                    <div key={p.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 42, flexShrink: 0, borderRadius: 9, overflow: 'hidden', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                        <div style={{ background: '#3b82f6', color: '#fff', fontSize: 9, fontWeight: 800, padding: '2px 0', letterSpacing: '.05em' }}>{monthName}</div>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a', padding: '2px 0' }}>{dayNum}</div>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                        <div style={{ fontSize: 10, color: '#64748b', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.project_code || p.type || 'Project'}</div>
+                        <div style={{ marginTop: 4, fontSize: 10, fontWeight: 700, color: urgency }}>{daysLeft} Days Left</div>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          </div>
+
+          {/* Key Stats */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h3 style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', margin: 0 }}>Key Statistics</h3>
+            {[
+              { label: 'Workforce',     value: workforceCount,  icon: Users,     color: '#2563eb', bg: '#dbeafe' },
+              { label: 'Safety Score',  value: safetyScore != null ? `${Math.round(safetyScore)}%` : 'N/A', icon: ShieldCheck, color: safetyScore != null && safetyScore >= 70 ? '#16a34a' : '#d97706', bg: safetyScore != null && safetyScore >= 70 ? '#dcfce7' : '#fef3c7' },
+              { label: 'DQS Bills',     value: tqsBills.length, icon: FileCheck,color: '#7c3aed', bg: '#f5f3ff' },
+              { label: 'Open Incidents',value: openIncidents,  icon: AlertTriangle, color: openIncidents > 0 ? '#dc2626' : '#16a34a', bg: openIncidents > 0 ? '#fee2e2' : '#dcfce7' },
+              { label: 'Collection Rate',value: `${collectionRate}%`, icon: BarChart2, color: collectionRate >= 70 ? '#16a34a' : '#d97706', bg: collectionRate >= 70 ? '#dcfce7' : '#fef3c7' },
+              { label: 'Open RFIs & NCRs', value: openRFIs + openNCRs, icon: FileWarning, color: (openRFIs + openNCRs) > 0 ? '#d97706' : '#16a34a', bg: (openRFIs + openNCRs) > 0 ? '#fef3c7' : '#dcfce7' },
+            ].map(({ label, value, icon: Icon, color, bg }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={14} style={{ color }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>{label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                </div>
               </div>
             ))}
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Recent Incidents */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent HSE Incidents</h3>
-                <Link to="/hse/incidents" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View All →</Link>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      {['Date', 'Project', 'Type', 'Severity', 'Status'].map(h => (
-                        <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {safeIncidents.length === 0
-                      ? <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No incidents recorded</td></tr>
-                      : safeIncidents.map((inc, i) => {
-                        const sev = String(inc.severity || '').toLowerCase();
-                        const sc  = sev === 'high' || sev === 'critical' ? '#ef4444' : sev === 'medium' ? '#f59e0b' : '#22c55e';
-                        const open = !['closed','resolved'].includes(String(inc.status||'').toLowerCase());
-                        return (
-                          <tr key={inc.id} style={{ borderBottom: i < safeIncidents.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                            <td style={{ padding: '10px 14px', fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>{inc.incident_date ? dayjs(inc.incident_date).format('DD MMM') : '—'}</td>
-                            <td style={{ padding: '10px 14px', fontSize: 12, color: '#374151', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inc.project_name || '—'}</td>
-                            <td style={{ padding: '10px 14px', fontSize: 11, color: '#64748b', textTransform: 'capitalize' }}>{(inc.incident_type || '').replace(/_/g,' ') || '—'}</td>
-                            <td style={{ padding: '10px 14px' }}><span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: `${sc}18`, color: sc }}>{inc.severity || '—'}</span></td>
-                            <td style={{ padding: '10px 14px' }}><span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: open ? '#fef3c7' : '#dcfce7', color: open ? '#d97706' : '#15803d' }}>{inc.status || 'open'}</span></td>
-                          </tr>
-                        );
-                      })
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Open RFIs & NCRs */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Open Quality Items <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginLeft: 6 }}>{safeRFIs.length} RFIs · {safeNCRs.length} NCRs</span></h3>
-                <Link to="/quality/rfi" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>RFIs →</Link>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      {['Type', 'Number', 'Project', 'Activity', 'Status'].map(h => (
-                        <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {safeRFIs.length === 0 && safeNCRs.length === 0
-                      ? <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No open quality items</td></tr>
-                      : [...safeRFIs.map(r => ({ ...r, _type: 'RFI' })), ...safeNCRs.map(n => ({ ...n, _type: 'NCR' }))].slice(0, 8).map((item, i, arr) => (
-                        <tr key={item.id} style={{ borderBottom: i < arr.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                          <td style={{ padding: '10px 14px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: item._type === 'RFI' ? '#dbeafe' : '#fee2e2', color: item._type === 'RFI' ? '#1e40af' : '#b91c1c' }}>{item._type}</span>
-                          </td>
-                          <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: '#4f46e5' }}>{item.rfi_number || item.ncr_number || '—'}</td>
-                          <td style={{ padding: '10px 14px', fontSize: 11, color: '#64748b', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.project_name || '—'}</td>
-                          <td style={{ padding: '10px 14px', fontSize: 11, color: '#374151', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.activity_name || item.title || '—'}</td>
-                          <td style={{ padding: '10px 14px' }}><span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#d97706' }}>{item.status || 'open'}</span></td>
-                        </tr>
-                      ))
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* ── Recent Activity ── */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent Activity</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Recent Payments */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent Payments</h3>
-                <Link to="/finance/payments" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View All →</Link>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      {['Date', 'Beneficiary', 'Type', 'Amount'].map(h => (
-                        <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', textAlign: h === 'Amount' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {safePayments.length === 0
-                      ? <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No payments recorded</td></tr>
-                      : safePayments.map((p, i) => (
-                        <tr key={p.id} style={{ borderBottom: i < safePayments.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                          <td style={{ padding: '10px 14px', fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>{dayjs(p.payment_date || p.created_at).format('DD MMM')}</td>
-                          <td style={{ padding: '10px 14px', fontSize: 12, color: '#374151', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.entity_name || p.project_name || 'Payment'}</td>
-                          <td style={{ padding: '10px 14px' }}><span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d' }}>{(p.payment_type || 'payment').replace(/_/g,' ')}</span></td>
-                          <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 800, color: '#22c55e', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{inrCr(p.net_amount || p.amount)}</td>
-                        </tr>
-                      ))
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
+        {/* ── Projects Portfolio (full grid) ── */}
+        {companyProjects.length > 0 && <ProjectCards projects={companyProjects} />}
 
-            {/* Recent RA Bills */}
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Recent RA Bills</h3>
-                <Link to="/qs/ra-bills" style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textDecoration: 'none' }}>View All →</Link>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      {['Date', 'Project', 'Status', 'Value'].map(h => (
-                        <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', textAlign: h === 'Value' ? 'right' : 'left', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {safeBills.length === 0
-                      ? <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No RA bills</td></tr>
-                      : safeBills.map((b, i) => {
-                        const s = String(b.status || 'pending').toLowerCase();
-                        const sc = s === 'paid' || s === 'certified' ? '#22c55e' : s === 'rejected' ? '#ef4444' : '#f59e0b';
-                        return (
-                          <tr key={b.id} style={{ borderBottom: i < safeBills.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                            <td style={{ padding: '10px 14px', fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>{dayjs(b.bill_date || b.created_at).format('DD MMM')}</td>
-                            <td style={{ padding: '10px 14px', fontSize: 12, color: '#374151', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.project_name || '—'}</td>
-                            <td style={{ padding: '10px 14px' }}><span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: `${sc}18`, color: sc }}>{s}</span></td>
-                            <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 800, color: '#0f172a', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{inrCr(b.bill_value || b.net_payable || b.gross_amount)}</td>
-                          </tr>
-                        );
-                      })
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid #e2e8f0', fontSize: 11, color: '#94a3b8' }}>
-          <span>BCIM Engineering ERP · Executive Dashboard · {dayjs().format('D MMMM YYYY')}</span>
-          <span>Press <kbd style={{ padding: '1px 5px', border: '1px solid #cbd5e1', borderRadius: 3, background: '#f1f5f9', fontSize: 10 }}>R</kbd> to refresh</span>
-        </div>
       </div>
     </div>
   );
