@@ -44,9 +44,7 @@ runSchemaInit('hr-attendance', initTable);
 // ═══════════════════════════════════════════════════════════
 router.get('/', async (req, res) => {
   try {
-    const { user_id, month, year, department_id } = req.query;
-    const m = parseInt(month) || new Date().getMonth() + 1;
-    const y = parseInt(year)  || new Date().getFullYear();
+    const { user_id, month, year, department_id, date } = req.query;
 
     let sql = `
       SELECT a.*, u.name as employee_name, u.employee_code,
@@ -55,11 +53,19 @@ router.get('/', async (req, res) => {
       JOIN users u ON u.id = a.user_id
       LEFT JOIN employee_profiles ep ON ep.user_id = u.id
       LEFT JOIN hr_departments dep ON dep.id = ep.department_id
-      WHERE a.company_id = $1
-        AND EXTRACT(MONTH FROM a.attendance_date) = $2
-        AND EXTRACT(YEAR  FROM a.attendance_date) = $3`;
-    const params = [req.user.company_id, m, y];
-    let idx = 4;
+      WHERE a.company_id = $1`;
+    const params = [req.user.company_id];
+    let idx = 2;
+
+    if (date) {
+      // single-date mode for daily punch view
+      sql += ` AND a.attendance_date = $${idx}`; params.push(date); idx++;
+    } else {
+      const m = parseInt(month) || new Date().getMonth() + 1;
+      const y = parseInt(year)  || new Date().getFullYear();
+      sql += ` AND EXTRACT(MONTH FROM a.attendance_date) = $${idx} AND EXTRACT(YEAR FROM a.attendance_date) = $${idx+1}`;
+      params.push(m, y); idx += 2;
+    }
 
     if (user_id)      { sql += ` AND a.user_id=$${idx}`;       params.push(user_id);      idx++; }
     if (department_id){ sql += ` AND ep.department_id=$${idx}`; params.push(department_id); idx++; }
