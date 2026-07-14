@@ -435,30 +435,29 @@ router.get('/executive', async (req, res) => {
              WHERE pp.company_id = $1
            ), 0) AS total_budget,
 
-           -- Total spent: TQS bills (approved/under_review) + SC bills (paid) + RA bills (certified/paid)
+           -- Total spent: line-item totals matching budget control page "bills received"
            COALESCE((
-             SELECT SUM(tb.total_amount)
-             FROM tqs_bills tb
+             SELECT SUM(li.basic_amount + COALESCE(li.cgst_amt,0) + COALESCE(li.sgst_amt,0) + COALESCE(li.igst_amt,0))
+             FROM tqs_bill_line_items li
+             JOIN tqs_bills tb ON tb.id = li.bill_id
              JOIN projects pp ON pp.id = tb.project_id
-             WHERE pp.company_id = $1
-               AND tb.is_deleted = FALSE
-               AND tb.workflow_status NOT IN ('rejected','draft','pending')
+             WHERE pp.company_id = $1 AND tb.is_deleted = FALSE
            ), 0)
            +
            COALESCE((
-             SELECT SUM(sb.net_payable)
-             FROM sc_bills sb
+             SELECT SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0))
+             FROM sc_bill_items bi
+             JOIN sc_bills sb ON sb.id = bi.bill_id
              JOIN projects pp ON pp.id = sb.project_id
-             WHERE pp.company_id = $1
-               AND sb.status IN ('submitted','approved','paid')
+             WHERE pp.company_id = $1 AND sb.status IN ('submitted','approved','paid')
            ), 0)
            +
            COALESCE((
-             SELECT SUM(rb.net_payable)
-             FROM ra_bills rb
+             SELECT SUM(rbi.current_qty * rbi.rate * (1 + COALESCE(rb.gst_rate, 18) / 100.0))
+             FROM ra_bill_items rbi
+             JOIN ra_bills rb ON rb.id = rbi.ra_bill_id
              JOIN projects pp ON pp.id = rb.project_id
-             WHERE pp.company_id = $1
-               AND rb.status IN ('certified','authorized','verified','paid')
+             WHERE pp.company_id = $1 AND rb.status IN ('certified','paid')
            ), 0)
            AS total_spent`,
         [scope.params[0]]
