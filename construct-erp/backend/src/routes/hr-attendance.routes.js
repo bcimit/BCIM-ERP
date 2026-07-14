@@ -58,8 +58,9 @@ runSchemaInit('hr-attendance', initTable);
 // ═══════════════════════════════════════════════════════════
 router.get('/', async (req, res) => {
   try {
-    const { user_id, month, year, department_id, date } = req.query;
-    const projectId = await getProjectScope(req);
+    const { user_id, month, year, department_id, date, project_id } = req.query;
+    // explicit filter wins; otherwise auto-scope by role
+    const projectId = project_id || await getProjectScope(req);
 
     let sql = `
       SELECT a.*, u.name as employee_name, u.employee_code,
@@ -96,10 +97,10 @@ router.get('/', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 router.get('/summary', async (req, res) => {
   try {
-    const { month, year, department_id } = req.query;
+    const { month, year, department_id, project_id } = req.query;
     const m = parseInt(month) || new Date().getMonth() + 1;
     const y = parseInt(year)  || new Date().getFullYear();
-    const projectId = await getProjectScope(req);
+    const projectId = project_id || await getProjectScope(req);
 
     let sql = `
       SELECT u.id as user_id, u.name, u.employee_code,
@@ -403,7 +404,7 @@ router.get('/timesheet-report', async (req, res) => {
         ROW_NUMBER() OVER (ORDER BY u.name) AS sno,
         u.employee_code                     AS emp_id,
         u.name,
-        COALESCE(ep.designation_name, u.designation, '—')  AS designation,
+        COALESCE(des.name, u.designation, '—')             AS designation,
         COALESCE(dep.name, u.department, '—')              AS department,
         COALESCE(dep.name, u.department, '—')              AS trade,
         'BCIM STAFF'                        AS company,
@@ -418,9 +419,10 @@ router.get('/timesheet-report', async (req, res) => {
              THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
         u.id                                AS user_id
       FROM users u
-      LEFT JOIN employee_profiles ep  ON ep.user_id = u.id
-      LEFT JOIN hr_departments dep    ON dep.id = ep.department_id
-      LEFT JOIN hr_attendance a       ON a.user_id = u.id
+      LEFT JOIN employee_profiles ep   ON ep.user_id = u.id
+      LEFT JOIN hr_departments dep     ON dep.id = ep.department_id
+      LEFT JOIN hr_designations des    ON des.id = ep.designation_id
+      LEFT JOIN hr_attendance a        ON a.user_id = u.id
                                      AND a.attendance_date = $2
                                      AND a.company_id = $1
       WHERE u.company_id = $1
