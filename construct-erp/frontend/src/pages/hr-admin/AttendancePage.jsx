@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Calendar, Fingerprint, RefreshCw, CheckCircle, AlertTriangle, CalendarCheck, Clock, Download } from 'lucide-react';
-import { hrAttendanceAPI, hrMastersAPI, hrEmployeesAPI, hrEsslAPI } from '../../api/client';
+import { hrAttendanceAPI, hrMastersAPI, hrEmployeesAPI, hrEsslAPI, projectAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 
 const B = { navy:'#0A1F5C', blue:'#2563EB', yellow:'#F4C430', success:'#10B981' };
@@ -290,23 +290,25 @@ export default function AttendancePage() {
   const now = new Date();
   const [month,     setMonth]     = useState(now.getMonth() + 1);
   const [year,      setYear]      = useState(now.getFullYear());
-  const [deptFilter,setDeptFilter]= useState('');
-  const [view,      setView]      = useState('summary');
+  const [deptFilter,   setDeptFilter]   = useState('');
+  const [projectFilter,setProjectFilter] = useState('');
+  const [view,         setView]          = useState('summary');
   const [syncing,   setSyncing]   = useState(false);
   const [syncResult,setSyncResult]= useState(null);
   const [dailyDate, setDailyDate] = useState(now.toISOString().split('T')[0]);
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  const { data: deptData } = useQuery({ queryKey:['hr-departments'], queryFn:()=>hrMastersAPI.listDepts().then(r=>r.data) });
+  const { data: deptData }     = useQuery({ queryKey:['hr-departments'], queryFn:()=>hrMastersAPI.listDepts().then(r=>r.data) });
+  const { data: projectsData } = useQuery({ queryKey:['projects-active'], queryFn:()=>projectAPI.list({ is_active:true }).then(r=>r.data) });
 
   const { data: attData, isLoading } = useQuery({
-    queryKey:['hr-attendance-grid', month, year, deptFilter],
-    queryFn:()=>hrAttendanceAPI.list({ month, year, department_id: deptFilter||undefined }).then(r=>r.data),
+    queryKey:['hr-attendance-grid', month, year, deptFilter, projectFilter],
+    queryFn:()=>hrAttendanceAPI.list({ month, year, department_id: deptFilter||undefined, project_id: projectFilter||undefined }).then(r=>r.data),
   });
   const { data: summaryData } = useQuery({
-    queryKey:['hr-attendance-summary', month, year, deptFilter],
-    queryFn:()=>hrAttendanceAPI.summary({ month, year, department_id: deptFilter||undefined }).then(r=>r.data),
+    queryKey:['hr-attendance-summary', month, year, deptFilter, projectFilter],
+    queryFn:()=>hrAttendanceAPI.summary({ month, year, department_id: deptFilter||undefined, project_id: projectFilter||undefined }).then(r=>r.data),
   });
 
   const allEmployees = useMemo(() => (summaryData?.data || []).map(s => ({
@@ -314,8 +316,8 @@ export default function AttendancePage() {
     department_id: s.department_id, department_name: s.department_name,
   })), [summaryData]);
   const { data: dailyData, isLoading: dailyLoading } = useQuery({
-    queryKey:['hr-attendance-daily', dailyDate, deptFilter],
-    queryFn:()=>hrAttendanceAPI.list({ date: dailyDate, department_id: deptFilter||undefined }).then(r=>r.data),
+    queryKey:['hr-attendance-daily', dailyDate, deptFilter, projectFilter],
+    queryFn:()=>hrAttendanceAPI.list({ date: dailyDate, department_id: deptFilter||undefined, project_id: projectFilter||undefined }).then(r=>r.data),
     enabled: view === 'daily',
   });
 
@@ -348,7 +350,7 @@ export default function AttendancePage() {
     onError:e=>toast.error(e.response?.data?.error||'Error'),
   });
   const baselineMut = useMutation({
-    mutationFn:()=>hrAttendanceAPI.baseline({ month, year, department_id: deptFilter||undefined, overwrite:false }),
+    mutationFn:()=>hrAttendanceAPI.baseline({ month, year, department_id: deptFilter||undefined, project_id: projectFilter||undefined, overwrite:false }),
     onSuccess:(res)=>{
       toast.success(`Monthly baseline added: ${res.data?.count||0} records`);
       qc.invalidateQueries({ queryKey:['hr-attendance-grid'] });
@@ -461,6 +463,11 @@ export default function AttendancePage() {
           className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:border-blue-400">
           <option value="">All Departments</option>
           {(deptData?.data||[]).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <select value={projectFilter} onChange={e=>setProjectFilter(e.target.value)}
+          className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:border-blue-400">
+          <option value="">All Projects</option>
+          {(projectsData?.data||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 ml-auto">
           <button onClick={()=>setView('summary')}   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='summary'  ?'bg-white text-blue-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Summary</button>
