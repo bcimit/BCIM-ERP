@@ -14,7 +14,7 @@ import {
   ChevronDown, Tag, CalendarDays, Filter, Eye, Rows3,
   UserRound, Layers3, Send, ClipboardCheck, Settings, GripVertical, RefreshCw,
   ShoppingCart, Upload, Paperclip, History, Info, MapPin, RotateCcw, Pencil,
-  ArrowDownUp, ArrowUp, ArrowDown,
+  ArrowDownUp, ArrowUp, ArrowDown, Copy,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import dayjs from 'dayjs';
