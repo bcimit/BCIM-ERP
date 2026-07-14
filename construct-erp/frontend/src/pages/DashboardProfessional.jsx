@@ -639,6 +639,20 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* ── Pending MD Approvals (right after KPI cards) ── */}
+        {isMdRole && (
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Pending Approvals</h3>
+            </div>
+            <div style={{ padding: '4px 0' }}>
+              <Suspense fallback={<DashLoader />}>
+                <ApprovalsPage embedded mdMode={isStrictMd} />
+              </Suspense>
+            </div>
+          </div>
+        )}
+
         {/* ── Main 3-col row ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '5fr 4fr 3fr', gap: 16 }}>
 
@@ -981,20 +995,6 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-
-        {/* ── Pending MD Approvals ── */}
-        {isMdRole && (
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Pending Approvals</h3>
-            </div>
-            <div style={{ padding: '4px 0' }}>
-              <Suspense fallback={<DashLoader />}>
-                <ApprovalsPage embedded mdMode={isStrictMd} />
-              </Suspense>
-            </div>
-          </div>
-        )}
 
         {/* ── Projects Portfolio (full grid) ── */}
         {companyProjects.length > 0 && <ProjectCards projects={companyProjects} />}
