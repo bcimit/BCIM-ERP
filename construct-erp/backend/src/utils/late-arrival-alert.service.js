@@ -237,6 +237,27 @@ function buildLateEmail({ employeeName, employeeCode, date, checkInTime, lateMin
 async function sendLateArrivalAlerts({ date, companyId, minLateMinutes = 5, overrideRecipients, dryRun = false } = {}) {
   const targetDate = date || new Date().toISOString().slice(0, 10);
 
+  // Auto-recalculate late_minutes for the target date before querying,
+  // so the button works correctly without a separate manual recalculate step.
+  await query(`
+    UPDATE hr_attendance ha
+    SET late_minutes = GREATEST(0, EXTRACT(EPOCH FROM (
+      ha.in_time::time - COALESCE(
+        (SELECT (hs.start_time + (COALESCE(hs.grace_minutes,0) * INTERVAL '1 minute'))::time
+         FROM hr_employee_shifts es
+         JOIN hr_shifts hs ON hs.id = es.shift_id
+         WHERE es.employee_id = ha.user_id
+           AND es.effective_from <= ha.attendance_date
+           AND (es.effective_to IS NULL OR es.effective_to >= ha.attendance_date)
+         ORDER BY es.effective_from DESC LIMIT 1),
+        '09:30:00'::time
+      )
+    )) / 60)::int
+    WHERE ha.attendance_date = $1
+      AND ha.in_time IS NOT NULL
+      AND ha.status IN ('present', 'half_day')
+  `, [targetDate]).catch(e => logger.warn('late_minutes recalc skipped:', e.message));
+
   // Get company info
   const companyFilter = companyId ? `WHERE id = '${companyId}'` : `WHERE COALESCE(is_active, TRUE) = TRUE`;
   const companies = await query(`SELECT id, name FROM companies ${companyFilter}`);
