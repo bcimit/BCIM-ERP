@@ -585,6 +585,18 @@ router.get('/agent-key', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ── Ensure unique constraints exist for ON CONFLICT upserts ─────────────── */
+(async () => {
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS hr_attendance_user_date_uidx
+      ON hr_attendance(user_id, attendance_date)
+  `).catch(() => {});
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS sc_attendance_worker_date_uidx
+      ON sc_attendance(worker_id, attendance_date)
+  `).catch(() => {});
+})();
+
 /* ── sync log table ──────────────────────────────────────────────────────── */
 (async () => {
   await query(`
