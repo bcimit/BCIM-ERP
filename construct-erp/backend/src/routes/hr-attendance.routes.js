@@ -95,14 +95,55 @@ router.get('/', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // SUMMARY — per employee for a month
 // ═══════════════════════════════════════════════════════════
-// /summary — grouped by department for a date range, includes staff + SC workers
+// /summary — per-employee monthly summary (month/year) OR department-grouped (from/to)
 router.get('/summary', async (req, res) => {
   try {
-    const { from, to, project_id } = req.query;
+    const { month, year, from, to, department_id, project_id } = req.query;
     const cid = req.user.company_id;
     const scopeProject = await getProjectScope(req);
     const effProject = scopeProject !== null ? scopeProject : (project_id || null);
 
+    // ── Per-employee mode (Attendance page sends month/year) ──
+    if (month || year) {
+      const m = parseInt(month) || new Date().getMonth() + 1;
+      const y = parseInt(year)  || new Date().getFullYear();
+
+      const params = [cid, m, y];
+      let deptFilter = '', projFilter = '';
+      let idx = 4;
+      if (department_id) { deptFilter = ` AND ep.department_id=$${idx++}`; params.push(department_id); }
+      if (effProject)    { projFilter = ` AND ep.project_id=$${idx++}`;    params.push(effProject); }
+
+      const { rows } = await query(`
+        SELECT u.id AS user_id,
+               u.name,
+               u.employee_code,
+               ep.department_id,
+               COALESCE(dep.name, u.department, '—') AS department_name,
+               COUNT(*) FILTER (WHERE a.status='present')  AS present,
+               COUNT(*) FILTER (WHERE a.status='absent')   AS absent,
+               COUNT(*) FILTER (WHERE a.status='half_day') AS half_day,
+               COUNT(*) FILTER (WHERE a.status='leave')    AS on_leave,
+               COUNT(*)                                    AS total_marked
+        FROM users u
+        LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+        LEFT JOIN hr_departments dep   ON dep.id = ep.department_id
+        LEFT JOIN hr_attendance a      ON a.user_id = u.id
+                                      AND a.company_id = $1
+                                      AND EXTRACT(MONTH FROM a.attendance_date) = $2
+                                      AND EXTRACT(YEAR  FROM a.attendance_date) = $3
+        WHERE u.company_id = $1
+          AND u.is_active = TRUE
+          ${deptFilter}
+          ${projFilter}
+        GROUP BY u.id, u.name, u.employee_code, ep.department_id, dep.name, u.department
+        ORDER BY dep.name NULLS LAST, u.name
+      `, params);
+
+      return res.json({ data: rows });
+    }
+
+    // ── Department-grouped mode (reports send from/to) ──
     const fromDate = from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10);
     const toDate   = to   || new Date().toISOString().slice(0,10);
 
