@@ -275,38 +275,53 @@ export default function AttendanceDashboardPage() {
   return (
     <div style={{ background: '#F1F5F9', minHeight: '100vh' }}>
 
-      {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-black text-slate-800">Attendance Dashboard</h1>
-          <p className="text-[13px] text-slate-400 mt-0.5">Real-time overview of attendance across all projects and sites</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select value={month} onChange={e => setMonth(parseInt(e.target.value))}
-            className="text-[13px] text-slate-600 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-100">
-            {MONTHS.map((m,i) => <option key={i+1} value={i+1}>{SHORT[i]}</option>)}
-          </select>
-          <select value={year} onChange={e => setYear(parseInt(e.target.value))}
-            className="text-[13px] text-slate-600 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-100">
-            {[2024,2025,2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <button onClick={() => refetch()}
-            className="flex items-center gap-1.5 text-[13px] text-slate-600 border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
-            <RefreshCw size={13} />
-          </button>
-          <button className="flex items-center gap-1.5 text-[13px] text-slate-600 border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
-            <Download size={13} /> Import Logs
-          </button>
-          <button className="flex items-center gap-1.5 text-[13px] text-slate-600 border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
-            <SlidersHorizontal size={13} /> Filters
-          </button>
-          <button className="flex items-center gap-1.5 text-[13px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors shadow-sm">
-            <CheckCircle2 size={13} /> Mark Attendance
-          </button>
+      {/* ── Indigo gradient hero ─────────────────────────────────────────── */}
+      <div className="relative overflow-hidden" style={{background:'linear-gradient(120deg, #1E1B4B 0%, #312E81 55%, #4338CA 100%)', padding:'22px 24px 60px'}}>
+        <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.08]"
+          style={{background:'radial-gradient(circle,#fff,transparent 70%)',transform:'translate(25%,-25%)'}}/>
+        <div className="relative z-10 flex items-start justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{background:'rgba(255,255,255,0.12)'}}>
+              <Activity size={19} style={{color:'#C7D2FE'}}/>
+            </div>
+            <div>
+              <h1 className="text-[19px] font-black text-white">Attendance Dashboard</h1>
+              <p className="text-[12.5px] mt-0.5" style={{color:'#A5B4FC'}}>Real-time overview across all projects and sites — {dateLabel}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select value={month} onChange={e => setMonth(parseInt(e.target.value))}
+              className="text-[13px] rounded-lg px-3 py-2 focus:outline-none"
+              style={{background:'rgba(255,255,255,0.12)', color:'#E0E7FF', border:'1px solid rgba(255,255,255,0.22)'}}>
+              {MONTHS.map((m,i) => <option key={i+1} value={i+1} style={{color:'#1E1B4B'}}>{SHORT[i]}</option>)}
+            </select>
+            <select value={year} onChange={e => setYear(parseInt(e.target.value))}
+              className="text-[13px] rounded-lg px-3 py-2 focus:outline-none"
+              style={{background:'rgba(255,255,255,0.12)', color:'#E0E7FF', border:'1px solid rgba(255,255,255,0.22)'}}>
+              {[2024,2025,2026].map(y => <option key={y} value={y} style={{color:'#1E1B4B'}}>{y}</option>)}
+            </select>
+            <button onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2 transition-colors"
+              style={{background:'rgba(255,255,255,0.12)', color:'#E0E7FF', border:'1px solid rgba(255,255,255,0.22)'}}>
+              <RefreshCw size={13} />
+            </button>
+            <button className="flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2 transition-colors"
+              style={{background:'rgba(255,255,255,0.12)', color:'#E0E7FF', border:'1px solid rgba(255,255,255,0.22)'}}>
+              <Download size={13} /> Import Logs
+            </button>
+            <button className="flex items-center gap-1.5 text-[13px] rounded-lg px-3 py-2 transition-colors"
+              style={{background:'rgba(255,255,255,0.12)', color:'#E0E7FF', border:'1px solid rgba(255,255,255,0.22)'}}>
+              <SlidersHorizontal size={13} /> Filters
+            </button>
+            <button className="flex items-center gap-1.5 text-[13px] font-bold rounded-lg px-4 py-2 transition-colors"
+              style={{background:'#fff', color:'#312E81'}}>
+              <CheckCircle2 size={13} /> Mark Attendance
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-5 space-y-4" style={{marginTop:-36}}>
 
         {/* ── KPI rows ────────────────────────────────────────────────────── */}
         {[KPI_ROW1, KPI_ROW2, KPI_ROW3].map((row, ri) => (

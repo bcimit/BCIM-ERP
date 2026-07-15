@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Fingerprint, RefreshCw, CheckCircle, AlertTriangle, CalendarCheck, Clock, Download, Mail, Send } from 'lucide-react';
+import { Calendar, Fingerprint, RefreshCw, CheckCircle, AlertTriangle, CalendarCheck, Clock, Download, Mail, Send, Search, Users, UserCheck, UserX, Clock3, Palmtree } from 'lucide-react';
 import { hrAttendanceAPI, hrMastersAPI, hrEmployeesAPI, hrEsslAPI, projectAPI } from '../../api/client';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,34 @@ const STATUS_CELL = {
   holiday:  { bg:'bg-purple-100',                       text:'text-purple-700',  label:'HO' },
   week_off: { bg:'bg-gray-100',                         text:'text-gray-500',    label:'WO' },
 };
+
+// Full-word dot pill, same visual language as the Daily Timesheet Report
+const STATUS_META = {
+  present:  { bg:'#DCFCE7', color:'#15803D', dot:'#22C55E', label:'Present'  },
+  absent:   { bg:'#FEE2E2', color:'#B91C1C', dot:'#EF4444', label:'Absent'   },
+  half_day: { bg:'#DBEAFE', color:'#1D4ED8', dot:'#3B82F6', label:'Half Day' },
+  leave:    { bg:'#FEF3C7', color:'#B45309', dot:'#F59E0B', label:'Leave'    },
+  holiday:  { bg:'#EDE9FE', color:'#6D28D9', dot:'#8B5CF6', label:'Holiday'  },
+  week_off: { bg:'#F1F5F9', color:'#475569', dot:'#94A3B8', label:'Week Off' },
+};
+function StatusPill({ status }) {
+  const m = STATUS_META[status] || null;
+  if (!m) return <span className="text-slate-300 text-xs">—</span>;
+  return (
+    <span style={{ background:m.bg, color:m.color, borderRadius:999, padding:'2px 10px 2px 7px', fontWeight:700, fontSize:10.5, display:'inline-flex', alignItems:'center', gap:5, whiteSpace:'nowrap' }}>
+      <span style={{ width:6, height:6, borderRadius:'50%', background:m.dot, flexShrink:0 }} />
+      {m.label}
+    </span>
+  );
+}
+function Avatar({ name }) {
+  const initials = (name||'?').split(' ').map(w=>w[0]).filter(Boolean).slice(0,2).join('').toUpperCase();
+  let hash = 0;
+  for (const ch of (name||'')) hash = (hash*31 + ch.charCodeAt(0)) % 360;
+  return (
+    <span style={{ width:28, height:28, borderRadius:'50%', flexShrink:0, background:`hsl(${hash},55%,92%)`, color:`hsl(${hash},55%,32%)`, display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:10.5, fontWeight:800 }}>{initials}</span>
+  );
+}
 
 const NEXT_STATUS = { present:'absent', absent:'half_day', half_day:'leave', leave:'present' };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -296,6 +324,7 @@ export default function AttendancePage() {
   const [syncing,   setSyncing]   = useState(false);
   const [syncResult,setSyncResult]= useState(null);
   const [dailyDate, setDailyDate] = useState(now.toISOString().split('T')[0]);
+  const [empSearch, setEmpSearch] = useState('');
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
@@ -417,54 +446,100 @@ export default function AttendancePage() {
 
   const summary = summaryData?.data || [];
 
-  return (
-    <div className="p-6 space-y-6 min-h-screen" style={{background:'#F8FAFC'}}>
+  const totalPresent = summary.reduce((s,r)=>s+(parseInt(r.present)||0),0);
+  const totalAbsent  = summary.reduce((s,r)=>s+(parseInt(r.absent)||0),0);
+  const totalHalf    = summary.reduce((s,r)=>s+(parseInt(r.half_day)||0),0);
+  const totalLeave   = summary.reduce((s,r)=>s+(parseInt(r.on_leave)||0),0);
+  const totalMarked  = summary.reduce((s,r)=>s+(parseInt(r.total_marked)||0),0);
+  const presentPct   = totalMarked > 0 ? Math.round(((totalPresent + totalHalf*0.5) / totalMarked) * 100) : 0;
 
-      {/* Header */}
-      <motion.div {...fade(0)} className="relative overflow-hidden rounded-2xl"
-        style={{background:`linear-gradient(135deg,${B.navy},#1e3a8a)`,boxShadow:'0 8px 32px rgba(10,31,92,0.2)'}}>
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.07]"
+  return (
+    <div className="space-y-6 min-h-screen" style={{background:'#F1F5F9'}}>
+
+      {/* ── Indigo gradient hero ─────────────────────────────────────────── */}
+      <motion.div {...fade(0)} className="relative overflow-hidden"
+        style={{background:'linear-gradient(120deg, #1E1B4B 0%, #312E81 55%, #4338CA 100%)', padding:'22px 28px 68px'}}>
+        <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-[0.08]"
           style={{background:'radial-gradient(circle,#fff,transparent 70%)',transform:'translate(25%,-25%)'}}/>
-        <div className="relative z-10 px-8 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
-                <Calendar className="w-4 h-4 text-white"/>
-              </div>
-              <span className="text-white/60 text-sm font-semibold">HR & Admin</span>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{background:'rgba(255,255,255,0.12)'}}>
+              <Calendar className="w-[19px] h-[19px]" style={{color:'#C7D2FE'}}/>
             </div>
-            <h1 className="text-2xl font-black text-white">Attendance</h1>
-            <p className="text-white/55 text-sm mt-1">Monthly attendance tracking for permanent employees</p>
+            <div>
+              <h1 className="text-[19px] font-black text-white">Attendance</h1>
+              <p className="text-[12.5px] mt-0.5" style={{color:'#A5B4FC'}}>{MONTHS[month-1]} {year} · monthly attendance tracking</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start">
             <button onClick={()=>baselineMut.mutate()} disabled={baselineMut.isPending}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 hover:opacity-90"
-              style={{background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.2)'}}>
-              {baselineMut.isPending ? <RefreshCw className="w-4 h-4 animate-spin"/> : <CalendarCheck className="w-4 h-4"/>}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50 hover:opacity-90"
+              style={{background:'rgba(255,255,255,0.12)',color:'#E0E7FF',border:'1px solid rgba(255,255,255,0.22)'}}>
+              {baselineMut.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <CalendarCheck className="w-3.5 h-3.5"/>}
               {baselineMut.isPending ? 'Marking…' : 'Mark Month Present'}
             </button>
             <button onClick={()=>runAlertsMut.mutate()} disabled={runAlertsMut.isPending}
               title="Send late-arrival emails to all employees who came in late today"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 hover:opacity-90"
-              style={{background:'rgba(239,68,68,0.25)',color:'#fff',border:'1px solid rgba(239,68,68,0.4)'}}>
-              {runAlertsMut.isPending ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
-              {runAlertsMut.isPending ? 'Sending alerts…' : 'Send Late Alerts Today'}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50 hover:opacity-90"
+              style={{background:'rgba(239,68,68,0.22)',color:'#FECACA',border:'1px solid rgba(239,68,68,0.35)'}}>
+              {runAlertsMut.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <Send className="w-3.5 h-3.5"/>}
+              {runAlertsMut.isPending ? 'Sending…' : 'Send Late Alerts'}
             </button>
             <button onClick={()=>testMailMut.mutate()} disabled={testMailMut.isPending}
               title="Send a sample late-arrival email to your own inbox"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 hover:opacity-90"
-              style={{background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.2)'}}>
-              {testMailMut.isPending ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Mail className="w-4 h-4"/>}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-bold disabled:opacity-50 hover:opacity-90"
+              style={{background:'rgba(255,255,255,0.12)',color:'#E0E7FF',border:'1px solid rgba(255,255,255,0.22)'}}>
+              {testMailMut.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <Mail className="w-3.5 h-3.5"/>}
               {testMailMut.isPending ? 'Sending…' : 'Test Email'}
             </button>
             <button onClick={handleEsslSync} disabled={syncing}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black disabled:opacity-50 hover:opacity-90"
-              style={{background:B.yellow,color:B.navy}}>
-              {syncing ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Fingerprint className="w-4 h-4"/>}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-black disabled:opacity-50 hover:opacity-90"
+              style={{background:'#fff',color:'#312E81'}}>
+              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <Fingerprint className="w-3.5 h-3.5"/>}
               {syncing ? 'Syncing…' : 'Sync from ESSL'}
             </button>
           </div>
         </div>
+
+        {/* Attendance progress bar */}
+        <div className="mt-[18px] max-w-[420px] relative z-10">
+          <div className="flex justify-between mb-[5px]">
+            <span className="text-[11.5px] font-semibold" style={{color:'#C7D2FE'}}>Attendance rate ({MONTHS[month-1]})</span>
+            <span className="text-[11.5px] font-black text-white">{presentPct}%</span>
+          </div>
+          <div className="h-[7px] rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.15)'}}>
+            <div style={{
+              height:'100%', width:`${presentPct}%`, borderRadius:999, transition:'width .5s ease',
+              background: presentPct>=85 ? 'linear-gradient(90deg,#34D399,#10B981)'
+                        : presentPct>=60 ? 'linear-gradient(90deg,#FBBF24,#F59E0B)'
+                        : 'linear-gradient(90deg,#F87171,#EF4444)',
+            }}/>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="px-6 pb-8 space-y-6" style={{marginTop:-44}}>
+
+      {/* ── KPI cards (overlap hero) ─────────────────────────────────────── */}
+      <motion.div {...fade(0.04)} className="grid gap-3" style={{gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))'}}>
+        {[
+          { label:'Total Marked', val:totalMarked, Icon:Users,     accent:'#6366F1', bg:'#EEF2FF' },
+          { label:'Present',      val:totalPresent, Icon:UserCheck, accent:'#16A34A', bg:'#F0FDF4' },
+          { label:'Half Day',     val:totalHalf,    Icon:Clock3,    accent:'#2563EB', bg:'#EFF6FF' },
+          { label:'Absent',       val:totalAbsent,  Icon:UserX,     accent:'#DC2626', bg:'#FEF2F2' },
+          { label:'On Leave',     val:totalLeave,   Icon:Palmtree,  accent:'#D97706', bg:'#FFFBEB' },
+        ].map(({label,val,Icon,accent,bg})=>(
+          <div key={label} className="bg-white rounded-[14px] flex items-center gap-3 px-4 py-[14px]"
+            style={{boxShadow:'0 1px 3px rgba(15,23,42,0.08), 0 8px 24px -12px rgba(15,23,42,0.12)'}}>
+            <span className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{background:bg}}>
+              <Icon size={18} color={accent}/>
+            </span>
+            <div>
+              <div className="text-[21px] font-black text-slate-900 leading-tight">{val}</div>
+              <div className="text-[11px] font-semibold text-slate-500">{label}</div>
+            </div>
+          </div>
+        ))}
       </motion.div>
 
       {/* ESSL Sync Result Banner */}
@@ -534,10 +609,10 @@ export default function AttendancePage() {
           {(projectsData?.data||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 ml-auto">
-          <button onClick={()=>setView('summary')}   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='summary'  ?'bg-white text-blue-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Summary</button>
-          <button onClick={()=>setView('grid')}      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='grid'     ?'bg-white text-blue-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Grid</button>
+          <button onClick={()=>setView('summary')}   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='summary'  ?'bg-white text-indigo-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Summary</button>
+          <button onClick={()=>setView('grid')}      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='grid'     ?'bg-white text-indigo-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Grid</button>
           <button onClick={()=>setView('timesheet')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='timesheet'?'bg-white text-indigo-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Timesheet</button>
-          <button onClick={()=>setView('daily')}     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='daily'    ?'bg-white text-emerald-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Daily Punch</button>
+          <button onClick={()=>setView('daily')}     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view==='daily'    ?'bg-white text-indigo-700 shadow-sm':'text-gray-500 hover:text-gray-700'}`}>Daily Punch</button>
         </div>
       </motion.div>
 
@@ -633,18 +708,32 @@ export default function AttendancePage() {
       )}
 
       {/* Daily Punch View */}
-      {view==='daily' && (
+      {view==='daily' && (() => {
+        const dailyRows = allEmployees
+          .filter(e => !deptFilter || e.department_id === deptFilter)
+          .filter(e => !empSearch.trim() || `${e.name} ${e.employee_code||''}`.toLowerCase().includes(empSearch.trim().toLowerCase()));
+        return (
         <motion.div {...fade(0.12)} className="space-y-4">
-          {/* Date picker */}
+          {/* Date picker + search */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-wrap items-center gap-3"
             style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
-            <Clock className="w-4 h-4 text-emerald-500 shrink-0"/>
+            <Clock className="w-4 h-4 text-indigo-500 shrink-0"/>
             <span className="text-sm font-semibold text-slate-600">Punch Report for</span>
             <input type="date" value={dailyDate} onChange={e=>setDailyDate(e.target.value)}
-              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:border-emerald-400"/>
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:border-indigo-400"/>
             <span className="text-xs text-slate-400">
               {dailyData?.data?.length || 0} of {allEmployees.length} employees have records
             </span>
+            <div className="flex items-center gap-2 rounded-full px-3.5 py-1.5 ml-auto"
+              style={{border:'1px solid #E2E8F0', background:'#F8FAFC', minWidth:220}}>
+              <Search size={14} className="text-slate-400 shrink-0"/>
+              <input value={empSearch} onChange={e=>setEmpSearch(e.target.value)}
+                placeholder="Search name or ID..."
+                className="border-none outline-none text-sm flex-1 bg-transparent text-slate-700"/>
+              {empSearch && (
+                <button onClick={()=>setEmpSearch('')} className="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+              )}
+            </div>
           </div>
 
           {/* Table */}
@@ -652,54 +741,52 @@ export default function AttendancePage() {
             style={{boxShadow:'0 2px 12px rgba(10,31,92,0.06)'}}>
             {dailyLoading ? (
               <div className="flex items-center justify-center py-16">
-                <div className="w-8 h-8 rounded-full border-2 border-emerald-200 border-t-emerald-600 animate-spin"/>
+                <div className="w-8 h-8 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin"/>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" style={{maxHeight:'62vh', overflowY:'auto'}}>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-500 font-black">
-                      <th className="text-left px-4 py-3">#</th>
-                      <th className="text-left px-4 py-3">Employee</th>
-                      <th className="text-left px-4 py-3">Department</th>
-                      <th className="text-center px-4 py-3">Status</th>
-                      <th className="text-center px-4 py-3">IN Time</th>
-                      <th className="text-center px-4 py-3">OUT Time</th>
-                      <th className="text-center px-4 py-3">Hours</th>
-                      <th className="text-center px-4 py-3">Late (min)</th>
+                    <tr className="text-xs uppercase tracking-wide font-black" style={{background:'#1E1B4B'}}>
+                      <th className="text-left px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>#</th>
+                      <th className="text-left px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>Employee</th>
+                      <th className="text-left px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>Department</th>
+                      <th className="text-center px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>Status</th>
+                      <th className="text-center px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>IN Time</th>
+                      <th className="text-center px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>OUT Time</th>
+                      <th className="text-center px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>Hours</th>
+                      <th className="text-center px-4 py-3 text-indigo-100 sticky top-0" style={{background:'#1E1B4B'}}>Late (min)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {allEmployees.filter(e => !deptFilter || e.department_id === deptFilter).map((emp, i) => {
+                    {dailyRows.map((emp, i) => {
                       const rec = (dailyData?.data || []).find(r => r.user_id === emp.id);
                       const inM  = toMins(rec?.in_time);
                       const outM = toMins(rec?.out_time);
                       const hrs  = (inM != null && outM != null && outM > inM) ? fmtHrs(outM - inM) : '—';
                       const st   = rec?.status;
-                      const stCell = STATUS_CELL[st] || { bg:'bg-gray-50', text:'text-gray-400', label:'—' };
                       return (
-                        <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={emp.id} className="hover:bg-indigo-50/40 transition-colors">
                           <td className="px-4 py-3 text-gray-400 text-xs">{i+1}</td>
                           <td className="px-4 py-3">
-                            <div className="font-semibold text-gray-900">{emp.name}</div>
-                            {emp.employee_code && <div className="text-xs text-gray-400">{emp.employee_code}</div>}
+                            <div className="flex items-center gap-2.5">
+                              <Avatar name={emp.name}/>
+                              <div>
+                                <div className="font-semibold text-gray-900">{emp.name}</div>
+                                {emp.employee_code && <div className="text-xs text-gray-400 font-mono">{emp.employee_code}</div>}
+                              </div>
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{emp.department_name || '—'}</td>
-                          <td className="px-4 py-3 text-center">
-                            {st ? (
-                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-black ${stCell.bg} ${stCell.text}`}>
-                                {stCell.label}
-                              </span>
-                            ) : <span className="text-gray-300 text-xs">—</span>}
-                          </td>
+                          <td className="px-4 py-3 text-center"><StatusPill status={st}/></td>
                           <td className="px-4 py-3 text-center">
                             {rec?.in_time
-                              ? <span className="font-mono text-emerald-700 font-bold text-sm">{rec.in_time.slice(0,5)}</span>
+                              ? <span className="font-mono text-slate-700 font-bold text-sm">{rec.in_time.slice(0,5)}</span>
                               : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3 text-center">
                             {rec?.out_time
-                              ? <span className="font-mono text-red-500 font-bold text-sm">{rec.out_time.slice(0,5)}</span>
+                              ? <span className="font-mono text-slate-700 font-bold text-sm">{rec.out_time.slice(0,5)}</span>
                               : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -707,14 +794,16 @@ export default function AttendancePage() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             {rec?.late_minutes > 0
-                              ? <span className="text-amber-600 font-bold text-xs">{rec.late_minutes} min</span>
+                              ? <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-bold text-[11px]">{rec.late_minutes}m</span>
                               : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                         </tr>
                       );
                     })}
-                    {allEmployees.length === 0 && (
-                      <tr><td colSpan={8} className="px-4 py-16 text-center text-gray-400 text-sm">No employees found</td></tr>
+                    {dailyRows.length === 0 && (
+                      <tr><td colSpan={8} className="px-4 py-16 text-center text-gray-400 text-sm">
+                        {empSearch ? `No employees match "${empSearch}"` : 'No employees found'}
+                      </td></tr>
                     )}
                   </tbody>
                 </table>
@@ -722,7 +811,8 @@ export default function AttendancePage() {
             )}
           </div>
         </motion.div>
-      )}
+        );
+      })()}
 
       {/* Summary View */}
       {view==='summary' && (
@@ -768,6 +858,7 @@ export default function AttendancePage() {
           </div>
         </motion.div>
       )}
+      </div>
     </div>
   );
 }
