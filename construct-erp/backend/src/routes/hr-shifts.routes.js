@@ -132,6 +132,33 @@ router.delete('/employee-shifts/:id', authorize(...HR_ROLES), async (req, res) =
   res.json({ success: true });
 });
 
+// Bulk-assign a shift to all active employees in a project (or HO/no-project)
+router.post('/employee-shifts/bulk-assign', authorize(...HR_ROLES), async (req, res) => {
+  const { project_id, shift_id, effective_from, effective_to } = req.body;
+  if (!shift_id || !effective_from) return res.status(400).json({ error: 'shift_id and effective_from required' });
+
+  const isNone = !project_id || project_id === 'none';
+  const empSql = isNone
+    ? `SELECT u.id FROM users u JOIN employee_profiles ep ON ep.user_id=u.id WHERE u.company_id=$1 AND u.is_active=true AND ep.project_id IS NULL`
+    : `SELECT u.id FROM users u JOIN employee_profiles ep ON ep.user_id=u.id WHERE u.company_id=$1 AND u.is_active=true AND ep.project_id=$2`;
+  const { rows: emps } = await query(empSql, isNone ? [req.user.company_id] : [req.user.company_id, project_id]);
+
+  let assigned = 0;
+  for (const emp of emps) {
+    await query(
+      `UPDATE hr_employee_shifts SET effective_to=$1 WHERE employee_id=$2 AND company_id=$3 AND effective_to IS NULL AND effective_from < $1`,
+      [effective_from, emp.id, req.user.company_id]
+    );
+    await query(
+      `INSERT INTO hr_employee_shifts(company_id,employee_id,shift_id,effective_from,effective_to,created_by)
+       VALUES($1,$2,$3,$4,$5,$6)`,
+      [req.user.company_id, emp.id, shift_id, effective_from, effective_to || null, req.user.id]
+    );
+    assigned++;
+  }
+  res.json({ data: { assigned } });
+});
+
 // ── Overtime ──────────────────────────────────────────────────────────────────
 router.get('/overtime', authorize(...HR_ALL), async (req, res) => {
   const { employee_id, month, status } = req.query;

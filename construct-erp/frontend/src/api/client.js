@@ -493,6 +493,7 @@ export const hrShiftsAPI = {
   deleteShift:  (id)       => api.delete(`/hr-admin/shifts/${id}`),
   empShifts:    (p)        => api.get('/hr-admin/employee-shifts', { params: p }),
   assignShift:  (d)        => api.post('/hr-admin/employee-shifts', d),
+  bulkAssignShift: (d)     => api.post('/hr-admin/employee-shifts/bulk-assign', d),
   removeShift:  (id)       => api.delete(`/hr-admin/employee-shifts/${id}`),
   overtime:     (p)        => api.get('/hr-admin/overtime', { params: p }),
   addOT:        (d)        => api.post('/hr-admin/overtime', d),
