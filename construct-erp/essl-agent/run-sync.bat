@@ -1,41 +1,26 @@
 @echo off
 REM ============================================================
-REM  BCIM ESSL Attendance Sync Agent
-REM  Runs every 5 minutes via Windows Task Scheduler.
+REM  BCIM ESSL Attendance Sync Agent — Continuous Loop Mode
+REM  Syncs every 5 minutes automatically (no Task Scheduler needed).
 REM
-REM  Task Scheduler setup:
-REM    Trigger  : Daily (any time) → Repeat every 5 minutes
-REM               Duration: Indefinitely
-REM    Action   : Start a program
-REM    Program  : D:\OFFICE PROJECTS\CONSTRUCT-ERP\construct-erp\essl-agent\run-sync.bat
-REM    Start in : D:\OFFICE PROJECTS\CONSTRUCT-ERP\construct-erp\essl-agent
+REM  USAGE:
+REM    Double-click this file, OR run from command prompt:
+REM      run-sync.bat
+REM
+REM  To run as a background service on startup, add this .bat
+REM  to Task Scheduler with trigger: At startup, run once.
+REM  (The script loops internally every 5 min — no repeat needed.)
 REM ============================================================
 
 cd /d "%~dp0"
 
-REM ── Daily log file (resets each day, stays small) ──────────────────────────
-set LOGFILE=logs\sync-%DATE:~-4%-%DATE:~3,2%-%DATE:~0,2%.log
 if not exist logs mkdir logs
+set LOGFILE=logs\sync-%DATE:~-4%-%DATE:~3,2%-%DATE:~0,2%.log
 
-REM ── Lock file: skip if a previous run is still in progress ─────────────────
-set LOCKFILE=sync.lock
-if exist "%LOCKFILE%" (
-  echo [%TIME%] Skipping — previous sync still running >> "%LOGFILE%"
-  exit /b 0
-)
+echo [%DATE% %TIME%] ESSL Agent starting in loop mode... >> "%LOGFILE%"
+echo [%DATE% %TIME%] ESSL Agent starting in loop mode...
 
-echo %DATE% %TIME% > "%LOCKFILE%"
+node sync.js --loop >> "%LOGFILE%" 2>&1
 
-echo [%TIME%] Starting ESSL sync... >> "%LOGFILE%"
-
-node sync.js --days 1 >> "%LOGFILE%" 2>&1
-
-if %ERRORLEVEL% NEQ 0 (
-  echo [%TIME%] ERROR: sync failed with code %ERRORLEVEL% >> "%LOGFILE%"
-  del "%LOCKFILE%"
-  exit /b %ERRORLEVEL%
-)
-
-echo [%TIME%] Sync complete. >> "%LOGFILE%"
-
-del "%LOCKFILE%"
+echo [%DATE% %TIME%] ESSL Agent stopped (exit code %ERRORLEVEL%). >> "%LOGFILE%"
+pause

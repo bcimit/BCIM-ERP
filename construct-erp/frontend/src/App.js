@@ -343,6 +343,18 @@ const HREmployeeFiltersPage   = lazy(() => import('./pages/hr-admin/HREmployeeFi
 const HRCompliancePage            = lazy(() => import('./pages/hr-admin/HRCompliancePage'));
 const ComplianceTrackerPage       = lazy(() => import('./pages/hr-admin/compliance/CompliancePage'));
 const HRConfirmationReportPage    = lazy(() => import('./pages/hr-admin/HRConfirmationReportPage'));
+const HRCompanySettingsPage       = lazy(() => import('./pages/hr-admin/CompanySettingsPage'));
+const HRMasterSettingsPage        = lazy(() => import('./pages/hr-admin/MasterSettingsPage'));
+const HRSmsSettingsPage           = lazy(() => import('./pages/hr-admin/SmsSettingsPage'));
+const HRShiftCalendarPage         = lazy(() => import('./pages/hr-admin/ShiftCalendarPage'));
+const HRShiftRosterPage           = lazy(() => import('./pages/hr-admin/ShiftRosterPage'));
+const HREmployeeCategoriesPage    = lazy(() => import('./pages/hr-admin/EmployeeCategoriesPage'));
+const HREmployeeShiftsPage        = lazy(() => import('./pages/hr-admin/EmployeeShiftsPage'));
+const HRShiftSchedulePage         = lazy(() => import('./pages/hr-admin/ShiftSchedulePage'));
+const HRLeaveEntriesPage          = lazy(() => import('./pages/hr-admin/LeaveEntriesPage'));
+const HROutdoorEntriesPage        = lazy(() => import('./pages/hr-admin/OutdoorEntriesPage'));
+const HRGeofencesPage             = lazy(() => import('./pages/hr-admin/GeofencesPage'));
+const HRWorkCodesPage             = lazy(() => import('./pages/hr-admin/WorkCodesPage'));
 
 // ── Home route resolver — sends each user to their first accessible page ──────
 const MODULE_HOME = {
@@ -880,7 +892,19 @@ export default function App() {
                 <Route path="hr-admin/training"     element={<RequireModule module="HR & Admin"><HRTrainingPage /></RequireModule>} />
                 <Route path="hr-admin/emp-assets"   element={<RequireModule module="HR & Admin"><HREmployeeAssetsPage /></RequireModule>} />
                 <Route path="hr-admin/travel"       element={<RequireModule module="HR & Admin"><HRTravelRequestPage /></RequireModule>} />
-                <Route path="hr-admin/recruitment"  element={<RequireModule module="HR & Admin"><HRRecruitmentPage /></RequireModule>} />
+                <Route path="hr-admin/recruitment"     element={<RequireModule module="HR & Admin"><HRRecruitmentPage /></RequireModule>} />
+                <Route path="hr-admin/company-settings" element={<RequireModule module="HR & Admin"><HRCompanySettingsPage /></RequireModule>} />
+                <Route path="hr-admin/master-settings"  element={<RequireModule module="HR & Admin"><HRMasterSettingsPage /></RequireModule>} />
+                <Route path="hr-admin/sms-settings"     element={<RequireModule module="HR & Admin"><HRSmsSettingsPage /></RequireModule>} />
+                <Route path="hr-admin/shift-calendar"   element={<RequireModule module="HR & Admin"><HRShiftCalendarPage /></RequireModule>} />
+                <Route path="hr-admin/shift-roster"     element={<RequireModule module="HR & Admin"><HRShiftRosterPage /></RequireModule>} />
+                <Route path="hr-admin/emp-categories"   element={<RequireModule module="HR & Admin"><HREmployeeCategoriesPage /></RequireModule>} />
+                <Route path="hr-admin/emp-shifts"       element={<RequireModule module="HR & Admin"><HREmployeeShiftsPage /></RequireModule>} />
+                <Route path="hr-admin/shift-schedule"   element={<RequireModule module="HR & Admin"><HRShiftSchedulePage /></RequireModule>} />
+                <Route path="hr-admin/leave-entries"    element={<RequireModule module="HR & Admin"><HRLeaveEntriesPage /></RequireModule>} />
+                <Route path="hr-admin/outdoor-entries"  element={<RequireModule module="HR & Admin"><HROutdoorEntriesPage /></RequireModule>} />
+                <Route path="hr-admin/geofences"        element={<RequireModule module="HR & Admin"><HRGeofencesPage /></RequireModule>} />
+                <Route path="hr-admin/work-codes"       element={<RequireModule module="HR & Admin"><HRWorkCodesPage /></RequireModule>} />
 
                 {/* Planning */}
                 <Route path="planning" element={<RequireModule module="Planning"><PlanningDashboard /></RequireModule>} />

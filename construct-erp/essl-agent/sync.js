@@ -10,9 +10,9 @@
  *   2. Copy this folder to C:\essl-agent\
  *   3. Edit config.json with your API key and company ID
  *   4. Run:  npm install
- *   5. Test: node sync.js --days 1
- *   6. Schedule: Windows Task Scheduler → run daily at 23:00
- *      Action: node "C:\essl-agent\sync.js"
+ *   5. Test: node sync.js --minutes 10
+ *   6. Continuous: node sync.js --loop          (every 5 min, runs forever)
+ *      Or use Task Scheduler → run run-sync.bat daily (legacy mode)
  */
 
 'use strict';
@@ -30,30 +30,30 @@ if (!fs.existsSync(CFG_PATH)) {
 }
 const cfg = JSON.parse(fs.readFileSync(CFG_PATH, 'utf8'));
 
+const LOOP_INTERVAL_MS  = (cfg.loop_interval_minutes || 5) * 60 * 1000;
+const DEFAULT_WINDOW_MIN = cfg.window_minutes || 10; // overlap window for real-time mode
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
-function toDateStr(d) {
-  return d.toISOString().split('T')[0];
-}
-function addDays(d, n) {
-  const r = new Date(d); r.setDate(r.getDate() + n); return r;
-}
+function toDateStr(d)    { return d.toISOString().split('T')[0]; }
+function toDateTimeStr(d){ return d.toISOString().replace('T', ' ').slice(0, 19); }
+function addDays(d, n)   { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function addMinutes(d, n){ return new Date(d.getTime() + n * 60000); }
 
 // ── MSSQL config for ESSL ─────────────────────────────────────────────────────
 function buildMssqlCfg() {
   const c = {
     user:     cfg.essl.username,
     password: cfg.essl.password,
-    server:   cfg.essl.host,       // e.g. "192.168.1.26" or "localhost"
-    database: cfg.essl.database,   // e.g. "etimetrackliteweb"
+    server:   cfg.essl.host,
+    database: cfg.essl.database,
     options: {
-      instanceName:          cfg.essl.instance || undefined, // "SQLEXPRESS"
-      encrypt:               false,
+      instanceName:           cfg.essl.instance || undefined,
+      encrypt:                false,
       trustServerCertificate: true,
-      connectTimeout:        15000,
-      requestTimeout:        120000,
+      connectTimeout:         15000,
+      requestTimeout:         120000,
     },
   };
-  // For named instances (SQLEXPRESS), do NOT set port — SQL Browser resolves it
   if (!cfg.essl.instance) c.port = parseInt(cfg.essl.port) || 1433;
   return c;
 }
@@ -82,7 +82,7 @@ async function existingTables(conn, tables) {
 }
 
 // ── Pull swipe data from ESSL ─────────────────────────────────────────────────
-async function pullSwipes(conn, tables, fromDate, toDate) {
+async function pullSwipes(conn, tables, fromDT, toDT) {
   if (!tables.length) return [];
 
   const unionSQL = tables.map(t => `
@@ -96,8 +96,8 @@ async function pullSwipes(conn, tables, fromDate, toDate) {
   `).join(' UNION ALL ');
 
   const r = await conn.request()
-    .input('from', sql.VarChar, fromDate + ' 00:00:00')
-    .input('to',   sql.VarChar, toDate   + ' 23:59:59')
+    .input('from', sql.VarChar, fromDT)
+    .input('to',   sql.VarChar, toDT)
     .query(`${unionSQL} ORDER BY emp_code, swipe_time`);
 
   return r.recordset;
@@ -111,7 +111,7 @@ function groupSwipes(rows) {
     if (!code) continue;
     const dt   = new Date(row.swipe_time);
     const date = toDateStr(dt);
-    const time = dt.toTimeString().slice(0, 8); // HH:MM:SS
+    const time = dt.toTimeString().slice(0, 8);
     const key  = `${code}|${date}`;
     if (!grouped[key]) grouped[key] = { emp_code: code, date, ins: [], outs: [] };
     if (row.direction === 'in') grouped[key].ins.push(time);
@@ -120,8 +120,8 @@ function groupSwipes(rows) {
 
   return Object.values(grouped).map(g => {
     g.ins.sort(); g.outs.sort();
-    const in_time  = g.ins[0]  || (g.outs.length === 0 ? null : null);
-    const out_time = g.outs[g.outs.length - 1] || null;
+    const in_time     = g.ins[0] || null;
+    const out_time    = g.outs[g.outs.length - 1] || null;
     const punch_count = g.ins.length + g.outs.length;
     return { emp_code: g.emp_code, date: g.date, in_time, out_time, punch_count };
   });
@@ -160,17 +160,10 @@ function pushToERP(records) {
   });
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
-async function main() {
-  const args = process.argv.slice(2);
-  const daysArg = args.indexOf('--days');
-  const days = daysArg >= 0 ? parseInt(args[daysArg + 1]) || 1 : cfg.sync_days || 1;
-
-  const toDate   = toDateStr(new Date());
-  const fromDate = toDateStr(addDays(new Date(), -days));
-
+// ── Single sync run ───────────────────────────────────────────────────────────
+async function runSync({ fromDT, toDT, label }) {
   console.log(`\n[ESSL Agent] ${new Date().toLocaleString()}`);
-  console.log(`[ESSL Agent] Syncing ${fromDate} → ${toDate} (${days} day(s))`);
+  console.log(`[ESSL Agent] Syncing ${label}`);
   console.log(`[ESSL Agent] ESSL Server: ${cfg.essl.host}\\${cfg.essl.instance || 'default'}`);
 
   let conn;
@@ -179,16 +172,13 @@ async function main() {
     conn = await sql.connect(buildMssqlCfg());
     console.log('[ESSL Agent] Connected.');
 
-    const allTables  = monthlyTables(fromDate, toDate);
-    const tables     = await existingTables(conn, allTables);
+    const allTables = monthlyTables(fromDT, toDT);
+    const tables    = await existingTables(conn, allTables);
     console.log(`[ESSL Agent] Tables found: ${tables.join(', ') || 'none'}`);
 
-    if (!tables.length) {
-      console.log('[ESSL Agent] No DeviceLogs tables for this range. Done.');
-      return;
-    }
+    if (!tables.length) { console.log('[ESSL Agent] No DeviceLogs tables for this range. Done.'); return; }
 
-    const rawSwipes  = await pullSwipes(conn, tables, fromDate, toDate);
+    const rawSwipes = await pullSwipes(conn, tables, fromDT, toDT);
     console.log(`[ESSL Agent] Raw swipes: ${rawSwipes.length}`);
 
     const records = groupSwipes(rawSwipes);
@@ -200,14 +190,63 @@ async function main() {
     const result = await pushToERP(records);
     console.log(`[ESSL Agent] ✓ Synced: ${result.synced || 0} | Skipped: ${result.skipped || 0}`);
     if (result.not_found?.length) console.log(`[ESSL Agent] Not found in ERP: ${result.not_found.join(', ')}`);
-    if (result.errors?.length) console.log(`[ESSL Agent] Errors:`, result.errors);
+    if (result.errors?.length)    console.log('[ESSL Agent] Errors:', result.errors);
 
   } catch (err) {
     console.error('[ESSL Agent] ERROR:', err.message);
-    process.exit(1);
+    if (!loopMode) process.exit(1); // in loop mode, log and continue
   } finally {
     if (conn) await conn.close().catch(() => {});
     console.log('[ESSL Agent] Done.\n');
+  }
+}
+
+// ── Parse args ────────────────────────────────────────────────────────────────
+const args       = process.argv.slice(2);
+const loopMode   = args.includes('--loop');
+const daysArg    = args.indexOf('--days');
+const minutesArg = args.indexOf('--minutes');
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+async function main() {
+  if (loopMode) {
+    // Continuous mode: sync every N minutes (default 5)
+    const windowMin = minutesArg >= 0 ? parseInt(args[minutesArg + 1]) || DEFAULT_WINDOW_MIN : DEFAULT_WINDOW_MIN;
+    console.log(`[ESSL Agent] Loop mode started — interval: ${cfg.loop_interval_minutes || 5} min | window: ${windowMin} min`);
+    console.log('[ESSL Agent] Press Ctrl+C to stop.\n');
+
+    const tick = async () => {
+      const now  = new Date();
+      const from = addMinutes(now, -windowMin);
+      await runSync({
+        fromDT: toDateTimeStr(from),
+        toDT:   toDateTimeStr(now),
+        label:  `last ${windowMin} minutes (${toDateTimeStr(from)} → ${toDateTimeStr(now)})`,
+      });
+    };
+
+    await tick(); // run immediately on start
+    setInterval(tick, LOOP_INTERVAL_MS);
+
+  } else {
+    // One-shot mode
+    let fromDT, toDT, label;
+
+    if (minutesArg >= 0) {
+      const windowMin = parseInt(args[minutesArg + 1]) || DEFAULT_WINDOW_MIN;
+      const now  = new Date();
+      const from = addMinutes(now, -windowMin);
+      fromDT = toDateTimeStr(from);
+      toDT   = toDateTimeStr(now);
+      label  = `last ${windowMin} minutes`;
+    } else {
+      const days = daysArg >= 0 ? parseInt(args[daysArg + 1]) || 1 : cfg.sync_days || 1;
+      toDT   = toDateStr(new Date()) + ' 23:59:59';
+      fromDT = toDateStr(addDays(new Date(), -days)) + ' 00:00:00';
+      label  = `${fromDT.slice(0, 10)} → ${toDT.slice(0, 10)} (${days} day(s))`;
+    }
+
+    await runSync({ fromDT, toDT, label });
   }
 }
 

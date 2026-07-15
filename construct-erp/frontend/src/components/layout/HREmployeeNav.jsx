@@ -5,6 +5,31 @@ import { ChevronDown } from 'lucide-react';
 
 const NAV_MENUS = [
   {
+    label: 'Masters',
+    items: [
+      { label: 'Company Settings',       to: '/hr-admin/company-settings' },
+      { label: 'Master Settings',        to: '/hr-admin/master-settings' },
+      { label: 'Mail Settings',          to: '/admin/mail' },
+      { label: 'SMS Settings',           to: '/hr-admin/sms-settings' },
+      { label: 'Shift Details',          to: '/hr-admin/shifts' },
+      { label: 'Shift Calendar',         to: '/hr-admin/shift-calendar' },
+      { label: 'Shift Roster',           to: '/hr-admin/shift-roster' },
+      { label: 'Leave Types',            to: '/hr-admin/leaves' },
+      { label: 'Employee Categories',    to: '/hr-admin/emp-categories' },
+      { label: 'Public Holidays',        to: '/hr-admin/holidays' },
+      { label: 'Departments',            to: '/hr-admin/departments' },
+      { label: 'Employees',              to: '/hr-admin/employees' },
+      { label: 'Employees Shifts',       to: '/hr-admin/emp-shifts' },
+      { label: 'Employees Shift Schedule', to: '/hr-admin/shift-schedule' },
+      { label: 'Employees Leave Entries', to: '/hr-admin/leave-entries' },
+      { label: 'Employee OutDoor Entries', to: '/hr-admin/outdoor-entries' },
+      { label: 'Attendance Log',         to: '/hr-admin/attendance' },
+      { label: 'Employee OT Register',   to: '/hr-admin/attendance' },
+      { label: 'Geofences',              to: '/hr-admin/geofences' },
+      { label: 'Manage Work Code',       to: '/hr-admin/work-codes' },
+    ],
+  },
+  {
     label: 'Main',
     items: [
       { label: 'Analytics Hub',       to: '/hr-admin/analytics' },
