@@ -854,6 +854,31 @@ router.put('/workers/:id', authorize(...PLANNER), async (req, res) => {
   } catch(e){ res.status(500).json({ error: e.message }); }
 });
 
+// DELETE /sc/workers/:id — remove a worker not tied to any NMR or attendance history
+router.delete('/workers/:id', authorize(...PLANNER), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cid = CID(req);
+
+    const owned = await query(`SELECT id FROM sc_workers WHERE id=$1 AND company_id=$2`, [id, cid]);
+    if (!owned.rows.length) return res.status(404).json({ error: 'Worker not found' });
+
+    // NMR totals are aggregated from sc_attendance at creation time (no per-worker
+    // line table exists), so attendance history is the only thing that ties a
+    // worker to billed NMRs — block delete if any exists.
+    const attRes = await query(`SELECT COUNT(*) FROM sc_attendance WHERE worker_id=$1`, [id]);
+    const attCount = parseInt(attRes.rows[0].count);
+    if (attCount > 0) {
+      return res.status(409).json({
+        error: `Cannot delete: worker has ${attCount} attendance record(s) which may be included in an NMR. Deactivate instead.`,
+      });
+    }
+
+    await query(`DELETE FROM sc_workers WHERE id=$1 AND company_id=$2`, [id, cid]);
+    res.json({ success: true });
+  } catch(e){ res.status(500).json({ error: e.message }); }
+});
+
 router.get('/attendance', async (req, res) => {
   try {
     const { project_id, sc_id, wo_id, from_date, to_date } = req.query;

@@ -657,6 +657,11 @@ export default function SCLabour() {
     onSuccess:()=>{ toast.success('ESSL code saved'); qc.invalidateQueries({queryKey:['sc-workers']}); },
     onError:e=>toast.error(e?.response?.data?.error||'Failed'),
   });
+  const deleteWorkerMut = useMutation({
+    mutationFn: (id)=>scAPI.deleteWorker(id),
+    onSuccess:()=>{ toast.success('Worker removed'); qc.invalidateQueries({queryKey:['sc-workers']}); },
+    onError:e=>toast.error(e?.response?.data?.error||'Failed to delete worker'),
+  });
   const markAttMut = useMutation({
     mutationFn: d=>scAPI.markAttendance(d),
     onSuccess:()=>{ toast.success('Attendance saved'); qc.invalidateQueries({queryKey:['sc-attendance']}); setShowAttForm(false); },
@@ -806,14 +811,14 @@ export default function SCLabour() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{background:`linear-gradient(90deg, ${Theme.navy} 0%, ${Theme.navyDark} 100%)`}}>
-                    {['Code','Worker Name','Contractor','Skill Type','Daily Rate (₹)','Mobile','ESSL Code','Status'].map(h=>(
+                    {['Code','Worker Name','Contractor','Skill Type','Daily Rate (₹)','Mobile','ESSL Code','Status',''].map(h=>(
                       <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-white/80 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredWorkers.length===0 ? (
-                    <tr><td colSpan={8} className="py-12 text-center">
+                    <tr><td colSpan={9} className="py-12 text-center">
                       <Users className="w-10 h-10 text-slate-400 mx-auto mb-2"/>
                       <p className="text-slate-400">No workers registered</p>
                     </td></tr>
@@ -832,6 +837,15 @@ export default function SCLabour() {
                         <span className={clsx('text-xs px-2 py-0.5 rounded-full font-semibold', w.status==='active'?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-500')}>
                           {w.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={()=>{ if (window.confirm(`Remove ${w.worker_name}? This cannot be undone.`)) deleteWorkerMut.mutate(w.id); }}
+                          disabled={deleteWorkerMut.isPending}
+                          title="Remove worker"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-40">
+                          <X className="w-4 h-4"/>
+                        </button>
                       </td>
                     </tr>
                   ))}
