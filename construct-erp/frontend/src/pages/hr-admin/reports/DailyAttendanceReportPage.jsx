@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { hrAttendanceAPI, projectAPI } from '../../../api/client';
 import { Download, Printer, ClipboardList } from 'lucide-react';
 
-const today = () => new Date().toISOString().slice(0,10);
+const today     = () => new Date().toISOString().slice(0,10);
+const yesterday = () => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
 
 const S_COLOR = { present:'#D1FAE5/#065F46', absent:'#FEE2E2/#991B1B', leave:'#FEF3C7/#92400E', half_day:'#DBEAFE/#1E40AF', holiday:'#EDE9FE/#5B21B6' };
 function Pill({ s }) {
@@ -12,16 +13,15 @@ function Pill({ s }) {
 }
 
 export default function DailyAttendanceReportPage() {
-  const [date, setDate]       = useState(today());
-  const [project, setProject] = useState('');
-  const [dept, setDept]       = useState('');
+  const [date, setDate]         = useState(today());
+  const [project, setProject]   = useState('');
   const [category, setCategory] = useState('');
 
   const { data: projects } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data||r.data||[]) });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['daily-att-report', date, project, dept, category],
-    queryFn:  () => hrAttendanceAPI.timesheetReport({ from:date, to:date, project_id:project||undefined, department:dept||undefined, category:category||undefined })
+    queryKey: ['daily-att-report', date, project, category],
+    queryFn:  () => hrAttendanceAPI.timesheetReport({ date, project_id:project||undefined, category:category||undefined })
                     .then(r => r.data?.data || r.data || []),
   });
 
@@ -56,13 +56,14 @@ export default function DailyAttendanceReportPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14 }}>
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14, alignItems:'center' }}>
         <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 10px', fontSize:13 }} />
+        <button onClick={()=>setDate(yesterday())} style={{ background: date===yesterday()?'#7C3AED':'#F1F5F9', color: date===yesterday()?'#fff':'#475569', border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>Yesterday</button>
+        <button onClick={()=>setDate(today())} style={{ background: date===today()?'#7C3AED':'#F1F5F9', color: date===today()?'#fff':'#475569', border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>Today</button>
         <select value={project} onChange={e=>setProject(e.target.value)} style={{ border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 10px', fontSize:13 }}>
           <option value=''>All Projects</option>
           {(projects||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <input value={dept} onChange={e=>setDept(e.target.value)} placeholder="Department..." style={{ border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 10px', fontSize:13 }} />
         <select value={category} onChange={e=>setCategory(e.target.value)} style={{ border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 10px', fontSize:13 }}>
           <option value=''>All Categories</option>
           <option value='staff'>Staff</option>
