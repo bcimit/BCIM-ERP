@@ -130,22 +130,45 @@ export default function TimesheetReportPage() {
       {/* ── PRINT STYLES ──────────────────────────────── */}
       <style>{`
         @media print {
+          @page { size: A3 landscape; margin: 10mm 12mm; }
           html, body { margin:0; padding:0; background:#fff !important; }
-          body * { visibility:hidden !important; }
-          #ts-print-root, #ts-print-root * { visibility:visible !important; }
-          #ts-print-root { position:absolute !important; left:0; top:0; width:100%; background:#fff; }
-          @page { size: A3 landscape; margin: 8mm 10mm; }
-          #ts-print-root { font-family: Arial, sans-serif; font-size: 10pt; color: #000; }
+          body > * { display:none !important; }
+          body > div:has(#ts-print-root) { display:block !important; }
           .no-print { display:none !important; }
           .print-only { display:block !important; }
-          .print-table { width:100%; border-collapse:collapse; font-size:8.5pt; }
+          #ts-print-root {
+            display:block !important;
+            visibility:visible !important;
+            position:static !important;
+            overflow:visible !important;
+            width:100% !important;
+            background:#fff;
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            color: #000;
+          }
+          #ts-print-root * { visibility:visible !important; overflow:visible !important; }
+          #ts-print-root .ts-table-wrap { overflow:visible !important; }
+          .print-table {
+            width:100%;
+            border-collapse:collapse;
+            font-size:8.5pt;
+            page-break-inside:auto;
+          }
+          .print-table thead { display:table-header-group; }
+          .print-table tfoot { display:table-footer-group; }
+          .print-table tr { page-break-inside:avoid; page-break-after:auto; }
           .print-table th {
             background:#1B3A6B !important; color:#fff !important;
             padding:5px 6px; border:1px solid #1B3A6B;
-            text-align:left; font-size:8pt; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+            text-align:left; font-size:8pt;
+            -webkit-print-color-adjust:exact; print-color-adjust:exact;
           }
           .print-table td { padding:4px 6px; border:1px solid #ccc; vertical-align:middle; }
-          .print-table tr:nth-child(even) td { background:#F0F4FF !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+          .print-table tr:nth-child(even) td {
+            background:#F0F4FF !important;
+            -webkit-print-color-adjust:exact; print-color-adjust:exact;
+          }
           .sig-section { page-break-inside:avoid; margin-top:20px; }
         }
         @media screen {
@@ -286,10 +309,10 @@ export default function TimesheetReportPage() {
 
         {/* ─── TABLE ─── */}
         {!loading && !error && (
-          <div style={{ overflowX:'auto' }}>
+          <div className="ts-table-wrap" style={{ overflowX:'auto' }}>
             <table className="print-table" style={{
               borderCollapse:'collapse', width:'100%', fontSize:12,
-              background:'#fff', borderRadius:8, overflow:'hidden',
+              background:'#fff', borderRadius:8,
               boxShadow:'0 1px 6px rgba(0,0,0,0.07)',
             }}>
               <thead>
