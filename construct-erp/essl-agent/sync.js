@@ -85,11 +85,25 @@ async function existingTables(conn, tables) {
 async function pullSwipes(conn, tables, fromDT, toDT) {
   if (!tables.length) return [];
 
+  // Detect if DeviceLogs table has a Direction column (ETimetracklite standard: 0=In, 1=Out)
+  let hasDirection = false;
+  try {
+    await conn.request().query(`SELECT TOP 0 Direction FROM [${tables[0]}]`);
+    hasDirection = true;
+  } catch (_) {}
+
+  // Use ESSL Direction column when available; fall back to hour-of-day heuristic
+  const dirExpr = hasDirection
+    ? `CASE WHEN d.Direction = 0 THEN 'in' WHEN d.Direction = 1 THEN 'out' ELSE (CASE WHEN DATEPART(HOUR, d.LogDate) < 12 THEN 'in' ELSE 'out' END) END`
+    : `CASE WHEN DATEPART(HOUR, d.LogDate) < 12 THEN 'in' ELSE 'out' END`;
+
+  console.log(`[ESSL Agent] Direction source: ${hasDirection ? 'ESSL Direction column' : 'hour-of-day fallback'}`);
+
   const unionSQL = tables.map(t => `
     SELECT
-      e.EmployeeCode                                                    AS emp_code,
-      CONVERT(VARCHAR(23), d.LogDate, 121)                              AS swipe_time,
-      CASE WHEN DATEPART(HOUR, d.LogDate) < 12 THEN 'in' ELSE 'out' END AS direction
+      e.EmployeeCode           AS emp_code,
+      CONVERT(VARCHAR(23), d.LogDate, 121) AS swipe_time,
+      ${dirExpr}               AS direction
     FROM [${t}] d
     JOIN Employees e ON e.NumericCode = d.UserId
     WHERE d.LogDate BETWEEN @from AND @to
@@ -113,16 +127,36 @@ function groupSwipes(rows) {
     const date = toDateStr(dt);
     const time = dt.toTimeString().slice(0, 8);
     const key  = `${code}|${date}`;
-    if (!grouped[key]) grouped[key] = { emp_code: code, date, ins: [], outs: [] };
+    if (!grouped[key]) grouped[key] = { emp_code: code, date, ins: [], outs: [], all: [] };
     if (row.direction === 'in') grouped[key].ins.push(time);
     else grouped[key].outs.push(time);
+    grouped[key].all.push(time);
   }
 
   return Object.values(grouped).map(g => {
-    g.ins.sort(); g.outs.sort();
-    const in_time     = g.ins[0] || null;
-    const out_time    = g.outs[g.outs.length - 1] || null;
-    const punch_count = g.ins.length + g.outs.length;
+    g.ins.sort(); g.outs.sort(); g.all.sort();
+    const punch_count = g.all.length;
+
+    let in_time, out_time;
+
+    if (g.ins.length && g.outs.length) {
+      // Normal case: have both explicit in and out punches
+      in_time  = g.ins[0];
+      out_time = g.outs[g.outs.length - 1];
+    } else if (g.ins.length >= 2 && !g.outs.length) {
+      // All punches classified as 'in' (hour fallback edge case) — first=in, last=out
+      in_time  = g.ins[0];
+      out_time = g.ins[g.ins.length - 1] !== g.ins[0] ? g.ins[g.ins.length - 1] : null;
+    } else if (g.outs.length >= 1 && !g.ins.length) {
+      // All punches are 'out' — treat first as in, last as out
+      in_time  = g.outs[0];
+      out_time = g.outs.length > 1 ? g.outs[g.outs.length - 1] : null;
+    } else {
+      // Only one punch total
+      in_time  = g.all[0] || null;
+      out_time = null;
+    }
+
     return { emp_code: g.emp_code, date: g.date, in_time, out_time, punch_count };
   });
 }
