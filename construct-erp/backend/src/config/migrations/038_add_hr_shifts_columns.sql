@@ -4,7 +4,7 @@ ADD COLUMN IF NOT EXISTS break_minutes INT DEFAULT 30,
 ADD COLUMN IF NOT EXISTS is_night_shift BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS ot_after_minutes INT DEFAULT 480;
 
--- Backfill existing shifts with defaults
+-- Ensure is_active is TRUE for all existing shifts (in case it got set to FALSE)
 UPDATE hr_shifts
-SET break_minutes = 30, is_night_shift = FALSE, ot_after_minutes = 480
-WHERE break_minutes IS NULL OR is_night_shift IS NULL OR ot_after_minutes IS NULL;
+SET is_active = TRUE
+WHERE is_active IS NULL OR is_active = FALSE;
