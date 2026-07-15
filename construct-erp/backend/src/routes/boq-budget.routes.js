@@ -827,12 +827,12 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
         WHERE project_id=$1 AND status != 'cancelled'`, [project_id]);
     } catch (_) {}
 
-    // Finance module invoices (Vendor Payments page) — Bills Received.
-    // Cost head is taken from the linked PO's items (first non-null entry); falls
-    // back to 'Material' when the invoice has no PO or PO items have no head set.
-    // Excludes invoices already covered by a TQS bill (tqs_bills rows already in
-    // tqsActuals) — identified by the invoice having a payment with tqs_bill_id.
-    // Only verified/authorized/paid invoices count (not raw 'pending' entries).
+    // Finance module invoices (Vendor Payments page) — Bills Received / Total Spent.
+    // Consistent with TQS bills: any non-cancelled/rejected invoice counts (including
+    // 'pending' — Finance invoices are not auto-promoted to 'paid' when a payment is
+    // recorded, so filtering to verified/authorized/paid would silently miss most).
+    // Cost head inferred from linked PO items; falls back to 'Material'.
+    // Excludes invoices whose payment was linked to a TQS bill (already counted via tqsActuals).
     const finInvActuals = await query(`
       SELECT
         COALESCE(
@@ -845,7 +845,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
         SUM(i.net_amount) AS actual
       FROM invoices i
       WHERE i.project_id = $1
-        AND i.status IN ('verified', 'authorized', 'paid')
+        AND i.status NOT IN ('cancelled', 'rejected')
         AND NOT EXISTS (
           SELECT 1 FROM payments pay
           WHERE pay.invoice_id = i.id AND pay.tqs_bill_id IS NOT NULL
