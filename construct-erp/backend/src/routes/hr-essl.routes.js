@@ -65,15 +65,34 @@ router.post('/agent-push', async (req, res) => {
             const arrMins = h * 60 + m;
             if (arrMins > 9 * 60 + 30) lateMin = arrMins - (9 * 60 + 30);
           }
+          // Merge with existing punches: earliest = in, latest = out.
+          // A partial window sync may deliver only an evening punch (as in_time),
+          // so every incoming time is a candidate for both in and out.
           await query(
             `INSERT INTO hr_attendance
                (user_id, company_id, attendance_date, status, in_time, out_time, late_minutes, source)
              VALUES ($1,$2,$3,$4,$5,$6,$7,'essl_agent')
              ON CONFLICT (user_id, attendance_date) DO UPDATE
-               SET status=$4,
-                   in_time=COALESCE($5, hr_attendance.in_time),
-                   out_time=COALESCE($6, hr_attendance.out_time),
-                   late_minutes=$7, source='essl_agent'`,
+               SET in_time  = LEAST(
+                     COALESCE(hr_attendance.in_time, $5::time),
+                     COALESCE($5::time, hr_attendance.in_time)),
+                   out_time = NULLIF(
+                     GREATEST(
+                       COALESCE(hr_attendance.out_time, $6::time, $5::time),
+                       COALESCE($6::time, $5::time, hr_attendance.out_time)),
+                     LEAST(
+                       COALESCE(hr_attendance.in_time, $5::time),
+                       COALESCE($5::time, hr_attendance.in_time))),
+                   status = CASE WHEN NULLIF(
+                       GREATEST(
+                         COALESCE(hr_attendance.out_time, $6::time, $5::time),
+                         COALESCE($6::time, $5::time, hr_attendance.out_time)),
+                       LEAST(
+                         COALESCE(hr_attendance.in_time, $5::time),
+                         COALESCE($5::time, hr_attendance.in_time))) IS NOT NULL
+                     THEN 'present' ELSE 'half_day' END,
+                   late_minutes = LEAST(COALESCE(hr_attendance.late_minutes, $7), $7),
+                   source='essl_agent'`,
             [userId, company_id, rec.date, status, inTime, outTime, lateMin]
           );
         } else {
@@ -85,12 +104,45 @@ router.post('/agent-push', async (req, res) => {
             const diff = (oh * 60 + om) - (ih * 60 + im);
             if (diff > 0) hoursWorked = Math.min(parseFloat((diff / 60).toFixed(2)), 12);
           }
+          // Same merge logic as hr_attendance: earliest punch = in, latest = out
           await query(
             `INSERT INTO sc_attendance
                (company_id, project_id, sc_id, wo_id, worker_id, attendance_date, status, hours_worked, in_time, out_time, remarks)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'essl_agent')
              ON CONFLICT (worker_id, attendance_date) DO UPDATE
-               SET status=$7, hours_worked=$8, in_time=$9, out_time=$10, remarks='essl_agent'`,
+               SET in_time  = LEAST(
+                     COALESCE(sc_attendance.in_time, $9::time),
+                     COALESCE($9::time, sc_attendance.in_time)),
+                   out_time = NULLIF(
+                     GREATEST(
+                       COALESCE(sc_attendance.out_time, $10::time, $9::time),
+                       COALESCE($10::time, $9::time, sc_attendance.out_time)),
+                     LEAST(
+                       COALESCE(sc_attendance.in_time, $9::time),
+                       COALESCE($9::time, sc_attendance.in_time))),
+                   hours_worked = COALESCE(
+                     LEAST(ROUND(EXTRACT(EPOCH FROM (
+                       NULLIF(
+                         GREATEST(
+                           COALESCE(sc_attendance.out_time, $10::time, $9::time),
+                           COALESCE($10::time, $9::time, sc_attendance.out_time)),
+                         LEAST(
+                           COALESCE(sc_attendance.in_time, $9::time),
+                           COALESCE($9::time, sc_attendance.in_time)))
+                       - LEAST(
+                           COALESCE(sc_attendance.in_time, $9::time),
+                           COALESCE($9::time, sc_attendance.in_time))
+                     )) / 3600.0, 2), 12),
+                     sc_attendance.hours_worked, $8),
+                   status = CASE WHEN NULLIF(
+                       GREATEST(
+                         COALESCE(sc_attendance.out_time, $10::time, $9::time),
+                         COALESCE($10::time, $9::time, sc_attendance.out_time)),
+                       LEAST(
+                         COALESCE(sc_attendance.in_time, $9::time),
+                         COALESCE($9::time, sc_attendance.in_time))) IS NOT NULL
+                     THEN 'present' ELSE 'half_day' END,
+                   remarks='essl_agent'`,
             [company_id, scWorker.project_id, scWorker.sc_id, scWorker.wo_id,
              scWorker.id, rec.date, status, hoursWorked, inTime || null, (hasOut ? outTime : null)]
           );
