@@ -1365,6 +1365,7 @@ router.post('/:id/payment', async (req, res) => {
         FROM vendor_qs_certification_bills cb
         JOIN tqs_bills b ON b.id = cb.bill_id
         LEFT JOIN tqs_bill_updates u ON u.bill_id = cb.bill_id
+                                    AND u.certification_id = cb.certification_id
         WHERE cb.certification_id = $1
         ORDER BY cb.inv_date
       `, [req.params.id]);
