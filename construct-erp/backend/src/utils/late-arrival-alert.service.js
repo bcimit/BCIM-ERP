@@ -2,10 +2,15 @@
 // Sends individual late-arrival warning emails to employees who checked in late.
 // Can be triggered manually via API or scheduled via cron.
 
-const { query } = require('../config/db');
+const cron = require('node-cron');
+const logger = require('./logger');
+const { query } = require('../config/database');
 const { sendMail } = require('../services/mail.service');
 
 const ERP_URL = process.env.API_BASE_URL || 'https://erp.bcim.in';
+// Daily late-arrival sweep — 11:00 AM IST by default, after morning punches
+// have synced from the biometric devices. Override with env vars.
+const DEFAULT_CRON = '0 11 * * *';
 
 // ── HTML email template ───────────────────────────────────────────────────────
 function buildLateEmail({ employeeName, employeeCode, date, checkInTime, lateMinutes, shiftStart, companyName, managerName }) {
@@ -152,15 +157,26 @@ async function sendLateArrivalAlerts({ date, companyId, minLateMinutes = 5, over
     // Get late employees for the date
     const { rows: lateEmps } = await query(`
       SELECT
-        a.id, a.user_id, a.attendance_date, a.check_in, a.late_minutes,
+        a.id, a.user_id, a.attendance_date, a.in_time AS check_in, a.late_minutes,
         u.name AS employee_name, u.email AS employee_email, u.employee_code,
-        COALESCE(ep.shift_start_time, s.start_time) AS shift_start,
+        s.start_time AS shift_start,
         m.name AS manager_name, m.email AS manager_email
       FROM hr_attendance a
       JOIN users u ON u.id = a.user_id
       LEFT JOIN employee_profiles ep ON ep.user_id = a.user_id
-      LEFT JOIN hr_shifts s ON s.id = ep.shift_id
       LEFT JOIN users m ON m.id = ep.reporting_manager_id
+      -- Shift start (optional, for display) comes from the active assignment in
+      -- hr_employee_shifts, not employee_profiles (which has no shift column).
+      LEFT JOIN LATERAL (
+        SELECT hs.start_time
+        FROM hr_employee_shifts es
+        JOIN hr_shifts hs ON hs.id = es.shift_id
+        WHERE es.employee_id = a.user_id
+          AND es.effective_from <= a.attendance_date
+          AND (es.effective_to IS NULL OR es.effective_to >= a.attendance_date)
+        ORDER BY es.effective_from DESC
+        LIMIT 1
+      ) s ON TRUE
       WHERE a.company_id = $1
         AND a.attendance_date = $2
         AND a.late_minutes >= $3
@@ -205,4 +221,27 @@ async function sendLateArrivalAlerts({ date, companyId, minLateMinutes = 5, over
   return { ok: true, date: targetDate, results };
 }
 
-module.exports = { sendLateArrivalAlerts, buildLateEmail };
+// ── Scheduled automation: runs every day and emails whoever came in late ──────
+function initLateArrivalAlert() {
+  if (String(process.env.HR_LATE_ALERT_ENABLED || 'true').toLowerCase() === 'false') {
+    logger.info('Late-arrival alert scheduler disabled (HR_LATE_ALERT_ENABLED=false)');
+    return;
+  }
+  const schedule = process.env.HR_LATE_ALERT_CRON || DEFAULT_CRON;
+  const minLateMinutes = parseInt(process.env.HR_LATE_ALERT_MIN_MINUTES, 10) || 5;
+
+  cron.schedule(schedule, () => {
+    logger.info('Scheduled late-arrival alert triggered');
+    // No companyId → sweeps every active company for today's date.
+    sendLateArrivalAlerts({ minLateMinutes })
+      .then((r) => {
+        const total = (r.results || []).reduce((s, x) => s + (x.sent || 0), 0);
+        logger.info(`Late-arrival alerts sent: ${total} across ${r.results?.length || 0} company(ies)`);
+      })
+      .catch((err) => logger.error(`Late-arrival alert failed: ${err.message}`));
+  }, { timezone: process.env.HR_LATE_ALERT_TZ || process.env.TZ || 'Asia/Kolkata' });
+
+  logger.info(`Late-arrival alert scheduler initialized (${schedule}, ≥${minLateMinutes} min)`);
+}
+
+module.exports = { sendLateArrivalAlerts, buildLateEmail, initLateArrivalAlert };
