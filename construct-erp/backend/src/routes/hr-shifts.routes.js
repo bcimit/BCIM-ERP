@@ -99,11 +99,10 @@ router.post('/shifts', authorize(...HR_ROLES), async (req, res) => {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     const { rows } = await query(
-      `INSERT INTO hr_shifts(company_id,name,shift_code,start_time,end_time,break_minutes,is_night_shift,grace_minutes,ot_after_minutes)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO hr_shifts(company_id,name,shift_code,start_time,end_time,grace_minutes)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
       [req.user.company_id, name, code||null, start_time, end_time,
-       parseInt(break_minutes)||30, is_night_shift||false,
-       parseInt(grace_minutes)||10, parseInt(ot_after_minutes)||0]
+       parseInt(grace_minutes)||10]
     );
     res.json({ data: rows[0] });
   } catch (err) {
@@ -115,13 +114,11 @@ router.put('/shifts/:id', authorize(...HR_ROLES), async (req, res) => {
   try {
     const { name, code, start_time, end_time, break_minutes, is_night_shift, grace_minutes, ot_after_minutes, active } = req.body;
     const { rows } = await query(
-      `UPDATE hr_shifts SET name=$1,shift_code=$2,start_time=$3,end_time=$4,break_minutes=$5,
-       is_night_shift=$6,grace_minutes=$7,ot_after_minutes=$8,active=$9
-       WHERE id=$10 AND company_id=$11 RETURNING *`,
+      `UPDATE hr_shifts SET name=$1,shift_code=$2,start_time=$3,end_time=$4,grace_minutes=$5,is_active=$6
+       WHERE id=$7 AND company_id=$8 RETURNING *`,
       [name, code||null, start_time, end_time,
-       parseInt(break_minutes)||30, is_night_shift||false,
-       parseInt(grace_minutes)||10, parseInt(ot_after_minutes)||0,
-       active, req.params.id, req.user.company_id]
+       parseInt(grace_minutes)||10, active!==false,
+       req.params.id, req.user.company_id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Shift not found' });
     res.json({ data: rows[0] });
