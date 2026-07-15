@@ -30,6 +30,22 @@ const NAV_MENUS = [
     ],
   },
   {
+    label: 'Reports',
+    items: [
+      { label: 'Daily Attendance',      to: '/hr-admin/reports/daily-attendance' },
+      { label: 'Monthly Status',        to: '/hr-admin/reports/monthly-status' },
+      { label: 'Attendance Summary',    to: '/hr-admin/reports/attendance-summary' },
+      { label: 'Department Summary',    to: '/hr-admin/reports/dept-summary' },
+      { label: 'Leave Summary',         to: '/hr-admin/reports/leave-summary' },
+      { label: 'Yearly Summary',        to: '/hr-admin/reports/yearly-summary' },
+      { label: 'Employee Details',      to: '/hr-admin/reports/employee-details' },
+      { label: 'Log Records',           to: '/hr-admin/reports/log-records' },
+      { label: 'Shift Schedule',        to: '/hr-admin/reports/shift-schedule' },
+      { label: 'Random Check',          to: '/hr-admin/reports/random-check' },
+      { label: 'Recalculate',           to: '/hr-admin/attendance/recalculate' },
+    ],
+  },
+  {
     label: 'Main',
     items: [
       { label: 'Analytics Hub',       to: '/hr-admin/analytics' },

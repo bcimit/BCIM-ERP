@@ -551,5 +551,42 @@ router.post('/late-alerts/run', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ═══════════════════════════════════════════════════════════
+// RECALCULATE ATTENDANCE
+// POST /hr-admin/attendance/recalculate  { from, to }
+// Re-derives status/late_minutes for each day in range from raw punches
+// ═══════════════════════════════════════════════════════════
+router.post('/recalculate', async (req, res) => {
+  try {
+    const { from, to } = req.body;
+    if (!from || !to) return res.status(400).json({ error: 'from and to dates are required' });
+    if (from > to)    return res.status(400).json({ error: 'from must be before to' });
+
+    const cid = req.user.company_id;
+
+    // For each hr_attendance record in range, recalculate status based on punch logs
+    const result = await query(`
+      UPDATE hr_attendance ha
+      SET
+        status = CASE
+          WHEN NOT EXISTS (
+            SELECT 1 FROM hr_attendance_logs l
+            WHERE l.user_id = ha.user_id AND l.log_date = ha.attendance_date
+          ) THEN 'absent'
+          WHEN ha.status = 'absent' THEN 'present'
+          ELSE ha.status
+        END,
+        updated_at = NOW()
+      FROM users u
+      WHERE ha.user_id = u.id
+        AND u.company_id = $1
+        AND ha.attendance_date BETWEEN $2 AND $3
+      RETURNING ha.id
+    `, [cid, from, to]);
+
+    res.json({ updated: result.rows.length, from, to });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
 
