@@ -185,6 +185,7 @@ export const subcontractorAPI = {
   approveWorkOrder:  (id, d)  => api.patch(`/subcontractors/work-orders/${id}/approve`, d),
   mdApproveWorkOrder:(id)     => api.patch(`/subcontractors/work-orders/${id}/md-approve`),
   rejectWorkOrder:   (id, d)  => api.patch(`/subcontractors/work-orders/${id}/reject`, d),
+  terminateWorkOrder:(id, d)  => api.patch(`/subcontractors/work-orders/${id}/terminate`, d),
   downloadWOTemplate:()       => api.get('/subcontractors/work-orders/import/template', { responseType: 'blob' }),
   excelImportPreview:(file)   => { const fd = new FormData(); fd.append('file', file); return api.post('/subcontractors/work-orders/import/excel', fd, { headers: { 'Content-Type': undefined } }); },
   // Measurements

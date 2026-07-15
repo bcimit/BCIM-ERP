@@ -131,6 +131,25 @@ router.patch('/work-orders/:id/reject', authorize('super_admin', 'admin', 'proje
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// PATCH /work-orders/:id/terminate — close a WO mid-way when vendor abandons work
+router.patch('/work-orders/:id/terminate', authorize('super_admin', 'admin', 'project_manager', 'procurement_manager', 'managing_director', 'md', 'ceo'), async (req, res) => {
+  try {
+    const reason = (req.body?.reason || '').trim();
+    if (!reason) return res.status(400).json({ error: 'A termination reason is required.' });
+    const result = await query(
+      `UPDATE work_orders
+       SET status='terminated', rejection_reason=$3, updated_at=NOW()
+       WHERE id=$1
+         AND project_id IN (SELECT id FROM projects WHERE company_id=$2)
+         AND status NOT IN ('terminated','closed','rejected')
+       RETURNING *`,
+      [req.params.id, req.user.company_id, reason]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Work order not found or already closed/terminated.' });
+    res.json({ data: result.rows[0], message: 'Work Order terminated' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Measurements (MB)
 router.get('/measurements', ctrl.getMeasurements);
 router.post('/measurements', authorize('super_admin', 'admin', 'project_manager', 'site_engineer'), ctrl.createMeasurement);
