@@ -2,6 +2,8 @@
 // Sends individual late-arrival warning emails to employees who checked in late.
 // Can be triggered manually via API or scheduled via cron.
 
+const fs   = require('fs');
+const path = require('path');
 const cron = require('node-cron');
 const logger = require('./logger');
 const { query } = require('../config/database');
@@ -12,116 +14,170 @@ const ERP_URL = process.env.API_BASE_URL || 'https://erp.bcim.in';
 // have synced from the biometric devices. Override with env vars.
 const DEFAULT_CRON = '0 11 * * *';
 
+// Embed BCIM logo as base64 so it renders even when external images are blocked
+let LOGO_SRC = `${ERP_URL}/bcim-logo.png`;
+try {
+  const logoPath = path.join(__dirname, '../../../frontend/public/bcim-logo.png');
+  const b64 = fs.readFileSync(logoPath).toString('base64');
+  LOGO_SRC = `data:image/png;base64,${b64}`;
+} catch (_) { /* fall back to hosted URL */ }
+
 // ── HTML email template ───────────────────────────────────────────────────────
 function buildLateEmail({ employeeName, employeeCode, date, checkInTime, lateMinutes, shiftStart, companyName, managerName }) {
   const lateHrs  = Math.floor(lateMinutes / 60);
   const lateMins = lateMinutes % 60;
-  const lateStr  = lateHrs > 0 ? `${lateHrs}h ${lateMins}m` : `${lateMins} minutes`;
+  const lateStr  = lateHrs > 0 ? `${lateHrs}h ${lateMins}m` : `${lateMins} min`;
   const dateStr  = new Date(date).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   const subject = `Late Arrival Notice — ${dateStr}`;
 
+  const row = (label, value, valueStyle = '') =>
+    `<tr>
+       <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #f1f5f9;width:42%">${label}</td>
+       <td style="padding:10px 16px;font-size:13px;font-weight:600;border-bottom:1px solid #f1f5f9;${valueStyle}">${value}</td>
+     </tr>`;
+
   const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b">
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:32px 0">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
 
-      <!-- Header -->
-      <div style="background:linear-gradient(135deg,#0f2a52,#1e3a8a);padding:20px 24px;border-radius:10px 10px 0 0">
-        <table width="100%" cellpadding="0" cellspacing="0">
-          <tr>
-            <td>
-              <h2 style="margin:0;color:#fff;font-size:18px;font-weight:700">Late Arrival Notice</h2>
-              <p style="margin:4px 0 0;color:#93c5fd;font-size:12px">${companyName} &bull; HR Department</p>
-            </td>
-            <td align="right">
-              <div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:8px 14px;text-align:center">
-                <div style="color:#fbbf24;font-size:22px;font-weight:900;line-height:1">${lateStr}</div>
-                <div style="color:#bfdbfe;font-size:10px;font-weight:600;letter-spacing:1px;margin-top:2px">LATE</div>
-              </div>
-            </td>
-          </tr>
-        </table>
-      </div>
-
-      <!-- Body -->
-      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px;padding:24px">
-
-        <p style="margin:0 0 16px;font-size:14px;color:#475569">
-          Dear <strong style="color:#0f172a">${employeeName}</strong>,
-        </p>
-
-        <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6">
-          Our records indicate that you arrived <strong style="color:#dc2626">${lateStr} late</strong> to work on
-          <strong style="color:#0f172a">${dateStr}</strong>. We kindly request you to ensure punctuality going forward.
-        </p>
-
-        <!-- Detail box -->
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:20px">
-          <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px">
+  <!-- ── HEADER ── -->
+  <tr><td style="background:linear-gradient(135deg,#0a1d3e 0%,#1e3a8a 100%);border-radius:12px 12px 0 0;padding:0">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <!-- Logo + Company -->
+        <td style="padding:24px 28px 20px">
+          <table cellpadding="0" cellspacing="0">
             <tr>
-              <td style="color:#64748b;padding:6px 0;width:45%">Employee Name</td>
-              <td style="color:#0f172a;font-weight:700;padding:6px 0">${employeeName}</td>
-            </tr>
-            <tr style="border-top:1px solid #f1f5f9">
-              <td style="color:#64748b;padding:6px 0">Employee Code</td>
-              <td style="color:#0f172a;font-weight:600;padding:6px 0">${employeeCode || '—'}</td>
-            </tr>
-            <tr style="border-top:1px solid #f1f5f9">
-              <td style="color:#64748b;padding:6px 0">Date</td>
-              <td style="color:#0f172a;font-weight:600;padding:6px 0">${dateStr}</td>
-            </tr>
-            ${shiftStart ? `
-            <tr style="border-top:1px solid #f1f5f9">
-              <td style="color:#64748b;padding:6px 0">Shift Start Time</td>
-              <td style="color:#0f172a;font-weight:600;padding:6px 0">${shiftStart}</td>
-            </tr>` : ''}
-            <tr style="border-top:1px solid #f1f5f9">
-              <td style="color:#64748b;padding:6px 0">Actual Check-in</td>
-              <td style="color:#dc2626;font-weight:700;padding:6px 0">${checkInTime}</td>
-            </tr>
-            <tr style="border-top:1px solid #f1f5f9">
-              <td style="color:#64748b;padding:6px 0">Late By</td>
-              <td style="padding:6px 0">
-                <span style="background:#fee2e2;color:#dc2626;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px">${lateStr}</span>
+              <td style="background:#fff;border-radius:8px;padding:6px 10px;vertical-align:middle">
+                <img src="${LOGO_SRC}" alt="BCIM" height="38" style="display:block;height:38px;max-width:120px">
+              </td>
+              <td style="padding-left:14px;vertical-align:middle">
+                <div style="color:#ffffff;font-size:15px;font-weight:800;letter-spacing:0.3px;line-height:1.2">
+                  ${companyName.toUpperCase()}
+                </div>
+                <div style="color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:1px;margin-top:3px">HR DEPARTMENT</div>
               </td>
             </tr>
           </table>
-        </div>
+        </td>
+        <!-- Late Badge -->
+        <td align="right" style="padding:24px 28px 20px;vertical-align:middle">
+          <div style="display:inline-block;background:rgba(239,68,68,0.18);border:2px solid rgba(239,68,68,0.5);border-radius:12px;padding:10px 18px;text-align:center">
+            <div style="color:#fca5a5;font-size:26px;font-weight:900;line-height:1;letter-spacing:-0.5px">${lateStr}</div>
+            <div style="color:#ef4444;font-size:10px;font-weight:700;letter-spacing:2px;margin-top:4px">LATE</div>
+          </div>
+        </td>
+      </tr>
+      <!-- Title strip -->
+      <tr>
+        <td colspan="2" style="background:rgba(255,255,255,0.08);padding:12px 28px;border-top:1px solid rgba(255,255,255,0.1)">
+          <div style="color:#e2e8f0;font-size:13px;font-weight:700;letter-spacing:0.5px">&#9888;&nbsp; LATE ARRIVAL NOTICE</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-        <!-- Note -->
-        <div style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:20px">
-          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5">
-            <strong>Please Note:</strong> Repeated late arrivals may impact your attendance record,
-            performance evaluation, and salary calculations as per company policy.
-            If you have a valid reason for this late arrival, please submit an
-            <strong>Attendance Regularization</strong> request through the ESS portal.
-          </p>
-        </div>
+  <!-- ── BODY ── -->
+  <tr><td style="background:#ffffff;padding:28px 28px 0">
 
-        <!-- CTA -->
-        <p style="margin:0 0 20px;font-size:13px;color:#475569">
-          You can submit a regularization request or view your attendance record by clicking the button below:
-        </p>
-        <p style="margin:0 0 24px">
-          <a href="${ERP_URL}/ess" style="display:inline-block;background:#0f2a52;color:#fff;padding:11px 22px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">
-            View My Attendance →
-          </a>
-        </p>
+    <p style="margin:0 0 6px;font-size:15px;color:#1e293b">
+      Dear <strong style="color:#0f172a">${employeeName}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.7">
+      Our records show that you arrived
+      <strong style="color:#dc2626;background:#fee2e2;padding:1px 6px;border-radius:4px">${lateStr} late</strong>
+      to work on <strong style="color:#0f172a">${dateStr}</strong>.
+      We kindly request you to ensure punctuality going forward.
+    </p>
 
-        ${managerName ? `<p style="margin:0 0 8px;font-size:13px;color:#64748b">This notice has been sent to you and your reporting manager <strong>${managerName}</strong>.</p>` : ''}
-
-        <p style="margin:0;font-size:13px;color:#475569">
-          Regards,<br/>
-          <strong>HR Department</strong><br/>
-          ${companyName}
-        </p>
-
-        <hr style="border:none;border-top:1px solid #f1f5f9;margin:20px 0"/>
-        <p style="margin:0;font-size:10px;color:#94a3b8">
-          This is an automated notification from BCIM ERP. Please do not reply to this email.
-          For queries, contact HR at <a href="mailto:hr@bcim.in" style="color:#3b82f6">hr@bcim.in</a>.
-        </p>
+    <!-- Details card -->
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:24px">
+      <div style="background:#1e3a8a;padding:10px 16px">
+        <span style="color:#bfdbfe;font-size:11px;font-weight:700;letter-spacing:1px">ATTENDANCE DETAILS</span>
       </div>
-    </div>`;
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Employee Name',  `<span style="color:#0f172a">${employeeName}</span>`)}
+        ${row('Employee Code',  `<span style="color:#334155">${employeeCode || '—'}</span>`)}
+        ${row('Date',           `<span style="color:#0f172a">${dateStr}</span>`)}
+        ${shiftStart ? row('Shift Start Time', `<span style="color:#0369a1">${shiftStart}</span>`) : ''}
+        ${row('Actual Check-in', `<span style="color:#dc2626;font-size:14px">${checkInTime}</span>`)}
+        ${row('Late By',
+          `<span style="display:inline-block;background:#fee2e2;color:#dc2626;font-weight:700;font-size:12px;padding:3px 12px;border-radius:20px">${lateStr}</span>`
+        )}
+      </table>
+    </div>
+
+    <!-- Warning note -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+      <tr>
+        <td style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:14px 16px">
+          <p style="margin:0;font-size:13px;color:#78350f;line-height:1.6">
+            <strong>&#9888; Please Note:</strong> Repeated late arrivals may impact your attendance record,
+            performance evaluation, and salary calculations as per company policy.
+            If you have a valid reason, please submit an
+            <strong>Attendance Regularization</strong> request via the ESS portal.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- CTA -->
+    <p style="margin:0 0 8px;font-size:13px;color:#475569">
+      View your attendance or submit a regularization request:
+    </p>
+    <p style="margin:0 0 24px">
+      <a href="${ERP_URL}/ess"
+         style="display:inline-block;background:linear-gradient(135deg,#0a1d3e,#1e3a8a);color:#fff;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.3px">
+        View My Attendance &rarr;
+      </a>
+    </p>
+
+  </td></tr>
+
+  <!-- ── FOOTER ── -->
+  <tr><td style="background:#ffffff;padding:0 28px 28px">
+    ${managerName ? `<p style="margin:0 0 12px;font-size:12px;color:#64748b;background:#f8fafc;border-radius:6px;padding:10px 14px">
+      &#128203; This notice has also been sent to your reporting manager <strong>${managerName}</strong>.
+    </p>` : ''}
+
+    <p style="margin:0 0 4px;font-size:13px;color:#475569">Regards,</p>
+    <p style="margin:0 0 24px;font-size:13px;color:#0f172a">
+      <strong style="color:#1e3a8a">HR Department</strong><br>
+      <strong>${companyName}</strong>
+    </p>
+
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px">
+
+    <!-- Footer branding -->
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="vertical-align:middle">
+          <img src="${LOGO_SRC}" alt="BCIM" height="24" style="display:inline-block;height:24px;vertical-align:middle;opacity:0.5">
+          <span style="color:#94a3b8;font-size:11px;margin-left:8px;vertical-align:middle">${companyName}</span>
+        </td>
+        <td align="right" style="vertical-align:middle">
+          <span style="color:#cbd5e1;font-size:11px">Automated &bull; Do not reply &bull;
+            <a href="mailto:hr@bcim.in" style="color:#3b82f6;text-decoration:none">hr@bcim.in</a>
+          </span>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Bottom border accent -->
+  <tr><td style="background:linear-gradient(90deg,#0a1d3e,#1e3a8a,#3b82f6);height:4px;border-radius:0 0 12px 12px"></td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
 
   const text = [
     `Late Arrival Notice — ${companyName}`,
