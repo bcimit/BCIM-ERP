@@ -2009,6 +2009,8 @@ export const hrEsslAPI = {
   getDevices:     ()           => api.get('/hr-admin/essl/devices'),
   getSyncHistory: (limit = 20) => api.get('/hr-admin/essl/sync-history', { params: { limit } }),
   triggerSync:    (from, to)   => api.post('/hr-admin/essl/trigger-sync', { from, to }),
+  previewSC:      (params)     => api.get('/hr-admin/essl/preview-sc', { params }),
+  syncSC:         (data)       => api.post('/hr-admin/essl/sync-sc', data),
   getUnmatched:   ()           => api.get('/hr-admin/essl/unmatched'),
   deviceLogs:     (params)     => api.get('/hr-admin/essl/device-logs', { params }),
   importLogs:     (formData)   => api.post('/hr-admin/essl/import-logs', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

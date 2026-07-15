@@ -1,7 +1,7 @@
 // src/pages/sc/SCLabour.jsx — Worker Registry + Daily Attendance + NMR (Muster Roll)
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { scAPI, projectAPI } from '../../api/client';
+import { scAPI, projectAPI, hrEsslAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
 import { PageHeader, KpiCard as ThemeKpiCard, Theme } from '../../theme';
 import {
@@ -405,17 +405,17 @@ function EsslSyncModal({ onClose }) {
   const handlePreview = async () => {
     setPreviewing(true); setPreview(null);
     try {
-      const r = await scAPI.esslPreview({ from_date: syncDate, to_date: toDate });
+      const r = await hrEsslAPI.previewSC({ from: syncDate, to: toDate });
       setPreview(r.data?.data);
     } catch(e) {
-      toast.error(e?.response?.data?.error || 'Preview failed — check ESSL settings');
+      toast.error(e?.response?.data?.error || 'Preview failed — check ESSL Settings in HR module');
     } finally { setPreviewing(false); }
   };
 
   const handleSync = async () => {
     setSyncing(true); setResult(null);
     try {
-      const r = await scAPI.esslSync({ from_date: syncDate, to_date: toDate, overwrite });
+      const r = await hrEsslAPI.syncSC({ from: syncDate, to: toDate, overwrite });
       setResult(r.data?.data);
       toast.success(r.data.message);
       qc.invalidateQueries({ queryKey:['sc-attendance'] });
@@ -561,9 +561,9 @@ function EsslSyncModal({ onClose }) {
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600">
           <p className="font-bold mb-1">Prerequisites:</p>
           <ul className="space-y-1 list-disc list-inside">
-            <li>ESSL server IP and MySQL credentials saved in <strong>SC → Settings → ESSL tab</strong></li>
-            <li>Each worker must have an <strong>ESSL Employee Code</strong> set in Workers Registry</li>
-            <li>ESSL server must be on the same LAN as this ERP server</li>
+            <li>ESSL SQL Server credentials saved in <strong>HR &amp; Admin → ESSL Settings</strong></li>
+            <li>Each worker must have a <strong>Worker Code</strong> matching their ESSL Employee Code</li>
+            <li>ESSL ETimetracklite server must be reachable from this ERP server</li>
           </ul>
         </div>
       </div>

@@ -63,34 +63,15 @@ router.post('/agent-push', async (req, res) => {
       try {
         if (userId) {
           const lateMin = lateMinutesFor(inTime, cutoffMap[userId] ?? DEFAULT_CUTOFF_MINS);
-          // Merge with existing punches: earliest = in, latest = out.
-          // A partial window sync may deliver only an evening punch (as in_time),
-          // so every incoming time is a candidate for both in and out.
           await query(
             `INSERT INTO hr_attendance
                (user_id, company_id, attendance_date, status, in_time, out_time, late_minutes, source)
              VALUES ($1,$2,$3,$4,$5,$6,$7,'essl_agent')
              ON CONFLICT (user_id, attendance_date) DO UPDATE
-               SET in_time  = LEAST(
-                     COALESCE(hr_attendance.in_time, $5::time),
-                     COALESCE($5::time, hr_attendance.in_time)),
-                   out_time = NULLIF(
-                     GREATEST(
-                       COALESCE(hr_attendance.out_time, $6::time, $5::time),
-                       COALESCE($6::time, $5::time, hr_attendance.out_time)),
-                     LEAST(
-                       COALESCE(hr_attendance.in_time, $5::time),
-                       COALESCE($5::time, hr_attendance.in_time))),
-                   status = CASE WHEN NULLIF(
-                       GREATEST(
-                         COALESCE(hr_attendance.out_time, $6::time, $5::time),
-                         COALESCE($6::time, $5::time, hr_attendance.out_time)),
-                       LEAST(
-                         COALESCE(hr_attendance.in_time, $5::time),
-                         COALESCE($5::time, hr_attendance.in_time))) IS NOT NULL
-                     THEN 'present' ELSE 'half_day' END,
-                   late_minutes = LEAST(COALESCE(hr_attendance.late_minutes, $7), $7),
-                   source='essl_agent'`,
+               SET status=$4,
+                   in_time=COALESCE($5, hr_attendance.in_time),
+                   out_time=COALESCE($6, hr_attendance.out_time),
+                   late_minutes=$7, source='essl_agent'`,
             [userId, company_id, rec.date, status, inTime, outTime, lateMin]
           );
         } else {
@@ -102,45 +83,12 @@ router.post('/agent-push', async (req, res) => {
             const diff = (oh * 60 + om) - (ih * 60 + im);
             if (diff > 0) hoursWorked = Math.min(parseFloat((diff / 60).toFixed(2)), 12);
           }
-          // Same merge logic as hr_attendance: earliest punch = in, latest = out
           await query(
             `INSERT INTO sc_attendance
                (company_id, project_id, sc_id, wo_id, worker_id, attendance_date, status, hours_worked, in_time, out_time, remarks)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'essl_agent')
              ON CONFLICT (worker_id, attendance_date) DO UPDATE
-               SET in_time  = LEAST(
-                     COALESCE(sc_attendance.in_time, $9::time),
-                     COALESCE($9::time, sc_attendance.in_time)),
-                   out_time = NULLIF(
-                     GREATEST(
-                       COALESCE(sc_attendance.out_time, $10::time, $9::time),
-                       COALESCE($10::time, $9::time, sc_attendance.out_time)),
-                     LEAST(
-                       COALESCE(sc_attendance.in_time, $9::time),
-                       COALESCE($9::time, sc_attendance.in_time))),
-                   hours_worked = COALESCE(
-                     LEAST(ROUND(EXTRACT(EPOCH FROM (
-                       NULLIF(
-                         GREATEST(
-                           COALESCE(sc_attendance.out_time, $10::time, $9::time),
-                           COALESCE($10::time, $9::time, sc_attendance.out_time)),
-                         LEAST(
-                           COALESCE(sc_attendance.in_time, $9::time),
-                           COALESCE($9::time, sc_attendance.in_time)))
-                       - LEAST(
-                           COALESCE(sc_attendance.in_time, $9::time),
-                           COALESCE($9::time, sc_attendance.in_time))
-                     )) / 3600.0, 2), 12),
-                     sc_attendance.hours_worked, $8),
-                   status = CASE WHEN NULLIF(
-                       GREATEST(
-                         COALESCE(sc_attendance.out_time, $10::time, $9::time),
-                         COALESCE($10::time, $9::time, sc_attendance.out_time)),
-                       LEAST(
-                         COALESCE(sc_attendance.in_time, $9::time),
-                         COALESCE($9::time, sc_attendance.in_time))) IS NOT NULL
-                     THEN 'present' ELSE 'half_day' END,
-                   remarks='essl_agent'`,
+               SET status=$7, hours_worked=$8, in_time=$9, out_time=$10, remarks='essl_agent'`,
             [company_id, scWorker.project_id, scWorker.sc_id, scWorker.wo_id,
              scWorker.id, rec.date, status, hoursWorked, inTime || null, (hasOut ? outTime : null)]
           );
@@ -851,6 +799,236 @@ router.get('/device-logs', async (req, res) => {
     const r = await query(sql2, params);
     res.json({ data: r.rows, total: r.rows.length, page: Number(page), limit: lim });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   GET /hr-admin/essl/preview-sc
+   Dry-run: show what ESSL swipes would be pulled for SC workers
+══════════════════════════════════════════════════════════════ */
+router.get('/preview-sc', async (req, res) => {
+  const { from, to, sc_id } = req.query;
+  if (!from) return res.status(400).json({ error: 'from date required' });
+  const toDate = to || from;
+
+  try {
+    const cfgRow = await query(`SELECT * FROM hr_essl_config WHERE company_id=$1`, [req.user.company_id]);
+    if (!cfgRow.rows.length)
+      return res.status(400).json({ error: 'ESSL connection not configured. Go to HR → ESSL Settings.' });
+    const cfg = cfgRow.rows[0];
+    const companyId = req.user.company_id;
+
+    let workerSql = `SELECT id, worker_code, worker_name, daily_rate, sc_id, project_id, wo_id
+      FROM sc_workers WHERE company_id=$1 AND status='active' AND worker_code IS NOT NULL AND worker_code != ''`;
+    const params = [companyId];
+    if (sc_id) { workerSql += ` AND sc_id=$2`; params.push(sc_id); }
+    const scWorkers = await query(workerSql, params);
+
+    const workerMap = {};
+    const workerCodes = [];
+    scWorkers.rows.forEach(w => {
+      workerMap[String(w.worker_code).trim().toLowerCase()] = w;
+      workerCodes.push(String(w.worker_code).trim());
+    });
+
+    const conn = await sql.connect(buildMssqlConfig(cfg));
+    const tables = await existingTables(conn, monthlyTables(from, toDate));
+    if (!tables.length) {
+      await conn.close().catch(() => {});
+      return res.json({ data: { schema: 'etimetracklite', total: 0, mapped: 0, workers: scWorkers.rows.length, preview: [] } });
+    }
+
+    const unionSQL = buildSwipeSQL(tables, workerCodes);
+    const r = await conn.request()
+      .input('from', sql.VarChar, from + ' 00:00:00')
+      .input('to',   sql.VarChar, toDate + ' 23:59:59')
+      .query(`${unionSQL} ORDER BY emp_code, swipe_time`);
+    await conn.close().catch(() => {});
+
+    // Group swipes by (emp_code, date)
+    const grouped = {};
+    for (const row of r.recordset) {
+      const code = String(row.emp_code || '').trim().toLowerCase();
+      if (!code) continue;
+      const swipeDate = new Date(row.swipe_time);
+      const dateStr   = swipeDate.toISOString().split('T')[0];
+      const timeStr   = swipeDate.toTimeString().split(' ')[0];
+      const key = `${code}|${dateStr}`;
+      if (!grouped[key]) grouped[key] = { emp_code: code, date: dateStr, swipes: [] };
+      grouped[key].swipes.push({ time: timeStr, type: String(row.direction || '').toLowerCase(), raw: row.swipe_time });
+    }
+
+    let mapped = 0;
+    const preview = [];
+    for (const g of Object.values(grouped)) {
+      const worker = workerMap[g.emp_code];
+      g.swipes.sort((a, b) => a.time.localeCompare(b.time));
+      const inSwipes  = g.swipes.filter(s => s.type === 'in');
+      const outSwipes = g.swipes.filter(s => s.type === 'out');
+      const inTime  = inSwipes.length  ? inSwipes[0].time  : g.swipes[0]?.time  || null;
+      const outTime = outSwipes.length ? outSwipes[outSwipes.length - 1].time
+                                       : (g.swipes.length > 1 ? g.swipes[g.swipes.length - 1].time : null);
+      const hasIn   = !!inTime;
+      const hasOut  = !!outTime && outTime !== inTime;
+      const status  = resolveStatus(hasIn, hasOut);
+
+      let hoursWorked = 8;
+      if (inTime && outTime && outTime > inTime) {
+        const [ih, im] = inTime.split(':').map(Number);
+        const [oh, om] = outTime.split(':').map(Number);
+        hoursWorked = parseFloat(((oh * 60 + om - ih * 60 - im) / 60).toFixed(2));
+      }
+      const wage = parseFloat(worker?.daily_rate || 0) * (status === 'half_day' ? 0.5 : 1.0);
+      if (worker) mapped++;
+      preview.push({
+        emp_code: g.emp_code,
+        worker_name: worker ? worker.worker_name : null,
+        mapped: !!worker,
+        date: g.date,
+        first_punch: inSwipes[0]?.raw || g.swipes[0]?.raw || null,
+        last_punch: outSwipes.length > 0 ? outSwipes[outSwipes.length - 1].raw
+                                         : (g.swipes.length > 1 ? g.swipes[g.swipes.length - 1].raw : null),
+        hours_worked: hoursWorked,
+        status,
+        wage: worker ? wage : 0,
+        punch_count: g.swipes.length,
+      });
+    }
+    preview.sort((a, b) => (a.emp_code + a.date).localeCompare(b.emp_code + b.date));
+
+    res.json({ data: { schema: 'etimetracklite', total: preview.length, mapped, workers: scWorkers.rows.length, preview } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   POST /hr-admin/essl/sync-sc
+   Pull SC worker attendance from ESSL MSSQL → sc_attendance
+══════════════════════════════════════════════════════════════ */
+router.post('/sync-sc', async (req, res) => {
+  const { from, to, sc_id, overwrite } = req.body;
+  if (!from) return res.status(400).json({ error: 'from date required' });
+  const toDate = to || from;
+
+  try {
+    const cfgRow = await query(`SELECT * FROM hr_essl_config WHERE company_id=$1`, [req.user.company_id]);
+    if (!cfgRow.rows.length)
+      return res.status(400).json({ error: 'ESSL connection not configured. Go to HR → ESSL Settings.' });
+    const cfg = cfgRow.rows[0];
+    const companyId = req.user.company_id;
+
+    let workerSql = `SELECT id, worker_code, worker_name, daily_rate, sc_id, project_id, wo_id
+      FROM sc_workers WHERE company_id=$1 AND status='active' AND worker_code IS NOT NULL AND worker_code != ''`;
+    const params = [companyId];
+    if (sc_id) { workerSql += ` AND sc_id=$2`; params.push(sc_id); }
+    const scWorkers = await query(workerSql, params);
+
+    if (!scWorkers.rows.length)
+      return res.status(400).json({ error: 'No active SC workers with worker codes found. Set Worker Code in Workers Registry.' });
+
+    const workerMap = {};
+    const workerCodes = [];
+    scWorkers.rows.forEach(w => {
+      workerMap[String(w.worker_code).trim().toLowerCase()] = w;
+      workerCodes.push(String(w.worker_code).trim());
+    });
+
+    const conn = await sql.connect(buildMssqlConfig(cfg));
+    const tables = await existingTables(conn, monthlyTables(from, toDate));
+    if (!tables.length) {
+      await conn.close().catch(() => {});
+      return res.json({
+        data: { essl_records_found: 0, workers_mapped: scWorkers.rows.length, created: 0, updated: 0, skipped: 0, errors: [] },
+        message: 'No DeviceLogs tables found for this date range.',
+      });
+    }
+
+    const unionSQL = buildSwipeSQL(tables, workerCodes);
+    const r = await conn.request()
+      .input('from', sql.VarChar, from + ' 00:00:00')
+      .input('to',   sql.VarChar, toDate + ' 23:59:59')
+      .query(`${unionSQL} ORDER BY emp_code, swipe_time`);
+    await conn.close().catch(() => {});
+
+    // Group swipes by (emp_code, date)
+    const grouped = {};
+    for (const row of r.recordset) {
+      const code = String(row.emp_code || '').trim().toLowerCase();
+      if (!code) continue;
+      const swipeDate = new Date(row.swipe_time);
+      const dateStr   = swipeDate.toISOString().split('T')[0];
+      const timeStr   = swipeDate.toTimeString().split(' ')[0];
+      const key = `${code}|${dateStr}`;
+      if (!grouped[key]) grouped[key] = { emp_code: code, date: dateStr, swipes: [] };
+      grouped[key].swipes.push({ time: timeStr, type: String(row.direction || '').toLowerCase() });
+    }
+
+    let created = 0, updated = 0, skipped = 0;
+    const errors = [];
+
+    for (const g of Object.values(grouped)) {
+      const worker = workerMap[g.emp_code];
+      if (!worker) { skipped++; continue; }
+
+      g.swipes.sort((a, b) => a.time.localeCompare(b.time));
+      const inSwipes  = g.swipes.filter(s => s.type === 'in');
+      const outSwipes = g.swipes.filter(s => s.type === 'out');
+      const inTime  = inSwipes.length  ? inSwipes[0].time  : g.swipes[0]?.time  || null;
+      const outTime = outSwipes.length ? outSwipes[outSwipes.length - 1].time
+                                       : (g.swipes.length > 1 ? g.swipes[g.swipes.length - 1].time : null);
+      const hasIn  = !!inTime;
+      const hasOut = !!outTime && outTime !== inTime;
+      const status = resolveStatus(hasIn, hasOut);
+
+      let hoursWorked = 8;
+      if (inTime && outTime && outTime > inTime) {
+        const [ih, im] = inTime.split(':').map(Number);
+        const [oh, om] = outTime.split(':').map(Number);
+        hoursWorked = parseFloat(((oh * 60 + om - ih * 60 - im) / 60).toFixed(2));
+      }
+      const wage = parseFloat(worker.daily_rate || 0) * (status === 'half_day' ? 0.5 : 1.0);
+
+      try {
+        const existing = await query(
+          `SELECT id FROM sc_attendance WHERE worker_id=$1 AND attendance_date=$2 AND company_id=$3`,
+          [worker.id, g.date, companyId]
+        );
+
+        if (existing.rows.length && !overwrite) { skipped++; continue; }
+
+        if (existing.rows.length) {
+          await query(
+            `UPDATE sc_attendance SET status=$1, hours_worked=$2, wage_amount=$3,
+             overtime_hours=0, remarks=$4 WHERE id=$5`,
+            [status, Math.min(hoursWorked, 24), wage,
+             `ESSL sync: ${g.swipes.length} punch(es) [etimetracklite]`,
+             existing.rows[0].id]
+          );
+          updated++;
+        } else {
+          await query(
+            `INSERT INTO sc_attendance (company_id, project_id, sc_id, wo_id, worker_id,
+               attendance_date, status, hours_worked, overtime_hours, wage_amount, remarks, marked_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,$11)`,
+            [companyId, worker.project_id, worker.sc_id, worker.wo_id || null, worker.id,
+             g.date, status, Math.min(hoursWorked, 24), wage,
+             `ESSL sync: ${g.swipes.length} punch(es) [etimetracklite]`,
+             req.user.id]
+          );
+          created++;
+        }
+      } catch (e2) {
+        errors.push({ emp_code: g.emp_code, date: g.date, error: e2.message });
+      }
+    }
+
+    res.json({
+      data: { essl_records_found: r.recordset.length, workers_mapped: scWorkers.rows.length, created, updated, skipped, errors },
+      message: `ESSL sync complete: ${created} new, ${updated} updated, ${skipped} skipped`,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;
