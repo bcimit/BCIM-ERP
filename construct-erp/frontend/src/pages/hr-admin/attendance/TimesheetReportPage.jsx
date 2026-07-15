@@ -108,11 +108,12 @@ export default function TimesheetReportPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleExport = () => {
-    const headers = ['S.No','EMP ID','Name','Designation','Department','Company','P/A','In Time','Out Time','Late Min','Shift','Location','Emp Status','Reason'];
+    const headers = ['S.No','EMP ID','Name','Designation','Department','Company','P/A','In Time','Out Time','Late Min','Hrs Worked','Overtime Hrs','Shift','Location','Emp Status','Reason'];
     const csvRows = sortedRows.map((r, i) => [
       i+1, r.emp_id||'', r.name, r.designation, r.department,
       r.company, r.attendance_status, r.in_time||'', r.out_time||'',
-      r.late_minutes||0, r.shift, r.location, r.status, r.reason||'',
+      r.late_minutes||0, r.hours_worked||'', r.overtime_hours||'',
+      r.shift, r.location, r.status, r.reason||'',
     ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
     const blob = new Blob([[headers.join(','), ...csvRows].join('\n')], { type:'text/csv' });
     const a = document.createElement('a');
@@ -225,7 +226,7 @@ export default function TimesheetReportPage() {
           background:'#F5F3FF', color:'#7C3AED', border:'1px solid #C4B5FD',
           borderRadius:6, padding:'6px 14px', fontSize:13, cursor:'pointer', fontWeight:600,
         }}>
-          <Printer size={13}/> Print
+          <Printer size={13}/> Print / PDF
         </button>
       </div>
 
@@ -318,7 +319,7 @@ export default function TimesheetReportPage() {
               <thead>
                 <tr style={{ background:'#1B3A6B', color:'#fff' }}>
                   {['S.No','EMP ID','Name','Designation','Department','Company',
-                    'P/A','In Time','Out Time','Late\nMin','Shift','Location','Emp Status','Reason',
+                    'P/A','In Time','Out Time','Late\nMin','Hrs','OT','Shift','Location','Emp Status','Reason',
                   ].map(h=>{
                     const key = COL_KEYS[h];
                     const active = sortKey === key;
@@ -365,6 +366,14 @@ export default function TimesheetReportPage() {
                     <td style={{ ...td, textAlign:'center', color:r.late_minutes>0?'#DC2626':'#111' }}>
                       {r.late_minutes>0 ? r.late_minutes : '—'}
                     </td>
+                    <td style={{ ...td, textAlign:'center', color:'#475569' }}>
+                      {r.hours_worked>0 ? r.hours_worked : '—'}
+                    </td>
+                    <td style={{ ...td, textAlign:'center' }}>
+                      {r.overtime_hours>0
+                        ? <span style={{ background:'#FEF3C7', color:'#92400E', borderRadius:3, padding:'1px 6px', fontSize:10, fontWeight:700 }}>+{r.overtime_hours}h</span>
+                        : '—'}
+                    </td>
                     <td style={td}>{r.shift}</td>
                     <td style={td}>{r.location}</td>
                     <td style={td}>
@@ -389,7 +398,7 @@ export default function TimesheetReportPage() {
                       {' / '}
                       <span style={{ color:'#B91C1C', fontWeight:800 }}>{summary.absent}A</span>
                     </td>
-                    <td colSpan={7} style={td}/>
+                    <td colSpan={9} style={td}/>
                   </tr>
                 </tfoot>
               )}

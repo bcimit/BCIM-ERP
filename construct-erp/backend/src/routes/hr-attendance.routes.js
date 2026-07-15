@@ -562,15 +562,17 @@ router.get('/timesheet-report', async (req, res) => {
           'CIVIL'                             AS department,
           sc.name                             AS company,
           COALESCE(a.status, 'absent')        AS attendance_status,
-          TO_CHAR(a.in_time,  'HH12:MI AM')   AS in_time,
-          TO_CHAR(a.out_time, 'HH12:MI AM')   AS out_time,
-          0                                   AS late_minutes,
-          a.remarks                           AS reason,
-          COALESCE(p.name, '—')              AS location,
-          'DAY'                               AS shift,
+          TO_CHAR(a.in_time,  'HH12:MI AM')      AS in_time,
+          TO_CHAR(a.out_time, 'HH12:MI AM')      AS out_time,
+          0                                      AS late_minutes,
+          a.remarks                              AS reason,
+          COALESCE(p.name, '—')                AS location,
+          'DAY'                                  AS shift,
           CASE WHEN w.status = 'active' THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
-          w.id::text                          AS user_id,
-          'labour'                            AS row_type
+          w.id::text                             AS user_id,
+          'labour'                               AS row_type,
+          COALESCE(a.hours_worked, 0)            AS hours_worked,
+          GREATEST(0, COALESCE(a.hours_worked,0) - 8) AS overtime_hours
         FROM sc_workers w
         LEFT JOIN sc_subcontractors sc ON sc.id = w.sc_id
         LEFT JOIN projects p           ON p.id  = w.project_id
@@ -683,7 +685,18 @@ router.get('/monthly-report', async (req, res) => {
       ORDER BY sc.name NULLS LAST, w.worker_name, a.attendance_date
     `, scParams);
 
-    res.json({ data: [...staffRes.rows, ...scRes.rows] });
+    // Holidays for the month
+    const holidayRes = await query(
+      `SELECT holiday_date::text AS date, name AS holiday_name
+       FROM hr_holidays
+       WHERE company_id=$1 AND holiday_date BETWEEN $2 AND $3`,
+      [cid, from, to]
+    );
+
+    res.json({
+      data:     [...staffRes.rows, ...scRes.rows],
+      holidays: holidayRes.rows,
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -740,7 +753,7 @@ router.post('/late-alerts/run', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 // RECALCULATE ATTENDANCE
 // POST /hr-admin/attendance/recalculate  { from, to }
-// Re-derives status/late_minutes for each day in range from raw punches
+// Re-derives status/late_minutes from stored in_time/out_time for both staff and SC workers
 // ═══════════════════════════════════════════════════════════
 router.post('/recalculate', async (req, res) => {
   try {
@@ -750,19 +763,24 @@ router.post('/recalculate', async (req, res) => {
 
     const cid = req.user.company_id;
 
-    // For each hr_attendance record in range, recalculate status based on punch logs
-    const result = await query(`
+    // Staff — re-derive status and late_minutes from in_time/out_time
+    // Leave/holiday/week_off records are preserved
+    const staffResult = await query(`
       UPDATE hr_attendance ha
       SET
         status = CASE
-          WHEN NOT EXISTS (
-            SELECT 1 FROM hr_attendance_logs l
-            WHERE l.user_id = ha.user_id AND l.log_date = ha.attendance_date
-          ) THEN 'absent'
-          WHEN ha.status = 'absent' THEN 'present'
-          ELSE ha.status
+          WHEN ha.status IN ('leave','holiday','week_off') THEN ha.status
+          WHEN ha.in_time IS NOT NULL AND ha.out_time IS NOT NULL
+               AND ha.out_time != ha.in_time THEN 'present'
+          WHEN ha.in_time IS NOT NULL OR ha.out_time IS NOT NULL THEN 'half_day'
+          ELSE 'absent'
         END,
-        updated_at = NOW()
+        late_minutes = CASE
+          WHEN ha.status IN ('leave','holiday','week_off') THEN ha.late_minutes
+          WHEN ha.in_time IS NOT NULL THEN
+            GREATEST(0, EXTRACT(EPOCH FROM (ha.in_time - '09:30:00'::time)) / 60)::int
+          ELSE 0
+        END
       FROM users u
       WHERE ha.user_id = u.id
         AND u.company_id = $1
@@ -770,7 +788,35 @@ router.post('/recalculate', async (req, res) => {
       RETURNING ha.id
     `, [cid, from, to]);
 
-    res.json({ updated: result.rows.length, from, to });
+    // SC workers — re-derive status and hours_worked from in_time/out_time
+    const scResult = await query(`
+      UPDATE sc_attendance sa
+      SET
+        status = CASE
+          WHEN sa.in_time IS NOT NULL AND sa.out_time IS NOT NULL
+               AND sa.out_time != sa.in_time THEN 'present'
+          WHEN sa.in_time IS NOT NULL OR sa.out_time IS NOT NULL THEN 'half_day'
+          ELSE sa.status
+        END,
+        hours_worked = CASE
+          WHEN sa.in_time IS NOT NULL AND sa.out_time IS NOT NULL
+               AND sa.out_time != sa.in_time THEN
+            LEAST(12.0, ROUND(EXTRACT(EPOCH FROM (sa.out_time - sa.in_time)) / 3600.0, 2))
+          ELSE sa.hours_worked
+        END
+      FROM sc_workers w
+      WHERE sa.worker_id = w.id
+        AND w.company_id = $1
+        AND sa.attendance_date BETWEEN $2 AND $3
+      RETURNING sa.id
+    `, [cid, from, to]);
+
+    res.json({
+      updated:       staffResult.rows.length + scResult.rows.length,
+      staff_updated: staffResult.rows.length,
+      sc_updated:    scResult.rows.length,
+      from, to,
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
