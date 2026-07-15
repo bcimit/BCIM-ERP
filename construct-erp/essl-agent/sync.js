@@ -88,7 +88,7 @@ async function pullSwipes(conn, tables, fromDT, toDT) {
   const unionSQL = tables.map(t => `
     SELECT
       e.EmployeeCode                                                    AS emp_code,
-      CONVERT(VARCHAR(19), d.LogDate, 120)                              AS swipe_time,
+      CONVERT(VARCHAR(23), d.LogDate, 121)                              AS swipe_time,
       CASE WHEN DATEPART(HOUR, d.LogDate) < 12 THEN 'in' ELSE 'out' END AS direction
     FROM [${t}] d
     JOIN Employees e ON e.NumericCode = d.UserId
@@ -128,12 +128,13 @@ function groupSwipes(rows) {
 }
 
 // ── Push records to cloud ERP ─────────────────────────────────────────────────
-function pushToERP(records) {
+function pushToERP(records, raw_swipes) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       api_key:    cfg.erp.api_key,
       company_id: cfg.erp.company_id,
       records,
+      raw_swipes,
     });
 
     const url  = new URL(cfg.erp.push_url);
@@ -184,11 +185,11 @@ async function runSync({ fromDT, toDT, label }) {
     const records = groupSwipes(rawSwipes);
     console.log(`[ESSL Agent] Attendance records: ${records.length}`);
 
-    if (!records.length) { console.log('[ESSL Agent] Nothing to push.'); return; }
+    if (!records.length && !rawSwipes.length) { console.log('[ESSL Agent] Nothing to push.'); return; }
 
     console.log(`[ESSL Agent] Pushing to ERP: ${cfg.erp.push_url}`);
-    const result = await pushToERP(records);
-    console.log(`[ESSL Agent] ✓ Synced: ${result.synced || 0} | Skipped: ${result.skipped || 0}`);
+    const result = await pushToERP(records, rawSwipes);
+    console.log(`[ESSL Agent] ✓ Synced: ${result.synced || 0} | Skipped: ${result.skipped || 0} | Raw saved: ${result.raw_saved || 0}`);
     if (result.not_found?.length) console.log(`[ESSL Agent] Not found in ERP: ${result.not_found.join(', ')}`);
     if (result.errors?.length)    console.log('[ESSL Agent] Errors:', result.errors);
 

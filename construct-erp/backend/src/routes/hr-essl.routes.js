@@ -14,7 +14,7 @@ const router = express.Router();
    Body: { api_key, company_id, records: [{ emp_code, date, in_time, out_time, punch_count }] }
 ══════════════════════════════════════════════════════════════ */
 router.post('/agent-push', async (req, res) => {
-  const { api_key, company_id, records = [] } = req.body;
+  const { api_key, company_id, records = [], raw_swipes = [] } = req.body;
   if (!api_key || !company_id) return res.status(400).json({ error: 'api_key and company_id required' });
 
   try {
@@ -99,8 +99,20 @@ router.post('/agent-push', async (req, res) => {
       } catch (e2) { results.errors.push({ emp: rec.emp_code, date: rec.date, error: e2.message }); }
     }
 
+    // ── Save raw swipes to essl_device_logs ───────────────────────────────
+    if (raw_swipes.length) {
+      for (const s of raw_swipes) {
+        await query(
+          `INSERT INTO essl_device_logs (company_id, emp_code, swipe_time, direction, source)
+           VALUES ($1,$2,$3,$4,'agent')
+           ON CONFLICT (company_id, emp_code, swipe_time) DO NOTHING`,
+          [company_id, String(s.emp_code).trim(), s.swipe_time, s.direction || null]
+        ).catch(() => {});
+      }
+    }
+
     await query(`UPDATE hr_essl_config SET last_sync=NOW() WHERE company_id=$1`, [company_id]);
-    res.json({ success: true, ...results });
+    res.json({ success: true, ...results, raw_saved: raw_swipes.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -501,6 +513,16 @@ router.post('/sync', async (req, res) => {
       }
     }
 
+    // ── Save raw swipes to essl_device_logs ───────────────────────────────
+    for (const row of rawRows) {
+      await query(
+        `INSERT INTO essl_device_logs (company_id, emp_code, swipe_time, direction, source)
+         VALUES ($1,$2,$3,$4,'manual_sync')
+         ON CONFLICT (company_id, emp_code, swipe_time) DO NOTHING`,
+        [companyId, String(row.emp_code).trim(), new Date(row.swipe_time).toISOString(), row.direction || null]
+      ).catch(() => {});
+    }
+
     // ── Update last_sync timestamp ─────────────────────────────────────────
     await query(
       `UPDATE hr_essl_config SET last_sync=NOW() WHERE company_id=$1`,
@@ -597,6 +619,24 @@ router.get('/agent-key', async (req, res) => {
   `).catch(() => {});
 })();
 
+/* ── device logs table — raw individual swipes from ESSL ────────────────── */
+(async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS essl_device_logs (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id   UUID REFERENCES companies(id),
+      emp_code     TEXT NOT NULL,
+      swipe_time   TIMESTAMPTZ NOT NULL,
+      direction    TEXT,
+      source       TEXT DEFAULT 'agent',
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (company_id, emp_code, swipe_time)
+    )
+  `).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS essl_device_logs_company_time_idx ON essl_device_logs(company_id, swipe_time DESC)`).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS essl_device_logs_emp_idx ON essl_device_logs(company_id, emp_code, swipe_time DESC)`).catch(() => {});
+})();
+
 /* ── sync log table ──────────────────────────────────────────────────────── */
 (async () => {
   await query(`
@@ -676,6 +716,31 @@ router.post('/trigger-sync', async (req, res) => {
     await query(`INSERT INTO hr_essl_sync_log (company_id,from_date,to_date,records_count,source,status,error_msg) VALUES ($1,$2,$3,0,'manual','error',$4)`, [req.user.company_id, from, to, e.message]).catch(()=>{});
     res.status(500).json({ error: e.message });
   }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   GET /hr-admin/essl/device-logs
+   Query raw swipes from Postgres essl_device_logs
+   ?from=YYYY-MM-DD&to=YYYY-MM-DD&emp_code=XXX&limit=500
+══════════════════════════════════════════════════════════════ */
+router.get('/device-logs', async (req, res) => {
+  try {
+    const { from, to, emp_code, limit = 500 } = req.query;
+    const cid = req.user.company_id;
+    const params = [cid];
+    let idx = 2;
+    let sql2 = `
+      SELECT emp_code, swipe_time, direction, source
+      FROM essl_device_logs
+      WHERE company_id = $1`;
+    if (from) { sql2 += ` AND swipe_time >= $${idx}`; params.push(from + ' 00:00:00'); idx++; }
+    if (to)   { sql2 += ` AND swipe_time <= $${idx}`; params.push(to   + ' 23:59:59'); idx++; }
+    if (emp_code) { sql2 += ` AND emp_code = $${idx}`; params.push(String(emp_code).trim()); idx++; }
+    sql2 += ` ORDER BY swipe_time DESC LIMIT $${idx}`;
+    params.push(Math.min(Number(limit), 5000));
+    const r = await query(sql2, params);
+    res.json({ data: r.rows, total: r.rows.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
