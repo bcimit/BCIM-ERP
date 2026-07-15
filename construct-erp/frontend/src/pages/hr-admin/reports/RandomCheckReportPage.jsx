@@ -21,7 +21,7 @@ export default function RandomCheckReportPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['random-check-pool', date, project],
-    queryFn:  () => hrAttendanceAPI.timesheetReport({ from:date, to:date, project_id:project||undefined }).then(r => r.data?.data || r.data || []),
+    queryFn:  () => hrAttendanceAPI.timesheetReport({ date, project_id:project||undefined }).then(r => r.data?.data || r.data || []),
   });
 
   const pool = Array.isArray(data) ? data : [];
