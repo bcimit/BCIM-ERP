@@ -1296,6 +1296,225 @@ function ManagerDeskTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   TRAINING TAB
+═══════════════════════════════════════════════════════════════ */
+const TRAINING_CATEGORIES = [
+  'Safety & HSE',
+  'Technical Skills',
+  'Quality Assurance',
+  'Housekeeping & 5S',
+  'Soft Skills / Leadership',
+  'Induction / Onboarding',
+  'Compliance & Statutory',
+  'Equipment Operation',
+  'First Aid / Emergency',
+  'Other',
+];
+
+const STATUS_COLORS = {
+  pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   label: 'Pending'   },
+  approved:  { bg: 'bg-green-50',   text: 'text-green-700',   label: 'Approved'  },
+  rejected:  { bg: 'bg-red-50',     text: 'text-red-700',     label: 'Rejected'  },
+  completed: { bg: 'bg-blue-50',    text: 'text-blue-700',    label: 'Completed' },
+};
+
+function TrainingTab() {
+  const qc = useQueryClient();
+
+  const requirements = useQuery({
+    queryKey: ['ess-training-requirements'],
+    queryFn:  () => essAPI.trainingRequirements().then(unwrap),
+  });
+  const requests = useQuery({
+    queryKey: ['ess-training-requests'],
+    queryFn:  () => essAPI.trainingRequests().then(unwrap),
+  });
+
+  const [form, setForm] = useState({ training_name: '', category: '', reason: '', preferred_date: '' });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = useMutation({
+    mutationFn: () => essAPI.createTrainingRequest(form),
+    onSuccess: () => {
+      toast.success('Training request submitted');
+      setForm({ training_name: '', category: '', reason: '', preferred_date: '' });
+      qc.invalidateQueries({ queryKey: ['ess-training-requests'] });
+    },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Failed to submit'),
+  });
+
+  const reqs = requirements.data || [];
+  const myRequests = requests.data || [];
+
+  return (
+    <div className="space-y-5 max-w-5xl mx-auto">
+
+      {/* Header */}
+      <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, #1e5a8a)` }}>
+        <div className="flex items-center gap-3 mb-1">
+          <Award size={22} className="text-white/80" />
+          <h2 className="text-xl font-bold">Training & Development</h2>
+        </div>
+        <p className="text-white/60 text-sm">View your training requirements and request new training programs</p>
+      </div>
+
+      {/* Training requirements from performance evaluation */}
+      {reqs.length > 0 && (
+        <SectionCard
+          title="Training Required (from Performance Review)"
+          subtitle="Training needs identified by your reporting manager"
+        >
+          <div className="space-y-3">
+            {reqs.map(r => (
+              <div key={r.id} className="flex gap-4 p-4 rounded-xl bg-amber-50 border border-amber-100">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
+                  <Award size={18} className="text-amber-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">
+                      {r.eval_period} · {r.review_type === 'quarterly' ? 'Quarterly' : 'Monthly'} Review
+                    </span>
+                    {r.overall_rating && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-amber-200 text-amber-700">
+                        {r.overall_rating}
+                      </span>
+                    )}
+                    {r.eval_date && (
+                      <span className="text-[10px] text-amber-500">
+                        {String(r.eval_date).slice(0, 10)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{r.training_required}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Request Training Form */}
+      <SectionCard title="Request Training" subtitle="Submit a request for a training program you need">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className={labelCls}>Training / Course Name *</label>
+            <input className={inputCls} value={form.training_name}
+              onChange={e => set('training_name', e.target.value)}
+              placeholder="e.g. Fire Safety, Crane Operation, First Aid…" />
+          </div>
+          <div>
+            <label className={labelCls}>Category</label>
+            <select className={inputCls} value={form.category} onChange={e => set('category', e.target.value)}>
+              <option value="">Select category…</option>
+              {TRAINING_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Preferred Date</label>
+            <input type="date" className={inputCls} value={form.preferred_date}
+              onChange={e => set('preferred_date', e.target.value)} />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelCls}>Reason / Justification</label>
+            <textarea rows={3} className={inputCls} value={form.reason}
+              onChange={e => set('reason', e.target.value)}
+              placeholder="Why do you need this training?" />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            disabled={!form.training_name || submit.isPending}
+            onClick={() => submit.mutate()}
+            className="px-6 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
+            style={{ background: GREEN }}
+          >
+            {submit.isPending ? 'Submitting…' : 'Submit Request'}
+          </button>
+        </div>
+      </SectionCard>
+
+      {/* My Training Requests */}
+      <SectionCard title="My Training Requests" subtitle="Track the status of your submitted training requests">
+        {requests.isLoading ? (
+          <p className="text-sm text-gray-400 py-4 text-center">Loading…</p>
+        ) : myRequests.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <Award size={32} className="mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No training requests submitted yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Training</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Preferred Date</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actioned By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {myRequests.map(r => {
+                  const sc = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
+                  return (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="py-3 px-3">
+                        <p className="font-medium text-gray-800">{r.training_name}</p>
+                        {r.reason && <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">{r.reason}</p>}
+                      </td>
+                      <td className="py-3 px-3 text-gray-600 text-xs">{r.category || '—'}</td>
+                      <td className="py-3 px-3 text-gray-600 text-xs">
+                        {r.preferred_date ? String(r.preferred_date).slice(0, 10) : '—'}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${sc.bg} ${sc.text}`}>
+                          {sc.label}
+                        </span>
+                        {r.rejection_reason && (
+                          <p className="text-[10px] text-red-400 mt-0.5">{r.rejection_reason}</p>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-gray-500 text-xs">{r.actioned_by_name || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Training categories reference */}
+      <SectionCard title="Training Categories Available" subtitle="Types of training programs offered at BCIM">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: 'Safety & HSE',          icon: '🦺', color: 'bg-red-50 border-red-100 text-red-700'      },
+            { label: 'Technical Skills',       icon: '⚙️', color: 'bg-blue-50 border-blue-100 text-blue-700'   },
+            { label: 'Quality Assurance',      icon: '✅', color: 'bg-green-50 border-green-100 text-green-700'},
+            { label: 'Housekeeping & 5S',      icon: '🧹', color: 'bg-yellow-50 border-yellow-100 text-yellow-700'},
+            { label: 'Soft Skills',            icon: '🤝', color: 'bg-purple-50 border-purple-100 text-purple-700'},
+            { label: 'Induction',              icon: '📋', color: 'bg-indigo-50 border-indigo-100 text-indigo-700'},
+            { label: 'Compliance',             icon: '⚖️', color: 'bg-gray-50 border-gray-200 text-gray-700'   },
+            { label: 'Equipment Operation',    icon: '🏗️', color: 'bg-orange-50 border-orange-100 text-orange-700'},
+            { label: 'First Aid / Emergency',  icon: '🩺', color: 'bg-pink-50 border-pink-100 text-pink-700'   },
+            { label: 'Other',                  icon: '📚', color: 'bg-teal-50 border-teal-100 text-teal-700'   },
+          ].map(({ label, icon, color }) => (
+            <div key={label} className={`flex flex-col items-center gap-2 p-3 rounded-xl border text-center cursor-pointer ${color}`}
+              onClick={() => { set('category', label); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+              <span className="text-2xl">{icon}</span>
+              <span className="text-xs font-semibold leading-tight">{label}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-3 text-center">Click a category to pre-fill your training request above</p>
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    COMING SOON PLACEHOLDER
 ═══════════════════════════════════════════════════════════════ */
 function ComingSoon({ label }) {
@@ -1315,7 +1534,7 @@ function ComingSoon({ label }) {
 /* ═══════════════════════════════════════════════════════════════
    ROOT PAGE
 ═══════════════════════════════════════════════════════════════ */
-const FUNCTIONAL_TABS = new Set(['dashboard','profile','attendance','leave','payslips','documents','hr-requests','manager']);
+const FUNCTIONAL_TABS = new Set(['dashboard','profile','attendance','leave','payslips','documents','hr-requests','manager','training']);
 
 export default function ESSPortalPage() {
   const now     = new Date();
@@ -1378,6 +1597,7 @@ export default function ESSPortalPage() {
         {active === 'documents'   && <DocumentsTab policies={policies.data || []} userId={userId} />}
         {active === 'hr-requests' && <HRRequestsTab serviceRequests={serviceRequests.data || []} />}
         {active === 'manager'     && <ManagerDeskTab />}
+        {active === 'training'    && <TrainingTab />}
         {!FUNCTIONAL_TABS.has(active) && <ComingSoon label={navLabel} />}
       </div>
     </div>
