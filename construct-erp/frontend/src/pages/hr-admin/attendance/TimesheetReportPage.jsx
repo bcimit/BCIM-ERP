@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { hrAttendanceAPI, projectAPI } from '../../../api/client';
 import { Printer, Download, RefreshCw, Filter, ChevronRight, Search, X } from 'lucide-react';
@@ -186,6 +186,31 @@ export default function TimesheetReportPage() {
   const [search, setSearch]         = useState('');
   const [statusFilter, setStatusF]  = useState('all');
   const [companyFilter, setCompany] = useState('');
+
+  // Drag-to-scroll on the table wrapper
+  const tableWrapRef = useRef(null);
+  const dragState    = useRef({ active: false, startX: 0, scrollLeft: 0 });
+
+  const onMouseDown = (e) => {
+    const el = tableWrapRef.current;
+    if (!el) return;
+    dragState.current = { active: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft };
+    el.style.cursor = 'grabbing';
+    el.style.userSelect = 'none';
+  };
+  const onMouseMove = (e) => {
+    const ds = dragState.current;
+    if (!ds.active) return;
+    const el = tableWrapRef.current;
+    if (!el) return;
+    const walk = (e.pageX - el.offsetLeft) - ds.startX;
+    el.scrollLeft = ds.scrollLeft - walk;
+  };
+  const onMouseUp = () => {
+    dragState.current.active = false;
+    const el = tableWrapRef.current;
+    if (el) { el.style.cursor = 'grab'; el.style.userSelect = ''; }
+  };
 
   const handleSort = (col) => {
     const key = COL_KEYS[col];
@@ -631,7 +656,15 @@ export default function TimesheetReportPage() {
 
         {/* ── TABLE ── */}
         {!loading && !error && (
-          <div className="ts-table-wrap" style={{ overflowX:'auto', marginTop:8 }}>
+          <div
+            ref={tableWrapRef}
+            className="ts-table-wrap ts-scroll"
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            style={{ overflowX:'auto', marginTop:8, cursor:'grab' }}
+          >
             <table className="print-table" style={{
               borderCollapse:'collapse', width:'100%', fontSize:12,
               background:'#fff', borderRadius:10,
@@ -863,7 +896,17 @@ export default function TimesheetReportPage() {
 
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .ts-scroll::-webkit-scrollbar { height: 10px; }
+        .ts-scroll::-webkit-scrollbar-track { background: #F1F5F9; border-radius: 8px; }
+        .ts-scroll::-webkit-scrollbar-thumb {
+          background: #94A3B8; border-radius: 8px;
+          border: 2px solid #F1F5F9;
+        }
+        .ts-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .ts-scroll { scrollbar-width: auto; scrollbar-color: #94A3B8 #F1F5F9; }
+      `}</style>
     </div>
   );
 }
