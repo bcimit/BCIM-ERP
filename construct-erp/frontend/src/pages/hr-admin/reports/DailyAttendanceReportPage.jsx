@@ -6,11 +6,41 @@ import { Download, Printer, ClipboardList } from 'lucide-react';
 const today     = () => new Date().toISOString().slice(0,10);
 const yesterday = () => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); };
 
+const fmtDate = (d) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
 const S_COLOR = { present:'#D1FAE5/#065F46', absent:'#FEE2E2/#991B1B', leave:'#FEF3C7/#92400E', half_day:'#DBEAFE/#1E40AF', holiday:'#EDE9FE/#5B21B6' };
 function Pill({ s }) {
   const [bg,c] = (S_COLOR[(s||'absent').toLowerCase()]||'#F1F5F9/#475569').split('/');
   return <span style={{ background:bg, color:c, borderRadius:3, padding:'1px 7px', fontWeight:700, fontSize:10, letterSpacing:0.4 }}>{(s||'A').charAt(0).toUpperCase()}</span>;
 }
+
+const PRINT_CSS = `
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body {
+    margin:0 !important; padding:0 !important; background:#fff !important;
+    -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;
+  }
+  nav, header, footer, aside,
+  .no-print,
+  .sidebar, .topbar, .app-header, .app-sidebar,
+  [class*="sidebar"], [class*="Sidebar"],
+  [class*="topbar"], [class*="Topbar"],
+  [class*="navbar"], [class*="Navbar"] {
+    display:none !important; width:0 !important; height:0 !important; overflow:hidden !important;
+  }
+  .print-only { display:block !important; }
+  #dar-print-root { padding:0 !important; }
+  #dar-table-wrap { overflow:visible !important; border:none !important; }
+  #dar-table-wrap table { font-size:10px !important; }
+  #dar-table-wrap th { background:#1B3A6B !important; color:#fff !important; }
+  .dar-sig-section { page-break-inside:avoid !important; margin-top:28px !important; }
+}
+@media screen {
+  .print-only { display:none !important; }
+}
+`;
 
 export default function DailyAttendanceReportPage() {
   const [date, setDate]         = useState(today());
@@ -19,13 +49,15 @@ export default function DailyAttendanceReportPage() {
 
   const { data: projects } = useQuery({ queryKey:['projects'], queryFn:()=>projectAPI.list().then(r=>r.data?.data||r.data||[]) });
 
-  const { data, isLoading } = useQuery({
+  const { data: reportData, isLoading } = useQuery({
     queryKey: ['daily-att-report', date, project, category],
     queryFn:  () => hrAttendanceAPI.timesheetReport({ date, project_id:project||undefined, category:category||undefined })
-                    .then(r => r.data?.data || r.data || []),
+                    .then(r => r.data || {}),
   });
 
-  const rows = Array.isArray(data) ? data : [];
+  const rows = Array.isArray(reportData?.data) ? reportData.data : Array.isArray(reportData) ? reportData : [];
+  const companyName = reportData?.companyName || 'BCIM';
+  const projectName = reportData?.projectName || (project ? (projects||[]).find(p=>p.id===project)?.name : '') || '';
   const present  = rows.filter(r=>(r.attendance_status||r.status||'').toLowerCase()==='present').length;
   const absent   = rows.filter(r=>(r.attendance_status||r.status||'').toLowerCase()==='absent').length;
   const leave    = rows.filter(r=>(r.attendance_status||r.status||'').toLowerCase()==='leave').length;
@@ -42,8 +74,10 @@ export default function DailyAttendanceReportPage() {
   };
 
   return (
-    <div className="p-4">
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+    <div id="dar-print-root" className="p-4">
+      <style>{PRINT_CSS}</style>
+
+      <div className="no-print" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <ClipboardList size={22} style={{ color:'#7C3AED' }} />
           <h1 style={{ fontWeight:700, fontSize:18, color:'#1E293B', margin:0 }}>Daily Attendance Report</h1>
@@ -59,7 +93,7 @@ export default function DailyAttendanceReportPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14, alignItems:'center' }}>
+      <div className="no-print" style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:14, alignItems:'center' }}>
         <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 10px', fontSize:13 }} />
         <button onClick={()=>setDate(yesterday())} style={{ background: date===yesterday()?'#7C3AED':'#F1F5F9', color: date===yesterday()?'#fff':'#475569', border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>Yesterday</button>
         <button onClick={()=>setDate(today())} style={{ background: date===today()?'#7C3AED':'#F1F5F9', color: date===today()?'#fff':'#475569', border:'1px solid #CBD5E1', borderRadius:6, padding:'5px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>Today</button>
@@ -74,8 +108,38 @@ export default function DailyAttendanceReportPage() {
         </select>
       </div>
 
+      {/* Print letterhead */}
+      <div className="print-only" style={{ borderBottom: '3px solid #1B3A6B', paddingBottom: 10, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <img src="/bcim-logo.png" alt="BCIM Logo" style={{ height: 54, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: '#555', letterSpacing: 2, textTransform: 'uppercase' }}>
+              {companyName}
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1B3A6B', letterSpacing: 0.5, margin: '2px 0' }}>
+              DAILY ATTENDANCE REPORT
+            </div>
+            <div style={{ fontSize: 9, color: '#444' }}>
+              {projectName ? <>Project: <strong>{projectName}</strong>&emsp;|&emsp;</> : null}
+              Date: <strong>{fmtDate(date)}</strong>&emsp;|&emsp;
+              Category: <strong>{category === 'staff' ? 'STAFF' : category === 'labour' ? 'LABOUR / SC WORKERS' : 'ALL'}</strong>
+            </div>
+          </div>
+          <table style={{ border: '1px solid #1B3A6B', borderCollapse: 'collapse', fontSize: 8, flexShrink: 0 }}>
+            <tbody>
+              {[['Total', rows.length], ['Present', present], ['Absent', absent], ['Leave', leave], ['Half Day', half]].map(([l,v]) => (
+                <tr key={l}>
+                  <td style={{ padding: '3px 8px', borderBottom: '1px solid #ccc', borderRight: '1px solid #ccc', fontWeight: 600 }}>{l}</td>
+                  <td style={{ padding: '3px 10px', borderBottom: '1px solid #ccc', textAlign: 'center', fontWeight: 700, color: '#1B3A6B' }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Summary cards */}
-      <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+      <div className="no-print" style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
         {[['Present', present, '#D1FAE5','#065F46'], ['Absent', absent, '#FEE2E2','#991B1B'], ['On Leave', leave, '#FEF3C7','#92400E'], ['Half Day', half, '#DBEAFE','#1E40AF'], ['Total', rows.length, '#F1F5F9','#475569']].map(([l,v,bg,c])=>(
           <div key={l} style={{ background:bg, borderRadius:8, padding:'10px 18px', minWidth:90, textAlign:'center' }}>
             <div style={{ fontWeight:800, fontSize:22, color:c }}>{v}</div>
@@ -96,7 +160,7 @@ export default function DailyAttendanceReportPage() {
         )}
       </div>
 
-      <div style={{ overflowX:'auto', background:'#fff', borderRadius:8, border:'1px solid #E2E8F0' }}>
+      <div id="dar-table-wrap" style={{ overflowX:'auto', background:'#fff', borderRadius:8, border:'1px solid #E2E8F0' }}>
         {isLoading ? (
           <div style={{ textAlign:'center', padding:'40px', color:'#94A3B8' }}>Loading...</div>
         ) : rows.length === 0 ? (
@@ -127,6 +191,28 @@ export default function DailyAttendanceReportPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Signature section (print only) */}
+      <div className="print-only dar-sig-section" style={{ marginTop: 32, borderTop: '1px solid #ccc', paddingTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          {[
+            { role: 'Prepared By', name: 'HR Executive' },
+            { role: 'Verified By', name: 'HR Manager / Admin' },
+            { role: 'Site Incharge', name: 'Project Manager' },
+            { role: 'Approved By', name: 'Management / Director' },
+          ].map(sig => (
+            <div key={sig.role} style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ borderBottom: '1.5px solid #333', marginBottom: 6, height: 40 }} />
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#1B3A6B' }}>{sig.role}</div>
+              <div style={{ fontSize: 8, color: '#555', marginTop: 2 }}>{sig.name}</div>
+              <div style={{ fontSize: 8, color: '#888', marginTop: 2 }}>Date: ____________</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 8, color: '#888' }}>
+          This is a system-generated report - {companyName} | Printed on: {new Date().toLocaleString('en-IN')}
+        </div>
       </div>
     </div>
   );
