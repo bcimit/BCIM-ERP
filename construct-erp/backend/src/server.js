@@ -1200,6 +1200,9 @@ if (require.main === module) {
 
     const { initLateArrivalAlert } = require('./utils/late-arrival-alert.service');
     initLateArrivalAlert();
+
+    const { initLateSummary } = require('./utils/hr-late-summary.service');
+    initLateSummary();
   });
   }); // end .finally()
 }
