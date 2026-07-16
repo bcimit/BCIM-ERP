@@ -547,7 +547,11 @@ router.put('/:id', async (req, res) => {
     );
     const curEmail = String(cur.rows[0]?.email || '').toLowerCase();
     const isProtectedAdmin = curEmail === 'it@bcim.in' || cur.rows[0]?.role === 'super_admin';
-    const effectiveRole = isProtectedAdmin ? 'super_admin' : (role || 'viewer');
+    // Roles that HR can assign; super_admin is never assignable via this endpoint
+    const ASSIGNABLE_ROLES = new Set(['viewer','employee','qs_engineer','site_engineer',
+      'project_manager','project_head','department_head','hr','hr_manager','admin','hr_admin']);
+    const requestedRole = role && ASSIGNABLE_ROLES.has(role) ? role : (cur.rows[0]?.role || 'employee');
+    const effectiveRole = isProtectedAdmin ? 'super_admin' : requestedRole;
     const effectiveEmail = curEmail === 'it@bcim.in' ? cur.rows[0].email : email;
 
     // Only update employee_code if a non-empty value was submitted and it's not already taken

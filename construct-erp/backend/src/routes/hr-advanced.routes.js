@@ -646,7 +646,7 @@ router.post('/regularizations', async (req, res) => {
       `INSERT INTO hr_attendance_correction_requests
        (company_id, user_id, attendance_id, attendance_date, requested_status, requested_in_time, requested_out_time, reason)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [companyId(req), user_id || req.user.id, attendance_id || null, attendance_date,
+      [companyId(req), hasHrAccess(req) ? (user_id || req.user.id) : req.user.id, attendance_id || null, attendance_date,
         requested_status || 'present', requested_in_time || null, requested_out_time || null, reason || null]
     );
     res.status(201).json({ data: rows[0] });
@@ -781,25 +781,29 @@ router.post('/payroll-compliance/settings', async (req, res) => {
 
 router.get('/payroll-compliance/tax-declarations', async (req, res) => {
   const fy = req.query.financial_year || `${new Date().getFullYear()}-${String(new Date().getFullYear() + 1).slice(-2)}`;
-  const { rows } = await query(
-    `SELECT t.*, u.name AS employee_name, u.employee_code
+  const params = [companyId(req), fy];
+  let sql = `SELECT t.*, u.name AS employee_name, u.employee_code
      FROM hr_tax_declarations t
      JOIN users u ON u.id = t.user_id
-     WHERE t.company_id=$1 AND t.financial_year=$2
-     ORDER BY t.created_at DESC`,
-    [companyId(req), fy]
-  );
+     WHERE t.company_id=$1 AND t.financial_year=$2`;
+  if (!hasHrAccess(req)) { params.push(req.user.id); sql += ` AND t.user_id=$${params.length}`; }
+  sql += ' ORDER BY t.created_at DESC';
+  const { rows } = await query(sql, params);
   res.json({ data: rows });
 });
 
 router.post('/payroll-compliance/tax-declarations', async (req, res) => {
   const { user_id, financial_year, declared_amount, approved_amount, status, remarks } = req.body;
+  const isHr = hasHrAccess(req);
   const { rows } = await query(
     `INSERT INTO hr_tax_declarations
      (company_id, user_id, financial_year, declared_amount, approved_amount, status, remarks)
      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [companyId(req), user_id || req.user.id, financial_year, declared_amount || 0,
-      approved_amount || 0, status || 'submitted', remarks || null]
+    [companyId(req), isHr ? (user_id || req.user.id) : req.user.id, financial_year,
+      declared_amount || 0,
+      isHr ? (approved_amount || 0) : 0,
+      isHr ? (status || 'submitted') : 'submitted',
+      remarks || null]
   );
   res.status(201).json({ data: rows[0] });
 });

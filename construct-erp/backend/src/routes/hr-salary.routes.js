@@ -355,10 +355,12 @@ router.get('/employee-salaries/:userId/current', async (req, res) => {
       `SELECT es.*, s.name as structure_name
        FROM hr_employee_salaries es
        LEFT JOIN hr_salary_structures s ON s.id = es.structure_id
-       WHERE es.user_id = $1 AND es.effective_from <= CURRENT_DATE
+       JOIN users u ON u.id = es.user_id
+       WHERE es.user_id = $1 AND u.company_id = $2
+         AND es.effective_from <= CURRENT_DATE
          AND (es.effective_to IS NULL OR es.effective_to >= CURRENT_DATE)
        ORDER BY es.effective_from DESC LIMIT 1`,
-      [req.params.userId]
+      [req.params.userId, req.user.company_id]
     );
     res.json({ data: rows[0] || null });
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -76,7 +76,9 @@ router.post('/agent-push', async (req, res) => {
                SET status=$4,
                    in_time=COALESCE($5, hr_attendance.in_time),
                    out_time=COALESCE($6, hr_attendance.out_time),
-                   late_minutes=$7, source='essl_agent'`,
+                   late_minutes=$7, source='essl_agent'
+             WHERE hr_attendance.leave_request_id IS NULL
+               AND hr_attendance.source NOT IN ('regularization','manual')`,
             [userId, company_id, rec.date, status, inTime, outTime, lateMin]
           );
         } else {

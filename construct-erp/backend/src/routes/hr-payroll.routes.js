@@ -333,8 +333,8 @@ router.post('/run', async (req, res) => {
       const paidDays = parseFloat(a.present || 0) + parseFloat(a.half_day || 0) * 0.5 + parseFloat(a.on_leave || 0);
       const lopDays  = workDays - paidDays;
 
-      // Pro-rate salary if LOP
-      const lopFactor = workDays > 0 ? paidDays / workDays : 1;
+      // Pro-rate salary if LOP (cap at 1.0 — Sunday/holiday swipes can push paidDays > workDays)
+      const lopFactor = workDays > 0 ? Math.min(1, paidDays / workDays) : 1;
       const basic = Math.round(parseFloat(emp.basic || 0) * lopFactor);
       const hra   = Math.round(parseFloat(emp.hra   || 0) * lopFactor);
       const conv  = Math.round(parseFloat(emp.conveyance || 0) * lopFactor);
@@ -370,18 +370,22 @@ router.post('/run', async (req, res) => {
       );
       const loanDed = parseFloat(loanQ.rows[0].total_emi || 0);
 
-      const totalDed = pf.emp + esi.emp + pt + loanDed;
-      const netPay   = gross - totalDed;
-
       // Upsert payroll record (skip if already approved/paid)
       const existing = await query(
-        `SELECT id, status FROM hr_monthly_payroll WHERE user_id=$1 AND month=$2 AND year=$3`,
+        `SELECT id, status, tds, advance_deduction, other_deductions FROM hr_monthly_payroll WHERE user_id=$1 AND month=$2 AND year=$3`,
         [emp.user_id, m, y]
       );
       if (existing.rows.length && ['approved','paid'].includes(existing.rows[0].status)) {
         generated.push({ user_id: emp.user_id, skipped: true, status: existing.rows[0].status });
         continue;
       }
+      // Preserve manually entered TDS/advance from a previous draft so re-runs don't wipe them
+      const prevTds = parseFloat(existing.rows[0]?.tds || 0);
+      const prevAdv = parseFloat(existing.rows[0]?.advance_deduction || 0)
+                    + parseFloat(existing.rows[0]?.other_deductions || 0);
+
+      const totalDed = pf.emp + esi.emp + pt + loanDed + prevTds + prevAdv;
+      const netPay   = gross - totalDed;
 
       const { rows } = await query(
         `INSERT INTO hr_monthly_payroll
@@ -563,28 +567,31 @@ router.post('/bulk-pay', async (req, res) => {
       loanAdv: 0,
     };
 
+    // Mark all records paid atomically so a mid-loop failure doesn't leave some paid, some not
+    await withTransaction(async (client) => {
+      for (const p of approved.rows) {
+        await client.query(
+          `UPDATE hr_monthly_payroll SET status='paid', payment_date=$1, payment_mode=$2, payment_ref=$3
+           WHERE id=$4`,
+          [payment_date, payment_mode || 'bank_transfer', payment_ref || null, p.id]
+        );
+        totals.gross   += parseFloat(p.gross_earnings  || 0);
+        totals.netPay  += parseFloat(p.net_pay         || 0);
+        totals.tds     += parseFloat(p.tds             || 0);
+        totals.pfEmp   += parseFloat(p.pf_employee     || 0);
+        totals.pfEr    += parseFloat(p.pf_employer     || 0);
+        totals.esiEmp  += parseFloat(p.esi_employee    || 0);
+        totals.esiEr   += parseFloat(p.esi_employer    || 0);
+        totals.pt      += parseFloat(p.pt              || 0);
+        totals.loanAdv += parseFloat(p.loan_deduction  || 0)
+                        + parseFloat(p.advance_deduction || 0)
+                        + parseFloat(p.other_deductions  || 0);
+        results.push({ id: p.id, employee_name: p.employee_name, net_pay: p.net_pay });
+      }
+    });
+
+    // Finance payment records are best-effort (outside the main transaction)
     for (const p of approved.rows) {
-      // Mark payroll as paid
-      await query(
-        `UPDATE hr_monthly_payroll SET status='paid', payment_date=$1, payment_mode=$2, payment_ref=$3
-         WHERE id=$4`,
-        [payment_date, payment_mode || 'bank_transfer', payment_ref || null, p.id]
-      );
-
-      // Accumulate totals for consolidated JV
-      totals.gross   += parseFloat(p.gross_earnings  || 0);
-      totals.netPay  += parseFloat(p.net_pay         || 0);
-      totals.tds     += parseFloat(p.tds             || 0);
-      totals.pfEmp   += parseFloat(p.pf_employee     || 0);
-      totals.pfEr    += parseFloat(p.pf_employer     || 0);
-      totals.esiEmp  += parseFloat(p.esi_employee    || 0);
-      totals.esiEr   += parseFloat(p.esi_employer    || 0);
-      totals.pt      += parseFloat(p.pt              || 0);
-      totals.loanAdv += parseFloat(p.loan_deduction  || 0)
-                      + parseFloat(p.advance_deduction || 0)
-                      + parseFloat(p.other_deductions  || 0);
-
-      // Auto-create Finance payment record
       try {
         await query(
           `INSERT INTO payments (company_id, project_id, entity_name, amount, tds_deducted, net_amount,
@@ -598,7 +605,6 @@ router.post('/bulk-pay', async (req, res) => {
       } catch (e) {
         console.warn('Finance payment insert skipped:', e.message);
       }
-      results.push({ id: p.id, employee_name: p.employee_name, net_pay: p.net_pay });
     }
 
     // ── Consolidated monthly salary JV ────────────────────────────────────────
