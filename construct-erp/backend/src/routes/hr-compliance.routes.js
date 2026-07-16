@@ -1308,6 +1308,17 @@ router.get('/celebrations', async (req, res) => {
   }
 });
 
+// ── GET /compliance/celebrations/upcoming — next N days birthdays & anniversaries
+router.get('/celebrations/upcoming', async (req, res) => {
+  try {
+    const { getUpcomingCelebrations } = require('../utils/hr-birthday-anniversary.service');
+    const data = await getUpcomingCelebrations(req.user.company_id, req.query.days || 30);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /compliance/celebrations/trigger — manually trigger greetings ────────
 router.post('/celebrations/trigger', async (req, res) => {
   try {

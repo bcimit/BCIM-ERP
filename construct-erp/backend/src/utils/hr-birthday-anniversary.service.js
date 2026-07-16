@@ -456,6 +456,53 @@ async function getTodayCelebrations(companyId) {
   };
 }
 
+// ── API helper: upcoming celebrations (next N days, excludes today) ──────────
+async function getUpcomingCelebrations(companyId, days = 30) {
+  const n = Math.max(1, Math.min(parseInt(days) || 30, 365));
+
+  // days_until uses day-of-year modulo so it never errors on Feb-29 / year-end.
+  // Range 1..n excludes today (0), which is served by getTodayCelebrations.
+  const [bdRes, annRes] = await Promise.all([
+    query(`
+      SELECT u.name, u.employee_code AS emp_code, ep.date_of_birth,
+             dep.name AS department, des.name AS designation,
+             (((EXTRACT(DOY FROM ep.date_of_birth) - EXTRACT(DOY FROM CURRENT_DATE))::int % 365 + 365) % 365) AS days_until
+      FROM employee_profiles ep
+      JOIN users u ON u.id = ep.user_id
+      LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+      LEFT JOIN hr_designations des ON des.id = ep.designation_id
+      WHERE ep.company_id = $1
+        AND ep.date_of_birth IS NOT NULL
+        AND (ep.employment_status IS NULL OR ep.employment_status = 'active')
+        AND (((EXTRACT(DOY FROM ep.date_of_birth) - EXTRACT(DOY FROM CURRENT_DATE))::int % 365 + 365) % 365) BETWEEN 1 AND $2
+      ORDER BY days_until, u.name
+    `, [companyId, n]),
+
+    query(`
+      SELECT u.name, u.employee_code AS emp_code, ep.date_of_joining,
+             dep.name AS department, des.name AS designation,
+             (((EXTRACT(DOY FROM ep.date_of_joining) - EXTRACT(DOY FROM CURRENT_DATE))::int % 365 + 365) % 365) AS days_until,
+             (EXTRACT(YEAR FROM CURRENT_DATE)::int - EXTRACT(YEAR FROM ep.date_of_joining)::int) AS years
+      FROM employee_profiles ep
+      JOIN users u ON u.id = ep.user_id
+      LEFT JOIN hr_departments dep ON dep.id = ep.department_id
+      LEFT JOIN hr_designations des ON des.id = ep.designation_id
+      WHERE ep.company_id = $1
+        AND ep.date_of_joining IS NOT NULL
+        AND EXTRACT(YEAR FROM ep.date_of_joining) < EXTRACT(YEAR FROM CURRENT_DATE)
+        AND (ep.employment_status IS NULL OR ep.employment_status = 'active')
+        AND (((EXTRACT(DOY FROM ep.date_of_joining) - EXTRACT(DOY FROM CURRENT_DATE))::int % 365 + 365) % 365) BETWEEN 1 AND $2
+      ORDER BY days_until, u.name
+    `, [companyId, n]),
+  ]);
+
+  return {
+    days:         n,
+    birthdays:    bdRes.rows.map(r => ({ ...r, days_until: parseInt(r.days_until) })),
+    anniversaries: annRes.rows.map(r => ({ ...r, days_until: parseInt(r.days_until), years: parseInt(r.years) })),
+  };
+}
+
 // ── Scheduler ─────────────────────────────────────────────────────────────────
 function initBirthdayAnniversary() {
   const schedule = process.env.BIRTHDAY_CRON || '30 8 * * *'; // 8:30 AM daily
@@ -467,4 +514,4 @@ function initBirthdayAnniversary() {
   logger.info(`Initialized — cron: "${schedule}" tz: ${tz}`);
 }
 
-module.exports = { initBirthdayAnniversary, runBirthdayAnniversary, getTodayCelebrations, birthdayEmailHtml, anniversaryEmailHtml, ORDINAL };
+module.exports = { initBirthdayAnniversary, runBirthdayAnniversary, getTodayCelebrations, getUpcomingCelebrations, birthdayEmailHtml, anniversaryEmailHtml, ORDINAL };

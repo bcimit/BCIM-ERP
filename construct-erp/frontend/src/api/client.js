@@ -2053,6 +2053,7 @@ export const hrComplianceAPI = {
   clraRegister:        (p)        => api.get('/hr-admin/compliance/clra-register',  { params: p }),
   hrChecklist:         ()         => api.get('/hr-admin/compliance/hr-checklist'),
   celebrations:        ()         => api.get('/hr-admin/compliance/celebrations'),
+  upcomingCelebrations:(days=30)  => api.get('/hr-admin/compliance/celebrations/upcoming', { params: { days } }),
   triggerCelebrations: ()         => api.post('/hr-admin/compliance/celebrations/trigger'),
 };
 
