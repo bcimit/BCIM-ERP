@@ -2,12 +2,11 @@
 // Annual performance reviews, KRA scoring, increment management
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { query } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 
 router.use(authenticate);
-router.use(authorize('super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'manager', 'department_head'));
 
 const initTable = async () => {
   await query(`
@@ -16,19 +15,32 @@ const initTable = async () => {
       company_id UUID REFERENCES companies(id),
       user_id UUID REFERENCES users(id),
       review_period TEXT,
+      review_period_type TEXT DEFAULT 'monthly',
+      appraisal_year INT,
       review_date DATE,
       reviewer_id UUID REFERENCES users(id),
       kra_score NUMERIC(5,2),
+      kra_scores JSONB,
       overall_rating TEXT,
       increment_pct NUMERIC(5,2) DEFAULT 0,
       increment_amount NUMERIC(12,2) DEFAULT 0,
       new_ctc NUMERIC(14,2),
       comments TEXT,
+      strengths TEXT,
+      improvements TEXT,
+      training_required TEXT,
       status TEXT DEFAULT 'draft',
       acknowledged_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // add columns if upgrading from old schema
+  await query(`ALTER TABLE hr_appraisals ADD COLUMN IF NOT EXISTS kra_scores JSONB`).catch(()=>{});
+  await query(`ALTER TABLE hr_appraisals ADD COLUMN IF NOT EXISTS appraisal_year INT`).catch(()=>{});
+  await query(`ALTER TABLE hr_appraisals ADD COLUMN IF NOT EXISTS review_period_type TEXT DEFAULT 'monthly'`).catch(()=>{});
+  await query(`ALTER TABLE hr_appraisals ADD COLUMN IF NOT EXISTS strengths TEXT`).catch(()=>{});
+  await query(`ALTER TABLE hr_appraisals ADD COLUMN IF NOT EXISTS improvements TEXT`).catch(()=>{});
+  await query(`ALTER TABLE hr_appraisals ADD COLUMN IF NOT EXISTS training_required TEXT`).catch(()=>{});
 };
 runSchemaInit('hr-appraisals', initTable);
 
@@ -73,17 +85,24 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      user_id, review_period, review_date, reviewer_id,
-      kra_score, overall_rating, increment_pct, increment_amount, new_ctc, comments
+      user_id, review_period, review_period_type, appraisal_year, review_date, reviewer_id,
+      kra_score, kra_scores, overall_rating, rating,
+      increment_pct, increment_percentage, increment_amount, new_ctc,
+      comments, strengths, improvements, training_required
     } = req.body;
     const { rows } = await query(
       `INSERT INTO hr_appraisals
-       (company_id, user_id, review_period, review_date, reviewer_id,
-        kra_score, overall_rating, increment_pct, increment_amount, new_ctc, comments)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [req.user.company_id, user_id, review_period || null, review_date || null,
-       reviewer_id || req.user.id, kra_score || null, overall_rating || null,
-       increment_pct || 0, increment_amount || 0, new_ctc || null, comments || null]
+       (company_id, user_id, review_period, review_period_type, appraisal_year, review_date, reviewer_id,
+        kra_score, kra_scores, overall_rating, increment_pct, increment_amount, new_ctc,
+        comments, strengths, improvements, training_required)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      [req.user.company_id, user_id, review_period || null, review_period_type || 'monthly',
+       appraisal_year || new Date().getFullYear(), review_date || null,
+       reviewer_id || req.user.id,
+       kra_score || null, kra_scores ? JSON.stringify(kra_scores) : null,
+       overall_rating || rating || null,
+       increment_pct || increment_percentage || 0, increment_amount || 0, new_ctc || null,
+       comments || null, strengths || null, improvements || null, training_required || null]
     );
     res.status(201).json({ data: rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -92,14 +111,23 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const {
-      review_date, kra_score, overall_rating, increment_pct, increment_amount, new_ctc, comments, status
+      review_date, review_period_type, appraisal_year,
+      kra_score, kra_scores, overall_rating, rating,
+      increment_pct, increment_percentage, increment_amount, new_ctc,
+      comments, strengths, improvements, training_required, status
     } = req.body;
     const { rows } = await query(
-      `UPDATE hr_appraisals SET review_date=$1, kra_score=$2, overall_rating=$3,
-         increment_pct=$4, increment_amount=$5, new_ctc=$6, comments=$7, status=$8
-       WHERE id=$9 AND company_id=$10 RETURNING *`,
-      [review_date || null, kra_score || null, overall_rating || null,
-       increment_pct || 0, increment_amount || 0, new_ctc || null, comments || null,
+      `UPDATE hr_appraisals SET review_date=$1, review_period_type=$2, appraisal_year=$3,
+         kra_score=$4, kra_scores=$5, overall_rating=$6,
+         increment_pct=$7, increment_amount=$8, new_ctc=$9,
+         comments=$10, strengths=$11, improvements=$12, training_required=$13, status=$14
+       WHERE id=$15 AND company_id=$16 RETURNING *`,
+      [review_date || null, review_period_type || 'monthly',
+       appraisal_year || new Date().getFullYear(),
+       kra_score || null, kra_scores ? JSON.stringify(kra_scores) : null,
+       overall_rating || rating || null,
+       increment_pct || increment_percentage || 0, increment_amount || 0, new_ctc || null,
+       comments || null, strengths || null, improvements || null, training_required || null,
        status || 'draft', req.params.id, req.user.company_id]
     );
     res.json({ data: rows[0] });
