@@ -10,9 +10,13 @@ const { query } = require('../config/database');
 const { sendMail } = require('../services/mail.service');
 
 // Default: 9:00 AM IST every day. Override via HR_LATE_SUMMARY_CRON env var.
-const DEFAULT_CRON       = '0 9 * * *';
-const DEFAULT_RECIPIENTS = process.env.HR_LATE_SUMMARY_EMAILS || 'it@bcim.in';
-const MIN_LATE_MINUTES   = parseInt(process.env.HR_LATE_SUMMARY_MIN_MINUTES, 10) || 1;
+const DEFAULT_CRON     = '0 9 * * *';
+const MIN_LATE_MINUTES = parseInt(process.env.HR_LATE_SUMMARY_MIN_MINUTES, 10) || 1;
+
+// Read recipients fresh every call so Railway env var changes take effect without restart
+function getDefaultRecipients() {
+  return process.env.HR_LATE_SUMMARY_EMAILS || 'it@bcim.in';
+}
 const TZ                 = process.env.HR_LATE_SUMMARY_TZ || process.env.TZ || 'Asia/Kolkata';
 const ERP_URL            = process.env.API_BASE_URL || 'https://erp.bcim.in';
 
@@ -290,9 +294,11 @@ function buildSummaryEmail(companyName, rows, targetDate) {
 }
 
 // ── Main runner ───────────────────────────────────────────────────────────────
-async function runLateSummary({ date, manual = false } = {}) {
+async function runLateSummary({ date, manual = false, recipients: recipientOverride } = {}) {
   const targetDate = date || todayIST();
-  const recipients = parseEmails(DEFAULT_RECIPIENTS);
+  const recipients = recipientOverride
+    ? parseEmails(Array.isArray(recipientOverride) ? recipientOverride.join(',') : recipientOverride)
+    : parseEmails(getDefaultRecipients());
   if (!recipients.length) {
     logger.warn('HR late summary: no recipients configured (HR_LATE_SUMMARY_EMAILS)');
     return { ok: false, reason: 'No recipients' };

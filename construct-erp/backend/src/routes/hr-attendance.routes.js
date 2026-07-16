@@ -910,9 +910,7 @@ router.post('/late-summary/run', authorize('super_admin','admin','hr','hr_admin'
   try {
     const { runLateSummary } = require('../utils/hr-late-summary.service');
     const { date, recipients } = req.body;
-    // Allow caller to override recipients for this one run
-    if (recipients) process.env.HR_LATE_SUMMARY_EMAILS = Array.isArray(recipients) ? recipients.join(',') : recipients;
-    const result = await runLateSummary({ date: date || undefined, manual: true });
+    const result = await runLateSummary({ date: date || undefined, manual: true, recipients: recipients || undefined });
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
