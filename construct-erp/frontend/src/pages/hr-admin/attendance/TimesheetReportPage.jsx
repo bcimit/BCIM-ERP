@@ -185,6 +185,7 @@ export default function TimesheetReportPage() {
   const [sortDir, setSortDir]       = useState('asc');
   const [search, setSearch]         = useState('');
   const [statusFilter, setStatusF]  = useState('all');
+  const [companyFilter, setCompany] = useState('');
 
   const handleSort = (col) => {
     const key = COL_KEYS[col];
@@ -208,8 +209,17 @@ export default function TimesheetReportPage() {
     });
   }, [rows, sortKey, sortDir]);
 
+  const availableCompanies = useMemo(() => {
+    const seen = new Set();
+    rows.forEach(r => { if (r.company) seen.add(r.company); });
+    return [...seen].sort();
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     let r = sortedRows;
+    if (companyFilter) {
+      r = r.filter(row => (row.company || '') === companyFilter);
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       r = r.filter(row =>
@@ -223,7 +233,7 @@ export default function TimesheetReportPage() {
       r = r.filter(row => (row.attendance_status || '').toLowerCase() === statusFilter);
     }
     return r;
-  }, [sortedRows, search, statusFilter]);
+  }, [sortedRows, companyFilter, search, statusFilter]);
 
   const deptBreakdown = useMemo(() => {
     const map = {};
@@ -385,11 +395,35 @@ export default function TimesheetReportPage() {
         <Filter size={13} color="#6B7280"/>
         <span style={{ fontSize:12, color:'#6B7280', fontWeight:500, marginRight:2 }}>Filters:</span>
         <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle}/>
-        <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
-          <option value="staff">Staff Only</option>
-          <option value="labour">Labour / SC Workers</option>
-          <option value="all">All (Staff + Labour)</option>
+        <select value={category} onChange={e => { setCategory(e.target.value); setCompany(''); }} style={inputStyle}>
+          <option value="staff">BCIM Staff</option>
+          <option value="labour">SC / Labour Workers</option>
+          <option value="all">All Employees</option>
         </select>
+
+        {/* Company filter — populated from loaded rows */}
+        <select
+          value={companyFilter}
+          onChange={e => setCompany(e.target.value)}
+          style={{ ...inputStyle, minWidth:190, maxWidth:260 }}
+          title="Filter by contractor / company"
+        >
+          <option value="">All Companies</option>
+          {availableCompanies.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        {companyFilter && (
+          <button onClick={() => setCompany('')} style={{
+            display:'flex', alignItems:'center', gap:3,
+            background:'#FEF2F2', color:'#B91C1C', border:'0.5px solid #FECACA',
+            borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer',
+          }}>
+            <X size={11}/> {companyFilter}
+          </button>
+        )}
+
         <select value={projectFilter} onChange={e => setProject(e.target.value)}
           style={{ ...inputStyle, minWidth:190 }}>
           <option value="">All Projects</option>
@@ -547,7 +581,8 @@ export default function TimesheetReportPage() {
                   ? <>Project: <strong>{meta.projectName}</strong>{meta.projectCode ? ` (${meta.projectCode})` : ''}&emsp;|&emsp;</>
                   : null}
                 Date: <strong>{fmtDate(date)}</strong>&emsp;|&emsp;
-                Category: <strong>{category === 'staff' ? 'STAFF ONLY' : category === 'labour' ? 'LABOUR / SC WORKERS' : 'ALL (STAFF + LABOUR)'}</strong>
+                Category: <strong>{category === 'staff' ? 'BCIM STAFF' : category === 'labour' ? 'SC / LABOUR WORKERS' : 'ALL EMPLOYEES'}</strong>
+                {companyFilter && <>&emsp;|&emsp;Company: <strong>{companyFilter}</strong></>}
               </div>
             </div>
             <table style={{ border:'1px solid #1B3A6B', borderCollapse:'collapse', fontSize:8, flexShrink:0 }}>
