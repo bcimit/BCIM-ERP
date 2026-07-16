@@ -902,6 +902,22 @@ router.post('/late-alerts/test', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// LATE SUMMARY — HR Manager daily digest (manual trigger)
+// POST /hr-admin/attendance/late-summary/run
+// Body: { date?, recipients? }   (optional overrides)
+// ═══════════════════════════════════════════════════════════
+router.post('/late-summary/run', authorize('super_admin','admin','hr','hr_admin','hr_manager'), async (req, res) => {
+  try {
+    const { runLateSummary } = require('../utils/hr-late-summary.service');
+    const { date, recipients } = req.body;
+    // Allow caller to override recipients for this one run
+    if (recipients) process.env.HR_LATE_SUMMARY_EMAILS = Array.isArray(recipients) ? recipients.join(',') : recipients;
+    const result = await runLateSummary({ date: date || undefined, manual: true });
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════
 // RECALCULATE ATTENDANCE
 // POST /hr-admin/attendance/recalculate  { from, to }
 // Re-derives status/late_minutes from stored in_time/out_time for both staff and SC workers
