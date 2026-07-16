@@ -94,18 +94,14 @@ async function existingTables(conn, tables) {
 }
 
 // ── Pull swipe data from ESSL ─────────────────────────────────────────────────
-// NOTE: ESSL's Direction column is empty ('') on this install, and C1 ('in'/'out')
-// is unreliable (same value on both punches for some devices). So we do NOT trust
-// direction flags — attendance in/out is derived chronologically in groupSwipes().
-// C1 is still exported as `direction` on raw swipes for reference only.
 async function pullSwipes(conn, tables, fromDT, toDT) {
   if (!tables.length) return [];
 
   const unionSQL = tables.map(t => `
     SELECT
-      e.EmployeeCode                        AS emp_code,
-      CONVERT(VARCHAR(23), d.LogDate, 121)  AS swipe_time,
-      LOWER(LTRIM(RTRIM(COALESCE(d.C1, '')))) AS direction
+      e.EmployeeCode                                                    AS emp_code,
+      CONVERT(VARCHAR(23), d.LogDate, 121)                              AS swipe_time,
+      CASE WHEN DATEPART(HOUR, d.LogDate) < 12 THEN 'in' ELSE 'out' END AS direction
     FROM [${t}] d
     JOIN Employees e ON e.NumericCode = d.UserId
     WHERE d.LogDate BETWEEN @from AND @to
@@ -120,8 +116,6 @@ async function pullSwipes(conn, tables, fromDT, toDT) {
 }
 
 // ── Group swipes into daily attendance records ────────────────────────────────
-// Direction flags from ESSL are unreliable, so in/out is purely chronological:
-// first punch of the day = in_time, last punch = out_time (if more than one).
 function groupSwipes(rows) {
   const grouped = {};
   for (const row of rows) {
@@ -131,15 +125,16 @@ function groupSwipes(rows) {
     const date = toDateStr(dt);
     const time = dt.toTimeString().slice(0, 8);
     const key  = `${code}|${date}`;
-    if (!grouped[key]) grouped[key] = { emp_code: code, date, all: [] };
-    grouped[key].all.push(time);
+    if (!grouped[key]) grouped[key] = { emp_code: code, date, ins: [], outs: [] };
+    if (row.direction === 'in') grouped[key].ins.push(time);
+    else grouped[key].outs.push(time);
   }
 
   return Object.values(grouped).map(g => {
-    g.all.sort();
-    const punch_count = g.all.length;
-    const in_time     = g.all[0] || null;
-    const out_time    = punch_count > 1 ? g.all[punch_count - 1] : null;
+    g.ins.sort(); g.outs.sort();
+    const in_time     = g.ins[0] || null;
+    const out_time    = g.outs[g.outs.length - 1] || null;
+    const punch_count = g.ins.length + g.outs.length;
     return { emp_code: g.emp_code, date: g.date, in_time, out_time, punch_count };
   });
 }
