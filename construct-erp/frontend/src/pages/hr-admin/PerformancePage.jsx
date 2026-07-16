@@ -180,9 +180,9 @@ function DetailView({ ev, onClose }) {
   const reviewLabel = ev.review_type === 'quarterly' ? 'Quarterly' : 'Monthly';
 
   return (
-    <div id="perf-print-root" className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-8 px-4">
+    <div id="perf-print-root" className="fixed inset-0 z-50 bg-black/50 flex items-stretch justify-center overflow-hidden">
       <style>{PERF_PRINT_CSS}</style>
-      <div id="perf-print-card" className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl">
+      <div id="perf-print-card" className="bg-white w-full flex flex-col" style={{ maxWidth: '100vw' }}>
 
         {/* Screen header */}
         <div className="no-print flex items-center justify-between px-6 py-4 border-b">
@@ -207,7 +207,7 @@ function DetailView({ ev, onClose }) {
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* Review type badge */}
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Review Type:</span>
@@ -461,8 +461,8 @@ function EvalFormModal({ editing, onClose }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-8 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-stretch justify-center overflow-hidden">
+      <div className="bg-white w-full flex flex-col" style={{ maxWidth: '100vw' }}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ background: NAVY, borderRadius: '16px 16px 0 0' }}>
@@ -475,7 +475,7 @@ function EvalFormModal({ editing, onClose }) {
           <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg"><X size={18} className="text-white"/></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
 
           {/* Review type */}
           <div className="flex items-center gap-6 p-3 bg-blue-50 rounded-xl">
