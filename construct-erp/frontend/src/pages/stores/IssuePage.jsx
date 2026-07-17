@@ -422,6 +422,8 @@ export default function IssuePage() {
 // ── MINForm ───────────────────────────────────────────────────────────────────
 
 function MINForm({ onClose, projects, contractors, qc }) {
+  const { user } = useAuthStore();
+  const isSuperAdmin = String(user?.role || '').toLowerCase() === 'super_admin';
   const [formData, setFormData] = useState({
     project_id: '', activity_name: '', contractor_id: '',
     issued_to: '', vehicle_number: '', issue_date: dayjs().format('YYYY-MM-DD'),
