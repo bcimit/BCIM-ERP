@@ -861,21 +861,30 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     // tqsPaid/tqsActuals bucket via workflow_status='paid' on tqs_bills).
     const finPayActuals = await query(`
       SELECT
-        COALESCE(
-          pay.cost_head,
-          (SELECT pi.cost_head
-           FROM invoices inv
-           JOIN po_items pi ON pi.po_id = inv.po_id
-           WHERE inv.id = pay.invoice_id AND pi.cost_head IS NOT NULL
-           ORDER BY pi.sort_order LIMIT 1),
-          'Material'
-        ) AS cost_head,
-        SUM(pay.net_amount) AS actual
-      FROM payments pay
-      WHERE pay.project_id = $1
-        AND pay.tqs_bill_id IS NULL
-        AND COALESCE(pay.pc_number, '') = ''
-        AND pay.status = 'paid'
+        CASE
+          WHEN resolved ILIKE 'Advance%' THEN 'Sub Con'
+          WHEN resolved = 'Material'     THEN 'Materials / Consumables'
+          ELSE resolved
+        END AS cost_head,
+        SUM(actual) AS actual
+      FROM (
+        SELECT
+          COALESCE(
+            pay.cost_head,
+            (SELECT pi.cost_head
+             FROM invoices inv
+             JOIN po_items pi ON pi.po_id = inv.po_id
+             WHERE inv.id = pay.invoice_id AND pi.cost_head IS NOT NULL
+             ORDER BY pi.sort_order LIMIT 1),
+            'Materials / Consumables'
+          ) AS resolved,
+          pay.net_amount AS actual
+        FROM payments pay
+        WHERE pay.project_id = $1
+          AND pay.tqs_bill_id IS NULL
+          AND COALESCE(pay.pc_number, '') = ''
+          AND pay.status = 'paid'
+      ) sub
       GROUP BY 1
     `, [project_id]);
 
