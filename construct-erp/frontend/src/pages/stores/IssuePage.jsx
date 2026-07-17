@@ -530,6 +530,7 @@ function MINForm({ onClose, projects, contractors, qc }) {
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700">Issue Date *</label>
                 <input type="date" className={inp} value={formData.issue_date}
+                  max={dayjs().format('YYYY-MM-DD')}
                   onChange={e => setFormData(p => ({ ...p, issue_date: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
