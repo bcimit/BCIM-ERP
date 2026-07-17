@@ -380,7 +380,7 @@ function RaBillsComparisonTab({ chapterRows, months, planMap, actualMap, bills, 
   return (
     <div className="space-y-5">
       {renderTable({
-        title: 'Plan RA bills',
+        title: 'RA Bills Comparison (Planned vs Actual)',
         subtitle: 'Click any month cell to enter the planned billing amount for that chapter — saved per project',
         headClass: 'bg-amber-50',
         isActual: false,
