@@ -253,6 +253,9 @@ export const boqBudgetAPI = {
   costheadMonthly:     (projectId)            => api.get(`/boq-budget/${projectId}/costhead-monthly`),
   sendBudgetAlert:     (projectId)            => api.post(`/boq-budget/${projectId}/send-budget-alert`),
   unlinkedLines:       (projectId, costHead)  => api.get(`/boq-budget/${projectId}/unlinked-lines`, { params: { cost_head: costHead || undefined } }),
+  raPlan:              (projectId)            => api.get(`/boq-budget/${projectId}/ra-plan`),
+  setRaPlanCell:       (projectId, payload)    => api.put(`/boq-budget/${projectId}/ra-plan`, payload),
+  raActuals:           (projectId)             => api.get(`/boq-budget/${projectId}/ra-actuals`),
 };
 
 export const boqMappingAPI = {
@@ -1068,6 +1071,14 @@ export const plantAPI = {
   listCostAllocation:(p)     => api.get('/plant/cost-allocation', { params: p }),
   createCostAllocation:(d)   => api.post('/plant/cost-allocation', d),
   deleteCostAllocation:(id)  => api.delete(`/plant/cost-allocation/${id}`),
+  // Tower Crane Register
+  listTowerCranes:       (p)     => api.get('/plant/tower-cranes', { params: p }),
+  createTowerCrane:      (d)     => api.post('/plant/tower-cranes', d),
+  updateTowerCrane:      (id, d) => api.put(`/plant/tower-cranes/${id}`, d),
+  deleteTowerCrane:      (id)    => api.delete(`/plant/tower-cranes/${id}`),
+  listTowerCraneDocs:    (id)    => api.get(`/plant/tower-cranes/${id}/documents`),
+  addTowerCraneDoc:      (id, d) => api.post(`/plant/tower-cranes/${id}/documents`, d),
+  deleteTowerCraneDoc:   (id)    => api.delete(`/plant/tower-crane-documents/${id}`),
   // Dashboard / Reports / Compliance
   dashboard:         ()      => api.get('/plant/dashboard'),
   expiryAlerts:      ()      => api.get('/plant/expiry-alerts'),

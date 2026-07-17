@@ -27,6 +27,22 @@ runSchemaInit('boq_item_budget_breakdown', async () => {
   `);
 });
 
+runSchemaInit('ra_bill_chapter_plans', async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS ra_bill_chapter_plans (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      chapter_key TEXT NOT NULL,
+      ra_index SMALLINT NOT NULL CHECK (ra_index BETWEEN 1 AND 9),
+      planned_amount NUMERIC(16,2) DEFAULT 0,
+      created_by UUID,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (project_id, chapter_key, ra_index)
+    )
+  `);
+});
+
 runSchemaInit('project_costhead_budgets', async () => {
   await query(`
     CREATE TABLE IF NOT EXISTS project_costhead_budgets (
@@ -1933,6 +1949,106 @@ router.post('/:project_id/send-budget-alert', async (req, res) => {
     console.error('[send-budget-alert]', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── RA Bills Comparison — Plan vs Actual, chapter × RA1-RA9 (fixed Jul-Mar) ──
+// Chapter grouping mirrors the frontend's BOQ Summary logic exactly (group by
+// normalized chapter_name when a project has multiple distinct names, else by
+// chapter_no) so chapter_key values line up between the Plan grid the user
+// edits and the Actual figures computed here from real RA bills.
+const normChapterName = (s) => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+function buildChapterKeyer(allBoqItems) {
+  const names = new Set(allBoqItems.map(i => normChapterName(i.chapter_name)).filter(Boolean));
+  const useNameGrouping = names.size > 1;
+  return (it) => {
+    if (useNameGrouping) {
+      const name = normChapterName(it.chapter_name);
+      return name || `__no:${it.chapter_no || 'ZZZ'}`;
+    }
+    return it.chapter_no || '0';
+  };
+}
+
+// GET /:project_id/ra-plan — saved planned amounts, chapter_key × ra_index (1-9)
+router.get('/:project_id/ra-plan', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const r = await query(
+      `SELECT chapter_key, ra_index, planned_amount::text FROM ra_bill_chapter_plans WHERE project_id = $1`,
+      [project_id]
+    );
+    res.json({ data: r.rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /:project_id/ra-plan — upsert a single cell { chapter_key, ra_index, planned_amount }
+router.put('/:project_id/ra-plan', authorize(...BUDGET_WRITERS), async (req, res) => {
+  try {
+    const { project_id } = req.params;
+    const { chapter_key, ra_index, planned_amount } = req.body;
+    if (!chapter_key || !(ra_index >= 1 && ra_index <= 9)) {
+      return res.status(400).json({ error: 'chapter_key and ra_index (1-9) are required' });
+    }
+    await query(
+      `INSERT INTO ra_bill_chapter_plans (project_id, chapter_key, ra_index, planned_amount, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (project_id, chapter_key, ra_index)
+       DO UPDATE SET planned_amount = EXCLUDED.planned_amount, updated_at = NOW()`,
+      [project_id, chapter_key, ra_index, parseFloat(planned_amount) || 0, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /:project_id/ra-actuals — real RA bill amounts assigned to RA1-RA9 by
+// chronological submission order (1st bill ever created = RA1, etc.), summed
+// per chapter to match the Plan grid's row keys.
+router.get('/:project_id/ra-actuals', async (req, res) => {
+  try {
+    const { project_id } = req.params;
+
+    const boqItemsRes = await query(
+      `SELECT id, chapter_no, chapter_name FROM boq_items WHERE project_id = $1`,
+      [project_id]
+    );
+    const chapterKeyOf = buildChapterKeyer(boqItemsRes.rows);
+    const boqItemChapter = {};
+    boqItemsRes.rows.forEach(bi => { boqItemChapter[bi.id] = chapterKeyOf(bi); });
+
+    const billsRes = await query(
+      `SELECT id, bill_number, bill_date, created_at
+       FROM ra_bills
+       WHERE project_id = $1
+       ORDER BY COALESCE(bill_date, created_at::date) ASC, created_at ASC
+       LIMIT 9`,
+      [project_id]
+    );
+    const bills = billsRes.rows.map((b, i) => ({ ...b, ra_index: i + 1 }));
+
+    const actualsMap = {}; // `${chapter_key}::${ra_index}` -> amount
+    if (bills.length) {
+      const itemsRes = await query(
+        `SELECT ra_bill_id, boq_item_id, amount::text FROM ra_bill_items WHERE ra_bill_id = ANY($1)`,
+        [bills.map(b => b.id)]
+      );
+      const raIndexByBillId = {};
+      bills.forEach(b => { raIndexByBillId[b.id] = b.ra_index; });
+      itemsRes.rows.forEach(it => {
+        const raIdx = raIndexByBillId[it.ra_bill_id];
+        const chKey = boqItemChapter[it.boq_item_id];
+        if (!raIdx || !chKey) return;
+        const mapKey = `${chKey}::${raIdx}`;
+        actualsMap[mapKey] = (actualsMap[mapKey] || 0) + (parseFloat(it.amount) || 0);
+      });
+    }
+
+    const actuals = Object.entries(actualsMap).map(([k, amount]) => {
+      const [chapter_key, ra_index] = k.split('::');
+      return { chapter_key, ra_index: parseInt(ra_index, 10), amount };
+    });
+
+    res.json({ data: { bills, actuals } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
