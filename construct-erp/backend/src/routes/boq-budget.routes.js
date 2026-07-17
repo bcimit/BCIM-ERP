@@ -872,9 +872,15 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     // Finance module payments (Vendor Payments page) — Bills Paid.
     // Uses payments.cost_head when set; otherwise falls back to the linked
     // invoice's PO item cost_head; finally defaults to 'Material'.
-    // Excludes payments already counted via tqsPaid (tqs_bill_id IS NOT NULL
-    // means the payment was synced back to a TQS bill, so it's already in the
-    // tqsPaid/tqsActuals bucket via workflow_status='paid' on tqs_bills).
+    // Excludes payments already counted via tqsPaid:
+    //   - tqs_bill_id IS NOT NULL: single-bill QS-cert payment, synced back to
+    //     that one TQS bill (already in tqsPaid via workflow_status='paid').
+    //   - certification_id set AND every bill the certification covers is
+    //     already workflow_status='paid': a multi-bill QS-cert payment can't
+    //     use tqs_bill_id (one FK, many bills), so it's excluded via the
+    //     vendor_qs_certification_bills junction instead — once every covered
+    //     bill is fully paid, tqsPaid already captures that money in full and
+    //     this Finance payment would otherwise double it.
     const finPayActuals = await query(`
       SELECT
         CASE
@@ -900,6 +906,15 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
           AND pay.tqs_bill_id IS NULL
           AND COALESCE(pay.pc_number, '') = ''
           AND pay.status = 'paid'
+          AND NOT (
+            pay.certification_id IS NOT NULL
+            AND EXISTS (SELECT 1 FROM vendor_qs_certification_bills cb WHERE cb.certification_id = pay.certification_id)
+            AND NOT EXISTS (
+              SELECT 1 FROM vendor_qs_certification_bills cb
+              JOIN tqs_bills tb ON tb.id = cb.bill_id
+              WHERE cb.certification_id = pay.certification_id AND tb.workflow_status <> 'paid'
+            )
+          )
       ) sub
       GROUP BY 1
     `, [project_id]);
