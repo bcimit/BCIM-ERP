@@ -369,7 +369,7 @@ router.patch('/:id/status', authenticate, async (req, res) => {
       if (billRow) {
         const creditValue = parseFloat(existing.net_amount || existing.total_amount) || 0;
         await query(
-          `UPDATE tqs_bills SET credit_note_num = $1, credit_note_val = COALESCE(credit_note_val,0) + $2, updated_at = NOW() WHERE id = $3`,
+          `UPDATE tqs_bills SET credit_note_num = $1, credit_note_val = $2, updated_at = NOW() WHERE id = $3`,
           [existing.cn_number, creditValue, billRow.id]
         );
       }
