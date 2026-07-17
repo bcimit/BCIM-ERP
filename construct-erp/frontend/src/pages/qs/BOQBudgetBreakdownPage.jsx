@@ -2073,12 +2073,22 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                         {r.paid > 0 ? `₹${Math.round(r.paid).toLocaleString('en-IN')}` : '—'}
                       </span>
                     ) : r.paid > 0 ? (
-                      <button onClick={() => toggleExpand(r.cost_head, hasActual)}
-                        title="Cash actually disbursed — click to see the transactions counted under Bills Received"
-                        className={clsx('font-semibold hover:underline underline-offset-2 transition-colors',
-                          isExpanded ? 'text-indigo-600' : 'text-indigo-700 hover:text-indigo-500')}>
-                        ₹{Math.round(r.paid).toLocaleString('en-IN')}
-                      </button>
+                      <div className="text-right">
+                        <button onClick={() => toggleExpand(r.cost_head, hasActual)}
+                          title="Cash actually disbursed — click to see the transactions counted under Bills Received"
+                          className={clsx('font-semibold hover:underline underline-offset-2 transition-colors',
+                            isExpanded ? 'text-indigo-600' : 'text-indigo-700 hover:text-indigo-500')}>
+                          ₹{Math.round(r.paid).toLocaleString('en-IN')}
+                        </button>
+                        {(r.paid_advance > 0 && r.paid_invoice > 0) && (
+                          <div className="text-[9px] text-slate-400 mt-0.5">
+                            Adv ₹{Math.round(r.paid_advance).toLocaleString('en-IN')} · Inv ₹{Math.round(r.paid_invoice).toLocaleString('en-IN')}
+                          </div>
+                        )}
+                        {(r.paid_advance > 0 && r.paid_invoice === 0) && (
+                          <div className="text-[9px] text-amber-500 mt-0.5">Advance only — no bill yet</div>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-slate-300">—</span>
                     )}

@@ -892,6 +892,9 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     //     voucher with paid_amount set, which advTrackerActuals already sums —
     //     without this exclusion the same advance counts twice, once here and
     //     once via the voucher.
+    // is_advance is exposed alongside cost_head so the caller can route this
+    // row's money into either the "paid against invoice" or "paid as advance"
+    // bucket — same underlying money, just split for the Bills Paid breakdown.
     const finPayActuals = await query(`
       SELECT
         CASE
@@ -899,6 +902,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
           WHEN resolved = 'Material'     THEN 'Materials / Consumables'
           ELSE resolved
         END AS cost_head,
+        (resolved ILIKE 'Advance%') AS is_advance,
         SUM(actual) AS actual
       FROM (
         SELECT
@@ -928,7 +932,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
             )
           )
       ) sub
-      GROUP BY 1
+      GROUP BY 1, 2
     `, [project_id]);
 
     // "Received" = value of bills logged (RA/SC/TQS/PO/Finance invoices).
@@ -942,12 +946,34 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     // "Paid" = cash actually disbursed: the paid portion of those same bills,
     // plus advances/petty cash (cash out with no corresponding bill received),
     // plus Finance module payments (Vendor Payments page).
-    const paidMap = {};
-    for (const rows of [raPaid.rows, scPaid.rows, tqsPaid.rows, poFallbackPaid.rows, advActuals.rows, advTrackerActuals.rows, btAdvActuals.rows, spcActuals.rows, spcRemainder.rows, storePCAdvActuals.rows, finPayActuals.rows]) {
+    // Split into paidInvoiceMap (paid against a real bill/invoice) and
+    // paidAdvanceMap (advances/petty cash paid with no bill of their own) so
+    // Budget Control can show the breakdown, not just the combined total.
+    const paidInvoiceMap = {};
+    for (const rows of [raPaid.rows, scPaid.rows, tqsPaid.rows, poFallbackPaid.rows]) {
       for (const r of rows) {
         if (!r.cost_head) continue;
-        paidMap[r.cost_head] = (paidMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
+        paidInvoiceMap[r.cost_head] = (paidInvoiceMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
       }
+    }
+    const paidAdvanceMap = {};
+    for (const rows of [advActuals.rows, advTrackerActuals.rows, btAdvActuals.rows, spcActuals.rows, spcRemainder.rows, storePCAdvActuals.rows]) {
+      for (const r of rows) {
+        if (!r.cost_head) continue;
+        paidAdvanceMap[r.cost_head] = (paidAdvanceMap[r.cost_head] || 0) + parseFloat(r.actual || 0);
+      }
+    }
+    // finPayActuals rows carry their own is_advance flag, decided per row —
+    // route each into the matching bucket instead of guessing at the cost-head
+    // level (a cost head can have both kinds of Finance payment).
+    for (const r of finPayActuals.rows) {
+      if (!r.cost_head) continue;
+      const bucket = r.is_advance ? paidAdvanceMap : paidInvoiceMap;
+      bucket[r.cost_head] = (bucket[r.cost_head] || 0) + parseFloat(r.actual || 0);
+    }
+    const paidMap = {};
+    for (const h of new Set([...Object.keys(paidInvoiceMap), ...Object.keys(paidAdvanceMap)])) {
+      paidMap[h] = (paidInvoiceMap[h] || 0) + (paidAdvanceMap[h] || 0);
     }
     // actualMap = total cost incurred (received bills + advances/petty cash that
     // have no bill of their own) — drives Profit/Contingency derivation below.
@@ -995,6 +1021,10 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     receivedMap['Profit'] = baseReceived * PROFIT_PCT;
     const basePaid = PROFIT_BASE_HEADS.reduce((s, h) => s + (paidMap[h] || 0), 0);
     paidMap['Profit'] = basePaid * PROFIT_PCT;
+    const basePaidInvoice = PROFIT_BASE_HEADS.reduce((s, h) => s + (paidInvoiceMap[h] || 0), 0);
+    paidInvoiceMap['Profit'] = basePaidInvoice * PROFIT_PCT;
+    const basePaidAdvance = PROFIT_BASE_HEADS.reduce((s, h) => s + (paidAdvanceMap[h] || 0), 0);
+    paidAdvanceMap['Profit'] = basePaidAdvance * PROFIT_PCT;
 
     // Contingency (head 20) budget = Total BOQ Value − sum(heads 1-18) − Profit.
     // This is a planning allocation only — "whatever's left of the contract
@@ -1040,6 +1070,8 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
       actual: actualMap[head] || 0,
       received: receivedMap[head] || 0,
       paid: paidMap[head] || 0,
+      paid_invoice: paidInvoiceMap[head] || 0,
+      paid_advance: paidAdvanceMap[head] || 0,
       balance: (budgetMap[head] || 0) - (actualMap[head] || 0),
       derived: DERIVED_HEADS.has(head),
       monthly_avg: parseFloat(((actualMap[head] || 0) / monthsElapsed).toFixed(2)),
