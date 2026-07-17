@@ -1547,7 +1547,7 @@ function ClientBillingSummary({ projectId, contractValue }) {
   const advanceBalance = advanceReceived - advanceRecovered;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
       <ClientKPI label="Client Work Order Value" value={workOrderValue} icon={Building2} color="#0B2E59" />
       <ClientKPI label="Current RA Bill Certified" value={currentBill?.net_payable} sub={currentBill?.bill_number} icon={CheckCircle2} color="#059669" />
       <ClientKPI label="Cumulative RA Bill Value" value={cumulativeBilled} sub={`${certifiedBills.length} bill${certifiedBills.length !== 1 ? 's' : ''}`} icon={TrendingUp} color="#4F46E5" />
@@ -1562,14 +1562,14 @@ function ClientBillingSummary({ projectId, contractValue }) {
 function ClientKPI({ label, value, sub, icon: Icon, color }) {
   const n = parseFloat(value);
   return (
-    <div className="bg-white rounded-xl border border-slate-200 px-3.5 py-2.5 shadow-sm flex items-start gap-2.5">
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}1A` }}>
-        <Icon className="w-4 h-4" style={{ color }} />
+    <div className="bg-white rounded-xl border border-slate-200 px-4 py-3.5 shadow-sm flex items-start gap-3">
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}1A` }}>
+        <Icon className="w-4.5 h-4.5" style={{ color }} />
       </div>
       <div className="min-w-0">
-        <div className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wide leading-tight">{label}</div>
-        <div className="text-[13px] font-bold text-slate-800 mt-0.5 truncate">{n > 0 ? `₹${Math.round(n).toLocaleString('en-IN')}` : '—'}</div>
-        {sub ? <div className="text-[9.5px] text-slate-400 mt-0.5 truncate">{sub}</div> : null}
+        <div className="text-[12.5px] font-medium text-slate-500 leading-tight">{label}</div>
+        <div className="text-[28px] font-semibold text-slate-800 mt-1 truncate leading-none">{n > 0 ? `₹${Math.round(n).toLocaleString('en-IN')}` : '—'}</div>
+        {sub ? <div className="text-[11px] text-slate-400 mt-1.5 truncate">{sub}</div> : null}
       </div>
     </div>
   );
@@ -1980,8 +1980,8 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                     : isContingency && contAbsorbed > 0 ? 'border-l-blue-300 bg-blue-50/20'
                     : 'border-l-transparent',
                   isExpanded && 'bg-indigo-50/40')}>
-                  <td className="px-2 py-2 text-center text-slate-500 font-bold">{i + 1}</td>
-                  <td className="px-4 py-2 font-medium text-slate-700">
+                  <td className="px-2 py-3.5 text-center text-slate-500 font-medium">{i + 1}</td>
+                  <td className="px-4 py-3.5 font-medium text-slate-700">
                     <div className="flex items-center gap-1.5">
                       {hasActual && (
                         <button onClick={() => toggleExpand(r.cost_head, hasActual)}
@@ -1994,10 +1994,10 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       <span>{r.cost_head}</span>
                     </div>
                   </td>
-                  <td className="px-2 py-1">
+                  <td className="px-2 py-3.5">
                     {r.derived ? (
                       <div className="flex items-center justify-end gap-2 px-2">
-                        <span className="text-sm font-semibold text-slate-800">
+                        <span className="text-sm font-medium text-slate-800">
                           {r.budget !== 0 ? `₹${Math.round(r.budget).toLocaleString('en-IN')}` : '—'}
                         </span>
                         {r.cost_head === 'Profit' ? (
@@ -2020,7 +2020,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       </div>
                     ) : (
                       <div className="flex items-center justify-end gap-2 px-2">
-                        <span className={clsx('text-sm font-semibold', r.budget > 0 ? 'text-slate-800' : 'text-slate-300 italic text-xs')}>
+                        <span className={clsx('text-sm font-medium', r.budget > 0 ? 'text-slate-800' : 'text-slate-300 italic text-xs')}>
                           {r.budget > 0 ? `₹${Math.round(r.budget).toLocaleString('en-IN')}` : 'Not set'}
                         </span>
                         <button onClick={() => { setEditVal(r.budget ? Math.round(r.budget).toString() : ''); setEditingHead(r.cost_head); }}
@@ -2031,7 +2031,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold">
+                  <td className="px-4 py-3.5 text-right font-medium">
                     {isContingency ? (
                       <div className="text-right">
                         {contAbsorbed > 0 ? (
@@ -2060,7 +2060,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold">
+                  <td className="px-4 py-3.5 text-right font-medium">
                     {isContingency ? (
                       <div className="text-right">
                         {contAbsorbed > 0 ? (
@@ -2094,29 +2094,29 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold">
+                  <td className="px-4 py-3.5 text-right font-medium">
                     {isContingency || r.derived ? (
                       <span className="text-slate-300">—</span>
                     ) : (() => {
                       const outstanding = (r.received || 0) - (r.paid || 0);
                       return outstanding > 0.5 ? (
-                        <span className="font-semibold text-amber-600" title="Bills received but not yet paid">
+                        <span className="font-medium text-amber-600" title="Bills received but not yet paid">
                           ₹{Math.round(outstanding).toLocaleString('en-IN')}
                         </span>
                       ) : <span className="text-slate-300">—</span>;
                     })()}
                   </td>
-                  <td className="px-4 py-2 text-right text-xs font-bold tabular-nums">
+                  <td className="px-4 py-3.5 text-right text-xs font-medium tabular-nums">
                     {r.budget > 0 && !isContingency ? (
                       <UsageBar pct={pctUsed} status={barStatus} />
                     ) : isContingency && contBudget > 0 ? (
                       <UsageBar pct={(contAbsorbed / contBudget) * 100} status="slate" />
                     ) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums">
+                  <td className="px-3 py-3.5 text-right text-xs tabular-nums">
                     {!isContingency && r.monthly_avg > 0 ? (
                       <div>
-                        <div className={clsx('font-bold',
+                        <div className={clsx('font-medium',
                           r.budget > 0 && r.monthly_avg * 12 > r.budget ? 'text-rose-600' : 'text-indigo-600')}>
                           {inr(r.monthly_avg * 12)}
                         </div>
@@ -2124,7 +2124,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
                       </div>
                     ) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className={clsx('px-4 py-2 text-right font-bold',
+                  <td className={clsx('px-4 py-3.5 text-right font-medium',
                     r.budget === 0 && !isContingency ? 'text-slate-300'
                     : overCritical ? 'text-rose-600'
                     : overCovered ? 'text-amber-600'
@@ -2468,7 +2468,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
   });
 
   return (
-    <div style={embedded ? { fontFamily: "'Times New Roman', Times, serif" } : { background: Theme.pageBg, minHeight: '100vh', fontFamily: "'Times New Roman', Times, serif" }}>
+    <div style={embedded ? { fontFamily: "'Inter', system-ui, sans-serif" } : { background: Theme.pageBg, minHeight: '100vh', fontFamily: "'Inter', system-ui, sans-serif" }}>
       {!embedded && (
         <PageHeader
           title={pageTitle || 'BOQ Budget Breakdown'}
@@ -2500,7 +2500,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
         />
       )}
 
-      <div className="p-5 md:p-6 max-w-[1700px] mx-auto space-y-5">
+      <div className="p-5 md:p-6 max-w-[1700px] mx-auto space-y-6">
 
         {/* Search — project comes from the top bar's project selector */}
         {projectId && (
