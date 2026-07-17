@@ -887,6 +887,11 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
     //     vendor_qs_certification_bills junction instead — once every covered
     //     bill is fully paid, tqsPaid already captures that money in full and
     //     this Finance payment would otherwise double it.
+    //   - advance_voucher_id IS NOT NULL: this payment's advance was later
+    //     migrated into the Advance Tracker (tqs_advance_vouchers) as its own
+    //     voucher with paid_amount set, which advTrackerActuals already sums —
+    //     without this exclusion the same advance counts twice, once here and
+    //     once via the voucher.
     const finPayActuals = await query(`
       SELECT
         CASE
@@ -910,6 +915,7 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
         FROM payments pay
         WHERE pay.project_id = $1
           AND pay.tqs_bill_id IS NULL
+          AND pay.advance_voucher_id IS NULL
           AND COALESCE(pay.pc_number, '') = ''
           AND pay.status = 'paid'
           AND NOT (
