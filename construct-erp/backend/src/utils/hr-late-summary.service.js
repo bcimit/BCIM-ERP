@@ -15,7 +15,7 @@ const MIN_LATE_MINUTES = parseInt(process.env.HR_LATE_SUMMARY_MIN_MINUTES, 10) |
 
 // Read recipients fresh every call so Railway env var changes take effect without restart
 function getDefaultRecipients() {
-  return process.env.HR_LATE_SUMMARY_EMAILS || 'it@bcim.in';
+  return process.env.HR_LATE_SUMMARY_EMAILS || 'raja@bcim.in,surendra@bcim.in,it@bcim.in';
 }
 const TZ                 = process.env.HR_LATE_SUMMARY_TZ || process.env.TZ || 'Asia/Kolkata';
 const ERP_URL            = process.env.API_BASE_URL || 'https://erp.bcim.in';
