@@ -742,10 +742,16 @@ router.get('/:project_id/costhead-summary', async (req, res) => {
 
     // Received: SC bills — same statuses and cost-head attribution as the BOQ
     // item view (untagged lines default to "Sub Con") so both screens agree.
+    // 'under_review' is included alongside 'submitted' — a bill only reaches
+    // under_review AFTER being submitted, while it's mid-way through a
+    // multi-stage approval chain (see sc.routes.js /bills/:id/approve: a
+    // non-final-stage approval sets status='under_review', not before
+    // submission). Excluding it here was an oversight — it's already been
+    // submitted and represents real money billed against you.
     const scActuals = await query(`
       SELECT COALESCE(bi.cost_head, 'Sub Con') AS cost_head, SUM(bi.curr_qty * bi.rate * (1 + COALESCE(sb.gst_pct, 18) / 100.0)) AS actual
       FROM sc_bill_items bi JOIN sc_bills sb ON sb.id = bi.bill_id
-      WHERE sb.project_id=$1 AND sb.status IN ('submitted','approved','paid')
+      WHERE sb.project_id=$1 AND sb.status IN ('submitted','under_review','approved','paid')
       GROUP BY COALESCE(bi.cost_head, 'Sub Con')`, [project_id]);
     // Paid: actual cash paid against SC bills (mapped to "Sub Con" — SC bill
     // items are essentially all Sub Con, and paid_amount isn't split by head).
