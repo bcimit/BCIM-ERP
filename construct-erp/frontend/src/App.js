@@ -221,6 +221,7 @@ const PlantCompliance     = lazy(() => import('./pages/plant/PlantCompliance'));
 const PlantCost           = lazy(() => import('./pages/plant/PlantCost'));
 const PlantReports        = lazy(() => import('./pages/plant/PlantReports'));
 const HireRentalPage      = lazy(() => import('./pages/plant/HireRentalPage'));
+const TowerCranePage      = lazy(() => import('./pages/plant/TowerCranePage'));
 const ITAssetPage         = lazy(() => import('./pages/it/ITAssetPage'));
 const ITTicketPage        = lazy(() => import('./pages/it/ITTicketPage'));
 const LicensePage         = lazy(() => import('./pages/it/LicensePage'));
@@ -981,6 +982,7 @@ export default function App() {
                 <Route path="plant/compliance"   element={<RequireModule module="Plant & Machinery"><PlantCompliance /></RequireModule>} />
                 <Route path="plant/cost"         element={<RequireModule module="Plant & Machinery"><PlantCost /></RequireModule>} />
                 <Route path="plant/reports"      element={<RequireModule module="Plant & Machinery"><PlantReports /></RequireModule>} />
+                <Route path="plant/tower-cranes" element={<RequireModule module="Plant & Machinery"><TowerCranePage /></RequireModule>} />
                 <Route path="hire-rental"           element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="dashboard" /></RequireModule>} />
                 <Route path="hire-rental/invoices"  element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="invoices" /></RequireModule>} />
                 <Route path="hire-rental/certify"   element={<RequireModule module="Hire & Rental"><HireRentalPage defaultTab="certify" /></RequireModule>} />
