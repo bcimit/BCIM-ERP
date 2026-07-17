@@ -474,6 +474,8 @@ function MINForm({ onClose, projects, contractors, qc }) {
       .filter(it => parseFloat(it.quantity_issued) > 0)
       .map(it => ({ ...it, quantity_requested: it.quantity_requested || it.quantity_issued || 0 }));
     if (!validItems.length)            return toast.error('Enter quantity to issue for at least one item');
+    const overStock = validItems.find(it => parseFloat(it.quantity_issued) > parseFloat(it.available_stock || 0));
+    if (overStock) return toast.error(`Insufficient stock for ${overStock.material_name}. Available: ${overStock.available_stock} ${overStock.unit}`);
     createMutation.mutate({ ...formData, items: validItems });
   };
 
@@ -692,9 +694,15 @@ function MINForm({ onClose, projects, contractors, qc }) {
                             className={clsx('w-full h-9 rounded-lg px-2 text-xs text-center font-mono outline-none transition-all border', FIELD_HL)} />
                         </td>
                         <td className="py-2.5 px-2">
-                          <input type="number" min={0} placeholder="0" required value={it.quantity_issued}
+                          <input type="number" min={0} max={it.available_stock} placeholder="0" required value={it.quantity_issued}
                             onChange={e => setItem(idx, 'quantity_issued', e.target.value)}
-                            className={clsx('w-full h-9 rounded-lg px-2 text-xs text-center font-mono font-bold text-indigo-700 outline-none transition-all border', FIELD_HL)} />
+                            className={clsx('w-full h-9 rounded-lg px-2 text-xs text-center font-mono font-bold outline-none transition-all border',
+                              parseFloat(it.quantity_issued) > parseFloat(it.available_stock || 0)
+                                ? 'border-red-400 bg-red-50 text-red-600 ring-1 ring-red-300'
+                                : 'text-indigo-700 ' + FIELD_HL)} />
+                          {parseFloat(it.quantity_issued) > parseFloat(it.available_stock || 0) && (
+                            <p className="text-[10px] text-red-500 mt-0.5 text-center">Max: {it.available_stock}</p>
+                          )}
                         </td>
                         <td className="py-2.5 px-2">
                           <input placeholder="Activity / floor details" value={it.purpose}
