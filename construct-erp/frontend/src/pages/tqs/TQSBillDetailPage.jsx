@@ -121,12 +121,13 @@ function OverviewTab({ bill }) {
   const upd = bill.bill_updates || {};
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={`grid gap-3 ${bill.credit_note_val > 0 ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'}`}>
         {[
           { label: 'Basic Amount',  value: `₹${inr(bill.basic_amount)}`,     accent: '#1a3a6b' },
           { label: 'GST Amount',    value: `₹${inr(bill.gst_amount)}`,        accent: '#d97706' },
           { label: 'Transport',     value: `₹${inr(bill.transport_charges)}`, accent: '#0891b2' },
           { label: 'Total Invoice', value: `₹${inr(bill.total_amount)}`,      accent: '#1d4ed8' },
+          ...(bill.credit_note_val > 0 ? [{ label: `Credit Note${bill.credit_note_num ? ` (${bill.credit_note_num})` : ''}`, value: `− ₹${inr(bill.credit_note_val)}`, accent: '#dc2626' }] : []),
         ].map(c => (
           <div key={c.label}
             className="bg-white rounded-xl px-4 py-3.5 border-2"
