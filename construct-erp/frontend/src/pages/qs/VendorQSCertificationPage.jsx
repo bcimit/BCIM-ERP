@@ -928,8 +928,8 @@ export default function VendorQSCertificationPage() {
                   </Link>
                   <button
                     onClick={() => statusMut.mutate({ id: c.id, status: 'accounts' })}
-                    disabled={c.status === 'accounts' || c.status === 'paid' || !canApprove}
-                    title={canApprove ? 'Approve and send to Accounts' : `Only ${CERT_APPROVER_EMAIL} can approve and send this to Accounts`}
+                    disabled={c.status !== 'certified' || !canApprove}
+                    title={!canApprove ? `Only ${CERT_APPROVER_EMAIL} can approve` : c.status !== 'certified' ? `Cannot approve: status is ${c.status}` : 'Approve and send to Accounts'}
                     className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-[11px] font-semibold disabled:opacity-40 inline-flex items-center gap-1 transition-colors"
                   >
                     <Send className="w-3 h-3" /> {canApprove ? 'Approve' : 'Accounts'}
