@@ -727,7 +727,6 @@ router.post('/', async (req, res) => {
       const headerExtraGst = summary_items.length === 0
         ? billsRes.rows.reduce((s, b) => s + n(b.transport_gst_amt), 0)
         : 0;
-      const gross = mappedItems.reduce((s, it) => s + it.amount, 0) + headerExtras;
       const itemTax = mappedItems.reduce((s, it) => s + n(it.tax_amount), 0) + headerExtraGst;
       // Use gst_tax override if explicitly provided (even 0 = vendor has no GST)
       const billTax = (gst_tax !== undefined && gst_tax !== '' && gst_tax !== null)
@@ -737,6 +736,17 @@ router.post('/', async (req, res) => {
       // Invoice total = sum of selected bills' total_amount (basic + GST, exactly what vendor billed).
       // This is the correct base for net_payable and TDS — it matches the frontend display.
       const invoiceBillTotal = billsRes.rows.reduce((s, b) => s + n(b.total_amount), 0);
+      // gross_amount (the certification's "before tax" summary figure, shown in the
+      // printed Abstract as part of "Total Gross Certified" = gross + tax) is derived
+      // from the real invoice total minus tax, NOT summed independently from
+      // qty × PO-rate. Some POs quote a GST-INCLUSIVE rate (po_items.rate already
+      // includes tax) — for those, qty × rate IS the full inclusive amount, so
+      // summing it as "gross" and then adding tax_amount on top double-counted
+      // the tax in this one summary figure (net_payable itself was never affected,
+      // since it already derives from invoiceBillTotal below). Deriving gross this
+      // way keeps gross + tax == invoiceBillTotal always, regardless of whether any
+      // given PO's rate happens to be tax-inclusive or -exclusive.
+      const gross = invoiceBillTotal - billTax;
 
       // ── TDS auto-calculation ────────────────────────────────────────────
       // TDS base = invoice total (what vendor billed incl. GST), matching frontend useEffect.
@@ -988,13 +998,16 @@ router.post('/:id/refresh-from-bills', async (req, res) => {
       if (!billIds.length) throw new Error('No linked vendor bills found to refresh');
 
       const { items } = await buildSummaryFromBills(client, billIds, req.user.company_id, req.params.id);
-      const gross = round2(items.reduce((s, it) => s + n(it.amount), 0));
       const itemTax = round2(items.reduce((s, it) => s + n(it.tax_amount), 0));
       const billTax = itemTax || round2(linkedBills.rows.reduce((s, b) => s + n(b.gst_amount), 0));
       const totalDed = n(cert.tds_amount) + n(cert.advance_recovered) + n(cert.retention_amount) + n(cert.other_deductions);
       // Net = invoice total (what vendor billed incl. GST) minus deductions
-      const invoiceBillTotal = round2(linkedBills.rows.reduce((s, b) => s + n(b.total_amount), 0)) || gross;
+      const invoiceBillTotal = round2(linkedBills.rows.reduce((s, b) => s + n(b.total_amount), 0));
       const netPayable = round2(invoiceBillTotal - totalDed);
+      // gross_amount is derived from the real invoice total minus tax (see the
+      // same fix + comment in POST / above) — NOT summed independently from
+      // qty × PO-rate, which double-counts tax on POs whose rate is GST-inclusive.
+      const gross = round2(invoiceBillTotal - billTax) || round2(items.reduce((s, it) => s + n(it.amount), 0));
 
       // weighment_qty/msb_ref/ign_ref/grs_ref are typed in manually by the QS
       // certifier and aren't derivable from bill data — preserve them across
