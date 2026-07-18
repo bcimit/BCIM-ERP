@@ -1075,6 +1075,48 @@ router.post('/:id/refresh-from-bills', async (req, res) => {
   }
 });
 
+// PATCH /:id/meta — correct the RA Bill No. on an existing certification
+// (e.g. renumbering RA-1 -> RA-19). Same sensitivity gate as cert_number/GST
+// since the RA number is an official reference printed on the Abstract of
+// Measurement and Payment Certificate.
+router.patch('/:id/meta', async (req, res) => {
+  try {
+    const { ra_bill_number, ra_sequence } = req.body;
+    if (ra_bill_number === undefined && ra_sequence === undefined) {
+      return res.status(400).json({ error: 'ra_bill_number or ra_sequence required' });
+    }
+    const email = (req.user.email || '').toLowerCase();
+    const role  = (req.user.role || '').toLowerCase();
+    const canEditSensitive = email === CERT_APPROVER_EMAIL || role === 'super_admin' || role === 'admin';
+    if (!canEditSensitive) {
+      return res.status(403).json({ error: `Only ${CERT_APPROVER_EMAIL} can edit the RA Bill No.` });
+    }
+
+    const certRes = await query(
+      `SELECT id, status FROM vendor_qs_certifications WHERE id=$1 AND company_id=$2`,
+      [req.params.id, req.user.company_id]
+    );
+    if (!certRes.rows.length) return res.status(404).json({ error: 'Certification not found' });
+    if (certRes.rows[0].status === 'paid') return res.status(400).json({ error: 'Paid certification cannot be edited' });
+
+    const sets = [];
+    const params = [];
+    let i = 1;
+    if (ra_bill_number !== undefined) { sets.push(`ra_bill_number=$${i++}`); params.push(ra_bill_number || null); }
+    if (ra_sequence !== undefined)    { sets.push(`ra_sequence=$${i++}`);    params.push(parseInt(ra_sequence, 10) || 1); }
+    params.push(req.params.id, req.user.company_id);
+
+    const result = await query(
+      `UPDATE vendor_qs_certifications SET ${sets.join(', ')}, updated_at=NOW()
+       WHERE id=$${i++} AND company_id=$${i++} RETURNING *`,
+      params
+    );
+    res.json({ data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.patch('/:id/amounts', async (req, res) => {
   try {
     const {

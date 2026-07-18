@@ -559,6 +559,7 @@ function AmountCorrectionModal({ cert, onClose }) {
     remarks:           cert.remarks           || '',
     cert_number:       cert.cert_number       || '',
     gst_tax:           cert.tax_amount        || 0,
+    ra_bill_number:    cert.ra_bill_number    || `RA-${cert.ra_sequence || 1}`,
   });
   // Fetch pending subcon advances from Stores matching this vendor
   const { data: scAdv } = useQuery({
@@ -584,6 +585,7 @@ function AmountCorrectionModal({ cert, onClose }) {
       remarks:           cert.remarks           || '',
       cert_number:       cert.cert_number       || '',
       gst_tax:           cert.tax_amount        || 0,
+      ra_bill_number:    cert.ra_bill_number    || `RA-${cert.ra_sequence || 1}`,
     });
   }, [cert]);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -598,9 +600,14 @@ function AmountCorrectionModal({ cert, onClose }) {
   const effectiveTax = canEditSensitive ? n(form.gst_tax) : n(cert.tax_amount);
   const revisedNet = n(cert.gross_amount) + effectiveTax - totalDed;
   const mut = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const payload = { ...form };
+      delete payload.ra_bill_number;
       if (!canEditSensitive) { delete payload.cert_number; delete payload.gst_tax; }
+      const original = cert.ra_bill_number || `RA-${cert.ra_sequence || 1}`;
+      if (canEditSensitive && form.ra_bill_number !== original) {
+        await vendorQSCertificationAPI.updateMeta(cert.id, { ra_bill_number: form.ra_bill_number });
+      }
       return vendorQSCertificationAPI.updateAmounts(cert.id, payload);
     },
     onSuccess: () => {
@@ -640,6 +647,11 @@ function AmountCorrectionModal({ cert, onClose }) {
                 <label className="text-[11px] font-medium text-slate-900 uppercase">GST / Tax Amount</label>
                 <input type="number" className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm"
                   value={form.gst_tax} onChange={e => set('gst_tax', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-slate-900 uppercase">RA Bill No.</label>
+                <input type="text" className="w-full border border-indigo-200 rounded-lg px-3 py-2 text-sm"
+                  placeholder="RA-19" value={form.ra_bill_number} onChange={e => set('ra_bill_number', e.target.value)} />
               </div>
               <div className="col-span-2 border-b border-dashed border-slate-200 -mt-1 mb-1" />
             </>

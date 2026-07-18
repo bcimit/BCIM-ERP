@@ -1861,6 +1861,7 @@ export const vendorQSCertificationAPI = {
   summaryItems:    (data)   => api.post('/vendor-qs-certifications/summary-items', data),
   create:          (data)   => api.post('/vendor-qs-certifications', data),
   refreshFromBills:(id)     => api.post(`/vendor-qs-certifications/${id}/refresh-from-bills`),
+  updateMeta:      (id, d)  => api.patch(`/vendor-qs-certifications/${id}/meta`, d),
   updateAmounts:   (id, d)  => api.patch(`/vendor-qs-certifications/${id}/amounts`, d),
   updateStatus:    (id, d)  => api.patch(`/vendor-qs-certifications/${id}/status`, d),
   updateItems:     (id, d)  => api.patch(`/vendor-qs-certifications/${id}/items`, d),
