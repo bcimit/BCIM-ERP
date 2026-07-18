@@ -5,6 +5,7 @@ const { authenticate } = require('../middleware/auth');
 const { query, withTransaction } = require('../config/database');
 const { runSchemaInit } = require('../utils/schemaInit');
 const { sendMail } = require('../services/mail.service');
+const { resyncAdvancesFromBills } = require('./procurement-advance.routes');
 
 router.use(authenticate);
 
@@ -408,6 +409,42 @@ router.get('/pending-sc-advances', async (req, res) => {
     `, params);
 
     const total = rows.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+    res.json({ data: rows, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /pending-advance-vouchers — outstanding Procurement Advance Tracker
+// balance for this vendor, so the QS certifier can pull it straight into the
+// Advance Recovery field instead of having to look it up separately.
+router.get('/pending-advance-vouchers', async (req, res) => {
+  try {
+    const { vendor_name, project_id } = req.query;
+    if (!vendor_name?.trim()) return res.json({ data: [], total: 0 });
+
+    const params = [req.user.company_id, `%${vendor_name.trim()}%`];
+    const where = [
+      `av.company_id = $1`,
+      `av.vendor_name ILIKE $2`,
+      `av.is_deleted = FALSE`,
+      `av.advance_value > av.recovered_amount`,
+    ];
+    if (project_id) {
+      where.push(`(av.project_id = $${params.length + 1} OR av.project_id IS NULL)`);
+      params.push(project_id);
+    }
+
+    const { rows } = await query(`
+      SELECT av.id, av.sl_number, av.voucher_number, av.wo_number, av.po_number,
+             av.advance_value::text, av.recovered_amount::text,
+             (av.advance_value - av.recovered_amount) AS outstanding
+      FROM tqs_advance_vouchers av
+      WHERE ${where.join(' AND ')}
+      ORDER BY av.created_at ASC
+    `, params);
+
+    const total = rows.reduce((sum, r) => sum + parseFloat(r.outstanding || 0), 0);
     res.json({ data: rows, total });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -851,6 +888,13 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json({ data: result });
 
+    // Advance Recovery was set at creation — resync the Procurement Advance
+    // Tracker so the vendor's voucher(s) reflect it immediately.
+    if (n(advance_recovered) > 0) {
+      resyncAdvancesFromBills(req.user.company_id).catch(e =>
+        console.error('[qs-cert create] advance resync failed:', e.message));
+    }
+
     // Best-effort: notify the approver a new certification is awaiting their
     // sign-off — never blocks/fails the request if mail isn't configured.
     try {
@@ -1158,6 +1202,12 @@ router.patch('/:id/amounts', async (req, res) => {
       return updated.rows[0];
     });
     res.json({ data: result });
+
+    // Advance Recovery on this cert just changed — resync the Procurement
+    // Advance Tracker so the linked vendor's voucher(s) reflect it (FIFO
+    // across their open vouchers). Best-effort: never fails the request.
+    resyncAdvancesFromBills(req.user.company_id).catch(e =>
+      console.error('[qs-cert /amounts] advance resync failed:', e.message));
   } catch (err) {
     if (err.code === '23505' && /cert_number/.test(err.constraint || '')) {
       return res.status(409).json({ error: `Certificate number "${String(req.body.cert_number).trim()}" is already in use. Enter a different number.` });

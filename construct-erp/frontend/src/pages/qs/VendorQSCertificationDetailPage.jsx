@@ -567,6 +567,13 @@ function AmountCorrectionModal({ cert, onClose }) {
     enabled:  !!cert.vendor_name,
     staleTime: 30000,
   });
+  // Fetch outstanding Procurement Advance Tracker balance for this vendor
+  const { data: pcAdv } = useQuery({
+    queryKey: ['pending-advance-vouchers', cert.vendor_name, cert.project_id],
+    queryFn:  () => vendorQSCertificationAPI.pendingAdvanceVouchers({ vendor_name: cert.vendor_name, project_id: cert.project_id }).then(r => r.data),
+    enabled:  !!cert.vendor_name,
+    staleTime: 30000,
+  });
   useEffect(() => {
     setForm({
       tds_rate:          cert.tds_rate          || 0,
@@ -659,8 +666,21 @@ function AmountCorrectionModal({ cert, onClose }) {
             <input type="number" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
               value={form.tds_amount} onChange={e => set('tds_amount', e.target.value)} />
           </div>
-          {/* Advance Recovery — with pending subcon advance hint from Stores */}
+          {/* Advance Recovery — with pending advance hints from Stores + the Procurement Advance Tracker */}
           <div className="col-span-2">
+            {pcAdv?.total > 0 && (
+              <div className="mb-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span className="text-[11px] text-blue-800">
+                  Outstanding advance in Advance Tracker ({pcAdv.data?.length} voucher{pcAdv.data?.length === 1 ? '' : 's'}):
+                  {' '}<strong>₹{inr(pcAdv.total)}</strong>
+                  {pcAdv.data?.[0] && <span className="text-blue-600 ml-1">— {pcAdv.data[0].sl_number}{pcAdv.data[0].wo_number ? ` / ${pcAdv.data[0].wo_number}` : pcAdv.data[0].po_number ? ` / ${pcAdv.data[0].po_number}` : ''}</span>}
+                </span>
+                <button type="button" onClick={() => set('advance_recovered', pcAdv.total)}
+                  className="ml-3 text-[11px] font-semibold text-blue-700 border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100 whitespace-nowrap">
+                  Apply ₹{inr(pcAdv.total)}
+                </button>
+              </div>
+            )}
             {scAdv?.total > 0 && (
               <div className="mb-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between">
                 <span className="text-[11px] text-amber-800">

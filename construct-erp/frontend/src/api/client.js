@@ -1857,6 +1857,7 @@ export const vendorQSCertificationAPI = {
   accountsPending: (params) => api.get('/vendor-qs-certifications/accounts-pending', { params }),
   pendingInvoices:   (params) => api.get('/vendor-qs-certifications/pending-invoices', { params }),
   pendingScAdvances: (params) => api.get('/vendor-qs-certifications/pending-sc-advances', { params }),
+  pendingAdvanceVouchers: (params) => api.get('/vendor-qs-certifications/pending-advance-vouchers', { params }),
   summaryItems:    (data)   => api.post('/vendor-qs-certifications/summary-items', data),
   create:          (data)   => api.post('/vendor-qs-certifications', data),
   refreshFromBills:(id)     => api.post(`/vendor-qs-certifications/${id}/refresh-from-bills`),
