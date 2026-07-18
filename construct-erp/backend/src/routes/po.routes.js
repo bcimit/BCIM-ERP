@@ -393,14 +393,25 @@ router.get('/', async (req, res) => {
         FROM po_items poi
         LEFT JOIN recv r ON r.po_item_id = poi.id
         GROUP BY poi.po_id
+      ),
+      po_bills AS (
+        SELECT po_id,
+               SUM(total_amount) AS billed_amount,
+               SUM(total_amount) FILTER (WHERE workflow_status = 'paid') AS paid_amount
+        FROM tqs_bills
+        WHERE is_deleted = false AND po_id IS NOT NULL
+        GROUP BY po_id
       )
       SELECT po.*, v.name AS vendor_name, p.name AS project_name,
              COALESCE(rc.items_total, 0)    AS items_total,
-             COALESCE(rc.items_received, 0) AS items_received
+             COALESCE(rc.items_received, 0) AS items_received,
+             COALESCE(pb.billed_amount, 0)  AS billed_amount,
+             COALESCE(pb.paid_amount, 0)    AS paid_amount
       FROM purchase_orders po
       JOIN vendors v ON po.vendor_id = v.id
       JOIN projects p ON po.project_id = p.id
       LEFT JOIN po_rcv rc ON rc.po_id = po.id
+      LEFT JOIN po_bills pb ON pb.po_id = po.id
       WHERE ${conditions.join(' AND ')}`;
     let i = params.length + 1;
     if (status)     { sql += ` AND po.status = $${i++}`;     params.push(status); }

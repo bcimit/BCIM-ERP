@@ -66,6 +66,13 @@ const STAGE_ACTIONS = [
 ];
 
 const inr  = v => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const inrCompact = v => {
+  const n = Number(v) || 0;
+  const abs = Math.abs(n);
+  if (abs >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
+  if (abs >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
+  return `₹${Math.round(n).toLocaleString('en-IN')}`;
+};
 const fmt  = d => d ? dayjs(d).format('DD-MM-YYYY') : '—';
 
 /* ─── Signature Pad Modal ─── */
@@ -2273,6 +2280,20 @@ export default function POPage() {
     { key: 'fully_received', label: 'Received',       icon: Check,        iconBg: 'bg-green-50',   iconText: 'text-green-600'   },
   ];
 
+  const totalPOValue    = poData.reduce((s, p) => s + (parseFloat(p.grand_total) || 0), 0);
+  const totalBilled     = poData.reduce((s, p) => s + (parseFloat(p.billed_amount) || 0), 0);
+  const totalPaid       = poData.reduce((s, p) => s + (parseFloat(p.paid_amount) || 0), 0);
+  const pendingBilling  = Math.max(totalPOValue - totalBilled, 0);
+  const billedPct       = totalPOValue > 0 ? (totalBilled / totalPOValue) * 100 : 0;
+
+  const financeCards = [
+    { label: 'Total POs',       value: poData.length,              sub: projectFilter === 'all' ? 'All projects' : 'This project', icon: ShoppingCart, iconBg: 'bg-slate-100',  iconText: 'text-slate-600' },
+    { label: 'Total PO Value',  value: inrCompact(totalPOValue),    sub: inr(totalPOValue),  icon: IndianRupee,  iconBg: 'bg-indigo-50',  iconText: 'text-indigo-600', full: inr(totalPOValue) },
+    { label: 'Total Billed',    value: inrCompact(totalBilled),     sub: `${billedPct.toFixed(1)}% of PO value`, icon: Receipt, iconBg: 'bg-blue-50', iconText: 'text-blue-600', full: inr(totalBilled) },
+    { label: 'Total Paid',      value: inrCompact(totalPaid),       sub: totalBilled > 0 ? `${((totalPaid / totalBilled) * 100).toFixed(1)}% of billed` : '—', icon: CheckCircle2, iconBg: 'bg-green-50', iconText: 'text-green-600', full: inr(totalPaid) },
+    { label: 'Pending Billing', value: inrCompact(pendingBilling),  sub: 'PO value not yet invoiced', icon: TrendingUp, iconBg: 'bg-amber-50', iconText: 'text-amber-600', full: inr(pendingBilling) },
+  ];
+
   return (
     <div className="p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen bg-slate-50">
 
@@ -2312,7 +2333,21 @@ export default function POPage() {
         </div>
       )}
 
-      {/* KPI cards */}
+      {/* Financial summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+        {financeCards.map(({ label, value, sub, icon: Icon, iconBg, iconText, full }) => (
+          <div key={label} className="bg-white border border-slate-200 rounded-md p-4" title={full}>
+            <div className={clsx('w-8 h-8 rounded-md flex items-center justify-center mb-3', iconBg)}>
+              <Icon className={clsx('w-4 h-4', iconText)} />
+            </div>
+            <div className="text-2xl font-semibold text-slate-800">{value}</div>
+            <div className="text-xs text-slate-400 mt-0.5">{label}</div>
+            {sub && <div className="text-[11px] text-slate-400 mt-1 truncate">{sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Workflow stage KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {stats.map(({ key, label, icon: Icon, iconBg, iconText }) => {
           const count = poData.filter(p => p.status === key).length;
