@@ -3151,6 +3151,65 @@ router.patch('/:id/line-items/:lineId', async (req, res) => {
   }
 });
 
+// ── POST /tqs/bills/:id/line-items — add a new line to an existing bill ────
+router.post('/:id/line-items', async (req, res) => {
+  try {
+    await getAccessibleBill(req, req.params.id);
+    const {
+      item_name = '', category, unit = '', quantity = 0, rate = 0,
+      gst_pct = 0, gst_mode = 'intrastate', cost_head, boq_item_id, boq_chapter,
+    } = req.body;
+
+    const qty   = parseFloat(quantity) || 0;
+    const rt    = parseFloat(rate)     || 0;
+    const gstP  = parseFloat(gst_pct)  || 0;
+    const basic = qty * rt;
+    const mode  = gst_mode === 'interstate' ? 'interstate' : 'intrastate';
+    let cgP = 0, sgP = 0, igP = 0, cgA = 0, sgA = 0, igA = 0;
+    if (mode === 'interstate') { igP = gstP; igA = basic * igP / 100; }
+    else { cgP = gstP / 2; sgP = gstP / 2; cgA = basic * cgP / 100; sgA = basic * sgP / 100; }
+    const gstAmt   = cgA + sgA + igA;
+    const totalAmt = basic + gstAmt;
+
+    const r = await query(`
+      INSERT INTO tqs_bill_line_items (
+        bill_id, item_name, category, unit, quantity, rate, basic_amount,
+        gst_pct, gst_mode, cgst_pct, cgst_amt, sgst_pct, sgst_amt,
+        igst_pct, igst_amt, gst_amount, total_amount,
+        cost_head, boq_item_id, boq_chapter
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+      ) RETURNING *
+    `, [
+      req.params.id, item_name || 'New Item', category || null, unit, qty, rt, basic.toFixed(2),
+      gstP, mode, cgP, cgA.toFixed(2), sgP, sgA.toFixed(2), igP, igA.toFixed(2),
+      gstAmt.toFixed(2), totalAmt.toFixed(2),
+      BOQ_COST_HEADS.includes(cost_head) ? cost_head : null,
+      boq_item_id || null, boq_chapter || null,
+    ]);
+    await logHistory(req.params.id, 'system', `Line item "${r.rows[0].item_name}" added`, req.user.id);
+    res.status(201).json({ data: r.rows[0] });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /tqs/bills/:id/line-items/:lineId ───────────────────────────────
+router.delete('/:id/line-items/:lineId', async (req, res) => {
+  try {
+    await getAccessibleBill(req, req.params.id);
+    const r = await query(
+      `DELETE FROM tqs_bill_line_items WHERE id=$1 AND bill_id=$2 RETURNING id, item_name`,
+      [req.params.lineId, req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Line item not found on this bill' });
+    await logHistory(req.params.id, 'system', `Line item "${r.rows[0].item_name}" deleted`, req.user.id);
+    res.json({ data: { deleted: true } });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 // ── PATCH /tqs/bills/:id/stores ────────────────────────────────────────────
 router.patch('/:id/stores', requireTqsStageAccess('stores'), async (req, res) => {
   try {

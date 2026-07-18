@@ -1645,6 +1645,16 @@ function LineItemEditRow({ billId, item, boqItems }) {
   const [dirty, setDirty] = useState(false);
   const set = (k, v) => { setRow(p => ({ ...p, [k]: v })); setDirty(true); };
 
+  const delMut = useMutation({
+    mutationFn: () => tqsBillsAPI.deleteLineItem(billId, item.id),
+    onSuccess: () => {
+      toast.success('Line item deleted');
+      qc.invalidateQueries({ queryKey: ['tqs-bill-detail', billId] });
+      qc.invalidateQueries({ queryKey: ['tqs-bills'] });
+    },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Failed to delete'),
+  });
+
   const qty = parseFloat(row.quantity) || 0;
   const rt  = parseFloat(row.rate) || 0;
   const basic = qty * rt;
@@ -1705,13 +1715,21 @@ function LineItemEditRow({ billId, item, boqItems }) {
       </td>
       <td className="px-2 py-1.5 w-24 text-right text-xs text-slate-600">{inr(basic)}</td>
       <td className="px-2 py-1.5 w-28 text-right text-xs font-semibold text-slate-800">{inr(total)}</td>
-      <td className="px-2 py-1.5 w-16 text-center">
-        <button type="button" onClick={() => saveMut.mutate()} disabled={!dirty || saveMut.isPending}
-          className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
-            dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-400'
-          } disabled:opacity-60`}>
-          {saveMut.isPending ? '…' : 'Save'}
-        </button>
+      <td className="px-2 py-1.5 w-20 text-center">
+        <div className="flex items-center gap-1 justify-center">
+          <button type="button" onClick={() => saveMut.mutate()} disabled={!dirty || saveMut.isPending}
+            className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+              dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-400'
+            } disabled:opacity-60`}>
+            {saveMut.isPending ? '…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => window.confirm('Delete this line item?') && delMut.mutate()}
+            disabled={delMut.isPending}
+            className="p-1 rounded text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-40"
+            title="Delete line item">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -1720,7 +1738,13 @@ function LineItemEditRow({ billId, item, boqItems }) {
 // ── Line items section: fetches full bill detail (list rows don't include
 // items) and renders each line editable, so the Edit Bill modal shows the
 // same material/cost-head/BOQ detail as the Create form. ────────────────────
+const EMPTY_LINE = { item_name: '', unit: '', quantity: '', rate: '', gst_pct: '18', gst_mode: 'intrastate', cost_head: '', boq_item_id: '' };
+
 function BillLineItemsSection({ billId, projectId }) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [newLine, setNewLine] = useState({ ...EMPTY_LINE });
+
   const { data: detail, isLoading } = useQuery({
     queryKey: ['tqs-bill-detail', billId],
     queryFn: () => tqsBillsAPI.get(billId).then(r => r.data?.data ?? r.data),
@@ -1732,19 +1756,43 @@ function BillLineItemsSection({ billId, projectId }) {
     enabled: !!projectId,
   });
 
+  const setN = (k, v) => setNewLine(p => ({ ...p, [k]: v }));
+
+  const addMut = useMutation({
+    mutationFn: () => tqsBillsAPI.createLineItem(billId, newLine),
+    onSuccess: () => {
+      toast.success('Line item added');
+      setNewLine({ ...EMPTY_LINE });
+      setAdding(false);
+      qc.invalidateQueries({ queryKey: ['tqs-bill-detail', billId] });
+      qc.invalidateQueries({ queryKey: ['tqs-bills'] });
+    },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Failed to add item'),
+  });
+
   const items = detail?.line_items || [];
+  const newQty = parseFloat(newLine.quantity) || 0;
+  const newRt  = parseFloat(newLine.rate) || 0;
+  const newBasic = newQty * newRt;
+  const newGst = newBasic * (parseFloat(newLine.gst_pct) || 0) / 100;
 
   return (
     <div className={Z_CARD}>
-      <h3 className={Z_HEAD}>
-        Line Items {items.length > 0 && <span className="text-slate-400 normal-case font-normal">({items.length})</span>}
-      </h3>
+      <div className={`${Z_HEAD} flex items-center`}>
+        <span>Line Items {items.length > 0 && <span className="text-slate-400 normal-case font-normal">({items.length})</span>}</span>
+        <button type="button" onClick={() => { setAdding(a => !a); setNewLine({ ...EMPTY_LINE }); }}
+          className="ml-auto text-xs font-medium px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg flex items-center gap-1 transition-colors">
+          <Plus className="w-3.5 h-3.5" /> Add Line Item
+        </button>
+      </div>
       <div className="p-4">
         {isLoading ? (
           <div className="text-xs text-slate-400 italic py-4 text-center">Loading line items…</div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !adding ? (
           <div className="text-xs text-slate-400 italic py-4 text-center bg-slate-50 rounded-lg border border-slate-100">
             No material line items on this bill — header amounts only.
+            <button type="button" onClick={() => setAdding(true)}
+              className="ml-2 text-indigo-600 hover:underline font-medium">Add one now →</button>
           </div>
         ) : (
           <div className="border border-slate-200 rounded-xl overflow-x-auto">
@@ -1758,11 +1806,66 @@ function BillLineItemsSection({ billId, projectId }) {
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">GST% / Mode</th>
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">Basic</th>
                   <th className="px-2 py-2 text-right text-slate-500 font-medium">Total</th>
-                  <th className="w-16"></th>
+                  <th className="w-20"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map(it => <LineItemEditRow key={it.id} billId={billId} item={it} boqItems={boqItems} />)}
+                {adding && (
+                  <tr className="border-t-2 border-indigo-200 bg-indigo-50/40">
+                    <td className="px-2 py-1.5 min-w-[160px]">
+                      <input className="w-full border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Item description"
+                        value={newLine.item_name} onChange={e => setN('item_name', e.target.value)} autoFocus />
+                      <div className="flex gap-1 mt-1">
+                        <select className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+                          value={newLine.boq_item_id} onChange={e => setN('boq_item_id', e.target.value)}>
+                          <option value="">No BOQ item</option>
+                          {boqItems.map(b => <option key={b.id} value={b.id}>{b.item_no ? `${b.item_no} — ` : ''}{b.description}</option>)}
+                        </select>
+                        <select className="flex-1 min-w-0 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+                          value={newLine.cost_head} onChange={e => setN('cost_head', e.target.value)}>
+                          <option value="">Unallocated</option>
+                          {BOQ_COST_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="px-2 py-1.5 w-20">
+                      <input className="w-full border border-slate-200 rounded px-2 py-1 text-xs" placeholder="Nos"
+                        value={newLine.unit} onChange={e => setN('unit', e.target.value)} />
+                    </td>
+                    <td className="px-2 py-1.5 w-20">
+                      <input type="number" step="0.01" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
+                        value={newLine.quantity} onChange={e => setN('quantity', e.target.value)} placeholder="0" />
+                    </td>
+                    <td className="px-2 py-1.5 w-24">
+                      <input type="number" step="0.01" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
+                        value={newLine.rate} onChange={e => setN('rate', e.target.value)} placeholder="0.00" />
+                    </td>
+                    <td className="px-2 py-1.5 w-24">
+                      <input type="number" step="0.5" className="w-full border border-slate-200 rounded px-2 py-1 text-xs text-right"
+                        value={newLine.gst_pct} onChange={e => setN('gst_pct', e.target.value)} />
+                      <select className="w-full mt-1 border border-slate-200 rounded px-1 py-0.5 text-[10px] bg-white"
+                        value={newLine.gst_mode} onChange={e => setN('gst_mode', e.target.value)}>
+                        <option value="intrastate">CGST+SGST</option>
+                        <option value="interstate">IGST</option>
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5 w-24 text-right text-xs text-slate-600">{inr(newBasic)}</td>
+                    <td className="px-2 py-1.5 w-28 text-right text-xs font-semibold text-indigo-700">{inr(newBasic + newGst)}</td>
+                    <td className="px-2 py-1.5 w-20 text-center">
+                      <div className="flex items-center gap-1 justify-center">
+                        <button type="button" onClick={() => addMut.mutate()} disabled={addMut.isPending}
+                          className="px-2 py-1 text-[10px] font-semibold rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60">
+                          {addMut.isPending ? '…' : 'Add'}
+                        </button>
+                        <button type="button" onClick={() => setAdding(false)}
+                          className="p-1 rounded text-slate-400 hover:bg-slate-100 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
