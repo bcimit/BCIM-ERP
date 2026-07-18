@@ -1,5 +1,5 @@
 // src/pages/qs/BOQBudgetBreakdownPage.jsx — Master-detail BOQ budget allocation
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useReactToPrint } from 'react-to-print';
 import { clsx } from 'clsx';
@@ -27,7 +27,7 @@ const inr2 = (v) => `₹${(parseFloat(v) || 0).toLocaleString('en-IN', { minimum
 const num  = (v) => parseFloat(v) || 0;
 
 // ─── Shared professional print letterhead ─────────────────────────────────────
-function BOQPrintHeader({ title, subtitle, projectName, projectAddress, clientName, meta = [] }) {
+export function BOQPrintHeader({ title, subtitle, projectName, projectAddress, clientName, meta = [] }) {
   const now = new Date().toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
@@ -1665,7 +1665,7 @@ function SortableTh({ label, sortKey, chSort, onSort, className }) {
   );
 }
 
-function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName, contractValue }) {
+function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName, contractValue, highlightCostHead = null, initialChFilter = null }) {
   const qc = useQueryClient();
   const [editingHead, setEditingHead] = useState(null);
   const [editVal, setEditVal] = useState('');
@@ -1678,6 +1678,14 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
   const [chSearch, setChSearch] = useState('');
   const [chFilter, setChFilter] = useState('all'); // all | over | near | nobudget
   const [chSort, setChSort] = useState({ key: null, dir: 'asc' });
+
+  // Jump-in from the Overview tab: focus a specific cost head or a filter (over/near/nobudget)
+  useEffect(() => {
+    if (highlightCostHead) { setChSearch(highlightCostHead); setCostheadView('summary'); }
+  }, [highlightCostHead]);
+  useEffect(() => {
+    if (initialChFilter) { setChFilter(initialChFilter); setCostheadView('summary'); }
+  }, [initialChFilter]);
   const printBudgetRef = useRef();
   const handlePrintBudget = useReactToPrint({
     contentRef: printBudgetRef,
@@ -2197,7 +2205,7 @@ function CostHeadBudgetTab({ projectId, projectName, projectAddress, clientName,
   );
 }
 
-export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = null, pageTitle = null, pageSubtitle = null }) {
+export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = null, pageTitle = null, pageSubtitle = null, highlightCostHead = null, initialChFilter = null }) {
   const { selectedProjectId } = useAuthStore();
   const projectId = selectedProjectId || '';
   const [mode, setMode] = useState('amount'); // 'amount' | 'pct'
@@ -2628,7 +2636,7 @@ export default function BOQBudgetBreakdownPage({ embedded = false, lockedView = 
 
             {/* ── COST HEAD BUDGET VIEW ── */}
             {view === 'costhead' && (
-              <CostHeadBudgetTab projectId={projectId} projectName={selectedProject?.name || ''} projectAddress={projectAddress} clientName={clientName} contractValue={selectedProject?.contract_value} />
+              <CostHeadBudgetTab projectId={projectId} projectName={selectedProject?.name || ''} projectAddress={projectAddress} clientName={clientName} contractValue={selectedProject?.contract_value} highlightCostHead={highlightCostHead} initialChFilter={initialChFilter} />
             )}
 
             {/* ── BUDGET BREAKDOWN VIEW (existing) ── */}

@@ -12,7 +12,7 @@ import {
   IndianRupee, TrendingUp, TrendingDown, Wallet, Percent, Receipt,
   Target, Clock, Search, Printer, ArrowUpRight, ArrowDownRight, Minus,
   Download, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  Building2, CalendarRange,
+  Building2, CalendarRange, AlertTriangle, Info, ArrowRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { boqBudgetAPI, raBillAPI, clientAdvanceAPI, projectAPI } from '../../api/client';
 import useAuthStore from '../../store/authStore';
+import { BOQPrintHeader } from '../qs/BOQBudgetBreakdownPage';
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Design tokens — clean light enterprise palette
@@ -427,15 +428,19 @@ function CumulativeLineChart({ data, boqValue }) {
 /* ─────────────────────────────────────────────────────────────────────────
  * Cost Head Performance — horizontal bars
  * ───────────────────────────────────────────────────────────────────── */
-function CostHeadPerformance({ rows }) {
+function CostHeadPerformance({ rows, onSelect }) {
   const top = rows.filter((r) => !r.derived).sort((a, b) => b.budget - a.budget).slice(0, 10);
   const max = Math.max(...top.map((r) => Math.max(r.budget, r.actual)), 1);
   return (
     <div className="space-y-3.5">
       {top.map((r) => (
-        <div key={r.cost_head}>
+        <button key={r.cost_head} type="button" onClick={() => onSelect?.(r.cost_head)}
+          className="w-full text-left group -mx-1 px-1 rounded-lg transition hover:bg-slate-50">
           <div className="flex items-center justify-between text-[11.5px] mb-1">
-            <span className="font-semibold truncate" style={{ color: T.text }}>{r.cost_head}</span>
+            <span className="font-semibold truncate flex items-center gap-1" style={{ color: T.text }}>
+              {r.cost_head}
+              <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-60 transition" />
+            </span>
             <span style={{ color: T.textMuted }}>{inrCompact(r.actual)} / {inrCompact(r.budget)}</span>
           </div>
           <div className="relative h-3 rounded-full overflow-hidden" style={{ background: '#F1F5F9' }}>
@@ -444,13 +449,14 @@ function CostHeadPerformance({ rows }) {
             <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((r.actual / max) * 100, 100)}%` }} transition={{ duration: 0.9 }}
               className="absolute inset-y-0 left-0 rounded-full" style={{ background: r.actual > r.budget ? T.danger : T.success }} />
           </div>
-        </div>
+        </button>
       ))}
       {top.length === 0 && <div className="text-center py-8 text-xs" style={{ color: T.textMuted }}>No cost-head budgets set yet</div>}
       <div className="flex items-center gap-4 pt-1 text-[10.5px]" style={{ color: T.textMuted }}>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: T.primary, opacity: 0.28 }} /> Budget</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: T.success }} /> Actual (within budget)</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: T.danger }} /> Actual (over budget)</span>
+        <span className="ml-auto italic">click a row → Details</span>
       </div>
     </div>
   );
@@ -533,11 +539,13 @@ function ConsumptionTimeline({ data, budget }) {
 /* ─────────────────────────────────────────────────────────────────────────
  * MAIN COMPONENT
  * ───────────────────────────────────────────────────────────────────── */
-export default function BudgetControlDashboard() {
+export default function BudgetControlDashboard({ onJumpToDetails }) {
   const { selectedProjectId } = useAuthStore();
   const projectId = selectedProjectId || '';
   const printRef = useRef();
   const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: 'Budget_Control' });
+  const [raFrom, setRaFrom] = useState(1);
+  const [raTo, setRaTo] = useState(9);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -606,8 +614,8 @@ export default function BudgetControlDashboard() {
         actual: actualByIdx[i],
         remaining: Math.max(totalBoqValue - cumActual, 0),
       };
-    });
-  }, [planByIdx, actualByIdx, totalBoqValue]);
+    }).filter((_, i) => i + 1 >= raFrom && i + 1 <= raTo);
+  }, [planByIdx, actualByIdx, totalBoqValue, raFrom, raTo]);
 
   const cumulativeData = useMemo(() => {
     let cp = 0, ca = 0;
@@ -617,7 +625,12 @@ export default function BudgetControlDashboard() {
     });
   }, [planByIdx, actualByIdx]);
 
-  const variancePlan = useMemo(() => RA_MONTHS_SHORT.map((m, i) => ({ month: m, variance: actualByIdx[i] - planByIdx[i] })), [planByIdx, actualByIdx]);
+  const variancePlan = useMemo(() => RA_MONTHS_SHORT
+    .map((m, i) => ({ month: m, variance: actualByIdx[i] - planByIdx[i] }))
+    .filter((_, i) => i + 1 >= raFrom && i + 1 <= raTo), [planByIdx, actualByIdx, raFrom, raTo]);
+
+  const overHeads = costheadRows.filter((r) => !r.derived && r.budget > 0 && r.actual > r.budget);
+  const nearHeads = costheadRows.filter((r) => !r.derived && r.budget > 0 && r.actual <= r.budget && r.actual / r.budget >= 0.8);
 
   const planRaValue = planByIdx.reduce((s, v) => s + v, 0);
   const actualRaValue = actualByIdx.reduce((s, v) => s + v, 0);
@@ -711,10 +724,28 @@ export default function BudgetControlDashboard() {
             <Building2 className="w-3.5 h-3.5" style={{ color: T.primary }} />
             <span className="text-[12px] font-semibold" style={{ color: T.primary }}>{selectedProject?.name || 'Project'}</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: T.purpleSoft }}>
-            <CalendarRange className="w-3.5 h-3.5" style={{ color: T.purple }} />
-            <span className="text-[12px] font-semibold" style={{ color: T.purple }}>Billing Cycle: Jul – Mar</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: T.purpleSoft }}>
+            <CalendarRange className="w-3.5 h-3.5 flex-shrink-0" style={{ color: T.purple }} />
+            <select value={raFrom} onChange={(e) => setRaFrom(Math.min(Number(e.target.value), raTo))}
+              className="text-[12px] font-semibold bg-transparent outline-none" style={{ color: T.purple }}>
+              {RA_MONTHS.map((m, i) => <option key={i} value={i + 1}>RA{i + 1} · {m}</option>)}
+            </select>
+            <span className="text-[12px]" style={{ color: T.purple }}>–</span>
+            <select value={raTo} onChange={(e) => setRaTo(Math.max(Number(e.target.value), raFrom))}
+              className="text-[12px] font-semibold bg-transparent outline-none" style={{ color: T.purple }}>
+              {RA_MONTHS.map((m, i) => <option key={i} value={i + 1}>RA{i + 1} · {m}</option>)}
+            </select>
           </div>
+          {(overHeads.length > 0 || nearHeads.length > 0) && (
+            <button onClick={() => onJumpToDetails?.({ filter: overHeads.length > 0 ? 'over' : 'near' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition hover:opacity-80"
+              style={{ background: overHeads.length > 0 ? T.dangerSoft : T.warningSoft }}>
+              <AlertTriangle className="w-3.5 h-3.5" style={{ color: overHeads.length > 0 ? T.danger : T.warning }} />
+              <span className="text-[12px] font-semibold" style={{ color: overHeads.length > 0 ? T.danger : T.warning }}>
+                {overHeads.length > 0 ? `${overHeads.length} over budget` : `${nearHeads.length} near limit`}
+              </span>
+            </button>
+          )}
           <button onClick={handlePrint}
             className="flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] font-bold rounded-lg text-white transition hover:opacity-90"
             style={{ background: T.primary }}>
@@ -723,11 +754,64 @@ export default function BudgetControlDashboard() {
         </div>
       </div>
 
-      <div ref={printRef} className="max-w-[1680px] mx-auto px-6 py-6 space-y-6">
+      {/* ── Print-only summary (letterhead + KPIs + cost-head table) ── */}
+      <div ref={printRef} className="hidden print:block p-6">
+        <BOQPrintHeader
+          title="Budget Control Summary"
+          subtitle="Budget allocation, planned billing and actual billing performance"
+          projectName={selectedProject?.name}
+          projectAddress={[selectedProject?.location, selectedProject?.city, selectedProject?.state].filter(Boolean).join(', ')}
+          clientName={selectedProject?.client_name}
+          meta={[
+            ['BOQ Value', inrCompact(totalBoqValue)],
+            ['Plan RA Value', inrCompact(planRaValue)],
+            ['Actual RA Value', inrCompact(actualRaValue)],
+            ['Variance', inrCompact(variance)],
+            ['Budget Utilization', pct(budgetUtilPct)],
+            ['Outstanding', inrCompact(outstanding)],
+          ]}
+        />
+        <table className="w-full text-xs mt-3" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#0B2E59', color: '#fff' }}>
+              <th className="px-2 py-1.5 text-left">#</th>
+              <th className="px-2 py-1.5 text-left">Cost Head</th>
+              <th className="px-2 py-1.5 text-right">Budget</th>
+              <th className="px-2 py-1.5 text-right">Actual</th>
+              <th className="px-2 py-1.5 text-right">% Used</th>
+              <th className="px-2 py-1.5 text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {costheadRows.filter((r) => !r.derived).map((r, i) => (
+              <tr key={r.cost_head} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <td className="px-2 py-1">{i + 1}</td>
+                <td className="px-2 py-1">{r.cost_head}</td>
+                <td className="px-2 py-1 text-right">{inr(r.budget)}</td>
+                <td className="px-2 py-1 text-right">{inr(r.actual)}</td>
+                <td className="px-2 py-1 text-right">{r.budget > 0 ? pct((r.actual / r.budget) * 100) : '—'}</td>
+                <td className="px-2 py-1 text-right">{inr(r.budget - r.actual)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="max-w-[1680px] mx-auto px-6 py-6 space-y-6 print:hidden">
         {isLoading ? (
           <div className="grid grid-cols-4 gap-4">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-32 rounded-2xl animate-pulse" style={{ background: '#F1F5F9' }} />)}</div>
         ) : (
           <>
+            {certifiedBills.length === 0 && (
+              <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl" style={{ background: T.primarySoft, border: `1px solid #BFDBFE` }}>
+                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: T.primary }} />
+                <p className="text-[12.5px]" style={{ color: '#1E3A8A' }}>
+                  <b>No RA bills certified yet</b> for this project — Actual RA Value, RA-billing charts, and the Actual RA Bills table
+                  will stay at ₹0 until the first bill is certified. This reflects real project status, not missing data.
+                </p>
+              </div>
+            )}
+
             {/* ── KPI Cards ── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard index={0} icon={IndianRupee} label="BOQ Value" value={inrCompact(totalBoqValue)} sub="Total contract value" iconColor={T.primary} spark={cumActualSpark} sparkColor={T.primary} />
@@ -742,7 +826,7 @@ export default function BudgetControlDashboard() {
 
             {/* ── Main chart + right panel ── */}
             <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
-              <Panel title="Plan vs Actual RA Billing" subtitle="Monthly planned, actual and remaining BOQ value (RA1–RA9)" delay={0.05}>
+              <Panel title="Plan vs Actual RA Billing" subtitle={`Monthly planned, actual and remaining BOQ value (RA${raFrom}–RA${raTo})`} delay={0.05}>
                 <PlanActualChart3D data={chartData} />
               </Panel>
 
@@ -781,7 +865,7 @@ export default function BudgetControlDashboard() {
 
             {/* ── Tables ── */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <Panel title="Plan RA Bills" subtitle="Planned billing by RA number" delay={0.14}>
+              <Panel title="Plan RA Bills" subtitle={`Planned billing by RA number (RA${raFrom}–RA${raTo})`} delay={0.14}>
                 <DataTable
                   exportName="Plan_RA_Bills"
                   searchPlaceholder="Search RA / month…"
@@ -797,7 +881,7 @@ export default function BudgetControlDashboard() {
                     return RA_MONTHS.map((m, i) => {
                       cum += planByIdx[i];
                       return { id: i, idx: i, month: m, planned: planByIdx[i], cumulative: cum, pctBoq: totalBoqValue > 0 ? (cum / totalBoqValue) * 100 : 0 };
-                    });
+                    }).filter((r) => r.idx + 1 >= raFrom && r.idx + 1 <= raTo);
                   })()}
                   pageSize={9}
                 />
@@ -829,7 +913,7 @@ export default function BudgetControlDashboard() {
             {/* ── Bottom analytics ── */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <Panel title="Cost Head Performance" subtitle="Top 10 cost heads — budget vs actual" delay={0.20}>
-                <CostHeadPerformance rows={costheadRows} />
+                <CostHeadPerformance rows={costheadRows} onSelect={(costHead) => onJumpToDetails?.({ costHead })} />
               </Panel>
               <Panel title="Monthly Variance" subtitle="Actual minus planned RA billing, by month" delay={0.23}>
                 <VarianceWaterfall data={variancePlan} />

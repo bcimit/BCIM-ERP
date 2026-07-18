@@ -11,6 +11,8 @@ const TABS = [
 
 export default function BudgetPage() {
   const [tab, setTab] = useState('overview');
+  const [detailsFocus, setDetailsFocus] = useState({ costHead: null, filter: null });
+
   return (
     <div>
       <div className="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center gap-2">
@@ -23,12 +25,21 @@ export default function BudgetPage() {
         ))}
       </div>
 
-      {tab === 'overview' && <BudgetControlDashboard />}
+      {tab === 'overview' && (
+        <BudgetControlDashboard
+          onJumpToDetails={({ costHead, filter }) => {
+            setDetailsFocus({ costHead: costHead || null, filter: filter || null });
+            setTab('details');
+          }}
+        />
+      )}
       {tab === 'details' && (
         <BOQBudgetBreakdownPage
           lockedView="costhead"
           pageTitle="Budget Control"
           pageSubtitle="Cost head budget allocation vs actual expenditure"
+          highlightCostHead={detailsFocus.costHead}
+          initialChFilter={detailsFocus.filter}
         />
       )}
     </div>
