@@ -47,9 +47,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename:    (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`),
 });
-// 25MB — 10MB was too tight for phone-camera scans of ID/certificate documents,
-// a common real case for Employee Documents specifically.
-const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 
 // ─── Auto-create tables ───────────────────────────────────────────────────────
 const initTables = async () => {
