@@ -380,7 +380,12 @@ router.get('/', async (req, res) => {
     let sql = `
       WITH recv AS (
         SELECT po_item_id, SUM(qty) AS qty FROM (
-          SELECT ii.po_item_id, SUM(ii.qty_inspected - COALESCE(ii.qty_rejected, 0)) AS qty
+          -- Material Inspection is an optional step after IGN — most goods
+          -- receipts never get a separate qty_inspected value, so relying on
+          -- it alone made every un-inspected (but genuinely received) IGN
+          -- count as 0 received. Falls back to qty_as_per_dc (the delivery
+          -- challan quantity logged at receipt) when inspection was skipped.
+          SELECT ii.po_item_id, SUM(COALESCE(ii.qty_inspected, ii.qty_as_per_dc, 0) - COALESCE(ii.qty_rejected, 0)) AS qty
           FROM ign_items ii
           JOIN ign i ON i.id = ii.ign_id
           WHERE i.status != 'cancelled' AND ii.po_item_id IS NOT NULL
