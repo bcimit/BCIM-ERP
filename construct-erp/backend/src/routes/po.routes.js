@@ -409,12 +409,18 @@ router.get('/', async (req, res) => {
         GROUP BY poi.po_id
       ),
       po_bills AS (
-        SELECT po_id,
-               SUM(total_amount) AS billed_amount,
-               SUM(total_amount) FILTER (WHERE workflow_status = 'paid') AS paid_amount
-        FROM tqs_bills
-        WHERE is_deleted = false AND po_id IS NOT NULL
-        GROUP BY po_id
+        -- Paid = actual cash disbursed (tqs_bill_updates.paid_amount), not
+        -- "total_amount only if workflow_status='paid'" — a bill sitting at
+        -- an earlier stage (e.g. 'accounts') can already have most or all of
+        -- its value paid out as a partial payment, and that money would
+        -- otherwise show as ₹0 Paid until the bill's status formally flips.
+        SELECT tb.po_id,
+               SUM(tb.total_amount) AS billed_amount,
+               SUM(COALESCE(u.paid_amount, 0)) AS paid_amount
+        FROM tqs_bills tb
+        LEFT JOIN tqs_bill_updates u ON u.bill_id = tb.id
+        WHERE tb.is_deleted = false AND tb.po_id IS NOT NULL
+        GROUP BY tb.po_id
       )
       SELECT po.*, v.name AS vendor_name, p.name AS project_name,
              COALESCE(rc.items_total, 0)    AS items_total,
