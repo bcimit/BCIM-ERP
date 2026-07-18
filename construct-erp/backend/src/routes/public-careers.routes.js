@@ -32,13 +32,14 @@ async function requireApiKey(req, res, next) {
 router.get('/jobs', requireApiKey, async (req, res) => {
   try {
     const { rows } = await query(
-      `SELECT id, title, department, designation, vacancies,
-              experience_min, experience_max, qualification,
-              job_type, work_location, description, responsibilities,
-              skills_required, closing_date, created_at
-       FROM hr_job_postings
-       WHERE company_id=$1 AND status='open'
-       ORDER BY created_at DESC`,
+      `SELECT j.id, j.title, j.job_code, j.location AS work_location,
+              j.vacancies, j.description, j.status, j.created_at,
+              d.name AS department, des.name AS designation
+       FROM hr_job_openings j
+       LEFT JOIN hr_departments d   ON d.id = j.department_id
+       LEFT JOIN hr_designations des ON des.id = j.designation_id
+       WHERE j.company_id=$1 AND j.status='open'
+       ORDER BY j.created_at DESC`,
       [req.company_id]
     );
     res.json({ data: rows });
@@ -50,32 +51,26 @@ router.get('/jobs', requireApiKey, async (req, res) => {
 // POST /api/public/careers/apply
 router.post('/apply', requireApiKey, async (req, res) => {
   try {
-    const {
-      job_id, name, email, phone, experience_years,
-      current_company, current_designation, qualification,
-      expected_ctc, notice_period_days,
-    } = req.body;
+    const { job_id, name, email, phone, experience_years, current_company, expected_ctc } = req.body;
     if (!job_id || !name?.trim())
       return res.status(400).json({ error: 'job_id and name are required' });
 
     const jobCheck = await query(
-      `SELECT id FROM hr_job_postings WHERE id=$1 AND company_id=$2 AND status='open'`,
+      `SELECT id FROM hr_job_openings WHERE id=$1 AND company_id=$2 AND status='open'`,
       [job_id, req.company_id]
     );
     if (!jobCheck.rows.length)
       return res.status(404).json({ error: 'Job not found or no longer open' });
 
     const { rows } = await query(
-      `INSERT INTO hr_applicants
+      `INSERT INTO hr_candidates
          (company_id, job_id, name, email, phone, experience_years,
-          current_company, current_designation, qualification,
-          expected_ctc, notice_period_days, source)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'portal') RETURNING id`,
+          current_company, expected_ctc, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'portal') RETURNING id`,
       [
         req.company_id, job_id, name.trim(),
         email || null, phone || null, experience_years || 0,
-        current_company || null, current_designation || null,
-        qualification || null, expected_ctc || null, notice_period_days || 0,
+        current_company || null, expected_ctc || null,
       ]
     );
     res.status(201).json({ data: { id: rows[0].id } });
