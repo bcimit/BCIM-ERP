@@ -150,6 +150,13 @@ export default function LoginPage() {
   }, []);
 
   const loadProjectsForUser = async (currentUser) => {
+    // ESS domain has no project scoping — skip project selection entirely
+    // and go straight in (HomeRedirect/getHomeRoute sends them to /ess).
+    if (ess) {
+      clearSelectedProject();
+      navigate('/', { replace: true });
+      return;
+    }
     setPendingUser(currentUser);
     setProjectError('');
     setProjectLoading(true);

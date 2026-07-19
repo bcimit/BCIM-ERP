@@ -19,13 +19,15 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ];
 
-/* ─── design tokens ─── */
-const GREEN = '#16a34a';
-const NAVY  = '#1e3a5f';
-const BG    = '#F0F2F5';
+/* ─── design tokens — light HR-SaaS palette (Zoho People / GreytHR style),
+   matching the ESS login page's blue/teal theme instead of the ERP's navy/gold ─── */
+const ACCENT = '#2F6FED';   // primary accent — buttons, links, positive stats, progress bars
+const TEAL   = '#14B8A6';   // secondary accent — used sparingly for variety
+const DARK   = '#0F172A';   // dark text/highlight (was solid navy fills)
+const BG     = '#F4F6FB';
 
 /* ─── primitives ─── */
-const inputCls = 'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100 transition';
+const inputCls = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#2F6FED] focus:ring-2 focus:ring-blue-100 transition';
 const labelCls = 'mb-1 block text-xs font-semibold text-gray-600 uppercase tracking-wide';
 
 function Field({ title, children }) {
@@ -36,10 +38,10 @@ function Table({ columns, rows, empty = 'No records found' }) {
   return (
     <div className="overflow-auto rounded-lg border border-gray-200">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead style={{ backgroundColor: NAVY }}>
+        <thead className="bg-slate-50">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-white whitespace-nowrap">
+              <th key={c.key} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap">
                 {c.label}
               </th>
             ))}
@@ -89,8 +91,8 @@ function GreenBtn({ children, disabled, onClick, className = '' }) {
     <button
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50 ${className}`}
-      style={{ backgroundColor: disabled ? '#9ca3af' : GREEN }}
+      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50 disabled:hover:opacity-50 ${className}`}
+      style={{ backgroundColor: disabled ? '#9ca3af' : ACCENT }}
     >
       {children}
     </button>
@@ -199,27 +201,29 @@ const TAB_ITEMS = [
 
 function ESSTabNav({ active, setActive }) {
   return (
-    <div
-      className="flex items-center overflow-x-auto border-b border-gray-200 bg-white px-2 shrink-0"
-      style={{ scrollbarWidth: 'none' }}
-    >
-      {TAB_ITEMS.map(({ id, label, Icon }) => {
-        const isActive = active === id;
-        return (
-          <button
-            key={id}
-            onClick={() => setActive(id)}
-            className="flex shrink-0 items-center gap-1.5 px-3.5 py-3 text-xs font-semibold transition-all whitespace-nowrap border-b-2"
-            style={{
-              color:       isActive ? NAVY  : '#6b7280',
-              borderColor: isActive ? GREEN : 'transparent',
-            }}
-          >
-            <Icon size={14} className="shrink-0" />
-            {label}
-          </button>
-        );
-      })}
+    <div className="border-b border-gray-200 bg-white px-4 shrink-0 sm:px-5">
+      <div
+        className="flex items-center gap-1 overflow-x-auto py-2.5"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {TAB_ITEMS.map(({ id, label, Icon }) => {
+          const isActive = active === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActive(id)}
+              className="flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all whitespace-nowrap"
+              style={{
+                color:      isActive ? '#fff' : '#475569',
+                background: isActive ? ACCENT : 'transparent',
+              }}
+            >
+              <Icon size={14} className="shrink-0" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -292,10 +296,10 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
   const attPct       = workDays > 0 ? Math.round((presentDays / workDays) * 100) : 0;
   const announcements = (notifications || []).slice(0, 6);
 
-  const todayStatusColor = { P: GREEN, A: '#ef4444', L: '#8b5cf6', H: '#3b82f6', HD: '#f59e0b' };
+  const todayStatusColor = { P: ACCENT, A: '#ef4444', L: '#8b5cf6', H: '#3b82f6', HD: '#f59e0b' };
   const todayStatusLabel = { P: 'Present', A: 'Absent', L: 'On Leave', H: 'Holiday', HD: 'Half Day' };
 
-  const calDotColor = (code) => ({ P: GREEN, A: '#ef4444', HD: '#f59e0b', L: '#8b5cf6', H: '#3b82f6', WO: '#d1d5db' }[code] || null);
+  const calDotColor = (code) => ({ P: ACCENT, A: '#ef4444', HD: '#f59e0b', L: '#8b5cf6', H: '#3b82f6', WO: '#d1d5db' }[code] || null);
 
   const quickActions = [
     { label: 'Apply Leave',               Icon: CalendarOff,   tab: 'leave'       },
@@ -321,13 +325,13 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
         </div>
         <div
           className="relative hidden xl:flex w-72 min-h-[72px] items-center rounded-xl px-5 py-4 overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)' }}
+          style={{ background: 'linear-gradient(135deg, #EEF4FF, #E3F5F1)' }}
         >
           <span className="absolute right-3 top-0 text-7xl font-black leading-none select-none"
-            style={{ color: GREEN, opacity: 0.12 }}>❝</span>
+            style={{ color: ACCENT, opacity: 0.12 }}>❝</span>
           <div className="relative">
             <p className="text-xs italic text-gray-700 leading-relaxed">"{quote.text}"</p>
-            <p className="mt-1 text-[11px] font-semibold" style={{ color: GREEN }}>— {quote.author}</p>
+            <p className="mt-1 text-[11px] font-semibold" style={{ color: ACCENT }}>— {quote.author}</p>
           </div>
         </div>
       </div>
@@ -340,7 +344,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-gray-500">Today's Attendance</p>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
-              <CalendarCheck size={16} style={{ color: GREEN }} />
+              <CalendarCheck size={16} style={{ color: ACCENT }} />
             </div>
           </div>
           {todayRec?.code ? (
@@ -365,7 +369,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
               <p className="text-xs font-semibold text-gray-700">{profile.work_location}</p>
             </div>
           )}
-          <button onClick={() => setActive('attendance')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: GREEN }}>
+          <button onClick={() => setActive('attendance')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
             View Details →
           </button>
         </div>
@@ -384,7 +388,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
             {casualBal > 0 && <div><p className="text-[10px] uppercase tracking-wide text-gray-400">Casual Leave</p><p className="text-sm font-bold text-gray-700">{Number(casualBal).toFixed(1)}</p></div>}
             {earnedBal > 0 && <div><p className="text-[10px] uppercase tracking-wide text-gray-400">Earned Leave</p><p className="text-sm font-bold text-gray-700">{Number(earnedBal).toFixed(1)}</p></div>}
           </div>
-          <button onClick={() => setActive('leave')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: GREEN }}>
+          <button onClick={() => setActive('leave')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
             View Leave Balance →
           </button>
         </div>
@@ -403,7 +407,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
               <p className="text-2xl font-extrabold text-gray-900">₹{Number(payroll.net_pay || 0).toLocaleString('en-IN')}</p>
               <p className="text-xs text-gray-400 mb-3">Net Salary</p>
               <button onClick={() => payroll.id && navigate(`/hr-admin/payroll/${payroll.id}/payslip`)}
-                className="text-xs font-semibold hover:underline" style={{ color: GREEN }}>
+                className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
                 View Payslip →
               </button>
             </>
@@ -432,7 +436,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
               <p className="text-sm font-bold text-gray-700">{pendingCorr}</p>
             </div>
           </div>
-          <button onClick={() => setActive('hr-requests')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: GREEN }}>
+          <button onClick={() => setActive('hr-requests')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
             View All Requests →
           </button>
         </div>
@@ -474,7 +478,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
               <ChevronRight size={13} className="text-gray-500" />
             </button>
             <button onClick={() => { setCalMonth(now.getMonth()); setCalYear(now.getFullYear()); }}
-              className="text-xs font-semibold hover:underline ml-1" style={{ color: GREEN }}>Today</button>
+              className="text-xs font-semibold hover:underline ml-1" style={{ color: ACCENT }}>Today</button>
           </div>
           <div className="p-3">
             <div className="grid grid-cols-7 mb-1">
@@ -496,7 +500,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
                     <div
                       className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold"
                       style={{
-                        backgroundColor: isToday ? NAVY : 'transparent',
+                        backgroundColor: isToday ? DARK : 'transparent',
                         color:           isToday ? '#fff' : isWknd ? '#9ca3af' : '#374151',
                       }}
                     >
@@ -522,7 +526,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h3 className="text-sm font-bold text-gray-900">Announcements</h3>
-            <button className="text-xs font-semibold hover:underline" style={{ color: GREEN }}>View All</button>
+            <button className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>View All</button>
           </div>
           <div className="flex-1 divide-y divide-gray-50 overflow-y-auto">
             {announcements.length ? announcements.map((n, i) => (
@@ -565,7 +569,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
             <div className="grid grid-cols-5 gap-3 mb-5">
               {[
                 { label: 'Total Days', val: attendance.working_days ?? '-', color: '#64748b' },
-                { label: 'Present',    val: attendance.present      ?? 0,   color: GREEN     },
+                { label: 'Present',    val: attendance.present      ?? 0,   color: ACCENT     },
                 { label: 'Absent',     val: attendance.absent       ?? 0,   color: '#ef4444' },
                 { label: 'Half Day',   val: attendance.half_day     ?? 0,   color: '#f59e0b' },
                 { label: 'Leave',      val: attendance.on_leave     ?? 0,   color: '#8b5cf6' },
@@ -579,12 +583,12 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <p className="text-xs text-gray-500">Attendance Percentage</p>
-                <p className="text-sm font-bold" style={{ color: GREEN }}>{attPct}%</p>
+                <p className="text-sm font-bold" style={{ color: ACCENT }}>{attPct}%</p>
               </div>
               <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
                 <div
                   className="h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${attPct}%`, backgroundColor: GREEN }}
+                  style={{ width: `${attPct}%`, backgroundColor: ACCENT }}
                 />
               </div>
             </div>
@@ -595,7 +599,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h3 className="text-sm font-bold text-gray-900">Upcoming Events</h3>
-            <button className="text-xs font-semibold hover:underline" style={{ color: GREEN }}>View Full Calendar</button>
+            <button className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>View Full Calendar</button>
           </div>
           <div className="divide-y divide-gray-50">
             {announcements.slice(0, 4).map((n, i) => {
@@ -628,7 +632,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
       <div className="grid gap-5 lg:grid-cols-2">
         <SectionCard
           title="Leave History"
-          action={<button onClick={() => setActive('leave')} className="text-xs font-semibold hover:underline" style={{ color: GREEN }}>View All</button>}
+          action={<button onClick={() => setActive('leave')} className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>View All</button>}
         >
           <Table
             columns={[
@@ -643,7 +647,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
 
         <SectionCard
           title="Recent Requests"
-          action={<button onClick={() => setActive('hr-requests')} className="text-xs font-semibold hover:underline" style={{ color: GREEN }}>View All</button>}
+          action={<button onClick={() => setActive('hr-requests')} className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>View All</button>}
         >
           <Table
             columns={[
@@ -672,7 +676,7 @@ function ProfileTab({ profile, balances }) {
         <div className="flex items-start gap-6 p-2">
           <div
             className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white shadow"
-            style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #2d6a9f 100%)` }}
+            style={{ background: `linear-gradient(135deg, ${DARK} 0%, #2d6a9f 100%)` }}
           >
             {initials}
           </div>
@@ -709,10 +713,10 @@ function ProfileTab({ profile, balances }) {
               return (
                 <div key={b.leave_type_id} className="min-w-[150px] rounded-xl border border-gray-200 p-4 bg-gray-50">
                   <p className="text-xs font-semibold text-gray-500 truncate">{b.leave_type_name}</p>
-                  <p className="mt-2 text-3xl font-extrabold" style={{ color: GREEN }}>{avail.toFixed(1)}</p>
+                  <p className="mt-2 text-3xl font-extrabold" style={{ color: ACCENT }}>{avail.toFixed(1)}</p>
                   <p className="text-[11px] text-gray-400">Available</p>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
-                    <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: GREEN }} />
+                    <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: ACCENT }} />
                   </div>
                   <p className="mt-1 text-[10px] text-gray-400">{taken} taken / {accrued} accrued</p>
                 </div>
@@ -805,10 +809,10 @@ function AttendanceTab({ leaveTypes }) {
                   className={`relative flex h-9 w-full flex-col items-center justify-center rounded-lg text-xs font-semibold transition ${
                     st ? `${st.bg} ${st.text}` : isToday ? 'ring-2 text-gray-700' : 'text-gray-600 hover:bg-gray-100'
                   }`}
-                  style={isToday ? { ringColor: GREEN } : {}}
+                  style={isToday ? { ringColor: ACCENT } : {}}
                 >
                   {isToday && !st && (
-                    <span className="absolute inset-0 rounded-lg ring-2 pointer-events-none" style={{ ringColor: GREEN, outlineColor: GREEN, outline: `2px solid ${GREEN}` }} />
+                    <span className="absolute inset-0 rounded-lg ring-2 pointer-events-none" style={{ ringColor: ACCENT, outlineColor: ACCENT, outline: `2px solid ${ACCENT}` }} />
                   )}
                   {day}
                   {st && <span className="text-[9px] font-bold leading-none">{st.label}</span>}
@@ -889,9 +893,9 @@ function AttendanceTab({ leaveTypes }) {
               onClick={() => setSwipeDays(d)}
               className="text-xs font-bold px-3 py-1 rounded-full border transition"
               style={{
-                background:  swipeDays === d ? NAVY : '#fff',
+                background:  swipeDays === d ? DARK : '#fff',
                 color:       swipeDays === d ? '#fff' : '#64748b',
-                borderColor: swipeDays === d ? NAVY : '#d1d5db',
+                borderColor: swipeDays === d ? DARK : '#d1d5db',
               }}
             >
               {d} days
@@ -919,7 +923,7 @@ function AttendanceTab({ leaveTypes }) {
 
               return (
                 <div key={date} className="rounded-xl border border-gray-100 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2.5" style={{ background: NAVY }}>
+                  <div className="flex items-center justify-between px-4 py-2.5" style={{ background: DARK }}>
                     <span className="text-xs font-bold text-white">{dayLabel}</span>
                     <div className="flex items-center gap-3">
                       {firstIn && (
@@ -987,10 +991,10 @@ function LeaveTab({ leaveTypes }) {
           return (
             <div key={b.leave_type_id} className="min-w-[150px] rounded-xl border border-gray-200 bg-white p-4 shadow-sm shrink-0">
               <p className="text-xs font-semibold text-gray-500 truncate">{b.leave_type_name}</p>
-              <p className="mt-2 text-3xl font-extrabold" style={{ color: GREEN }}>{avail.toFixed(1)}</p>
+              <p className="mt-2 text-3xl font-extrabold" style={{ color: ACCENT }}>{avail.toFixed(1)}</p>
               <p className="text-[11px] text-gray-400">Available</p>
               <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100">
-                <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: GREEN }} />
+                <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: ACCENT }} />
               </div>
               <p className="mt-1 text-[10px] text-gray-400">{taken} taken / {accrued} accrued</p>
             </div>
@@ -1065,14 +1069,14 @@ function PayslipsTab() {
           { key: 'gross_earnings',   label: 'Gross',      render: r => `₹${Number(r.gross_earnings  ||0).toLocaleString('en-IN')}` },
           { key: 'total_deductions', label: 'Deductions', render: r => `₹${Number(r.total_deductions||0).toLocaleString('en-IN')}` },
           { key: 'net_pay',          label: 'Net Pay',    render: r => (
-            <span className="font-bold" style={{ color: GREEN }}>₹{Number(r.net_pay||0).toLocaleString('en-IN')}</span>
+            <span className="font-bold" style={{ color: ACCENT }}>₹{Number(r.net_pay||0).toLocaleString('en-IN')}</span>
           )},
           { key: 'status', label: 'Status', render: r => <StatusBadge value={r.status} /> },
           { key: 'actions', label: 'Payslip', render: r => (
             <button
               onClick={() => navigate(`/hr-admin/payroll/${r.id}/payslip`)}
               className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-              style={{ backgroundColor: GREEN }}
+              style={{ backgroundColor: ACCENT }}
             >
               <Printer size={12} /> Print
             </button>
@@ -1350,7 +1354,7 @@ function TrainingTab() {
     <div className="space-y-5 max-w-5xl mx-auto">
 
       {/* Header */}
-      <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${NAVY}, #1e5a8a)` }}>
+      <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${DARK}, #1e5a8a)` }}>
         <div className="flex items-center gap-3 mb-1">
           <Award size={22} className="text-white/80" />
           <h2 className="text-xl font-bold">Training & Development</h2>
@@ -1427,7 +1431,7 @@ function TrainingTab() {
             disabled={!form.training_name || submit.isPending}
             onClick={() => submit.mutate()}
             className="px-6 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
-            style={{ background: GREEN }}
+            style={{ background: ACCENT }}
           >
             {submit.isPending ? 'Submitting…' : 'Submit Request'}
           </button>
@@ -1574,7 +1578,7 @@ export default function ESSPortalPage() {
   const navLabel = TAB_ITEMS.find(i => i.id === active)?.label || active;
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ backgroundColor: BG }}>
+    <div className="flex flex-col min-h-screen" style={{ backgroundColor: BG, fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* Horizontal tab navigation — sits inside the existing app shell */}
       <ESSTabNav active={active} setActive={setActive} />
 
