@@ -466,13 +466,19 @@ const ProtectedRoute = ({ children, allowWithoutProject = false }) => {
   const location = useLocation();
   if (!isInitialized) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!allowWithoutProject && !GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
+  // ESS domain regular employees have no project scoping — exempt them from
+  // the project-selection gate. Without this, hitting /ess (which has no
+  // allowWithoutProject) redirected them to /select-project, which in turn
+  // redirected back to /ess (via the ESS-only check below), dead-ending in a
+  // redirect loop on a blank page.
+  const essExempt = isEssDomain() && !isEssFullAccessRole(user);
+  if (!allowWithoutProject && !essExempt && !GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
     return <Navigate to="/select-project" replace />;
   }
   // ESS custom domain: only the ESS Portal itself is reachable for regular
   // employees — every other ERP route bounces back. HR/admin staff are
   // exempt since they still need full ERP access on this domain.
-  if (isEssDomain() && !isEssFullAccessRole(user) && location.pathname !== '/' && !location.pathname.startsWith('/ess')) {
+  if (essExempt && location.pathname !== '/' && !location.pathname.startsWith('/ess')) {
     return <Navigate to="/ess" replace />;
   }
   return children;
