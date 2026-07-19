@@ -302,163 +302,174 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
   const calDotColor = (code) => ({ P: ACCENT, A: '#ef4444', HD: '#f59e0b', L: '#8b5cf6', H: '#3b82f6', WO: '#d1d5db' }[code] || null);
 
   const quickActions = [
-    { label: 'Apply Leave',               Icon: CalendarOff,   tab: 'leave'       },
-    { label: 'Attendance Reg.',           Icon: CalendarCheck, tab: 'attendance'  },
-    { label: 'View Payslip',              Icon: BadgeIndianRupee,  tab: 'payslips'    },
-    { label: 'View Attendance',           Icon: CheckCircle2,  tab: 'attendance'  },
-    { label: 'My Documents',             Icon: FileText,      tab: 'documents'   },
-    { label: 'Company Directory',         Icon: Users,         tab: null          },
-    { label: 'Raise Request',             Icon: FolderUp,      tab: 'hr-requests' },
-    { label: 'Helpdesk',                  Icon: Headphones,    tab: 'hr-requests' },
+    { label: 'Apply Leave',        Icon: CalendarOff,      tab: 'leave',       bg: '#EAF1FF', fg: '#2F6FED' },
+    { label: 'Attendance Reg.',    Icon: CalendarCheck,    tab: 'attendance',  bg: '#E3F5F1', fg: '#0D9488' },
+    { label: 'View Payslip',       Icon: BadgeIndianRupee, tab: 'payslips',    bg: '#FEF3D6', fg: '#B45309' },
+    { label: 'View Attendance',    Icon: CheckCircle2,     tab: 'attendance',  bg: '#EAF1FF', fg: '#2F6FED' },
+    { label: 'My Documents',       Icon: FileText,         tab: 'documents',   bg: '#F3E8FF', fg: '#7C3AED' },
+    { label: 'Company Directory',  Icon: Users,            tab: null,          bg: '#FCE7F3', fg: '#DB2777' },
+    { label: 'Raise Request',      Icon: FolderUp,         tab: 'hr-requests', bg: '#FFE4E0', fg: '#DC2626' },
+    { label: 'Helpdesk',           Icon: Headphones,       tab: 'hr-requests', bg: '#E3F5F1', fg: '#0D9488' },
+  ];
+
+  const initials = (profile?.name || 'E').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const statCards = [
+    {
+      label: 'Today\'s Attendance', bg: '#EAF1FF', fg: '#2F6FED', Icon: CalendarCheck,
+      body: todayRec?.code ? (
+        <>
+          <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white mb-1.5"
+            style={{ backgroundColor: todayStatusColor[todayRec.code] || '#9ca3af' }}>
+            {todayStatusLabel[todayRec.code] || todayRec.code}
+          </span>
+          {todayInTime
+            ? <p className="text-xl font-extrabold text-gray-900">{todayInTime} <span className="text-sm font-medium text-gray-400">In</span></p>
+            : <p className="text-xs text-gray-400 mt-1">No check-in recorded</p>}
+        </>
+      ) : (
+        <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-gray-100 text-gray-500 mb-1">Not Marked</span>
+      ),
+      footer: profile?.work_location ? { label: 'Location', value: profile.work_location } : null,
+      cta: { label: 'View Details', onClick: () => setActive('attendance') },
+    },
+    {
+      label: 'Leave Balance', bg: '#E3F5F1', fg: '#0D9488', Icon: CalendarOff,
+      body: (
+        <>
+          <p className="text-2xl font-extrabold text-gray-900">{Number(totalBalance).toFixed(1)}</p>
+          <p className="text-xs text-gray-400">Days available</p>
+        </>
+      ),
+      footer: (casualBal > 0 || earnedBal > 0) ? {
+        split: [
+          casualBal > 0 && { label: 'Casual', value: Number(casualBal).toFixed(1) },
+          earnedBal > 0 && { label: 'Earned', value: Number(earnedBal).toFixed(1) },
+        ].filter(Boolean),
+      } : null,
+      cta: { label: 'View Leave Balance', onClick: () => setActive('leave') },
+    },
+    {
+      label: 'Latest Payslip', bg: '#FEF3D6', fg: '#B45309', Icon: BadgeIndianRupee,
+      body: payroll?.month ? (
+        <>
+          <p className="text-[11px] text-gray-400">{MONTH_NAMES[(payroll.month || 1) - 1]} {payroll.year}</p>
+          <p className="text-2xl font-extrabold text-gray-900">₹{Number(payroll.net_pay || 0).toLocaleString('en-IN')}</p>
+          <p className="text-xs text-gray-400">Net salary</p>
+        </>
+      ) : <p className="text-sm text-gray-400 mt-2">No payslip available yet.</p>,
+      cta: payroll?.month ? { label: 'View Payslip', onClick: () => payroll.id && navigate(`/hr-admin/payroll/${payroll.id}/payslip`) } : null,
+    },
+    {
+      label: 'My Requests', bg: '#FCE7F3', fg: '#DB2777', Icon: FolderUp,
+      body: (
+        <>
+          <p className="text-2xl font-extrabold text-gray-900">{pendingTotal}</p>
+          <p className="text-xs text-gray-400">Pending requests</p>
+        </>
+      ),
+      footer: { split: [{ label: 'Leave', value: pendingLeave }, { label: 'Reg.', value: pendingCorr }] },
+      cta: { label: 'View All Requests', onClick: () => setActive('hr-requests') },
+    },
   ];
 
   return (
     <div className="space-y-5">
 
-      {/* ── Welcome + Quote ── */}
-      <div className="flex items-center gap-5">
-        <div className="flex-1">
-          <h2 className="text-xl font-bold text-gray-900">
-            Welcome back, {profile?.name?.split(' ')[0] || 'Employee'}! 👋
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">Here's what's happening with you today.</p>
-        </div>
-        <div
-          className="relative hidden xl:flex w-72 min-h-[72px] items-center rounded-xl px-5 py-4 overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #EEF4FF, #E3F5F1)' }}
-        >
-          <span className="absolute right-3 top-0 text-7xl font-black leading-none select-none"
-            style={{ color: ACCENT, opacity: 0.12 }}>❝</span>
-          <div className="relative">
-            <p className="text-xs italic text-gray-700 leading-relaxed">"{quote.text}"</p>
-            <p className="mt-1 text-[11px] font-semibold" style={{ color: ACCENT }}>— {quote.author}</p>
+      {/* ── Hero banner ── */}
+      <div
+        className="relative overflow-hidden rounded-2xl p-6 sm:p-7"
+        style={{ background: 'linear-gradient(120deg, #2F6FED 0%, #2557C7 55%, #0F9E8E 140%)' }}
+      >
+        <div className="pointer-events-none absolute -right-8 -top-16 h-56 w-56 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute right-24 bottom-[-48px] h-32 w-32 rounded-full bg-white/10" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-lg font-bold text-white ring-1 ring-white/25">
+              {initials}
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{greeting}</p>
+              <h2 className="text-xl font-bold text-white sm:text-2xl">{profile?.name?.split(' ')[0] || 'Employee'} 👋</h2>
+              <p className="mt-0.5 text-sm text-white/80">{profile?.designation_name || "Here's what's happening today."}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 self-start rounded-xl bg-white/12 px-4 py-3 ring-1 ring-white/20 sm:self-auto">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
+              <CalendarCheck size={17} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60">Today</p>
+              <p className="text-sm font-bold text-white">
+                {todayRec?.code ? (todayStatusLabel[todayRec.code] || todayRec.code) : 'Not marked'}
+                {todayInTime && <span className="ml-1.5 font-medium text-white/70">· In {todayInTime}</span>}
+              </p>
+            </div>
           </div>
         </div>
+        <p className="relative mt-5 max-w-xl border-t border-white/15 pt-4 text-xs italic leading-relaxed text-white/75">
+          "{quote.text}" <span className="not-italic font-semibold text-white">— {quote.author}</span>
+        </p>
       </div>
 
       {/* ── 4 Stat cards ── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-
-        {/* Today's Attendance */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-500">Today's Attendance</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
-              <CalendarCheck size={16} style={{ color: ACCENT }} />
+        {statCards.map((c) => (
+          <div key={c.label} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-gray-500">{c.label}</p>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: c.bg }}>
+                <c.Icon size={16} style={{ color: c.fg }} />
+              </div>
             </div>
-          </div>
-          {todayRec?.code ? (
-            <span
-              className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white mb-1"
-              style={{ backgroundColor: todayStatusColor[todayRec.code] || '#9ca3af' }}
-            >
-              {todayStatusLabel[todayRec.code] || todayRec.code}
-            </span>
-          ) : (
-            <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-gray-200 text-gray-600 mb-1">
-              Not Marked
-            </span>
-          )}
-          {todayInTime && (
-            <p className="text-xl font-extrabold text-gray-900 mt-0.5">{todayInTime} <span className="text-sm font-medium text-gray-400">Checked In</span></p>
-          )}
-          {!todayInTime && <p className="text-xs text-gray-400 mt-1">No check-in recorded</p>}
-          {profile?.work_location && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-[10px] uppercase tracking-wide text-gray-400">Location</p>
-              <p className="text-xs font-semibold text-gray-700">{profile.work_location}</p>
-            </div>
-          )}
-          <button onClick={() => setActive('attendance')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
-            View Details →
-          </button>
-        </div>
-
-        {/* Leave Balance */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-500">Leave Balance</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-              <CalendarOff size={16} className="text-blue-600" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-gray-900">{Number(totalBalance).toFixed(1)}</p>
-          <p className="text-xs text-gray-400 mb-3">Days Available</p>
-          <div className="flex gap-4 pt-3 border-t border-gray-100">
-            {casualBal > 0 && <div><p className="text-[10px] uppercase tracking-wide text-gray-400">Casual Leave</p><p className="text-sm font-bold text-gray-700">{Number(casualBal).toFixed(1)}</p></div>}
-            {earnedBal > 0 && <div><p className="text-[10px] uppercase tracking-wide text-gray-400">Earned Leave</p><p className="text-sm font-bold text-gray-700">{Number(earnedBal).toFixed(1)}</p></div>}
-          </div>
-          <button onClick={() => setActive('leave')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
-            View Leave Balance →
-          </button>
-        </div>
-
-        {/* Latest Payslip */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-500">Latest Payslip</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-50">
-              <BadgeIndianRupee size={16} className="text-yellow-600" />
-            </div>
-          </div>
-          {payroll?.month ? (
-            <>
-              <p className="text-xs text-gray-400">{MONTH_NAMES[(payroll.month || 1) - 1]} {payroll.year}</p>
-              <p className="text-2xl font-extrabold text-gray-900">₹{Number(payroll.net_pay || 0).toLocaleString('en-IN')}</p>
-              <p className="text-xs text-gray-400 mb-3">Net Salary</p>
-              <button onClick={() => payroll.id && navigate(`/hr-admin/payroll/${payroll.id}/payslip`)}
-                className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
-                View Payslip →
+            {c.body}
+            {c.footer && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                {c.footer.split ? (
+                  <div className="flex gap-5">
+                    {c.footer.split.map(f => (
+                      <div key={f.label}>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400">{f.label}</p>
+                        <p className="text-sm font-bold text-gray-700">{f.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400">{c.footer.label}</p>
+                    <p className="text-xs font-semibold text-gray-700">{c.footer.value}</p>
+                  </>
+                )}
+              </div>
+            )}
+            {c.cta && (
+              <button onClick={c.cta.onClick} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
+                {c.cta.label} →
               </button>
-            </>
-          ) : (
-            <p className="text-sm text-gray-400 mt-2">No payslip available yet.</p>
-          )}
-        </div>
-
-        {/* My Requests */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-gray-500">My Requests</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50">
-              <FolderUp size={16} className="text-orange-500" />
-            </div>
+            )}
           </div>
-          <p className="text-2xl font-extrabold text-gray-900">{pendingTotal}</p>
-          <p className="text-xs text-gray-400 mb-3">Pending Requests</p>
-          <div className="flex gap-5 pt-3 border-t border-gray-100">
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-400">Leave Requests</p>
-              <p className="text-sm font-bold text-gray-700">{pendingLeave}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-400">Regularization</p>
-              <p className="text-sm font-bold text-gray-700">{pendingCorr}</p>
-            </div>
-          </div>
-          <button onClick={() => setActive('hr-requests')} className="mt-3 text-xs font-semibold hover:underline" style={{ color: ACCENT }}>
-            View All Requests →
-          </button>
-        </div>
+        ))}
       </div>
 
       {/* ── Middle row: Quick Actions | Calendar | Announcements ── */}
       <div className="grid gap-5 lg:grid-cols-3">
 
         {/* Quick Actions */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="border-b border-gray-100 px-5 py-4">
             <h3 className="text-sm font-bold text-gray-900">Quick Actions</h3>
           </div>
           <div className="p-4 grid grid-cols-4 gap-y-4">
-            {quickActions.map(({ label, Icon, tab }) => (
+            {quickActions.map(({ label, Icon, tab, bg, fg }) => (
               <button
                 key={label}
                 onClick={() => tab && setActive(tab)}
-                className="flex flex-col items-center gap-1.5 rounded-xl p-2 hover:bg-gray-50 transition"
+                className="flex flex-col items-center gap-1.5 rounded-xl p-2 transition hover:bg-gray-50"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <Icon size={18} className="text-gray-600" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl transition group-hover:scale-105" style={{ background: bg }}>
+                  <Icon size={18} style={{ color: fg }} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 leading-tight text-center">{label}</span>
               </button>
@@ -467,7 +478,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
         </div>
 
         {/* My Calendar */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3.5">
             <h3 className="text-sm font-bold text-gray-900 flex-1">My Calendar</h3>
             <button onClick={prevMonth} className="rounded-lg border border-gray-200 p-1 hover:bg-gray-50 transition">
@@ -500,7 +511,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
                     <div
                       className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold"
                       style={{
-                        backgroundColor: isToday ? DARK : 'transparent',
+                        backgroundColor: isToday ? ACCENT : 'transparent',
                         color:           isToday ? '#fff' : isWknd ? '#9ca3af' : '#374151',
                       }}
                     >
@@ -523,26 +534,25 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
         </div>
 
         {/* Announcements */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm flex flex-col">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h3 className="text-sm font-bold text-gray-900">Announcements</h3>
             <button className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>View All</button>
           </div>
           <div className="flex-1 divide-y divide-gray-50 overflow-y-auto">
             {announcements.length ? announcements.map((n, i) => (
-              <div key={n.id || i} className="flex items-start gap-3 px-4 py-3.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-50">
-                  <Bell size={13} className="text-orange-500" />
+              <div key={n.id || i} className="relative flex items-start gap-3 px-4 py-3.5">
+                {!n.is_read && <span className="absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-full" style={{ background: ACCENT }} />}
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: '#FEF3D6' }}>
+                  <Bell size={13} style={{ color: '#B45309' }} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-gray-800 truncate">{n.title || (n.message || '').slice(0,40) || 'Notification'}</p>
                   <p className="mt-0.5 text-[11px] text-gray-500 line-clamp-2">{n.message}</p>
                   <p className="mt-1 text-[10px] text-gray-400">
                     {n.created_at ? new Date(n.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short' }) : ''}
-                    {n.created_at && ' ago'}
                   </p>
                 </div>
-                {!n.is_read && <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />}
               </div>
             )) : (
               <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -558,21 +568,36 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
       <div className="grid gap-5 lg:grid-cols-3">
 
         {/* Attendance Summary */}
-        <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h3 className="text-sm font-bold text-gray-900">My Attendance Summary</h3>
             <span className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600">
               {MONTH_NAMES[now.getMonth()]} {now.getFullYear()}
             </span>
           </div>
-          <div className="p-5">
-            <div className="grid grid-cols-5 gap-3 mb-5">
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
+            {/* Circular progress ring */}
+            <div className="relative mx-auto h-28 w-28 shrink-0 sm:mx-0">
+              <svg viewBox="0 0 100 100" className="h-28 w-28 -rotate-90">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="#EEF2F9" strokeWidth="10" />
+                <circle
+                  cx="50" cy="50" r="42" fill="none" stroke={ACCENT} strokeWidth="10" strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 42}`}
+                  strokeDashoffset={`${2 * Math.PI * 42 * (1 - attPct / 100)}`}
+                  style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-xl font-extrabold text-gray-900">{attPct}%</span>
+                <span className="text-[10px] text-gray-400">Present</span>
+              </div>
+            </div>
+            <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label: 'Total Days', val: attendance.working_days ?? '-', color: '#64748b' },
                 { label: 'Present',    val: attendance.present      ?? 0,   color: ACCENT     },
                 { label: 'Absent',     val: attendance.absent       ?? 0,   color: '#ef4444' },
                 { label: 'Half Day',   val: attendance.half_day     ?? 0,   color: '#f59e0b' },
-                { label: 'Leave',      val: attendance.on_leave     ?? 0,   color: '#8b5cf6' },
               ].map(({ label, val, color }) => (
                 <div key={label} className="rounded-xl border border-gray-100 p-3 text-center">
                   <p className="text-2xl font-extrabold" style={{ color }}>{val}</p>
@@ -580,23 +605,11 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
                 </div>
               ))}
             </div>
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-xs text-gray-500">Attendance Percentage</p>
-                <p className="text-sm font-bold" style={{ color: ACCENT }}>{attPct}%</p>
-              </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-2.5 rounded-full transition-all duration-500"
-                  style={{ width: `${attPct}%`, backgroundColor: ACCENT }}
-                />
-              </div>
-            </div>
           </div>
         </div>
 
         {/* Upcoming Events */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h3 className="text-sm font-bold text-gray-900">Upcoming Events</h3>
             <button className="text-xs font-semibold hover:underline" style={{ color: ACCENT }}>View Full Calendar</button>
@@ -607,11 +620,11 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
               return (
                 <div key={n.id || i} className="flex items-start gap-3 px-4 py-3.5">
                   {d && (
-                    <div className="w-10 shrink-0 rounded-lg text-center py-2 bg-blue-50">
-                      <p className="text-[9px] font-bold uppercase text-blue-400 leading-tight">
+                    <div className="w-10 shrink-0 rounded-lg text-center py-2" style={{ background: '#EAF1FF' }}>
+                      <p className="text-[9px] font-bold uppercase leading-tight" style={{ color: '#93B4F7' }}>
                         {d.toLocaleDateString('en-IN', { month: 'short' })}
                       </p>
-                      <p className="text-lg font-extrabold leading-tight text-blue-700">{d.getDate()}</p>
+                      <p className="text-lg font-extrabold leading-tight" style={{ color: ACCENT }}>{d.getDate()}</p>
                     </div>
                   )}
                   <div className="min-w-0">
