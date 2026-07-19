@@ -108,6 +108,7 @@ const navGroups = [
     { to: '/qs/boq-mapping',          icon: Layers,          label: 'BOQ SC Mapping' },
     { to: '/qs/boq-dashboard',        icon: BarChart3,       label: 'BOQ Margin Dashboard' },
     { to: '/qs/measurements',         icon: Ruler,           label: 'Measurement Book' },
+    { to: '/qs/client-work-orders',   icon: FileSignature,   label: 'Client Work Orders' },
     { to: '/qs/ra-bills',             icon: Receipt,         label: 'RA Bills' },
     { to: '/qs/po',                   icon: ShoppingCart,    label: 'Purchase Orders' },
     { to: '/qs/po-register',          icon: ClipboardList,   label: 'PO Register' },

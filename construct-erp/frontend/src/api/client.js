@@ -301,6 +301,16 @@ export const raBillAPI = {
   boqBillsDetail: (projectId) => api.get('/ra-bills/boq-bills-detail', { params: { project_id: projectId } }),
 };
 
+export const clientWOAPI = {
+  list:           (params) => api.get('/client-work-orders', { params }),
+  get:            (id)     => api.get(`/client-work-orders/${id}`),
+  create:         (data)   => api.post('/client-work-orders', data),
+  update:         (id, d)  => api.put(`/client-work-orders/${id}`, d),
+  remove:         (id)     => api.delete(`/client-work-orders/${id}`),
+  addAmendment:   (id, d)  => api.post(`/client-work-orders/${id}/amendments`, d),
+  delAmendment:   (id, aid) => api.delete(`/client-work-orders/${id}/amendments/${aid}`),
+};
+
 export const clientAdvanceAPI = {
   list:     (params) => api.get('/client-advances', { params }),
   stats:    (params) => api.get('/client-advances/stats', { params }),

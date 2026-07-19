@@ -68,6 +68,7 @@ const MeasurementBookPage = lazy(() =>
 const RABillPage           = lazy(() => import('./pages/qs/RABillPage'));
 const RABillNewPage        = lazy(() => import('./pages/qs/RABillNewPage'));
 const RABillDetail         = lazy(() => import('./pages/qs/RABillDetail'));
+const ClientWOPage         = lazy(() => import('./pages/qs/ClientWOPage'));
 const PriceEscalationPage  = lazy(() => import('./pages/qs/PriceEscalationPage'));
 const VendorQSCertificationPage = lazy(() => import('./pages/qs/VendorQSCertificationPage'));
 const VendorQSCertificationDetailPage = lazy(() => import('./pages/qs/VendorQSCertificationDetailPage'));
@@ -656,6 +657,7 @@ export default function App() {
                 <Route path="qs/boq-budget-breakdown" element={<RequireBudgetAccess><BOQBudgetBreakdownPage /></RequireBudgetAccess>} />
                 <Route path="qs/measurements" element={<RequireModule module="QS & Billing"><MeasurementPage /></RequireModule>} />
                 <Route path="qs/measurements/book" element={<RequireModule module="QS & Billing"><MeasurementBookPage /></RequireModule>} />
+                <Route path="qs/client-work-orders" element={<RequireModule module="QS & Billing"><ClientWOPage /></RequireModule>} />
                 <Route path="qs/ra-bills" element={<RequireModule module="QS & Billing"><RABillPage /></RequireModule>} />
                 <Route path="qs/ra-bills/new" element={<RequireModule module="QS & Billing"><RABillNewPage /></RequireModule>} />
                 <Route path="qs/ra-bills/:id" element={<RequireModule module="QS & Billing"><RABillDetail /></RequireModule>} />
