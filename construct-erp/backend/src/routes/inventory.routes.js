@@ -314,7 +314,6 @@ router.get('/monthly-report', async (req, res) => {
     let sql = `
       SELECT
         i.id, i.material_name, i.unit, i.site_location,
-        i.opening_stock AS initial_opening,
         i.closing_stock AS live_closing,
         COALESCE(i.unit_rate, 0)  AS rate,
         i.category, i.reorder_level, i.minimum_level,
@@ -322,8 +321,8 @@ router.get('/monthly-report', async (req, res) => {
         COALESCE(rx.received_qty, 0)      AS received_qty,
         COALESCE(ix.issued_qty, 0)        AS issued_qty,
         COALESCE(ix.last_issued_at, NULL) AS last_issued_at,
-        COALESCE(pre.receipts_before, 0)  AS receipts_before,
-        COALESCE(pre.issues_before,   0)  AS issues_before
+        COALESCE(post.receipts_after, 0)  AS receipts_after,
+        COALESCE(post.issues_after,   0)  AS issues_after
       FROM inventory i
       JOIN projects p ON i.project_id = p.id
       LEFT JOIN (
@@ -345,12 +344,12 @@ router.get('/monthly-report', async (req, res) => {
       ) ix ON ix.inventory_id = i.id
       LEFT JOIN (
         SELECT inventory_id,
-               SUM(CASE WHEN transaction_type IN ('grn','bill_receipt','transfer_in') THEN quantity ELSE 0 END) AS receipts_before,
-               SUM(CASE WHEN transaction_type IN ('issue','transfer_out')             THEN quantity ELSE 0 END) AS issues_before
+               SUM(CASE WHEN transaction_type IN ('grn','bill_receipt','transfer_in') THEN quantity ELSE 0 END) AS receipts_after,
+               SUM(CASE WHEN transaction_type IN ('issue','transfer_out')             THEN quantity ELSE 0 END) AS issues_after
         FROM stock_transactions
-        WHERE transacted_at < $2
+        WHERE transacted_at >= $3
         GROUP BY inventory_id
-      ) pre ON pre.inventory_id = i.id
+      ) post ON post.inventory_id = i.id
       WHERE p.company_id = $1`;
 
     let params = [req.user.company_id, monthStart, monthEnd];
@@ -361,15 +360,16 @@ router.get('/monthly-report', async (req, res) => {
     const result = await query(sql, params);
 
     const rows = result.rows.map(r => {
-      const received  = parseFloat(r.received_qty)    || 0;
-      const issued    = parseFloat(r.issued_qty)      || 0;
-      const rate      = parseFloat(r.rate)            || 0;
-      const initOpen  = parseFloat(r.initial_opening) || 0;
-      const recBefore = parseFloat(r.receipts_before) || 0;
-      const issBefore = parseFloat(r.issues_before)   || 0;
-      // True opening stock = initial stock entered + all movements before this month
-      const opening        = Math.max(0, initOpen + recBefore - issBefore);
-      const periodClosing  = Math.max(0, opening + received - issued);
+      const received     = parseFloat(r.received_qty)   || 0;
+      const issued       = parseFloat(r.issued_qty)     || 0;
+      const rate         = parseFloat(r.rate)           || 0;
+      const liveClosing  = parseFloat(r.live_closing)   || 0;
+      const recAfter     = parseFloat(r.receipts_after) || 0;
+      const issAfter     = parseFloat(r.issues_after)   || 0;
+      // Period-end closing = live balance rewound past all future-month movements
+      const periodClosing = Math.max(0, liveClosing - recAfter + issAfter);
+      // Period opening = closing rewound past this month's movements
+      const opening       = Math.max(0, periodClosing - received + issued);
       return {
         ...r,
         opening_stock:  opening,
