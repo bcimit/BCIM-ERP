@@ -570,7 +570,13 @@ function AuthInitializer({ children }) {
   const { user, initialize, logout } = useAuthStore();
   const navigate = useNavigate();
   const IDLE_TIMEOUT = 4 * 60 * 60 * 1000; // 4 hours idle timeout
-  const SESSION_MAX_MS = 8 * 60 * 60 * 1000; // 8 hours absolute
+  // No client-side absolute session cutoff — a session now lasts as long as
+  // the refresh token is valid (JWT_REFRESH_EXPIRES_IN, currently 7 days),
+  // with the access token silently renewed in the background by the axios
+  // interceptor. Previously a hard 8-hour wall-clock check here force-logged
+  // users out independent of token validity, which also proved fragile
+  // around app updates (a reload racing an in-progress login could read
+  // stale loginAt data and misfire this check).
 
   useEffect(() => {
     const isPublicVendorPortal = window.location.pathname.startsWith('/vendor-rfq/');
@@ -583,14 +589,6 @@ function AuthInitializer({ children }) {
       }
     };
     window.addEventListener('auth:logout', handleAuthLogout);
-
-    // Check absolute session age before anything else
-    const { loginAt } = useAuthStore.getState();
-    if (!isPublicVendorPortal && loginAt && Date.now() - loginAt > SESSION_MAX_MS) {
-      logout();
-      navigate('/login?reason=session_expired', { replace: true });
-      return;
-    }
 
     initialize();
 
