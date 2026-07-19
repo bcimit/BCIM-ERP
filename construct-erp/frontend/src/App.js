@@ -1,6 +1,6 @@
 // src/App.js
 import React, { Suspense, lazy, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
@@ -460,10 +460,16 @@ const GLOBAL_ROLES = ['super_admin', 'admin', 'managing_director', 'director', '
 // Also enforces a project selection for scoped users (anyone not in GLOBAL_ROLES).
 const ProtectedRoute = ({ children, allowWithoutProject = false }) => {
   const { user, isInitialized, selectedProjectId } = useAuthStore();
+  const location = useLocation();
   if (!isInitialized) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (!allowWithoutProject && !GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
     return <Navigate to="/select-project" replace />;
+  }
+  // ESS custom domain: only the ESS Portal itself is reachable — every other
+  // ERP route (even ones a user's role would otherwise permit) bounces back.
+  if (isEssDomain() && location.pathname !== '/' && !location.pathname.startsWith('/ess')) {
+    return <Navigate to="/ess" replace />;
   }
   return children;
 };

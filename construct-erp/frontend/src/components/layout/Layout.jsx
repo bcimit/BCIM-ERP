@@ -2014,6 +2014,9 @@ export default function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  // ESS custom domain: strip the full ERP nav chrome — employees on
+  // bcimhr.bcim.in should only ever see the ESS Portal, not the module sidebar.
+  const essOnly = typeof window !== 'undefined' && window.location.hostname === 'bcimhr.bcim.in';
   const { language, setLanguage, t } = useLanguage();
   const isProcurementPage = location.pathname.startsWith('/procurement');
   const isChatPage = location.pathname === '/chat' || location.pathname.startsWith('/chat/');
@@ -2423,24 +2426,26 @@ export default function Layout() {
       )}
 
       {/* ── HR secondary nav ── */}
-      {pageGroup === 'HR & Admin' && <HREmployeeNav />}
+      {!essOnly && pageGroup === 'HR & Admin' && <HREmployeeNav />}
 
       {/* ── MD Quick-Access Bar ── */}
-      {isMDNavUser && <MDQuickAccessBar />}
+      {!essOnly && isMDNavUser && <MDQuickAccessBar />}
       {/* ── Procurement Quick-Access Bar ── */}
-      {isProcurementUser && <ProcurementQuickAccessBar />}
+      {!essOnly && isProcurementUser && <ProcurementQuickAccessBar />}
 
       {/* ── Page content: sidebar + main ── */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-        {/* Desktop sidebar — hidden on mobile via CSS */}
-        <DesktopSidebar
-          navGroups={orderedGroups}
-          matchesPath={matchesPath}
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(c => !c)}
-          topOffset={(pageGroup ? 80 : 52) + (isMDNavUser || isProcurementUser ? 36 : 0)}
-          recentPages={recentPages}
-        />
+        {/* Desktop sidebar — hidden on mobile via CSS, and entirely on the ESS domain */}
+        {!essOnly && (
+          <DesktopSidebar
+            navGroups={orderedGroups}
+            matchesPath={matchesPath}
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed(c => !c)}
+            topOffset={(pageGroup ? 80 : 52) + (isMDNavUser || isProcurementUser ? 36 : 0)}
+            recentPages={recentPages}
+          />
+        )}
         <main style={{ flex: 1, minWidth: 0, position: 'relative', overflow: isChatPage ? 'hidden' : 'auto', ...(isChatPage ? { display: 'flex', flexDirection: 'column' } : {}) }} className="print:overflow-visible print:h-auto">
           <Suspense fallback={<LoadingScreen />}>
             <div key={location.key} className={clsx('page-enter', isProcurementPage && 'procurement-strong-text')} style={isChatPage ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : {}}>
@@ -2450,18 +2455,20 @@ export default function Layout() {
         </main>
       </div>
 
-      {/* Mobile sidebar */}
-      <MobileSidebar
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        navGroups={orderedGroups}
-        user={user}
-        matchesPath={matchesPath}
-        recentPages={recentPages}
-      />
+      {/* Mobile sidebar — not needed on the ESS domain (no other modules to browse) */}
+      {!essOnly && (
+        <MobileSidebar
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          navGroups={orderedGroups}
+          user={user}
+          matchesPath={matchesPath}
+          recentPages={recentPages}
+        />
+      )}
 
-      {/* Mobile bottom navigation bar */}
-      <MobileBottomNav onMenuOpen={() => setMobileOpen(true)} />
+      {/* Mobile bottom navigation bar — hidden on the ESS domain */}
+      {!essOnly && <MobileBottomNav onMenuOpen={() => setMobileOpen(true)} />}
 
       {/* ── Floating Team Chat launcher — visible from anywhere except the chat
           page itself. Hidden on mobile widths where MobileBottomNav already
