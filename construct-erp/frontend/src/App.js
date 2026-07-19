@@ -482,8 +482,11 @@ const PublicRoute = ({ children }) => {
   const { user, isInitialized, selectedProjectId } = useAuthStore();
   if (!isInitialized) return <LoadingScreen />;
   if (user) {
+    // ESS domain: regular employees have no project scoping — skip the
+    // project-selection gate entirely (only HR/admin roles need it here).
+    const essExempt = isEssDomain() && !isEssFullAccessRole(user);
     // Non-global users must pick a project before entering the app
-    if (!GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
+    if (!essExempt && !GLOBAL_ROLES.includes(user.role) && !isMDDashboardUser(user) && !selectedProjectId) {
       return <Navigate to="/select-project" replace />;
     }
     return <Navigate to={getHomeRoute(user)} replace />;
@@ -494,7 +497,8 @@ const PublicRoute = ({ children }) => {
 // Smart home redirect for the index route (already authenticated)
 function HomeRedirect() {
   const { user, selectedProjectId } = useAuthStore();
-  if (user && !GLOBAL_ROLES.includes(user.role) && !selectedProjectId) {
+  const essExempt = isEssDomain() && !isEssFullAccessRole(user);
+  if (user && !essExempt && !GLOBAL_ROLES.includes(user.role) && !selectedProjectId) {
     return <Navigate to="/select-project" replace />;
   }
   return <Navigate to={getHomeRoute(user)} replace />;
