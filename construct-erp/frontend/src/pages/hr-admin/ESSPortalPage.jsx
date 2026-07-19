@@ -199,9 +199,10 @@ const TAB_ITEMS = [
   { id: 'knowledge',   label: 'Knowledge Base', Icon: BookOpen        },
 ];
 
+// Mobile-only horizontal tab bar (the desktop nav is ESSSidebar below)
 function ESSTabNav({ active, setActive }) {
   return (
-    <div className="border-b border-gray-200 bg-white px-4 shrink-0 sm:px-5">
+    <div className="border-b border-gray-200 bg-white px-4 shrink-0 sm:px-5 lg:hidden">
       <div
         className="flex items-center gap-1 overflow-x-auto py-2.5"
         style={{ scrollbarWidth: 'none' }}
@@ -225,6 +226,45 @@ function ESSTabNav({ active, setActive }) {
         })}
       </div>
     </div>
+  );
+}
+
+// Desktop vertical sidebar — the primary ESS Portal navigation for individual
+// staff logins (Zoho People / GreytHR style left nav instead of a top bar).
+function ESSSidebar({ active, setActive }) {
+  return (
+    <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-gray-100 bg-white">
+      <div className="flex items-center gap-2.5 border-b border-gray-100 px-5 py-4">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: '#EAF1FF' }}>
+          <img src="/bcim-logo.png" alt="BCIM" className="h-5 w-5 object-contain" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-gray-900">ESS Portal</p>
+          <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-gray-400">Self Service</p>
+        </div>
+      </div>
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        {TAB_ITEMS.map(({ id, label, Icon }) => {
+          const isActive = active === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActive(id)}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-all"
+              style={{
+                color:      isActive ? '#fff' : '#475569',
+                background: isActive ? ACCENT : 'transparent',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#F4F6FB'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <Icon size={16} className="shrink-0" />
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </aside>
   );
 }
 
@@ -1591,31 +1631,36 @@ export default function ESSPortalPage() {
   const navLabel = TAB_ITEMS.find(i => i.id === active)?.label || active;
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ backgroundColor: BG, fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* Horizontal tab navigation — sits inside the existing app shell */}
-      <ESSTabNav active={active} setActive={setActive} />
+    <div className="flex min-h-screen" style={{ backgroundColor: BG, fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* Desktop vertical sidebar */}
+      <ESSSidebar active={active} setActive={setActive} />
 
-      {/* Page content */}
-      <div className="flex-1 p-5">
-        {active === 'dashboard' && (
-          <DashboardTab
-            summary={summary.data || {}}
-            balances={balances.data || []}
-            serviceRequests={serviceRequests.data || []}
-            notifications={notifications.data || []}
-            profile={profile}
-            setActive={setActive}
-          />
-        )}
-        {active === 'profile'     && <ProfileTab profile={profile} balances={balances.data || []} />}
-        {active === 'attendance'  && <AttendanceTab leaveTypes={derivedLeaveTypes} />}
-        {active === 'leave'       && <LeaveTab leaveTypes={derivedLeaveTypes} />}
-        {active === 'payslips'    && <PayslipsTab />}
-        {active === 'documents'   && <DocumentsTab policies={policies.data || []} userId={userId} />}
-        {active === 'hr-requests' && <HRRequestsTab serviceRequests={serviceRequests.data || []} />}
-        {active === 'manager'     && <ManagerDeskTab />}
-        {active === 'training'    && <TrainingTab />}
-        {!FUNCTIONAL_TABS.has(active) && <ComingSoon label={navLabel} />}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile horizontal tab bar (hidden on desktop — sidebar covers it) */}
+        <ESSTabNav active={active} setActive={setActive} />
+
+        {/* Page content */}
+        <div className="flex-1 p-5">
+          {active === 'dashboard' && (
+            <DashboardTab
+              summary={summary.data || {}}
+              balances={balances.data || []}
+              serviceRequests={serviceRequests.data || []}
+              notifications={notifications.data || []}
+              profile={profile}
+              setActive={setActive}
+            />
+          )}
+          {active === 'profile'     && <ProfileTab profile={profile} balances={balances.data || []} />}
+          {active === 'attendance'  && <AttendanceTab leaveTypes={derivedLeaveTypes} />}
+          {active === 'leave'       && <LeaveTab leaveTypes={derivedLeaveTypes} />}
+          {active === 'payslips'    && <PayslipsTab />}
+          {active === 'documents'   && <DocumentsTab policies={policies.data || []} userId={userId} />}
+          {active === 'hr-requests' && <HRRequestsTab serviceRequests={serviceRequests.data || []} />}
+          {active === 'manager'     && <ManagerDeskTab />}
+          {active === 'training'    && <TrainingTab />}
+          {!FUNCTIONAL_TABS.has(active) && <ComingSoon label={navLabel} />}
+        </div>
       </div>
     </div>
   );
