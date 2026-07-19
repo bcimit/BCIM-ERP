@@ -34,6 +34,8 @@ const managerRoles = [
 ];
 
 runSchemaInit('ess-mobile', async () => {
+  // Backfill company_id on employee_profiles if the table predates this column
+  await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)`).catch(() => {});
   await query(`
     CREATE TABLE IF NOT EXISTS hr_attendance_correction_requests (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -898,7 +900,7 @@ router.get('/team-today', async (req, res) => {
         `SELECT u.name
          FROM employee_profiles ep
          JOIN users u ON u.id = ep.user_id
-         WHERE ep.company_id = $1 AND u.is_active = true
+         WHERE u.company_id = $1 AND u.is_active = true
            AND ep.date_of_birth IS NOT NULL
            AND EXTRACT(MONTH FROM ep.date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE)
            AND EXTRACT(DAY   FROM ep.date_of_birth) = EXTRACT(DAY   FROM CURRENT_DATE)
