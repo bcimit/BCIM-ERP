@@ -2242,20 +2242,6 @@ export default function Layout() {
         {/* Right actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 6px', flexShrink: 0, borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
 
-          {/* Search */}
-          <button
-            onClick={() => setPaletteOpen(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '5px 10px', borderRadius: 8,
-              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-              color: 'rgba(255,255,255,0.90)', cursor: 'pointer', fontSize: 12,
-            }}
-          >
-            <Search size={13} />
-            <span className="sm-show" style={{ fontSize: 12, display: 'none' }}>Search</span>
-            <kbd className="sm-show" style={{ display: 'none', fontSize: 9, background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.85)', padding: '1px 5px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)' }}>⌘K</kbd>
-          </button>
 
           {/* Language — hidden on mobile */}
           <div style={{ position: 'relative' }} className="lg-show">
@@ -2287,8 +2273,6 @@ export default function Layout() {
             )}
           </div>
 
-          {/* Current Project chip — switches project for the session */}
-          <ProjectChip />
 
           {/* My ESS Portal — hidden on mobile (available via bottom nav) */}
           <NavLink
@@ -2310,23 +2294,6 @@ export default function Layout() {
             <span className="sm-show" style={{ display: 'none' }}>My ESS</span>
           </NavLink>
 
-          {/* Notifications */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setNotifOpen(o => !o)}
-              style={{ position: 'relative', width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.90)', cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-              onMouseLeave={e => { if (!notifOpen) e.currentTarget.style.background = 'transparent'; }}
-            >
-              <Bell size={16} />
-              {notifCount > 0 && (
-                <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 14, height: 14, borderRadius: '50%', background: '#EF4444', border: '1.5px solid #1E3A8A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff' }}>
-                  {notifCount > 99 ? '99+' : notifCount}
-                </span>
-              )}
-            </button>
-            {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
-          </div>
 
           {/* AI Copilot (Bill Tracker pilot) */}
           {isCopilotUser && (
