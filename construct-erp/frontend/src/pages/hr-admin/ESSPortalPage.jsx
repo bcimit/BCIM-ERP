@@ -5,6 +5,7 @@ import {
   FileText, FolderUp, Headphones, Monitor, ShieldCheck, UserRound, Printer,
   ChevronLeft, ChevronRight, Upload, Camera, Trash2,
   LayoutDashboard, Clock, Users, Award, BookOpen,
+  Radio, Heart, MessageSquare, Send, Wallet, Receipt, Sparkles,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { essAPI, hrAdvancedAPI } from '../../api/client';
@@ -184,19 +185,22 @@ function groupByDate(swipes) {
    HORIZONTAL TAB NAV (replaces the standalone sidebar)
 ═══════════════════════════════════════════════════════════════ */
 const TAB_ITEMS = [
-  { id: 'dashboard',   label: 'Dashboard',     Icon: LayoutDashboard },
-  { id: 'profile',     label: 'Profile',        Icon: UserRound       },
-  { id: 'attendance',  label: 'My Attendance',  Icon: CalendarCheck   },
-  { id: 'leave',       label: 'Leave',          Icon: CalendarOff     },
-  { id: 'payslips',    label: 'Payroll',        Icon: BadgeIndianRupee},
-  { id: 'documents',   label: 'My Documents',   Icon: FileText        },
-  { id: 'hr-requests', label: 'My Requests',    Icon: FolderUp        },
-  { id: 'manager',     label: 'Manager Desk',   Icon: CheckCircle2    },
-  { id: 'timesheet',   label: 'Timesheet',      Icon: Clock           },
-  { id: 'training',    label: 'Training',       Icon: Award           },
-  { id: 'assets',      label: 'Assets',         Icon: Monitor         },
-  { id: 'helpdesk',    label: 'Helpdesk',       Icon: Headphones      },
-  { id: 'knowledge',   label: 'Knowledge Base', Icon: BookOpen        },
+  { id: 'dashboard',     label: 'Dashboard',      Icon: LayoutDashboard },
+  { id: 'engage',        label: 'Engage',         Icon: Radio           },
+  { id: 'profile',       label: 'Profile',        Icon: UserRound       },
+  { id: 'attendance',    label: 'My Attendance',  Icon: CalendarCheck   },
+  { id: 'leave',         label: 'Leave',          Icon: CalendarOff     },
+  { id: 'payslips',      label: 'Payroll',        Icon: BadgeIndianRupee},
+  { id: 'reimbursement', label: 'Reimbursements', Icon: Receipt         },
+  { id: 'loans',         label: 'Loans & Advances', Icon: Wallet        },
+  { id: 'documents',     label: 'My Documents',   Icon: FileText        },
+  { id: 'hr-requests',   label: 'My Requests',    Icon: FolderUp        },
+  { id: 'manager',       label: 'Manager Desk',   Icon: CheckCircle2    },
+  { id: 'timesheet',     label: 'Timesheet',      Icon: Clock           },
+  { id: 'training',      label: 'Training',       Icon: Award           },
+  { id: 'assets',        label: 'Assets',         Icon: Monitor         },
+  { id: 'helpdesk',      label: 'Helpdesk',       Icon: Headphones      },
+  { id: 'knowledge',     label: 'Knowledge Base', Icon: BookOpen        },
 ];
 
 // Mobile-only horizontal tab bar (the desktop nav is ESSSidebar below)
@@ -1375,8 +1379,41 @@ function LeaveTab({ leaveTypes }) {
 ═══════════════════════════════════════════════════════════════ */
 function PayslipsTab() {
   const navigate = useNavigate();
+  const now = new Date();
+  const [ytdYear, setYtdYear] = useState(now.getFullYear());
   const payslips = useQuery({ queryKey: ['ess-payslips'], queryFn: () => essAPI.payslips().then(unwrap) });
+  const ytd = useQuery({ queryKey: ['ess-ytd', ytdYear], queryFn: () => essAPI.payrollYtd({ year: ytdYear }).then(r => r.data.data) });
+  const t = ytd.data?.totals || { gross: 0, deductions: 0, net: 0 };
   return (
+    <div className="space-y-5">
+      <SectionCard
+        title="YTD Summary"
+        subtitle="Year-to-date earnings, deductions and net pay"
+        action={
+          <select className={`${inputCls} max-w-[110px]`} value={ytdYear} onChange={e => setYtdYear(Number(e.target.value))}>
+            {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        }
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Gross Earnings</p>
+            <p className="mt-1 text-xl font-extrabold text-gray-800">₹{t.gross.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total Deductions</p>
+            <p className="mt-1 text-xl font-extrabold text-red-500">₹{t.deductions.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Net Paid</p>
+            <p className="mt-1 text-xl font-extrabold" style={{ color: ACCENT }}>₹{t.net.toLocaleString('en-IN')}</p>
+          </div>
+        </div>
+        {!(ytd.data?.months || []).length && !ytd.isLoading && (
+          <p className="mt-3 text-center text-xs text-gray-400">No payroll records for {ytdYear}</p>
+        )}
+      </SectionCard>
+
     <SectionCard title="Payslips" subtitle="Approved and paid payslips">
       <Table
         columns={[
@@ -1401,6 +1438,7 @@ function PayslipsTab() {
         rows={payslips.data || []}
       />
     </SectionCard>
+    </div>
   );
 }
 
@@ -2149,6 +2187,348 @@ function KnowledgeTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   ENGAGE TAB — social feed (posts + kudos)
+═══════════════════════════════════════════════════════════════ */
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+const KUDOS_BADGES = ['Great Work', 'Team Player', 'Innovation', 'Above & Beyond', 'Customer Hero', 'Helping Hand'];
+const POST_GROUPS  = ['General', 'Company News', 'Events', 'Appreciations', 'Buy/Sell/Rent'];
+
+function Avatar({ name, photo, size = 40 }) {
+  const initials = (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  if (photo) return <img src={photo} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+  return (
+    <div className="flex items-center justify-center rounded-full font-bold text-white"
+      style={{ width: size, height: size, fontSize: size * 0.38, background: ACCENT }}>
+      {initials}
+    </div>
+  );
+}
+
+function EngageComments({ postId }) {
+  const qc = useQueryClient();
+  const comments = useQuery({ queryKey: ['ess-engage-comments', postId], queryFn: () => essAPI.engageComments(postId).then(unwrap) });
+  const [text, setText] = useState('');
+  const add = useMutation({
+    mutationFn: () => essAPI.addEngageComment(postId, text),
+    onSuccess:  () => { setText(''); qc.invalidateQueries({ queryKey: ['ess-engage-comments', postId] }); qc.invalidateQueries({ queryKey: ['ess-engage'] }); },
+  });
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3">
+      <div className="space-y-3">
+        {(comments.data || []).map(c => (
+          <div key={c.id} className="flex gap-2">
+            <Avatar name={c.author_name} photo={c.author_photo} size={28} />
+            <div className="flex-1 rounded-lg bg-gray-50 px-3 py-2">
+              <p className="text-xs font-semibold text-gray-800">{c.author_name} <span className="ml-1 font-normal text-gray-400">{timeAgo(c.created_at)}</span></p>
+              <p className="text-sm text-gray-700">{c.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input className={inputCls} value={text} placeholder="Write a comment…"
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && text.trim()) add.mutate(); }} />
+        <button onClick={() => text.trim() && add.mutate()} disabled={add.isPending}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white disabled:opacity-50" style={{ background: ACCENT }}>
+          <Send size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EngageCard({ post }) {
+  const qc = useQueryClient();
+  const [showComments, setShowComments] = useState(false);
+  const react = useMutation({
+    mutationFn: () => essAPI.reactEngage(post.id, '❤️'),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['ess-engage'] }),
+  });
+  const liked = Boolean(post.my_reaction);
+  const isKudos = post.type === 'kudos';
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="p-4">
+        <div className="flex items-center gap-3">
+          <Avatar name={post.author_name} photo={post.author_photo} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-gray-900">{post.author_name}</p>
+            <p className="text-xs text-gray-400">
+              {post.group_name ? `${post.group_name} · ` : ''}{timeAgo(post.created_at)}
+            </p>
+          </div>
+          {isKudos && (
+            <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+              <Sparkles size={12} /> {post.kudos_badge || 'Kudos'}
+            </span>
+          )}
+        </div>
+
+        {isKudos ? (
+          <div className="mt-3 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-teal-50 p-4 text-center">
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold text-gray-900">{post.author_name}</span> appreciated{' '}
+              <span className="font-semibold" style={{ color: ACCENT }}>{post.kudos_to_name}</span>
+            </p>
+            {post.body && <p className="mt-2 text-sm italic text-gray-700">“{post.body}”</p>}
+          </div>
+        ) : (
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{post.body}</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4 border-t border-gray-100 px-4 py-2">
+        <button onClick={() => react.mutate()} className="flex items-center gap-1.5 text-sm font-medium transition"
+          style={{ color: liked ? '#e11d48' : '#64748b' }}>
+          <Heart size={16} fill={liked ? '#e11d48' : 'none'} /> {Number(post.reaction_count) || 0}
+        </button>
+        <button onClick={() => setShowComments(s => !s)} className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+          <MessageSquare size={16} /> {Number(post.comment_count) || 0}
+        </button>
+      </div>
+
+      {showComments && <div className="px-4 pb-4"><EngageComments postId={post.id} /></div>}
+    </div>
+  );
+}
+
+function EngageTab({ profile }) {
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState('');            // '' | 'post' | 'kudos'
+  const [mode, setMode]     = useState('post');        // composer mode
+  const [postBody, setPostBody]   = useState('');
+  const [postGroup, setPostGroup] = useState('General');
+  const [kudosTo, setKudosTo]     = useState('');
+  const [kudosBadge, setKudosBadge] = useState('Great Work');
+  const [kudosMsg, setKudosMsg]   = useState('');
+
+  const feed       = useQuery({ queryKey: ['ess-engage', filter], queryFn: () => essAPI.engageFeed(filter ? { type: filter } : {}).then(unwrap) });
+  const colleagues = useQuery({ queryKey: ['ess-colleagues'], queryFn: () => essAPI.colleagues().then(unwrap), enabled: mode === 'kudos' });
+
+  const create = useMutation({
+    mutationFn: () => mode === 'kudos'
+      ? essAPI.createEngagePost({ type: 'kudos', kudos_to: kudosTo, kudos_badge: kudosBadge, body: kudosMsg })
+      : essAPI.createEngagePost({ type: 'post', body: postBody, group_name: postGroup }),
+    onSuccess: () => {
+      toast.success(mode === 'kudos' ? 'Kudos given!' : 'Posted!');
+      setPostBody(''); setKudosMsg(''); setKudosTo('');
+      qc.invalidateQueries({ queryKey: ['ess-engage'] });
+    },
+    onError: (e) => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+
+  return (
+    <div className="space-y-5">
+      {/* Composer */}
+      <SectionCard noPad>
+        <div className="flex gap-1 border-b border-gray-100 p-2">
+          {[['post', 'Write Post', Radio], ['kudos', 'Give Kudos', Award]].map(([m, label, Icon]) => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${mode === m ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+              style={{ background: mode === m ? ACCENT : 'transparent' }}>
+              <Icon size={16} /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="p-4">
+          <div className="flex gap-3">
+            <Avatar name={profile?.name} photo={profile?.profile_photo_url} />
+            <div className="flex-1 space-y-3">
+              {mode === 'post' ? (
+                <>
+                  <textarea className={inputCls} rows={3} value={postBody} placeholder="Share something with your team…"
+                    onChange={e => setPostBody(e.target.value)} />
+                  <div className="flex items-center justify-between">
+                    <select className={`${inputCls} max-w-[180px]`} value={postGroup} onChange={e => setPostGroup(e.target.value)}>
+                      {POST_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                    <GreenBtn disabled={!postBody.trim() || create.isPending} onClick={() => create.mutate()}>
+                      <Send size={15} /> Post
+                    </GreenBtn>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field title="Appreciate">
+                      <select className={inputCls} value={kudosTo} onChange={e => setKudosTo(e.target.value)}>
+                        <option value="">Select a colleague…</option>
+                        {(colleagues.data || []).map(c => <option key={c.id} value={c.id}>{c.name}{c.designation_name ? ` — ${c.designation_name}` : ''}</option>)}
+                      </select>
+                    </Field>
+                    <Field title="Badge">
+                      <select className={inputCls} value={kudosBadge} onChange={e => setKudosBadge(e.target.value)}>
+                        {KUDOS_BADGES.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <textarea className={inputCls} rows={2} value={kudosMsg} placeholder="Add a message (optional)…"
+                    onChange={e => setKudosMsg(e.target.value)} />
+                  <div className="flex justify-end">
+                    <GreenBtn disabled={!kudosTo || create.isPending} onClick={() => create.mutate()}>
+                      <Award size={15} /> Give Kudos
+                    </GreenBtn>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Filter */}
+      <div className="flex gap-2">
+        {[['', 'All Activities'], ['post', 'Posts'], ['kudos', 'Kudos']].map(([v, label]) => (
+          <button key={v} onClick={() => setFilter(v)}
+            className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${filter === v ? 'text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+            style={{ background: filter === v ? ACCENT : undefined }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Feed */}
+      {feed.isLoading ? (
+        <p className="py-8 text-center text-sm text-gray-400">Loading feed…</p>
+      ) : !(feed.data || []).length ? (
+        <SectionCard><p className="py-8 text-center text-sm text-gray-400">No activity yet. Be the first to post or give kudos!</p></SectionCard>
+      ) : (
+        <div className="space-y-4">
+          {(feed.data || []).map(p => <EngageCard key={p.id} post={p} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REIMBURSEMENTS TAB
+═══════════════════════════════════════════════════════════════ */
+function ReimbursementsTab() {
+  const qc = useQueryClient();
+  const claims = useQuery({ queryKey: ['ess-reimbursements'], queryFn: () => essAPI.reimbursements().then(unwrap) });
+  const [form, setForm] = useState({ expense_type: 'travel', amount: '', description: '' });
+  const submit = useMutation({
+    mutationFn: () => essAPI.createReimbursement(form),
+    onSuccess:  () => { toast.success('Claim submitted'); setForm({ expense_type: 'travel', amount: '', description: '' }); qc.invalidateQueries({ queryKey: ['ess-reimbursements'] }); },
+    onError:    (e) => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+  return (
+    <div className="space-y-5">
+      <SectionCard title="Submit a Reimbursement Claim" subtitle="Travel, food, supplies and other work expenses">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field title="Expense Type">
+            <select className={inputCls} value={form.expense_type} onChange={e => setForm({ ...form, expense_type: e.target.value })}>
+              <option value="travel">Travel</option>
+              <option value="food">Food</option>
+              <option value="accommodation">Accommodation</option>
+              <option value="supplies">Supplies</option>
+              <option value="fuel">Fuel</option>
+              <option value="general">General</option>
+            </select>
+          </Field>
+          <Field title="Amount (₹)">
+            <input type="number" className={inputCls} value={form.amount} placeholder="0.00"
+              onChange={e => setForm({ ...form, amount: e.target.value })} />
+          </Field>
+          <Field title="Description">
+            <input className={inputCls} value={form.description} placeholder="What was it for?"
+              onChange={e => setForm({ ...form, description: e.target.value })} />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <GreenBtn disabled={!form.amount || submit.isPending} onClick={() => submit.mutate()}>
+            <Receipt size={16} /> Submit Claim
+          </GreenBtn>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="My Claims">
+        <Table
+          columns={[
+            { key: 'claim_date',   label: 'Date', render: r => String(r.claim_date||'').slice(0,10) },
+            { key: 'expense_type', label: 'Type', render: r => <span className="capitalize">{r.expense_type}</span> },
+            { key: 'description',  label: 'Description' },
+            { key: 'amount',       label: 'Amount', render: r => `₹${Number(r.amount||0).toLocaleString('en-IN')}` },
+            { key: 'status',       label: 'Status', render: r => <StatusBadge value={r.status} /> },
+          ]}
+          rows={claims.data || []}
+          empty="No reimbursement claims yet"
+        />
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOANS & ADVANCES TAB
+═══════════════════════════════════════════════════════════════ */
+function LoansTab() {
+  const qc = useQueryClient();
+  const loans = useQuery({ queryKey: ['ess-loans'], queryFn: () => essAPI.loans().then(unwrap) });
+  const [form, setForm] = useState({ loan_type: 'advance', amount: '', reason: '' });
+  const submit = useMutation({
+    mutationFn: () => essAPI.requestLoan(form),
+    onSuccess:  () => { toast.success('Request submitted'); setForm({ loan_type: 'advance', amount: '', reason: '' }); qc.invalidateQueries({ queryKey: ['ess-loans'] }); },
+    onError:    (e) => toast.error(e?.response?.data?.error || 'Failed'),
+  });
+  return (
+    <div className="space-y-5">
+      <SectionCard title="Request a Loan / Advance" subtitle="Salary advances and staff loans (subject to HR approval)">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field title="Type">
+            <select className={inputCls} value={form.loan_type} onChange={e => setForm({ ...form, loan_type: e.target.value })}>
+              <option value="advance">Salary Advance</option>
+              <option value="personal">Personal Loan</option>
+              <option value="emergency">Emergency Loan</option>
+            </select>
+          </Field>
+          <Field title="Amount (₹)">
+            <input type="number" className={inputCls} value={form.amount} placeholder="0.00"
+              onChange={e => setForm({ ...form, amount: e.target.value })} />
+          </Field>
+          <Field title="Reason">
+            <input className={inputCls} value={form.reason} placeholder="Purpose of the request"
+              onChange={e => setForm({ ...form, reason: e.target.value })} />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <GreenBtn disabled={!form.amount || submit.isPending} onClick={() => submit.mutate()}>
+            <Wallet size={16} /> Submit Request
+          </GreenBtn>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="My Loans & Advances">
+        <Table
+          columns={[
+            { key: 'requested_date', label: 'Requested', render: r => String(r.requested_date||'').slice(0,10) },
+            { key: 'loan_type',   label: 'Type', render: r => <span className="capitalize">{r.loan_type}</span> },
+            { key: 'amount',      label: 'Amount', render: r => `₹${Number(r.amount||0).toLocaleString('en-IN')}` },
+            { key: 'balance_amount', label: 'Balance', render: r => r.status === 'disbursed' || Number(r.balance_amount) ? `₹${Number(r.balance_amount||0).toLocaleString('en-IN')}` : '-' },
+            { key: 'status',      label: 'Status', render: r => <StatusBadge value={r.status} /> },
+          ]}
+          rows={loans.data || []}
+          empty="No loan or advance requests yet"
+        />
+      </SectionCard>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    COMING SOON PLACEHOLDER
 ═══════════════════════════════════════════════════════════════ */
 function ComingSoon({ label }) {
@@ -2168,7 +2548,7 @@ function ComingSoon({ label }) {
 /* ═══════════════════════════════════════════════════════════════
    ROOT PAGE
 ═══════════════════════════════════════════════════════════════ */
-const FUNCTIONAL_TABS = new Set(['dashboard','profile','attendance','leave','payslips','documents','hr-requests','manager','training','timesheet','assets','helpdesk','knowledge']);
+const FUNCTIONAL_TABS = new Set(['dashboard','engage','profile','attendance','leave','payslips','reimbursement','loans','documents','hr-requests','manager','training','timesheet','assets','helpdesk','knowledge']);
 
 export default function ESSPortalPage() {
   const now     = new Date();
@@ -2240,6 +2620,9 @@ export default function ESSPortalPage() {
           {active === 'assets'      && <AssetsTab />}
           {active === 'helpdesk'    && <HelpdeskTab />}
           {active === 'knowledge'   && <KnowledgeTab />}
+          {active === 'engage'      && <EngageTab profile={profile} />}
+          {active === 'reimbursement' && <ReimbursementsTab />}
+          {active === 'loans'       && <LoansTab />}
           {!FUNCTIONAL_TABS.has(active) && <ComingSoon label={navLabel} />}
         </div>
       </div>

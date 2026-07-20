@@ -2205,6 +2205,19 @@ export const essAPI = {
   helpdeskTickets:      ()             => api.get('/ess/helpdesk'),
   createHelpdeskTicket: (data)         => api.post('/ess/helpdesk', data),
   knowledge:            ()             => api.get('/ess/knowledge'),
+  // Engage
+  colleagues:           ()             => api.get('/ess/colleagues'),
+  engageFeed:           (params)       => api.get('/ess/engage', { params }),
+  createEngagePost:     (data)         => api.post('/ess/engage', data),
+  reactEngage:          (id, emoji)    => api.post(`/ess/engage/${id}/react`, { emoji }),
+  engageComments:       (id)           => api.get(`/ess/engage/${id}/comments`),
+  addEngageComment:     (id, body)     => api.post(`/ess/engage/${id}/comments`, { body }),
+  // Salary
+  payrollYtd:           (params)       => api.get('/ess/payroll/ytd', { params }),
+  loans:                ()             => api.get('/ess/loans'),
+  requestLoan:          (data)         => api.post('/ess/loans', data),
+  reimbursements:       ()             => api.get('/ess/reimbursements'),
+  createReimbursement:  (data)         => api.post('/ess/reimbursements', data),
 };
 
 export const notificationsAPI = {

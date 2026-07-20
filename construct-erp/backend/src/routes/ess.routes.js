@@ -1048,6 +1048,258 @@ router.patch('/onboarding/:id', requireManager, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+//  ENGAGE — social feed (posts + kudos), reactions & comments
+// ═══════════════════════════════════════════════════════════════
+runSchemaInit('ess-engage', async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS ess_posts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id UUID REFERENCES companies(id),
+      author_id UUID REFERENCES users(id),
+      type TEXT DEFAULT 'post' CHECK (type IN ('post','kudos')),
+      body TEXT,
+      group_name TEXT DEFAULT 'General',
+      kudos_to UUID REFERENCES users(id),
+      kudos_badge TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS ess_post_reactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id UUID REFERENCES ess_posts(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id),
+      emoji TEXT DEFAULT '👍',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(post_id, user_id)
+    )
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS ess_post_comments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id UUID REFERENCES ess_posts(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id),
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+});
+
+// Colleague list for the kudos recipient picker
+router.get('/colleagues', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.name, u.employee_code, des.name AS designation_name
+         FROM users u
+         LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+         LEFT JOIN hr_designations des ON des.id = ep.designation_id
+        WHERE u.company_id = $1 AND u.is_active = true AND u.id <> $2
+        ORDER BY u.name`,
+      [ownCompany(req), ownUser(req)]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Feed — posts + kudos with author, reaction summary, comment count, my reaction
+router.get('/engage', async (req, res) => {
+  try {
+    const { type } = req.query;
+    const params = [ownCompany(req), ownUser(req)];
+    let typeFilter = '';
+    if (type === 'post' || type === 'kudos') { typeFilter = ' AND p.type = $3'; params.push(type); }
+    const { rows } = await query(
+      `SELECT p.id, p.type, p.body, p.group_name, p.kudos_badge, p.created_at,
+              a.name AS author_name, a.employee_code AS author_code,
+              ep.profile_photo_url AS author_photo,
+              k.name AS kudos_to_name,
+              COUNT(DISTINCT r.id)                          AS reaction_count,
+              COUNT(DISTINCT c.id)                          AS comment_count,
+              MAX(mr.emoji)                                 AS my_reaction
+         FROM ess_posts p
+         JOIN users a ON a.id = p.author_id
+         LEFT JOIN employee_profiles ep ON ep.user_id = a.id
+         LEFT JOIN users k ON k.id = p.kudos_to
+         LEFT JOIN ess_post_reactions r ON r.post_id = p.id
+         LEFT JOIN ess_post_comments  c ON c.post_id = p.id
+         LEFT JOIN ess_post_reactions mr ON mr.post_id = p.id AND mr.user_id = $2
+        WHERE p.company_id = $1${typeFilter}
+        GROUP BY p.id, a.name, a.employee_code, ep.profile_photo_url, k.name
+        ORDER BY p.created_at DESC
+        LIMIT 100`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a post or give kudos
+router.post('/engage', async (req, res) => {
+  try {
+    const { type = 'post', body, group_name = 'General', kudos_to, kudos_badge } = req.body;
+    if (type === 'kudos') {
+      if (!kudos_to) return res.status(400).json({ error: 'Select who to appreciate' });
+    } else if (!body || !String(body).trim()) {
+      return res.status(400).json({ error: 'Write something to post' });
+    }
+    const { rows } = await query(
+      `INSERT INTO ess_posts (company_id, author_id, type, body, group_name, kudos_to, kudos_badge)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [ownCompany(req), ownUser(req), type, body || null, group_name,
+       type === 'kudos' ? kudos_to : null, type === 'kudos' ? (kudos_badge || 'Great Work') : null]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Toggle a reaction (same emoji again removes it)
+router.post('/engage/:id/react', async (req, res) => {
+  try {
+    const emoji = req.body.emoji || '👍';
+    const existing = await query(
+      `SELECT emoji FROM ess_post_reactions WHERE post_id = $1 AND user_id = $2`,
+      [req.params.id, ownUser(req)]
+    );
+    if (existing.rows.length && existing.rows[0].emoji === emoji) {
+      await query(`DELETE FROM ess_post_reactions WHERE post_id = $1 AND user_id = $2`, [req.params.id, ownUser(req)]);
+      return res.json({ data: { reacted: false } });
+    }
+    await query(
+      `INSERT INTO ess_post_reactions (post_id, user_id, emoji) VALUES ($1,$2,$3)
+       ON CONFLICT (post_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = NOW()`,
+      [req.params.id, ownUser(req), emoji]
+    );
+    res.json({ data: { reacted: true, emoji } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/engage/:id/comments', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT c.id, c.body, c.created_at, u.name AS author_name,
+              ep.profile_photo_url AS author_photo
+         FROM ess_post_comments c
+         JOIN users u ON u.id = c.user_id
+         LEFT JOIN employee_profiles ep ON ep.user_id = u.id
+        WHERE c.post_id = $1
+        ORDER BY c.created_at ASC`,
+      [req.params.id]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/engage/:id/comments', async (req, res) => {
+  try {
+    const { body } = req.body;
+    if (!body || !String(body).trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+    const { rows } = await query(
+      `INSERT INTO ess_post_comments (post_id, user_id, body) VALUES ($1,$2,$3)
+       RETURNING id, body, created_at`,
+      [req.params.id, ownUser(req), body.trim()]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SALARY — YTD report, loans/advances, reimbursements
+// ═══════════════════════════════════════════════════════════════
+router.get('/payroll/ytd', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const { rows } = await query(
+      `SELECT month, year, gross_earnings, total_deductions, net_pay, paid_days, lop_days
+         FROM hr_monthly_payroll
+        WHERE company_id = $1 AND user_id = $2 AND year = $3 AND status IN ('approved','paid')
+        ORDER BY month`,
+      [ownCompany(req), ownUser(req), year]
+    );
+    const totals = rows.reduce((a, r) => ({
+      gross:      a.gross      + Number(r.gross_earnings   || 0),
+      deductions: a.deductions + Number(r.total_deductions || 0),
+      net:        a.net        + Number(r.net_pay          || 0),
+    }), { gross: 0, deductions: 0, net: 0 });
+    res.json({ data: { year, months: rows, totals } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/loans', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, loan_type, amount, reason, requested_date, status,
+              disbursed_date, emi_amount, emi_months, balance_amount, repaid_amount
+         FROM hr_loans
+        WHERE company_id = $1 AND user_id = $2
+        ORDER BY requested_date DESC`,
+      [ownCompany(req), ownUser(req)]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/loans', async (req, res) => {
+  try {
+    const { loan_type = 'advance', amount, reason } = req.body;
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'Enter a valid amount' });
+    const { rows } = await query(
+      `INSERT INTO hr_loans (company_id, user_id, loan_type, amount, reason, status)
+       VALUES ($1,$2,$3,$4,$5,'pending') RETURNING id, loan_type, amount, status, requested_date`,
+      [ownCompany(req), ownUser(req), loan_type, Number(amount), reason || null]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/reimbursements', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, claim_date, expense_type, amount, description, status, paid_date
+         FROM hr_expense_claims
+        WHERE company_id = $1 AND user_id = $2
+        ORDER BY claim_date DESC`,
+      [ownCompany(req), ownUser(req)]
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/reimbursements', async (req, res) => {
+  try {
+    const { expense_type, amount, description } = req.body;
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'Enter a valid amount' });
+    const { rows } = await query(
+      `INSERT INTO hr_expense_claims (company_id, user_id, expense_type, amount, description, status)
+       VALUES ($1,$2,$3,$4,$5,'pending') RETURNING id, expense_type, amount, status, claim_date`,
+      [ownCompany(req), ownUser(req), expense_type || 'general', Number(amount), description || null]
+    );
+    res.status(201).json({ data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
 //  MY ASSETS — employee's allocated company assets (read-only)
 // ═══════════════════════════════════════════════════════════════
 router.get('/assets', async (req, res) => {
