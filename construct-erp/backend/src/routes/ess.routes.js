@@ -38,6 +38,11 @@ runSchemaInit('employee-profiles-add-company-id-v2', async () => {
   await query(`ALTER TABLE employee_profiles ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)`);
 });
 
+// notifications table may have been created before company_id was added
+runSchemaInit('notifications-add-company-id-v1', async () => {
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id)`);
+});
+
 runSchemaInit('ess-mobile', async () => {
   await query(`
     CREATE TABLE IF NOT EXISTS hr_attendance_correction_requests (
