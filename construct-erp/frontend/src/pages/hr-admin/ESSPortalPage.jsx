@@ -809,23 +809,23 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
 function ProfileTab({ profile, balances }) {
   const name = profile?.name || 'Employee';
   const p = profile || {};
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
 
   const fmtDate = (d) => d
     ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
   const cap = (s) => s ? String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : null;
 
-  // Field grid: renders only the rows that have a value, so partially-filled
-  // profiles never show a wall of dashes.
   const InfoGrid = ({ fields }) => {
     const rows = fields.filter(([, v]) => v !== null && v !== undefined && v !== '');
-    if (!rows.length) return <p className="text-sm text-gray-400">Not yet on file. Contact HR to update.</p>;
+    if (!rows.length) return <p style={{ fontSize:13, color:'#94A3B8' }}>Not yet on file. Contact HR to update.</p>;
     return (
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'14px 24px' }}>
         {rows.map(([lbl, val]) => (
           <div key={lbl}>
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">{lbl}</p>
-            <p className="mt-0.5 text-sm font-semibold text-gray-800 break-words">{val}</p>
+            <p style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'0.07em', color:'#94A3B8', fontWeight:600 }}>{lbl}</p>
+            <p style={{ marginTop:3, fontSize:13, fontWeight:600, color:'#1E293B', wordBreak:'break-words' }}>{val}</p>
           </div>
         ))}
       </div>
@@ -833,101 +833,72 @@ function ProfileTab({ profile, balances }) {
   };
 
   return (
-    <div className="space-y-5">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       {/* Header card */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="h-20" style={{ background: `linear-gradient(120deg, ${ACCENT}, ${TEAL})` }} />
-        <div className="px-6 pb-6">
-          <div className="-mt-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex items-end gap-4">
-              <div className="rounded-full bg-white p-1 shadow">
+      <div style={{ ...GCA, overflow:'hidden' }}>
+        <div style={{ height:80, background:`linear-gradient(120deg, ${ACCENT}, ${TEAL})` }} />
+        <div style={{ padding:'0 24px 24px' }}>
+          <div style={{ marginTop:-40, display:'flex', flexWrap:'wrap', gap:16, alignItems:'flex-end', justifyContent:'space-between' }}>
+            <div style={{ display:'flex', alignItems:'flex-end', gap:16 }}>
+              <div style={{ background:'#fff', padding:4, borderRadius:'50%', boxShadow:'0 2px 8px rgba(0,0,0,0.14)' }}>
                 <ProfilePhotoAvatar profile={profile} size={84} editable />
               </div>
-              <div className="pb-1">
-                <p className="text-xl font-bold text-gray-900">{name}</p>
-                <p className="text-sm text-gray-500">{p.designation_name || cap(p.role) || 'â€”'}</p>
+              <div style={{ paddingBottom:4 }}>
+                <p style={{ fontSize:20, fontWeight:800, color:'#0F172A', margin:0 }}>{name}</p>
+                <p style={{ fontSize:13, color:'#64748B', margin:0 }}>{p.designation_name || cap(p.role) || 'â€”'}</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 pb-1">
-              {p.employee_code && <span className="rounded-full px-3 py-1 text-[11px] font-bold" style={{ background: '#EAF1FF', color: ACCENT }}>{p.employee_code}</span>}
-              {p.department_name && <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">{p.department_name}</span>}
-              {p.employment_status && <span className="rounded-full px-3 py-1 text-[11px] font-semibold" style={{ background: '#E1F5EE', color: '#0F6E56' }}>{cap(p.employment_status)}</span>}
+            <div style={{ display:'flex', flexWrap:'wrap', gap:8, paddingBottom:4 }}>
+              {p.employee_code && <span style={{ background:'#EAF1FF', color:ACCENT, borderRadius:99, padding:'3px 12px', fontSize:11, fontWeight:700 }}>{p.employee_code}</span>}
+              {p.department_name && <span style={{ background:'#F1F5F9', color:'#475569', borderRadius:99, padding:'3px 12px', fontSize:11, fontWeight:600 }}>{p.department_name}</span>}
+              {p.employment_status && <span style={{ background:'#E1F5EE', color:'#0F6E56', borderRadius:99, padding:'3px 12px', fontSize:11, fontWeight:600 }}>{cap(p.employment_status)}</span>}
             </div>
           </div>
         </div>
       </div>
 
-      <SectionCard title="Personal Information">
-        <InfoGrid fields={[
-          ['Full Name',      name],
-          ['Date of Birth',  fmtDate(p.date_of_birth)],
-          ['Gender',         cap(p.gender)],
-          ['Blood Group',    p.blood_group],
-          ['Marital Status', cap(p.marital_status)],
-          ['Nationality',    p.nationality],
-          ["Father's Name",  p.father_name],
-        ]} />
-      </SectionCard>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Personal Information</span>
+        <InfoGrid fields={[['Full Name',name],['Date of Birth',fmtDate(p.date_of_birth)],['Gender',cap(p.gender)],['Blood Group',p.blood_group],['Marital Status',cap(p.marital_status)],['Nationality',p.nationality],[`Father's Name`,p.father_name]]} />
+      </div>
 
-      <SectionCard title="Contact Details">
-        <InfoGrid fields={[
-          ['Email',            p.email],
-          ['Phone',            p.phone],
-          ['Current Address',  p.current_address],
-          ['Permanent Address',p.permanent_address],
-          ['Emergency Contact',p.emergency_contact_name],
-          ['Emergency Phone',  p.emergency_contact_phone],
-        ]} />
-      </SectionCard>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Contact Details</span>
+        <InfoGrid fields={[['Email',p.email],['Phone',p.phone],['Current Address',p.current_address],['Permanent Address',p.permanent_address],['Emergency Contact',p.emergency_contact_name],['Emergency Phone',p.emergency_contact_phone]]} />
+      </div>
 
-      <SectionCard title="Employment">
-        <InfoGrid fields={[
-          ['Designation',       p.designation_name],
-          ['Department',        p.department_name],
-          ['Reporting Manager', p.reporting_manager_name],
-          ['Work Location',     p.work_location],
-          ['Employee Category', cap(p.employee_category)],
-          ['Employment Type',   cap(p.employment_type)],
-          ['Date of Joining',   fmtDate(p.date_of_joining)],
-          ['Date of Confirmation', fmtDate(p.date_of_confirmation)],
-        ]} />
-      </SectionCard>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Employment</span>
+        <InfoGrid fields={[['Designation',p.designation_name],['Department',p.department_name],['Reporting Manager',p.reporting_manager_name],['Work Location',p.work_location],['Employee Category',cap(p.employee_category)],['Employment Type',cap(p.employment_type)],['Date of Joining',fmtDate(p.date_of_joining)],['Date of Confirmation',fmtDate(p.date_of_confirmation)]]} />
+      </div>
 
-      <SectionCard title="Bank & Statutory" subtitle="Sensitive details are partially masked">
-        <InfoGrid fields={[
-          ['Bank',        p.bank_name],
-          ['Account No.', p.bank_account_last4 ? `â€¢â€¢â€¢â€¢ ${p.bank_account_last4}` : null],
-          ['IFSC',        p.bank_ifsc],
-          ['PAN',         p.pan_number],
-          ['UAN',         p.uan_number],
-          ['PF Account',  p.pf_account_number],
-          ['ESI No.',     p.esi_number],
-        ]} />
-      </SectionCard>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Bank & Statutory</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Sensitive details are partially masked</p>
+        <InfoGrid fields={[['Bank',p.bank_name],['Account No.',p.bank_account_last4?`â€¢â€¢â€¢â€¢ ${p.bank_account_last4}`:null],['IFSC',p.bank_ifsc],['PAN',p.pan_number],['UAN',p.uan_number],['PF Account',p.pf_account_number],['ESI No.',p.esi_number]]} />
+      </div>
 
-      {/* Leave balances */}
       {(balances || []).length > 0 && (
-        <SectionCard title="Leave Balances">
-          <div className="flex flex-wrap gap-4">
+        <div style={{ ...GCA, padding:20 }}>
+          <span style={STA}>Leave Balances</span>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:12 }}>
             {(balances || []).map((b) => {
-              const taken   = Number(b.taken   ?? 0);
-              const accrued = Number(b.accrued ?? 0);
-              const avail   = Number(b.closing_balance ?? 0);
-              const pct     = accrued > 0 ? Math.min(100, Math.round((taken / accrued) * 100)) : 0;
+              const taken = Number(b.taken??0), accrued = Number(b.accrued??0), avail = Number(b.closing_balance??0);
+              const pct = accrued > 0 ? Math.min(100, Math.round((taken/accrued)*100)) : 0;
               return (
-                <div key={b.leave_type_id} className="min-w-[150px] rounded-xl border border-gray-200 p-4 bg-gray-50">
-                  <p className="text-xs font-semibold text-gray-500 truncate">{b.leave_type_name}</p>
-                  <p className="mt-2 text-3xl font-extrabold" style={{ color: ACCENT }}>{avail.toFixed(1)}</p>
-                  <p className="text-[11px] text-gray-400">Available</p>
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200">
-                    <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: ACCENT }} />
+                <div key={b.leave_type_id} style={{ minWidth:150, background:'rgba(47,111,237,0.04)', border:'1px solid rgba(47,111,237,0.12)', borderRadius:12, padding:16 }}>
+                  <p style={{ fontSize:11.5, fontWeight:600, color:'#64748B', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.leave_type_name}</p>
+                  <p style={{ marginTop:8, fontSize:28, fontWeight:800, color:ACCENT, lineHeight:1 }}>{avail.toFixed(1)}</p>
+                  <p style={{ fontSize:10.5, color:'#94A3B8' }}>Available</p>
+                  <div style={{ marginTop:8, height:4, background:'rgba(0,0,0,0.06)', borderRadius:99 }}>
+                    <div style={{ height:4, borderRadius:99, width:`${pct}%`, background:ACCENT }} />
                   </div>
-                  <p className="mt-1 text-[10px] text-gray-400">{taken} taken / {accrued} accrued</p>
+                  <p style={{ marginTop:4, fontSize:10, color:'#94A3B8' }}>{taken} taken / {accrued} accrued</p>
                 </div>
               );
             })}
           </div>
-        </SectionCard>
+        </div>
       )}
     </div>
   );
@@ -1267,6 +1238,8 @@ function LeaveTab({ leaveTypes }) {
   const balances = useQuery({ queryKey: ['ess-leave-balances'],  queryFn: () => essAPI.leaveBalances().then(unwrap) });
   const requests = useQuery({ queryKey: ['ess-leave-requests'],  queryFn: () => essAPI.leaveRequests().then(unwrap) });
   const [leave, setLeave] = useState({ leave_type_id: '', from_date: today(), to_date: today(), reason: '' });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const refresh = () => ['ess-leave-balances','ess-leave-requests','ess-summary','ess-leave-requests-dash'].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
   const createLeave = useMutation({
     mutationFn: essAPI.createLeaveRequest,
@@ -1275,57 +1248,60 @@ function LeaveTab({ leaveTypes }) {
   const cancelLeave = useMutation({ mutationFn: essAPI.cancelLeaveRequest, onSuccess: refresh, onError: (e) => toast.error(e?.response?.data?.error || 'Failed to cancel leave') });
 
   return (
-    <div className="space-y-5">
-      <div className="flex gap-4 overflow-x-auto pb-1">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {/* Balance chips */}
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
         {(balances.data || []).map((b) => {
-          const taken   = Number(b.taken   ?? 0);
-          const accrued = Number(b.accrued ?? 0);
-          const avail   = Number(b.closing_balance ?? 0);
-          const pct     = accrued > 0 ? Math.min(100, Math.round((taken / accrued) * 100)) : 0;
+          const taken = Number(b.taken??0), accrued = Number(b.accrued??0), avail = Number(b.closing_balance??0);
+          const pct = accrued > 0 ? Math.min(100, Math.round((taken/accrued)*100)) : 0;
           return (
-            <div key={b.leave_type_id} className="min-w-[150px] rounded-xl border border-gray-200 bg-white p-4 shadow-sm shrink-0">
-              <p className="text-xs font-semibold text-gray-500 truncate">{b.leave_type_name}</p>
-              <p className="mt-2 text-3xl font-extrabold" style={{ color: ACCENT }}>{avail.toFixed(1)}</p>
-              <p className="text-[11px] text-gray-400">Available</p>
-              <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100">
-                <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: ACCENT }} />
+            <div key={b.leave_type_id} style={{ minWidth:150, ...GCA, padding:16, flexShrink:0 }}>
+              <p style={{ fontSize:11.5, fontWeight:600, color:'#64748B', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.leave_type_name}</p>
+              <p style={{ marginTop:8, fontSize:28, fontWeight:800, color:ACCENT, lineHeight:1 }}>{avail.toFixed(1)}</p>
+              <p style={{ fontSize:10.5, color:'#94A3B8' }}>Available</p>
+              <div style={{ marginTop:8, height:3, background:'rgba(0,0,0,0.06)', borderRadius:99 }}>
+                <div style={{ height:3, borderRadius:99, width:`${pct}%`, background:ACCENT }} />
               </div>
-              <p className="mt-1 text-[10px] text-gray-400">{taken} taken / {accrued} accrued</p>
+              <p style={{ marginTop:4, fontSize:10, color:'#94A3B8' }}>{taken} taken / {accrued} accrued</p>
             </div>
           );
         })}
       </div>
 
-      <SectionCard title="Apply Leave" subtitle="Submit a new leave request">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field title="Leave Type">
-            <select className={inputCls} value={leave.leave_type_id}
-              onChange={e => setLeave({ ...leave, leave_type_id: e.target.value })}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Apply Leave</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Submit a new leave request</p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Leave Type</label>
+            <select className={inputCls} value={leave.leave_type_id} onChange={e => setLeave({ ...leave, leave_type_id: e.target.value })}>
               <option value="">Select leave type</option>
               {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-          </Field>
-          <Field title="From Date">
-            <input type="date" className={inputCls} value={leave.from_date}
-              onChange={e => setLeave({ ...leave, from_date: e.target.value })} />
-          </Field>
-          <Field title="To Date">
-            <input type="date" className={inputCls} value={leave.to_date}
-              onChange={e => setLeave({ ...leave, to_date: e.target.value })} />
-          </Field>
-          <Field title="Reason">
-            <input className={inputCls} value={leave.reason} placeholder="Reason for leave"
-              onChange={e => setLeave({ ...leave, reason: e.target.value })} />
-          </Field>
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>From Date</label>
+            <input type="date" className={inputCls} value={leave.from_date} onChange={e => setLeave({ ...leave, from_date: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>To Date</label>
+            <input type="date" className={inputCls} value={leave.to_date} onChange={e => setLeave({ ...leave, to_date: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Reason</label>
+            <input className={inputCls} value={leave.reason} placeholder="Reason for leave" onChange={e => setLeave({ ...leave, reason: e.target.value })} />
+          </div>
         </div>
-        <div className="mt-4">
-          <GreenBtn disabled={!leave.leave_type_id} onClick={() => createLeave.mutate(leave)}>
+        <div style={{ marginTop:16 }}>
+          <button disabled={!leave.leave_type_id || createLeave.isPending} onClick={() => createLeave.mutate(leave)}
+            style={{ background:leave.leave_type_id?ACCENT:'rgba(0,0,0,0.08)', color:leave.leave_type_id?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 20px', fontWeight:700, fontSize:12.5, cursor:leave.leave_type_id?'pointer':'not-allowed' }}>
             Apply Leave
-          </GreenBtn>
+          </button>
         </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard title="Leave Request History">
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Leave Request History</span>
         <Table
           columns={[
             { key: 'leave_type_name', label: 'Type'   },
@@ -1335,7 +1311,7 @@ function LeaveTab({ leaveTypes }) {
             { key: 'status',    label: 'Status', render: r => <StatusBadge value={r.status} /> },
             { key: 'actions',   label: 'Action', render: r => r.status === 'pending'
                 ? <button onClick={() => cancelLeave.mutate(r.id)}
-                    className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 transition">
+                    style={{ background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:6, padding:'3px 10px', fontSize:11.5, fontWeight:600, color:'#DC2626', cursor:'pointer' }}>
                     Cancel
                   </button>
                 : '-'
@@ -1343,7 +1319,7 @@ function LeaveTab({ leaveTypes }) {
           ]}
           rows={requests.data || []}
         />
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -1355,63 +1331,63 @@ function PayslipsTab() {
   const navigate = useNavigate();
   const now = new Date();
   const [ytdYear, setYtdYear] = useState(now.getFullYear());
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const payslips = useQuery({ queryKey: ['ess-payslips'], queryFn: () => essAPI.payslips().then(unwrap) });
   const ytd = useQuery({ queryKey: ['ess-ytd', ytdYear], queryFn: () => essAPI.payrollYtd({ year: ytdYear }).then(r => r.data.data) });
   const t = ytd.data?.totals || { gross: 0, deductions: 0, net: 0 };
   return (
-    <div className="space-y-5">
-      <SectionCard
-        title="YTD Summary"
-        subtitle="Year-to-date earnings, deductions and net pay"
-        action={
-          <select className={`${inputCls} max-w-[110px]`} value={ytdYear} onChange={e => setYtdYear(Number(e.target.value))}>
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:16 }}>
+          <div>
+            <span style={STA}>YTD Summary</span>
+            <p style={{ fontSize:11.5, color:'#64748B' }}>Year-to-date earnings, deductions and net pay</p>
+          </div>
+          <select className={inputCls} style={{ maxWidth:110 }} value={ytdYear} onChange={e => setYtdYear(Number(e.target.value))}>
             {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-        }
-      >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Gross Earnings</p>
-            <p className="mt-1 text-xl font-extrabold text-gray-800">â‚¹{t.gross.toLocaleString('en-IN')}</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total Deductions</p>
-            <p className="mt-1 text-xl font-extrabold text-red-500">â‚¹{t.deductions.toLocaleString('en-IN')}</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Net Paid</p>
-            <p className="mt-1 text-xl font-extrabold" style={{ color: ACCENT }}>â‚¹{t.net.toLocaleString('en-IN')}</p>
-          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+          {[
+            { label:'Gross Earnings',    val:`â‚¹${t.gross.toLocaleString('en-IN')}`,       color:'#1E293B' },
+            { label:'Total Deductions',  val:`â‚¹${t.deductions.toLocaleString('en-IN')}`,  color:'#EF4444' },
+            { label:'Net Paid',          val:`â‚¹${t.net.toLocaleString('en-IN')}`,         color:ACCENT    },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ background:'rgba(47,111,237,0.04)', border:'1px solid rgba(47,111,237,0.08)', borderRadius:12, padding:16 }}>
+              <p style={{ fontSize:10.5, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', color:'#94A3B8' }}>{label}</p>
+              <p style={{ marginTop:6, fontSize:20, fontWeight:800, color, fontVariantNumeric:'tabular-nums' }}>{val}</p>
+            </div>
+          ))}
         </div>
         {!(ytd.data?.months || []).length && !ytd.isLoading && (
-          <p className="mt-3 text-center text-xs text-gray-400">No payroll records for {ytdYear}</p>
+          <p style={{ marginTop:12, textAlign:'center', fontSize:11.5, color:'#94A3B8' }}>No payroll records for {ytdYear}</p>
         )}
-      </SectionCard>
+      </div>
 
-    <SectionCard title="Payslips" subtitle="Approved and paid payslips">
-      <Table
-        columns={[
-          { key: 'month',            label: 'Month' },
-          { key: 'year',             label: 'Year'  },
-          { key: 'gross_earnings',   label: 'Gross',      render: r => `â‚¹${Number(r.gross_earnings  ||0).toLocaleString('en-IN')}` },
-          { key: 'total_deductions', label: 'Deductions', render: r => `â‚¹${Number(r.total_deductions||0).toLocaleString('en-IN')}` },
-          { key: 'net_pay',          label: 'Net Pay',    render: r => (
-            <span className="font-bold" style={{ color: ACCENT }}>â‚¹{Number(r.net_pay||0).toLocaleString('en-IN')}</span>
-          )},
-          { key: 'status', label: 'Status', render: r => <StatusBadge value={r.status} /> },
-          { key: 'actions', label: 'Payslip', render: r => (
-            <button
-              onClick={() => navigate(`/hr-admin/payroll/${r.id}/payslip`)}
-              className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-              style={{ backgroundColor: ACCENT }}
-            >
-              <Printer size={12} /> Print
-            </button>
-          )},
-        ]}
-        rows={payslips.data || []}
-      />
-    </SectionCard>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Payslips</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:14 }}>Approved and paid payslips</p>
+        <Table
+          columns={[
+            { key: 'month',            label: 'Month' },
+            { key: 'year',             label: 'Year'  },
+            { key: 'gross_earnings',   label: 'Gross',      render: r => `â‚¹${Number(r.gross_earnings  ||0).toLocaleString('en-IN')}` },
+            { key: 'total_deductions', label: 'Deductions', render: r => `â‚¹${Number(r.total_deductions||0).toLocaleString('en-IN')}` },
+            { key: 'net_pay', label: 'Net Pay', render: r => (
+              <span style={{ fontWeight:700, color:ACCENT }}>â‚¹{Number(r.net_pay||0).toLocaleString('en-IN')}</span>
+            )},
+            { key: 'status', label: 'Status', render: r => <StatusBadge value={r.status} /> },
+            { key: 'actions', label: 'Payslip', render: r => (
+              <button onClick={() => navigate(`/hr-admin/payroll/${r.id}/payslip`)}
+                style={{ display:'inline-flex', alignItems:'center', gap:4, borderRadius:8, padding:'5px 12px', fontSize:11.5, fontWeight:600, color:'#fff', background:ACCENT, border:'none', cursor:'pointer' }}>
+                <Printer size={12} /> Print
+              </button>
+            )},
+          ]}
+          rows={payslips.data || []}
+        />
+      </div>
     </div>
   );
 }
@@ -1422,12 +1398,10 @@ function PayslipsTab() {
 function DocumentsTab({ policies, userId }) {
   const qc = useQueryClient();
   const [doc, setDoc] = useState({ file: null, doc_type: 'employee_document', doc_name: '' });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const documents = useQuery({ queryKey: ['ess-documents'], queryFn: () => essAPI.documents().then(unwrap) });
-  const acks = useQuery({
-    queryKey: ['ess-policy-acks', userId],
-    queryFn:  () => hrAdvancedAPI.listPolicyAcks({ user_id: userId }).then(unwrap),
-    enabled:  Boolean(userId),
-  });
+  const acks = useQuery({ queryKey: ['ess-policy-acks', userId], queryFn: () => hrAdvancedAPI.listPolicyAcks({ user_id: userId }).then(unwrap), enabled: Boolean(userId) });
   const upload = useMutation({
     mutationFn: () => essAPI.uploadDocument(doc.file, { doc_type: doc.doc_type, doc_name: doc.doc_name }),
     onSuccess: () => { toast.success('Document uploaded'); setDoc({ file: null, doc_type: 'employee_document', doc_name: '' }); qc.invalidateQueries({ queryKey: ['ess-documents'] }); },
@@ -1439,32 +1413,39 @@ function DocumentsTab({ policies, userId }) {
   const acked = new Set((acks.data || []).map(a => a.policy_id));
 
   return (
-    <div className="space-y-5">
-      <SectionCard title="Upload Document" subtitle="Upload profile and HR documents">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field title="Document Type">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Upload Document</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Upload profile and HR documents</p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Document Type</label>
             <select className={inputCls} value={doc.doc_type} onChange={e => setDoc({ ...doc, doc_type: e.target.value })}>
               <option value="employee_document">Employee Document</option>
               <option value="id_proof">ID Proof</option>
               <option value="address_proof">Address Proof</option>
               <option value="certificate">Certificate</option>
             </select>
-          </Field>
-          <Field title="Document Name">
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Document Name</label>
             <input className={inputCls} value={doc.doc_name} onChange={e => setDoc({ ...doc, doc_name: e.target.value })} />
-          </Field>
-          <Field title="File">
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>File</label>
             <input type="file" className={inputCls} onChange={e => setDoc({ ...doc, file: e.target.files?.[0] || null })} />
-          </Field>
+          </div>
         </div>
-        <div className="mt-4">
-          <GreenBtn disabled={!doc.file} onClick={() => upload.mutate()}>
-            <Upload size={16} /> Upload Document
-          </GreenBtn>
+        <div style={{ marginTop:16 }}>
+          <button disabled={!doc.file} onClick={() => upload.mutate()}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:doc.file?ACCENT:'rgba(0,0,0,0.08)', color:doc.file?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 20px', fontWeight:700, fontSize:12.5, cursor:doc.file?'pointer':'not-allowed' }}>
+            <Upload size={15} /> Upload Document
+          </button>
         </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard title="My Documents">
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My Documents</span>
         <Table
           columns={[
             { key: 'doc_type',    label: 'Type' },
@@ -1473,9 +1454,11 @@ function DocumentsTab({ policies, userId }) {
           ]}
           rows={documents.data || []}
         />
-      </SectionCard>
+      </div>
 
-      <SectionCard title="Policy Acknowledgement" subtitle="Read and acknowledge published company policies">
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Policy Acknowledgement</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:14 }}>Read and acknowledge published company policies</p>
         <Table
           columns={[
             { key: 'title',          label: 'Policy'   },
@@ -1483,14 +1466,13 @@ function DocumentsTab({ policies, userId }) {
             { key: 'version',        label: 'Version'  },
             { key: 'effective_date', label: 'Effective', render: r => String(r.effective_date||'').slice(0,10) },
             { key: 'actions', label: 'Status', render: r => acked.has(r.id)
-                ? <span className="rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-[11px] font-semibold text-green-700">Acknowledged</span>
-                : <button className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition"
-                    onClick={() => acknowledge.mutate(r.id)}>Acknowledge</button>
+                ? <span style={{ display:'inline-block', padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:600, background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', color:'#059669' }}>Acknowledged</span>
+                : <button style={{ display:'inline-block', padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:600, background:'rgba(47,111,237,0.06)', border:'1px solid rgba(47,111,237,0.15)', color:ACCENT, cursor:'pointer' }} onClick={() => acknowledge.mutate(r.id)}>Acknowledge</button>
             },
           ]}
           rows={policies}
         />
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -1501,15 +1483,20 @@ function DocumentsTab({ policies, userId }) {
 function HRRequestsTab({ serviceRequests }) {
   const qc = useQueryClient();
   const [reqForm, setReqForm] = useState({ request_type: 'certificate', priority: 'normal', subject: '', description: '' });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const createRequest = useMutation({
     mutationFn: () => hrAdvancedAPI.createServiceRequest(reqForm),
     onSuccess:  () => { toast.success('HR request created'); setReqForm({ request_type: 'certificate', priority: 'normal', subject: '', description: '' }); qc.invalidateQueries({ queryKey: ['ess-hr-requests'] }); },
   });
   return (
-    <div className="space-y-5">
-      <SectionCard title="Raise HR Request" subtitle="Certificates, payroll queries, corrections, document support">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field title="Request Type">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Raise HR Request</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Certificates, payroll queries, corrections, document support</p>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Request Type</label>
             <select className={inputCls} value={reqForm.request_type} onChange={e => setReqForm({ ...reqForm, request_type: e.target.value })}>
               <option value="certificate">Certificate / Letter</option>
               <option value="payroll">Payroll Query</option>
@@ -1518,32 +1505,34 @@ function HRRequestsTab({ serviceRequests }) {
               <option value="documents">Document Correction</option>
               <option value="general">General</option>
             </select>
-          </Field>
-          <Field title="Priority">
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Priority</label>
             <select className={inputCls} value={reqForm.priority} onChange={e => setReqForm({ ...reqForm, priority: e.target.value })}>
               <option value="low">Low</option>
               <option value="normal">Normal</option>
               <option value="high">High</option>
               <option value="urgent">Urgent</option>
             </select>
-          </Field>
-          <Field title="Subject">
-            <input className={inputCls} value={reqForm.subject} placeholder="Brief subject"
-              onChange={e => setReqForm({ ...reqForm, subject: e.target.value })} />
-          </Field>
-          <Field title="Description">
-            <input className={inputCls} value={reqForm.description} placeholder="Details"
-              onChange={e => setReqForm({ ...reqForm, description: e.target.value })} />
-          </Field>
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Subject</label>
+            <input className={inputCls} value={reqForm.subject} placeholder="Brief subject" onChange={e => setReqForm({ ...reqForm, subject: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Description</label>
+            <input className={inputCls} value={reqForm.description} placeholder="Details" onChange={e => setReqForm({ ...reqForm, description: e.target.value })} />
+          </div>
         </div>
-        <div className="mt-4">
-          <GreenBtn disabled={!reqForm.subject} onClick={() => createRequest.mutate()}>
+        <div style={{ marginTop:16 }}>
+          <button disabled={!reqForm.subject} onClick={() => createRequest.mutate()}
+            style={{ background:reqForm.subject?ACCENT:'rgba(0,0,0,0.08)', color:reqForm.subject?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 20px', fontWeight:700, fontSize:12.5, cursor:reqForm.subject?'pointer':'not-allowed' }}>
             Create Request
-          </GreenBtn>
+          </button>
         </div>
-      </SectionCard>
-
-      <SectionCard title="My HR Requests">
+      </div>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My HR Requests</span>
         <Table
           columns={[
             { key: 'request_no',   label: 'Req No.'  },
@@ -1554,7 +1543,7 @@ function HRRequestsTab({ serviceRequests }) {
           ]}
           rows={serviceRequests}
         />
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -1566,6 +1555,8 @@ function ManagerDeskTab() {
   const qc          = useQueryClient();
   const leaves      = useQuery({ queryKey: ['ess-manager-leaves'],      queryFn: () => essAPI.managerLeaveRequests({ status: 'pending' }).then(unwrap), retry: false });
   const corrections = useQuery({ queryKey: ['ess-manager-corrections'], queryFn: () => essAPI.managerCorrections({ status: 'pending' }).then(unwrap), retry: false });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const refresh     = () => { qc.invalidateQueries({ queryKey: ['ess-manager-leaves'] }); qc.invalidateQueries({ queryKey: ['ess-manager-corrections'] }); };
   const leaveAction      = useMutation({ mutationFn: ({ id, action, rejection_reason }) => essAPI.managerLeaveAction(id, action, rejection_reason ? { rejection_reason } : {}),      onSuccess: refresh, onError: (e) => toast.error(e?.response?.data?.error || 'Action failed') });
   const correctionAction = useMutation({ mutationFn: ({ id, action, rejection_reason }) => essAPI.managerCorrectionAction(id, action, rejection_reason ? { rejection_reason } : {}), onSuccess: refresh, onError: (e) => toast.error(e?.response?.data?.error || 'Action failed') });
@@ -1573,8 +1564,8 @@ function ManagerDeskTab() {
   const [rejectModal, setRejectModal] = useState({ open: false, type: null, id: null });
   const [rejectReason, setRejectReason] = useState('');
 
-  const openReject = (type, id) => { setRejectReason(''); setRejectModal({ open: true, type, id }); };
-  const closeReject = () => setRejectModal({ open: false, type: null, id: null });
+  const openReject   = (type, id) => { setRejectReason(''); setRejectModal({ open: true, type, id }); };
+  const closeReject  = () => setRejectModal({ open: false, type: null, id: null });
   const submitReject = () => {
     const { type, id } = rejectModal;
     if (type === 'leave')      leaveAction.mutate({ id, action: 'reject', rejection_reason: rejectReason });
@@ -1584,41 +1575,39 @@ function ManagerDeskTab() {
 
   if (leaves.error?.response?.status === 403 && corrections.error?.response?.status === 403) {
     return (
-      <SectionCard title="Manager Desk">
-        <p className="text-sm text-gray-500">No manager approvals are available for this login.</p>
-      </SectionCard>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Manager Desk</span>
+        <p style={{ fontSize:13, color:'#64748B' }}>No manager approvals are available for this login.</p>
+      </div>
     );
   }
 
   const ActionButtons = ({ onApprove, onReject }) => (
-    <div className="flex gap-2">
-      <button onClick={onApprove} className="rounded-md border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700 hover:bg-green-100 transition">Approve</button>
-      <button onClick={onReject}  className="rounded-md border border-red-200   bg-red-50   px-2.5 py-1 text-xs font-semibold text-red-600   hover:bg-red-100   transition">Reject</button>
+    <div style={{ display:'flex', gap:6 }}>
+      <button onClick={onApprove} style={{ background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', borderRadius:6, padding:'3px 10px', fontSize:11.5, fontWeight:600, color:'#059669', cursor:'pointer' }}>Approve</button>
+      <button onClick={onReject}  style={{ background:'rgba(239,68,68,0.06)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:6, padding:'3px 10px', fontSize:11.5, fontWeight:600, color:'#DC2626', cursor:'pointer' }}>Reject</button>
     </div>
   );
 
   return (
-    <div className="space-y-5">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       {rejectModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeReject}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Reason for Rejection</h3>
-            <textarea
-              className="w-full rounded-lg border border-gray-300 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
-              rows={3}
-              placeholder="Enter reason (optional)"
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={closeReject} className="rounded-lg border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={submitReject} className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700">Reject</button>
+        <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.4)' }} onClick={closeReject}>
+          <div style={{ ...GCA, padding:24, width:'100%', maxWidth:360, margin:'0 16px' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize:14, fontWeight:700, color:'#1E293B', marginBottom:12 }}>Reason for Rejection</h3>
+            <textarea style={{ width:'100%', borderRadius:8, border:'1px solid rgba(0,0,0,0.12)', padding:10, fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
+              rows={3} placeholder="Enter reason (optional)" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+            <div style={{ marginTop:14, display:'flex', justifyContent:'flex-end', gap:8 }}>
+              <button onClick={closeReject} style={{ borderRadius:8, border:'1px solid rgba(0,0,0,0.1)', padding:'7px 16px', fontSize:12.5, fontWeight:600, color:'#64748B', background:'transparent', cursor:'pointer' }}>Cancel</button>
+              <button onClick={submitReject} style={{ borderRadius:8, border:'none', padding:'7px 16px', fontSize:12.5, fontWeight:700, color:'#fff', background:'#DC2626', cursor:'pointer' }}>Reject</button>
             </div>
           </div>
         </div>
       )}
 
-      <SectionCard title="Leave Approvals" subtitle="Pending team leave requests">
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Leave Approvals</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:14 }}>Pending team leave requests</p>
         <Table
           columns={[
             { key: 'employee_name',   label: 'Employee' },
@@ -1627,17 +1616,16 @@ function ManagerDeskTab() {
             { key: 'to_date',   label: 'To',   render: r => String(r.to_date  ||'').slice(0,10) },
             { key: 'days',            label: 'Days'     },
             { key: 'actions', label: 'Action', render: r => (
-              <ActionButtons
-                onApprove={() => leaveAction.mutate({ id: r.id, action: 'approve' })}
-                onReject={()  => openReject('leave', r.id)}
-              />
+              <ActionButtons onApprove={() => leaveAction.mutate({ id: r.id, action: 'approve' })} onReject={() => openReject('leave', r.id)} />
             )},
           ]}
           rows={leaves.data || []}
         />
-      </SectionCard>
+      </div>
 
-      <SectionCard title="Attendance Corrections" subtitle="Pending attendance corrections from your team">
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Attendance Corrections</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:14 }}>Pending attendance corrections from your team</p>
         <Table
           columns={[
             { key: 'employee_name',    label: 'Employee' },
@@ -1645,15 +1633,12 @@ function ManagerDeskTab() {
             { key: 'requested_status', label: 'Status'   },
             { key: 'reason',           label: 'Reason'   },
             { key: 'actions', label: 'Action', render: r => (
-              <ActionButtons
-                onApprove={() => correctionAction.mutate({ id: r.id, action: 'approve' })}
-                onReject={()  => openReject('correction', r.id)}
-              />
+              <ActionButtons onApprove={() => correctionAction.mutate({ id: r.id, action: 'approve' })} onReject={() => openReject('correction', r.id)} />
             )},
           ]}
           rows={corrections.data || []}
         />
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -1683,26 +1668,18 @@ const STATUS_COLORS = {
 
 function TrainingTab() {
   const qc = useQueryClient();
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
 
-  const requirements = useQuery({
-    queryKey: ['ess-training-requirements'],
-    queryFn:  () => essAPI.trainingRequirements().then(unwrap),
-  });
-  const requests = useQuery({
-    queryKey: ['ess-training-requests'],
-    queryFn:  () => essAPI.trainingRequests().then(unwrap),
-  });
+  const requirements = useQuery({ queryKey: ['ess-training-requirements'], queryFn: () => essAPI.trainingRequirements().then(unwrap) });
+  const requests     = useQuery({ queryKey: ['ess-training-requests'],     queryFn: () => essAPI.trainingRequests().then(unwrap) });
 
   const [form, setForm] = useState({ training_name: '', category: '', reason: '', preferred_date: '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = useMutation({
     mutationFn: () => essAPI.createTrainingRequest(form),
-    onSuccess: () => {
-      toast.success('Training request submitted');
-      setForm({ training_name: '', category: '', reason: '', preferred_date: '' });
-      qc.invalidateQueries({ queryKey: ['ess-training-requests'] });
-    },
+    onSuccess: () => { toast.success('Training request submitted'); setForm({ training_name: '', category: '', reason: '', preferred_date: '' }); qc.invalidateQueries({ queryKey: ['ess-training-requests'] }); },
     onError: (e) => toast.error(e?.response?.data?.error || 'Failed to submit'),
   });
 
@@ -1710,136 +1687,114 @@ function TrainingTab() {
   const myRequests = requests.data || [];
 
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
+    <div style={{ display:'flex', flexDirection:'column', gap:16, maxWidth:900, margin:'0 auto' }}>
 
       {/* Header */}
-      <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${DARK}, #1e5a8a)` }}>
-        <div className="flex items-center gap-3 mb-1">
-          <Award size={22} className="text-white/80" />
-          <h2 className="text-xl font-bold">Training & Development</h2>
+      <div style={{ borderRadius:16, padding:24, color:'#fff', background:`linear-gradient(135deg, ${DARK}, #1e5a8a)` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
+          <Award size={20} style={{ opacity:0.85 }} />
+          <h2 style={{ fontSize:18, fontWeight:800, margin:0 }}>Training & Development</h2>
         </div>
-        <p className="text-white/60 text-sm">View your training requirements and request new training programs</p>
+        <p style={{ fontSize:13, color:'rgba(255,255,255,0.6)', margin:0 }}>View your training requirements and request new training programs</p>
       </div>
 
-      {/* Training requirements from performance evaluation */}
+      {/* Requirements from perf review */}
       {reqs.length > 0 && (
-        <SectionCard
-          title="Training Required (from Performance Review)"
-          subtitle="Training needs identified by your reporting manager"
-        >
-          <div className="space-y-3">
+        <div style={{ ...GCA, padding:20 }}>
+          <span style={STA}>Training Required (from Performance Review)</span>
+          <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Training needs identified by your reporting manager</p>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {reqs.map(r => (
-              <div key={r.id} className="flex gap-4 p-4 rounded-xl bg-amber-50 border border-amber-100">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
-                  <Award size={18} className="text-amber-700" />
+              <div key={r.id} style={{ display:'flex', gap:14, padding:14, borderRadius:12, background:'rgba(245,158,11,0.06)', border:'1px solid rgba(245,158,11,0.15)' }}>
+                <div style={{ flexShrink:0, width:38, height:38, borderRadius:'50%', background:'rgba(245,158,11,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <Award size={17} style={{ color:'#B45309' }} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-xs font-bold text-amber-800 uppercase tracking-wide">
-                      {r.eval_period} Â· {r.review_type === 'quarterly' ? 'Quarterly' : 'Monthly'} Review
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
+                    <span style={{ fontSize:10.5, fontWeight:700, color:'#92400E', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                      {r.eval_period} {String.fromCharCode(0xB7)} {r.review_type === 'quarterly' ? 'Quarterly' : 'Monthly'} Review
                     </span>
-                    {r.overall_rating && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white border border-amber-200 text-amber-700">
-                        {r.overall_rating}
-                      </span>
-                    )}
-                    {r.eval_date && (
-                      <span className="text-[10px] text-amber-500">
-                        {String(r.eval_date).slice(0, 10)}
-                      </span>
-                    )}
+                    {r.overall_rating && <span style={{ padding:'1px 8px', borderRadius:99, fontSize:10, fontWeight:600, background:'#fff', border:'1px solid rgba(245,158,11,0.3)', color:'#B45309' }}>{r.overall_rating}</span>}
+                    {r.eval_date && <span style={{ fontSize:10, color:'#F59E0B' }}>{String(r.eval_date).slice(0,10)}</span>}
                   </div>
-                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{r.training_required}</p>
+                  <p style={{ fontSize:13, color:'#374151', whiteSpace:'pre-wrap' }}>{r.training_required}</p>
                 </div>
               </div>
             ))}
           </div>
-        </SectionCard>
+        </div>
       )}
 
       {/* Request Training Form */}
-      <SectionCard title="Request Training" subtitle="Submit a request for a training program you need">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className={labelCls}>Training / Course Name *</label>
-            <input className={inputCls} value={form.training_name}
-              onChange={e => set('training_name', e.target.value)}
-              placeholder="e.g. Fire Safety, Crane Operation, First Aidâ€¦" />
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Request Training</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:16 }}>Submit a request for a training program you need</p>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div style={{ gridColumn:'1 / -1' }}>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Training / Course Name *</label>
+            <input className={inputCls} value={form.training_name} onChange={e => set('training_name', e.target.value)} placeholder="e.g. Fire Safety, Crane Operation, First Aid..." />
           </div>
           <div>
-            <label className={labelCls}>Category</label>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Category</label>
             <select className={inputCls} value={form.category} onChange={e => set('category', e.target.value)}>
-              <option value="">Select categoryâ€¦</option>
+              <option value="">Select category...</option>
               {TRAINING_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Preferred Date</label>
-            <input type="date" className={inputCls} value={form.preferred_date}
-              onChange={e => set('preferred_date', e.target.value)} />
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Preferred Date</label>
+            <input type="date" className={inputCls} value={form.preferred_date} onChange={e => set('preferred_date', e.target.value)} />
           </div>
-          <div className="md:col-span-2">
-            <label className={labelCls}>Reason / Justification</label>
-            <textarea rows={3} className={inputCls} value={form.reason}
-              onChange={e => set('reason', e.target.value)}
-              placeholder="Why do you need this training?" />
+          <div style={{ gridColumn:'1 / -1' }}>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Reason / Justification</label>
+            <textarea rows={3} className={inputCls} value={form.reason} onChange={e => set('reason', e.target.value)} placeholder="Why do you need this training?" />
           </div>
         </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            disabled={!form.training_name || submit.isPending}
-            onClick={() => submit.mutate()}
-            className="px-6 py-2 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
-            style={{ background: ACCENT }}
-          >
-            {submit.isPending ? 'Submittingâ€¦' : 'Submit Request'}
+        <div style={{ marginTop:16, display:'flex', justifyContent:'flex-end' }}>
+          <button disabled={!form.training_name || submit.isPending} onClick={() => submit.mutate()}
+            style={{ background:form.training_name?ACCENT:'rgba(0,0,0,0.08)', color:form.training_name?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 24px', fontWeight:700, fontSize:12.5, cursor:form.training_name?'pointer':'not-allowed' }}>
+            {submit.isPending ? 'Submitting...' : 'Submit Request'}
           </button>
         </div>
-      </SectionCard>
+      </div>
 
-      {/* My Training Requests */}
-      <SectionCard title="My Training Requests" subtitle="Track the status of your submitted training requests">
+      {/* My Requests */}
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My Training Requests</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:16 }}>Track the status of your submitted training requests</p>
         {requests.isLoading ? (
-          <p className="text-sm text-gray-400 py-4 text-center">Loadingâ€¦</p>
+          <p style={{ padding:'24px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>Loading...</p>
         ) : myRequests.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            <Award size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No training requests submitted yet</p>
+          <div style={{ padding:'32px 0', textAlign:'center' }}>
+            <Award size={32} style={{ color:'#CBD5E1', margin:'0 auto 8px' }} />
+            <p style={{ fontSize:13, color:'#94A3B8' }}>No training requests submitted yet</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', fontSize:13, borderCollapse:'collapse' }}>
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Training</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Preferred Date</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actioned By</th>
+                <tr style={{ borderBottom:'1px solid rgba(0,0,0,0.06)' }}>
+                  {['Training','Category','Preferred Date','Status','Actioned By'].map(h => (
+                    <th key={h} style={{ textAlign:'left', padding:'8px 12px', fontSize:10.5, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.07em', color:'#94A3B8' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody>
                 {myRequests.map(r => {
                   const sc = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
                   return (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-3">
-                        <p className="font-medium text-gray-800">{r.training_name}</p>
-                        {r.reason && <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]">{r.reason}</p>}
+                    <tr key={r.id} style={{ borderBottom:'1px solid rgba(0,0,0,0.04)' }}>
+                      <td style={{ padding:'10px 12px' }}>
+                        <p style={{ fontWeight:600, color:'#1E293B' }}>{r.training_name}</p>
+                        {r.reason && <p style={{ fontSize:11, color:'#94A3B8', marginTop:2, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.reason}</p>}
                       </td>
-                      <td className="py-3 px-3 text-gray-600 text-xs">{r.category || 'â€”'}</td>
-                      <td className="py-3 px-3 text-gray-600 text-xs">
-                        {r.preferred_date ? String(r.preferred_date).slice(0, 10) : 'â€”'}
+                      <td style={{ padding:'10px 12px', fontSize:12, color:'#64748B' }}>{r.category || String.fromCharCode(0x2014)}</td>
+                      <td style={{ padding:'10px 12px', fontSize:12, color:'#64748B' }}>{r.preferred_date ? String(r.preferred_date).slice(0,10) : String.fromCharCode(0x2014)}</td>
+                      <td style={{ padding:'10px 12px' }}>
+                        <span style={{ display:'inline-block', padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:600 }} className={`${sc.bg} ${sc.text}`}>{sc.label}</span>
+                        {r.rejection_reason && <p style={{ fontSize:10, color:'#EF4444', marginTop:2 }}>{r.rejection_reason}</p>}
                       </td>
-                      <td className="py-3 px-3">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${sc.bg} ${sc.text}`}>
-                          {sc.label}
-                        </span>
-                        {r.rejection_reason && (
-                          <p className="text-[10px] text-red-400 mt-0.5">{r.rejection_reason}</p>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-gray-500 text-xs">{r.actioned_by_name || 'â€”'}</td>
+                      <td style={{ padding:'10px 12px', fontSize:12, color:'#94A3B8' }}>{r.actioned_by_name || String.fromCharCode(0x2014)}</td>
                     </tr>
                   );
                 })}
@@ -1847,32 +1802,32 @@ function TrainingTab() {
             </table>
           </div>
         )}
-      </SectionCard>
+      </div>
 
-      {/* Training categories reference */}
-      <SectionCard title="Training Categories Available" subtitle="Types of training programs offered at BCIM">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {/* Categories */}
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Training Categories Available</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:16 }}>Types of training programs offered at BCIM</p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
           {[
-            { label: 'Safety & HSE',          icon: 'ðŸ¦º', color: 'bg-red-50 border-red-100 text-red-700'      },
-            { label: 'Technical Skills',       icon: 'âš™ï¸', color: 'bg-blue-50 border-blue-100 text-blue-700'   },
-            { label: 'Quality Assurance',      icon: 'âœ…', color: 'bg-green-50 border-green-100 text-green-700'},
-            { label: 'Housekeeping & 5S',      icon: 'ðŸ§¹', color: 'bg-yellow-50 border-yellow-100 text-yellow-700'},
-            { label: 'Soft Skills',            icon: 'ðŸ¤', color: 'bg-purple-50 border-purple-100 text-purple-700'},
-            { label: 'Induction',              icon: 'ðŸ“‹', color: 'bg-indigo-50 border-indigo-100 text-indigo-700'},
-            { label: 'Compliance',             icon: 'âš–ï¸', color: 'bg-gray-50 border-gray-200 text-gray-700'   },
-            { label: 'Equipment Operation',    icon: 'ðŸ—ï¸', color: 'bg-orange-50 border-orange-100 text-orange-700'},
-            { label: 'First Aid / Emergency',  icon: 'ðŸ©º', color: 'bg-pink-50 border-pink-100 text-pink-700'   },
-            { label: 'Other',                  icon: 'ðŸ“š', color: 'bg-teal-50 border-teal-100 text-teal-700'   },
-          ].map(({ label, icon, color }) => (
-            <div key={label} className={`flex flex-col items-center gap-2 p-3 rounded-xl border text-center cursor-pointer ${color}`}
-              onClick={() => { set('category', label); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-              <span className="text-2xl">{icon}</span>
-              <span className="text-xs font-semibold leading-tight">{label}</span>
+            { label:'Safety & HSE',         bg:'rgba(239,68,68,0.06)',   border:'rgba(239,68,68,0.15)',   color:'#B91C1C' },
+            { label:'Technical Skills',     bg:'rgba(59,130,246,0.06)',  border:'rgba(59,130,246,0.15)',  color:'#1D4ED8' },
+            { label:'Quality Assurance',    bg:'rgba(16,185,129,0.06)',  border:'rgba(16,185,129,0.15)',  color:'#065F46' },
+            { label:'Housekeeping & 5S',    bg:'rgba(234,179,8,0.06)',   border:'rgba(234,179,8,0.15)',   color:'#92400E' },
+            { label:'Soft Skills',          bg:'rgba(139,92,246,0.06)',  border:'rgba(139,92,246,0.15)',  color:'#5B21B6' },
+            { label:'Induction',            bg:'rgba(99,102,241,0.06)',  border:'rgba(99,102,241,0.15)',  color:'#3730A3' },
+            { label:'Compliance',           bg:'rgba(100,116,139,0.06)', border:'rgba(100,116,139,0.15)', color:'#334155' },
+            { label:'Equipment Operation',  bg:'rgba(249,115,22,0.06)',  border:'rgba(249,115,22,0.15)',  color:'#9A3412' },
+            { label:'First Aid / Emergency',bg:'rgba(236,72,153,0.06)',  border:'rgba(236,72,153,0.15)',  color:'#9D174D' },
+            { label:'Other',                bg:'rgba(20,184,166,0.06)',  border:'rgba(20,184,166,0.15)',  color:'#0F766E' },
+          ].map(({ label, bg, border, color }) => (
+            <div key={label} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:12, borderRadius:12, border:`1px solid ${border}`, background:bg, textAlign:'center', cursor:'pointer' }}
+              onClick={() => { set('category', label); window.scrollTo({ top:0, behavior:'smooth' }); }}>
+              <span style={{ fontSize:11, fontWeight:700, color }}>{label}</span>
             </div>
           ))}
         </div>
-        <p className="text-xs text-gray-400 mt-3 text-center">Click a category to pre-fill your training request above</p>
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -1888,37 +1843,42 @@ function AssetsTab() {
   const assets = useQuery({ queryKey: ['ess-my-assets'], queryFn: () => essAPI.myAssets().then(unwrap) });
   const rows = assets.data || [];
   const active = rows.filter(r => r.status === 'assigned');
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   return (
-    <div className="space-y-5">
-      <SectionCard title="My Assets" subtitle="Company equipment currently allocated to you">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My Assets</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:16 }}>Company equipment currently allocated to you</p>
         {assets.isLoading ? (
-          <p className="py-6 text-center text-sm text-gray-400">Loading assetsâ€¦</p>
+          <p style={{ padding:'24px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>Loading assetsâ€¦</p>
         ) : !active.length ? (
-          <p className="py-8 text-center text-sm text-gray-400">No assets are currently allocated to you.</p>
+          <p style={{ padding:'32px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>No assets are currently allocated to you.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
             {active.map(a => (
-              <div key={a.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start justify-between">
-                  <span className="text-2xl">{ASSET_ICONS[a.category] || 'ðŸ“¦'}</span>
+              <div key={a.id} style={{ background:'rgba(255,255,255,0.7)', border:'1px solid rgba(0,0,0,0.07)', borderRadius:14, padding:16 }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8 }}>
+                  <span style={{ fontSize:28 }}>{ASSET_ICONS[a.category] || 'ðŸ”¦'}</span>
                   <StatusBadge value={a.status === 'assigned' ? 'approved' : a.status} />
                 </div>
-                <p className="mt-2 text-sm font-bold text-gray-900">{a.asset_name}</p>
-                <p className="text-xs capitalize text-gray-500">{String(a.category || '').replace(/_/g, ' ')}</p>
-                <dl className="mt-3 space-y-1 text-xs text-gray-600">
-                  {a.asset_code     && <div className="flex justify-between"><dt className="text-gray-400">Code</dt><dd className="font-medium text-gray-700">{a.asset_code}</dd></div>}
-                  {a.serial_number  && <div className="flex justify-between"><dt className="text-gray-400">Serial</dt><dd className="font-medium text-gray-700">{a.serial_number}</dd></div>}
-                  {a.assigned_on    && <div className="flex justify-between"><dt className="text-gray-400">Assigned</dt><dd className="font-medium text-gray-700">{String(a.assigned_on).slice(0,10)}</dd></div>}
-                  {a.assigned_by_name && <div className="flex justify-between"><dt className="text-gray-400">By</dt><dd className="font-medium text-gray-700">{a.assigned_by_name}</dd></div>}
+                <p style={{ fontSize:13.5, fontWeight:700, color:'#1E293B' }}>{a.asset_name}</p>
+                <p style={{ fontSize:11.5, color:'#64748B', textTransform:'capitalize' }}>{String(a.category||'').replace(/_/g,' ')}</p>
+                <dl style={{ marginTop:12, display:'flex', flexDirection:'column', gap:4 }}>
+                  {a.asset_code && <div style={{ display:'flex', justifyContent:'space-between' }}><dt style={{ fontSize:11, color:'#94A3B8' }}>Code</dt><dd style={{ fontSize:11, fontWeight:600, color:'#475569' }}>{a.asset_code}</dd></div>}
+                  {a.serial_number && <div style={{ display:'flex', justifyContent:'space-between' }}><dt style={{ fontSize:11, color:'#94A3B8' }}>Serial</dt><dd style={{ fontSize:11, fontWeight:600, color:'#475569' }}>{a.serial_number}</dd></div>}
+                  {a.assigned_on && <div style={{ display:'flex', justifyContent:'space-between' }}><dt style={{ fontSize:11, color:'#94A3B8' }}>Assigned</dt><dd style={{ fontSize:11, fontWeight:600, color:'#475569' }}>{String(a.assigned_on).slice(0,10)}</dd></div>}
+                  {a.assigned_by_name && <div style={{ display:'flex', justifyContent:'space-between' }}><dt style={{ fontSize:11, color:'#94A3B8' }}>By</dt><dd style={{ fontSize:11, fontWeight:600, color:'#475569' }}>{a.assigned_by_name}</dd></div>}
                 </dl>
               </div>
             ))}
           </div>
         )}
-      </SectionCard>
+      </div>
 
       {rows.some(r => r.status !== 'assigned') && (
-        <SectionCard title="Returned / Past Assets">
+        <div style={{ ...GCA, padding:20 }}>
+          <span style={STA}>Returned / Past Assets</span>
           <Table
             columns={[
               { key: 'asset_name', label: 'Asset' },
@@ -1930,7 +1890,7 @@ function AssetsTab() {
             ]}
             rows={rows.filter(r => r.status !== 'assigned')}
           />
-        </SectionCard>
+        </div>
       )}
     </div>
   );
@@ -1943,16 +1903,21 @@ function HelpdeskTab() {
   const qc = useQueryClient();
   const tickets = useQuery({ queryKey: ['ess-helpdesk'], queryFn: () => essAPI.helpdeskTickets().then(unwrap) });
   const [form, setForm] = useState({ category: 'hardware', priority: 'medium', subject: '', description: '' });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const create = useMutation({
     mutationFn: () => essAPI.createHelpdeskTicket(form),
     onSuccess:  () => { toast.success('Ticket raised'); setForm({ category: 'hardware', priority: 'medium', subject: '', description: '' }); qc.invalidateQueries({ queryKey: ['ess-helpdesk'] }); },
     onError:    (e) => toast.error(e?.response?.data?.error || 'Failed to raise ticket'),
   });
   return (
-    <div className="space-y-5">
-      <SectionCard title="Raise a Helpdesk Ticket" subtitle="Report IT / equipment issues to the support team">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field title="Category">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Raise a Helpdesk Ticket</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Report IT / equipment issues to the support team</p>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Category</label>
             <select className={inputCls} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
               <option value="hardware">Hardware</option>
               <option value="software">Software</option>
@@ -1962,34 +1927,36 @@ function HelpdeskTab() {
               <option value="access">Access Request</option>
               <option value="other">Other</option>
             </select>
-          </Field>
-          <Field title="Priority">
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Priority</label>
             <select className={inputCls} value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
               <option value="critical">Critical</option>
             </select>
-          </Field>
-          <Field title="Subject">
-            <input className={inputCls} value={form.subject} placeholder="Brief summary of the issue"
-              onChange={e => setForm({ ...form, subject: e.target.value })} />
-          </Field>
-          <Field title="Description">
-            <input className={inputCls} value={form.description} placeholder="What went wrong? Any error messages?"
-              onChange={e => setForm({ ...form, description: e.target.value })} />
-          </Field>
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Subject</label>
+            <input className={inputCls} value={form.subject} placeholder="Brief summary of the issue" onChange={e => setForm({ ...form, subject: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Description</label>
+            <input className={inputCls} value={form.description} placeholder="What went wrong? Any error messages?" onChange={e => setForm({ ...form, description: e.target.value })} />
+          </div>
         </div>
-        <div className="mt-4">
-          <GreenBtn disabled={!form.subject || create.isPending} onClick={() => create.mutate()}>
-            <Headphones size={16} /> Raise Ticket
-          </GreenBtn>
+        <div style={{ marginTop:16 }}>
+          <button disabled={!form.subject || create.isPending} onClick={() => create.mutate()}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:form.subject?ACCENT:'rgba(0,0,0,0.08)', color:form.subject?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 20px', fontWeight:700, fontSize:12.5, cursor:form.subject?'pointer':'not-allowed' }}>
+            <Headphones size={15} /> Raise Ticket
+          </button>
         </div>
-      </SectionCard>
-
-      <SectionCard title="My Tickets">
+      </div>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My Tickets</span>
         {tickets.isLoading ? (
-          <p className="py-6 text-center text-sm text-gray-400">Loading ticketsâ€¦</p>
+          <p style={{ padding:'24px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>Loading ticketsâ€¦</p>
         ) : (
           <Table
             columns={[
@@ -2004,7 +1971,7 @@ function HelpdeskTab() {
             empty="You haven't raised any tickets yet"
           />
         )}
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -2025,6 +1992,8 @@ function TimesheetTab() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year,  setYear]  = useState(now.getFullYear());
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const att = useQuery({
     queryKey: ['ess-timesheet', month, year],
     queryFn:  () => essAPI.attendance({ month, year }).then(unwrap),
@@ -2034,8 +2003,8 @@ function TimesheetTab() {
       .map(r => ({ ...r, hours: hoursBetween(r.in_time, r.out_time) }))
       .sort((a, b) => String(a.attendance_date).localeCompare(String(b.attendance_date)));
   }, [att.data]);
-  const totalHours   = useMemo(() => Math.round(rows.reduce((s, r) => s + r.hours, 0) * 100) / 100, [rows]);
-  const presentDays  = rows.filter(r => normaliseStatus(r.status) === 'P').length;
+  const totalHours  = useMemo(() => Math.round(rows.reduce((s, r) => s + r.hours, 0) * 100) / 100, [rows]);
+  const presentDays = rows.filter(r => normaliseStatus(r.status) === 'P').length;
   const shiftMonth = (delta) => {
     let m = month + delta, y = year;
     if (m < 1)  { m = 12; y--; }
@@ -2043,34 +2012,39 @@ function TimesheetTab() {
     setMonth(m); setYear(y);
   };
   return (
-    <div className="space-y-5">
-      <SectionCard
-        title="My Timesheet"
-        subtitle="Daily hours derived from your attendance punches"
-        action={
-          <div className="flex items-center gap-2">
-            <button onClick={() => shiftMonth(-1)} className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50"><ChevronLeft size={16} /></button>
-            <span className="min-w-[110px] text-center text-sm font-semibold text-gray-700">{MONTH_NAMES[month-1]} {year}</span>
-            <button onClick={() => shiftMonth(1)} className="rounded-lg border border-gray-200 p-1.5 hover:bg-gray-50"><ChevronRight size={16} /></button>
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <div>
+            <span style={STA}>My Timesheet</span>
+            <p style={{ fontSize:11.5, color:'#64748B' }}>Daily hours derived from your attendance punches</p>
           </div>
-        }
-      >
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total Hours</p>
-            <p className="mt-1 text-2xl font-extrabold" style={{ color: ACCENT }}>{totalHours}</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Present Days</p>
-            <p className="mt-1 text-2xl font-extrabold" style={{ color: TEAL }}>{presentDays}</p>
-          </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Avg Hours/Day</p>
-            <p className="mt-1 text-2xl font-extrabold text-gray-800">{presentDays ? Math.round((totalHours / presentDays) * 10) / 10 : 0}</p>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <button onClick={() => shiftMonth(-1)} style={{ background:'rgba(0,0,0,0.04)', border:'1px solid rgba(0,0,0,0.07)', borderRadius:8, padding:'5px 8px', cursor:'pointer', display:'flex', alignItems:'center' }}>
+              <ChevronLeft size={15} color="#64748B" />
+            </button>
+            <span style={{ minWidth:120, textAlign:'center', fontSize:13, fontWeight:700, color:'#1E293B' }}>{MONTH_NAMES[month-1]} {year}</span>
+            <button onClick={() => shiftMonth(1)} style={{ background:'rgba(0,0,0,0.04)', border:'1px solid rgba(0,0,0,0.07)', borderRadius:8, padding:'5px 8px', cursor:'pointer', display:'flex', alignItems:'center' }}>
+              <ChevronRight size={15} color="#64748B" />
+            </button>
           </div>
         </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:16 }}>
+          {[
+            { label:'Total Hours',   val:totalHours,  color:ACCENT },
+            { label:'Present Days',  val:presentDays, color:TEAL },
+            { label:'Avg Hours/Day', val:presentDays ? Math.round((totalHours/presentDays)*10)/10 : 0, color:'#1E293B' },
+          ].map(({ label, val, color }) => (
+            <div key={label} style={{ background:'rgba(47,111,237,0.04)', border:'1px solid rgba(47,111,237,0.08)', borderRadius:12, padding:16 }}>
+              <p style={{ fontSize:10.5, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.08em', color:'#94A3B8' }}>{label}</p>
+              <p style={{ marginTop:4, fontSize:24, fontWeight:800, color, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{val}</p>
+            </div>
+          ))}
+        </div>
+
         {att.isLoading ? (
-          <p className="py-6 text-center text-sm text-gray-400">Loading timesheetâ€¦</p>
+          <p style={{ padding:'24px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>Loading timesheetâ€¦</p>
         ) : (
           <Table
             columns={[
@@ -2084,7 +2058,7 @@ function TimesheetTab() {
             empty="No attendance records for this month"
           />
         )}
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -2096,6 +2070,8 @@ function KnowledgeTab() {
   const kb = useQuery({ queryKey: ['ess-knowledge'], queryFn: () => essAPI.knowledge().then(unwrap) });
   const [openId, setOpenId] = useState(null);
   const [search, setSearch] = useState('');
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const docs = kb.data || [];
   const filtered = docs.filter(d => {
     const q = search.toLowerCase();
@@ -2107,43 +2083,43 @@ function KnowledgeTab() {
     return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
   return (
-    <div className="space-y-5">
-      <SectionCard title="Knowledge Base" subtitle="Company policies, guidelines and procedures">
-        <div className="relative mb-4 max-w-sm">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Knowledge Base</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Company policies, guidelines and procedures</p>
+        <div style={{ marginBottom:16, maxWidth:320 }}>
           <input className={inputCls} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search policiesâ€¦" />
         </div>
         {kb.isLoading ? (
-          <p className="py-6 text-center text-sm text-gray-400">Loadingâ€¦</p>
+          <p style={{ padding:'24px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>Loadingâ€¦</p>
         ) : !filtered.length ? (
-          <p className="py-8 text-center text-sm text-gray-400">No published policies available.</p>
+          <p style={{ padding:'32px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>No published policies available.</p>
         ) : (
-          <div className="space-y-5">
+          <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
             {grouped.map(([cat, items]) => (
               <div key={cat}>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">{cat}</p>
-                <div className="space-y-2">
+                <p style={{ marginBottom:8, fontSize:10.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#94A3B8' }}>{cat}</p>
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {items.map(d => {
                     const open = openId === d.id;
                     return (
-                      <div key={d.id} className="rounded-xl border border-gray-200 bg-white">
-                        <button
-                          onClick={() => setOpenId(open ? null : d.id)}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                        >
-                          <div className="flex items-center gap-3">
-                            <BookOpen size={18} style={{ color: ACCENT }} />
+                      <div key={d.id} style={{ borderRadius:12, border:'1px solid rgba(0,0,0,0.07)', background:'rgba(255,255,255,0.7)', overflow:'hidden' }}>
+                        <button onClick={() => setOpenId(open ? null : d.id)}
+                          style={{ display:'flex', width:'100%', alignItems:'center', justifyContent:'space-between', gap:12, padding:'12px 16px', textAlign:'left', background:'transparent', border:'none', cursor:'pointer' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                            <BookOpen size={17} style={{ color:ACCENT, flexShrink:0 }} />
                             <div>
-                              <p className="text-sm font-semibold text-gray-900">{d.title}</p>
-                              <p className="text-xs text-gray-400">
+                              <p style={{ fontSize:13, fontWeight:600, color:'#1E293B' }}>{d.title}</p>
+                              <p style={{ fontSize:11, color:'#94A3B8', marginTop:1 }}>
                                 {d.policy_code ? `${d.policy_code} Â· ` : ''}v{d.version}
                                 {d.effective_date ? ` Â· ${String(d.effective_date).slice(0,10)}` : ''}
                               </p>
                             </div>
                           </div>
-                          <ChevronRight size={16} className={`text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+                          <ChevronRight size={15} style={{ color:'#94A3B8', transform:open?'rotate(90deg)':'none', transition:'transform 0.2s', flexShrink:0 }} />
                         </button>
                         {open && (
-                          <div className="border-t border-gray-100 px-4 py-3 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                          <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)', padding:'12px 16px', fontSize:13, lineHeight:1.6, color:'#475569', whiteSpace:'pre-wrap' }}>
                             {d.body}
                           </div>
                         )}
@@ -2155,7 +2131,7 @@ function KnowledgeTab() {
             ))}
           </div>
         )}
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -2280,13 +2256,15 @@ function EngageCard({ post }) {
 
 function EngageTab({ profile }) {
   const qc = useQueryClient();
-  const [filter, setFilter] = useState('');            // '' | 'post' | 'kudos'
-  const [mode, setMode]     = useState('post');        // composer mode
+  const [filter, setFilter] = useState('');
+  const [mode, setMode]     = useState('post');
   const [postBody, setPostBody]   = useState('');
   const [postGroup, setPostGroup] = useState('General');
   const [kudosTo, setKudosTo]     = useState('');
   const [kudosBadge, setKudosBadge] = useState('Great Work');
   const [kudosMsg, setKudosMsg]   = useState('');
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
 
   const feed       = useQuery({ queryKey: ['ess-engage', filter], queryFn: () => essAPI.engageFeed(filter ? { type: filter } : {}).then(unwrap) });
   const colleagues = useQuery({ queryKey: ['ess-colleagues'], queryFn: () => essAPI.colleagues().then(unwrap), enabled: mode === 'kudos' });
@@ -2304,70 +2282,70 @@ function EngageTab({ profile }) {
   });
 
   return (
-    <div className="space-y-5">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       {/* Composer */}
-      <SectionCard noPad>
-        <div className="flex gap-1 border-b border-gray-100 p-2">
+      <div style={{ ...GCA, overflow:'hidden' }}>
+        <div style={{ display:'flex', gap:4, borderBottom:'1px solid rgba(0,0,0,0.06)', padding:8 }}>
           {[['post', 'Write Post', Radio], ['kudos', 'Give Kudos', Award]].map(([m, label, Icon]) => (
             <button key={m} onClick={() => setMode(m)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${mode === m ? 'text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-              style={{ background: mode === m ? ACCENT : 'transparent' }}>
-              <Icon size={16} /> {label}
+              style={{ display:'flex', alignItems:'center', gap:8, borderRadius:8, padding:'6px 16px', fontSize:13, fontWeight:600, border:'none', cursor:'pointer', background:mode===m?ACCENT:'transparent', color:mode===m?'#fff':'#64748B', transition:'all 0.15s' }}>
+              <Icon size={15} /> {label}
             </button>
           ))}
         </div>
-        <div className="p-4">
-          <div className="flex gap-3">
+        <div style={{ padding:16 }}>
+          <div style={{ display:'flex', gap:12 }}>
             <Avatar name={profile?.name} photo={profile?.profile_photo_url} />
-            <div className="flex-1 space-y-3">
+            <div style={{ flex:1, display:'flex', flexDirection:'column', gap:10 }}>
               {mode === 'post' ? (
                 <>
-                  <textarea className={inputCls} rows={3} value={postBody} placeholder="Share something with your teamâ€¦"
-                    onChange={e => setPostBody(e.target.value)} />
-                  <div className="flex items-center justify-between">
-                    <select className={`${inputCls} max-w-[180px]`} value={postGroup} onChange={e => setPostGroup(e.target.value)}>
+                  <textarea className={inputCls} rows={3} value={postBody} placeholder="Share something with your teamâ€¦" onChange={e => setPostBody(e.target.value)} />
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                    <select className={inputCls} style={{ maxWidth:180 }} value={postGroup} onChange={e => setPostGroup(e.target.value)}>
                       {POST_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
-                    <GreenBtn disabled={!postBody.trim() || create.isPending} onClick={() => create.mutate()}>
-                      <Send size={15} /> Post
-                    </GreenBtn>
+                    <button disabled={!postBody.trim() || create.isPending} onClick={() => create.mutate()}
+                      style={{ display:'inline-flex', alignItems:'center', gap:6, background:postBody.trim()?ACCENT:'rgba(0,0,0,0.08)', color:postBody.trim()?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'8px 18px', fontWeight:700, fontSize:12.5, cursor:postBody.trim()?'pointer':'not-allowed' }}>
+                      <Send size={14} /> Post
+                    </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field title="Appreciate">
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    <div>
+                      <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Appreciate</label>
                       <select className={inputCls} value={kudosTo} onChange={e => setKudosTo(e.target.value)}>
                         <option value="">Select a colleagueâ€¦</option>
                         {(colleagues.data || []).map(c => <option key={c.id} value={c.id}>{c.name}{c.designation_name ? ` â€” ${c.designation_name}` : ''}</option>)}
                       </select>
-                    </Field>
-                    <Field title="Badge">
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Badge</label>
                       <select className={inputCls} value={kudosBadge} onChange={e => setKudosBadge(e.target.value)}>
                         {KUDOS_BADGES.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
-                    </Field>
+                    </div>
                   </div>
-                  <textarea className={inputCls} rows={2} value={kudosMsg} placeholder="Add a message (optional)â€¦"
-                    onChange={e => setKudosMsg(e.target.value)} />
-                  <div className="flex justify-end">
-                    <GreenBtn disabled={!kudosTo || create.isPending} onClick={() => create.mutate()}>
-                      <Award size={15} /> Give Kudos
-                    </GreenBtn>
+                  <textarea className={inputCls} rows={2} value={kudosMsg} placeholder="Add a message (optional)â€¦" onChange={e => setKudosMsg(e.target.value)} />
+                  <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                    <button disabled={!kudosTo || create.isPending} onClick={() => create.mutate()}
+                      style={{ display:'inline-flex', alignItems:'center', gap:6, background:kudosTo?ACCENT:'rgba(0,0,0,0.08)', color:kudosTo?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'8px 18px', fontWeight:700, fontSize:12.5, cursor:kudosTo?'pointer':'not-allowed' }}>
+                      <Award size={14} /> Give Kudos
+                    </button>
                   </div>
                 </>
               )}
             </div>
           </div>
         </div>
-      </SectionCard>
+      </div>
 
-      {/* Filter */}
-      <div className="flex gap-2">
+      {/* Filter pills */}
+      <div style={{ display:'flex', gap:8 }}>
         {[['', 'All Activities'], ['post', 'Posts'], ['kudos', 'Kudos']].map(([v, label]) => (
           <button key={v} onClick={() => setFilter(v)}
-            className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${filter === v ? 'text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
-            style={{ background: filter === v ? ACCENT : undefined }}>
+            style={{ borderRadius:99, padding:'5px 16px', fontSize:13, fontWeight:600, border:'1px solid', cursor:'pointer', transition:'all 0.15s', background:filter===v?ACCENT:'rgba(255,255,255,0.88)', color:filter===v?'#fff':'#64748B', borderColor:filter===v?ACCENT:'rgba(0,0,0,0.1)' }}>
             {label}
           </button>
         ))}
@@ -2375,11 +2353,13 @@ function EngageTab({ profile }) {
 
       {/* Feed */}
       {feed.isLoading ? (
-        <p className="py-8 text-center text-sm text-gray-400">Loading feedâ€¦</p>
+        <p style={{ padding:'32px 0', textAlign:'center', fontSize:13, color:'#94A3B8' }}>Loading feedâ€¦</p>
       ) : !(feed.data || []).length ? (
-        <SectionCard><p className="py-8 text-center text-sm text-gray-400">No activity yet. Be the first to post or give kudos!</p></SectionCard>
+        <div style={{ ...GCA, padding:32, textAlign:'center' }}>
+          <p style={{ fontSize:13, color:'#94A3B8' }}>No activity yet. Be the first to post or give kudos!</p>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           {(feed.data || []).map(p => <EngageCard key={p.id} post={p} />)}
         </div>
       )}
@@ -2394,16 +2374,21 @@ function ReimbursementsTab() {
   const qc = useQueryClient();
   const claims = useQuery({ queryKey: ['ess-reimbursements'], queryFn: () => essAPI.reimbursements().then(unwrap) });
   const [form, setForm] = useState({ expense_type: 'travel', amount: '', description: '' });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const submit = useMutation({
     mutationFn: () => essAPI.createReimbursement(form),
     onSuccess:  () => { toast.success('Claim submitted'); setForm({ expense_type: 'travel', amount: '', description: '' }); qc.invalidateQueries({ queryKey: ['ess-reimbursements'] }); },
     onError:    (e) => toast.error(e?.response?.data?.error || 'Failed'),
   });
   return (
-    <div className="space-y-5">
-      <SectionCard title="Submit a Reimbursement Claim" subtitle="Travel, food, supplies and other work expenses">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field title="Expense Type">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Submit a Reimbursement Claim</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Travel, food, supplies and other work expenses</p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Expense Type</label>
             <select className={inputCls} value={form.expense_type} onChange={e => setForm({ ...form, expense_type: e.target.value })}>
               <option value="travel">Travel</option>
               <option value="food">Food</option>
@@ -2412,24 +2397,25 @@ function ReimbursementsTab() {
               <option value="fuel">Fuel</option>
               <option value="general">General</option>
             </select>
-          </Field>
-          <Field title="Amount (â‚¹)">
-            <input type="number" className={inputCls} value={form.amount} placeholder="0.00"
-              onChange={e => setForm({ ...form, amount: e.target.value })} />
-          </Field>
-          <Field title="Description">
-            <input className={inputCls} value={form.description} placeholder="What was it for?"
-              onChange={e => setForm({ ...form, description: e.target.value })} />
-          </Field>
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Amount (â‚¹)</label>
+            <input type="number" className={inputCls} value={form.amount} placeholder="0.00" onChange={e => setForm({ ...form, amount: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Description</label>
+            <input className={inputCls} value={form.description} placeholder="What was it for?" onChange={e => setForm({ ...form, description: e.target.value })} />
+          </div>
         </div>
-        <div className="mt-4">
-          <GreenBtn disabled={!form.amount || submit.isPending} onClick={() => submit.mutate()}>
+        <div style={{ marginTop:16 }}>
+          <button disabled={!form.amount || submit.isPending} onClick={() => submit.mutate()}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:form.amount?ACCENT:'rgba(0,0,0,0.08)', color:form.amount?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 20px', fontWeight:700, fontSize:12.5, cursor:form.amount?'pointer':'not-allowed' }}>
             <Receipt size={16} /> Submit Claim
-          </GreenBtn>
+          </button>
         </div>
-      </SectionCard>
-
-      <SectionCard title="My Claims">
+      </div>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My Claims</span>
         <Table
           columns={[
             { key: 'claim_date',   label: 'Date', render: r => String(r.claim_date||'').slice(0,10) },
@@ -2441,7 +2427,7 @@ function ReimbursementsTab() {
           rows={claims.data || []}
           empty="No reimbursement claims yet"
         />
-      </SectionCard>
+      </div>
     </div>
   );
 }
@@ -2453,39 +2439,45 @@ function LoansTab() {
   const qc = useQueryClient();
   const loans = useQuery({ queryKey: ['ess-loans'], queryFn: () => essAPI.loans().then(unwrap) });
   const [form, setForm] = useState({ loan_type: 'advance', amount: '', reason: '' });
+  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
+  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
   const submit = useMutation({
     mutationFn: () => essAPI.requestLoan(form),
     onSuccess:  () => { toast.success('Request submitted'); setForm({ loan_type: 'advance', amount: '', reason: '' }); qc.invalidateQueries({ queryKey: ['ess-loans'] }); },
     onError:    (e) => toast.error(e?.response?.data?.error || 'Failed'),
   });
   return (
-    <div className="space-y-5">
-      <SectionCard title="Request a Loan / Advance" subtitle="Salary advances and staff loans (subject to HR approval)">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field title="Type">
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>Request a Loan / Advance</span>
+        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Salary advances and staff loans (subject to HR approval)</p>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Type</label>
             <select className={inputCls} value={form.loan_type} onChange={e => setForm({ ...form, loan_type: e.target.value })}>
               <option value="advance">Salary Advance</option>
               <option value="personal">Personal Loan</option>
               <option value="emergency">Emergency Loan</option>
             </select>
-          </Field>
-          <Field title="Amount (â‚¹)">
-            <input type="number" className={inputCls} value={form.amount} placeholder="0.00"
-              onChange={e => setForm({ ...form, amount: e.target.value })} />
-          </Field>
-          <Field title="Reason">
-            <input className={inputCls} value={form.reason} placeholder="Purpose of the request"
-              onChange={e => setForm({ ...form, reason: e.target.value })} />
-          </Field>
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Amount (â‚¹)</label>
+            <input type="number" className={inputCls} value={form.amount} placeholder="0.00" onChange={e => setForm({ ...form, amount: e.target.value })} />
+          </div>
+          <div>
+            <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Reason</label>
+            <input className={inputCls} value={form.reason} placeholder="Purpose of the request" onChange={e => setForm({ ...form, reason: e.target.value })} />
+          </div>
         </div>
-        <div className="mt-4">
-          <GreenBtn disabled={!form.amount || submit.isPending} onClick={() => submit.mutate()}>
+        <div style={{ marginTop:16 }}>
+          <button disabled={!form.amount || submit.isPending} onClick={() => submit.mutate()}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:form.amount?ACCENT:'rgba(0,0,0,0.08)', color:form.amount?'#fff':'#94A3B8', borderRadius:10, border:'none', padding:'9px 20px', fontWeight:700, fontSize:12.5, cursor:form.amount?'pointer':'not-allowed' }}>
             <Wallet size={16} /> Submit Request
-          </GreenBtn>
+          </button>
         </div>
-      </SectionCard>
-
-      <SectionCard title="My Loans & Advances">
+      </div>
+      <div style={{ ...GCA, padding:20 }}>
+        <span style={STA}>My Loans & Advances</span>
         <Table
           columns={[
             { key: 'requested_date', label: 'Requested', render: r => String(r.requested_date||'').slice(0,10) },
@@ -2497,7 +2489,7 @@ function LoansTab() {
           rows={loans.data || []}
           empty="No loan or advance requests yet"
         />
-      </SectionCard>
+      </div>
     </div>
   );
 }
