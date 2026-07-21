@@ -390,6 +390,9 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
     });
   }, [statusMap, todayStr]);
 
+  // Holiday dates set from hr_holidays (via summary API)
+  const holidayDateSet = useMemo(() => new Set((summary?.attendance?.holiday_dates || [])), [summary]);
+
   // Monthly dot grid
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const monthlyDots = useMemo(() => {
@@ -399,10 +402,13 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
     for (let d = 1; d <= dim; d++) {
       const ds = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const wday = new Date(ds).getDay();
-      result.push({ d, ds, code: statusMap[ds]?.code, isWknd: wday===0||wday===6, isToday: ds===todayStr });
+      const isWknd = wday===0||wday===6;
+      const isHoliday = holidayDateSet.has(ds);
+      const code = statusMap[ds]?.code || (isHoliday ? 'H' : isWknd ? 'WO' : null);
+      result.push({ d, ds, code, isWknd, isToday: ds===todayStr });
     }
     return result;
-  }, [statusMap, todayStr]);
+  }, [statusMap, todayStr, holidayDateSet]);
 
   const statCards = [
     {
@@ -613,7 +619,7 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
                 { label:'Present', val:attendance.present??0,   color:'#059669' },
                 { label:'Absent',  val:attendance.absent??0,    color:'#DC2626' },
                 { label:'Half Day',val:attendance.half_day??0,  color:'#D97706' },
-                { label:'Holiday', val:(attQ.data||[]).filter(r=>normaliseStatus(r.status)==='H').length, color:'#4F46E5' },
+                { label:'Holiday', val:attendance.holidays_in_month??0, color:'#4F46E5' },
               ].map(({ label,val,color }) => (
                 <div key={label} style={{ textAlign:'center',padding:'8px 4px',background:T.bg,borderRadius:10,border:`1px solid ${T.bdr}` }}>
                   <div style={{ fontSize:18,fontWeight:800,color,lineHeight:1 }}>{val}</div>
@@ -622,10 +628,10 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
               ))}
             </div>
             <div style={{ display:'grid',gridTemplateColumns:'repeat(11,1fr)',gap:3 }}>
-              {monthlyDots.map(({ ds,code,isWknd,isToday }) => {
+              {monthlyDots.map(({ ds,code,isToday }) => {
                 const BG = { P:'rgba(37,99,235,.15)',A:'rgba(239,68,68,.12)',L:'rgba(139,92,246,.12)',H:'rgba(34,197,94,.12)',HD:'rgba(245,158,11,.12)',WO:'rgba(0,0,0,.04)' };
                 const BD = { P:'rgba(37,99,235,.35)',A:'rgba(239,68,68,.3)',L:'rgba(139,92,246,.3)',H:'rgba(34,197,94,.3)',HD:'rgba(245,158,11,.3)',WO:'rgba(0,0,0,.07)' };
-                return <div key={ds} title={`${ds}: ${code||(isWknd?'WO':'--')}`} style={{ aspectRatio:'1',borderRadius:4,background:BG[code]||'rgba(0,0,0,.04)',border:`1px solid ${BD[code]||'rgba(0,0,0,.06)'}`,outline:isToday?`2px solid ${T.pri}`:undefined,outlineOffset:isToday?1:undefined }} />;
+                return <div key={ds} title={`${ds}: ${code||'--'}`} style={{ aspectRatio:'1',borderRadius:4,background:BG[code]||'rgba(0,0,0,.02)',border:`1px solid ${BD[code]||'rgba(0,0,0,.04)'}`,outline:isToday?`2px solid ${T.pri}`:undefined,outlineOffset:isToday?1:undefined }} />;
               })}
             </div>
           </div>

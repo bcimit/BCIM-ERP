@@ -179,7 +179,16 @@ router.get('/summary', async (req, res) => {
            COUNT(*) FILTER (WHERE status='leave')    AS on_leave,
            COUNT(*) FILTER (WHERE status='holiday')  AS holidays,
            COUNT(*) FILTER (WHERE status='week_off') AS week_off,
-           COALESCE(SUM(late_minutes),0)             AS late_minutes
+           COALESCE(SUM(late_minutes),0)             AS late_minutes,
+           (SELECT COUNT(*)::int FROM hr_holidays
+            WHERE company_id=$1
+              AND EXTRACT(MONTH FROM holiday_date)=$3
+              AND EXTRACT(YEAR  FROM holiday_date)=$4) AS holidays_in_month,
+           (SELECT COALESCE(json_agg(holiday_date::text ORDER BY holiday_date),'[]'::json)
+            FROM hr_holidays
+            WHERE company_id=$1
+              AND EXTRACT(MONTH FROM holiday_date)=$3
+              AND EXTRACT(YEAR  FROM holiday_date)=$4) AS holiday_dates
          FROM reconciled`,
         [companyId, userId, month, year]
       ),
