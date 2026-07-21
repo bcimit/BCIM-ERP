@@ -1347,9 +1347,18 @@ function AttendanceTab({ leaveTypes }) {
       else if (rec.code==='HD') HD++; else if (rec.code==='L') L++;
       else if (rec.code==='H') H++;
     }
+    // Infer absents: past working days with no biometric record
+    const dim = new Date(calYear, calMonth+1, 0).getDate();
+    for (let d = 1; d <= dim; d++) {
+      const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if (ds >= todayStr) break;
+      const dow = new Date(ds).getDay();
+      if (dow===0||dow===6) continue;
+      if (!statusMap[ds]) A++;
+    }
     const worked = P+A+HD+L;
     return { P, A, HD, L, H, worked, pct: worked>0 ? Math.round((P/worked)*100) : 0 };
-  }, [statusMap, calYear, calMonth]);
+  }, [statusMap, calYear, calMonth, todayStr]);
 
   /* ── design tokens ── */
   const T = {
@@ -1362,12 +1371,13 @@ function AttendanceTab({ leaveTypes }) {
   const Cd = (ex={}) => ({ background:T.card, borderRadius:18, border:`1px solid ${T.bdr}`, boxShadow:T.sh, ...ex });
 
   const STATUS_STYLE = {
-    P:  { bg:'rgba(16,185,129,.12)', fg:'#059669', bdr:'rgba(16,185,129,.25)',  label:'Present'  },
-    A:  { bg:'rgba(239,68,68,.1)',   fg:'#DC2626', bdr:'rgba(239,68,68,.22)',   label:'Absent'   },
-    HD: { bg:'rgba(245,158,11,.1)',  fg:'#B45309', bdr:'rgba(245,158,11,.22)',  label:'Half Day' },
-    L:  { bg:'rgba(139,92,246,.1)', fg:'#7C3AED', bdr:'rgba(139,92,246,.22)', label:'Leave'    },
-    H:  { bg:'rgba(99,102,241,.1)', fg:'#4338CA', bdr:'rgba(99,102,241,.22)', label:'Holiday'  },
-    WO: { bg:'rgba(0,0,0,.03)',     fg:'#94A3B8', bdr:'rgba(0,0,0,.07)',      label:'Week Off' },
+    P:  { bg:'rgba(16,185,129,.12)',  fg:'#059669', bdr:'rgba(16,185,129,.3)',   label:'Present'  },
+    PL: { bg:'rgba(245,158,11,.13)',  fg:'#B45309', bdr:'rgba(245,158,11,.35)',  label:'Late'     },
+    A:  { bg:'rgba(239,68,68,.13)',   fg:'#DC2626', bdr:'rgba(239,68,68,.3)',    label:'Absent'   },
+    HD: { bg:'rgba(251,146,60,.13)',  fg:'#C2410C', bdr:'rgba(251,146,60,.3)',   label:'Half Day' },
+    L:  { bg:'rgba(139,92,246,.1)',   fg:'#7C3AED', bdr:'rgba(139,92,246,.25)', label:'Leave'    },
+    H:  { bg:'rgba(99,102,241,.1)',   fg:'#4338CA', bdr:'rgba(99,102,241,.25)', label:'Holiday'  },
+    WO: { bg:'rgba(0,0,0,.03)',       fg:'#94A3B8', bdr:'rgba(0,0,0,.07)',      label:'Week Off' },
   };
 
   /* attendance% ring */
@@ -1463,7 +1473,7 @@ function AttendanceTab({ leaveTypes }) {
           <div style={{ padding:'16px 18px', borderBottom:`1px solid ${T.bdr}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
             <div style={{ fontSize:14,fontWeight:700,color:T.t1 }}>{MONTH_NAMES[calMonth]} {calYear} — Attendance</div>
             <div style={{ display:'flex',gap:'6px 12px',flexWrap:'wrap' }}>
-              {[['P','Present','#059669'],['A','Absent','#DC2626'],['HD','Half Day','#B45309'],['L','Leave','#7C3AED'],['H','Holiday','#4338CA'],['WO','Week Off','#94A3B8']].map(([code,name,color])=>(
+              {[['P','Present','#059669'],['PL','Late','#B45309'],['A','Absent','#DC2626'],['HD','Half Day','#C2410C'],['L','Leave','#7C3AED'],['H','Holiday','#4338CA'],['WO','Week Off','#94A3B8']].map(([code,name,color])=>(
                 <span key={code} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10.5,color:'#64748B' }}>
                   <span style={{ width:8,height:8,borderRadius:2,background:color,display:'inline-block',flexShrink:0 }}/>{name}
                 </span>
@@ -1479,21 +1489,28 @@ function AttendanceTab({ leaveTypes }) {
             <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3 }}>
               {cells.map((day,idx)=>{
                 if (!day) return <div key={`e-${idx}`} />;
-                const ds     = formatDay(day);
-                const rec    = statusMap[ds];
-                const code   = rec?.code;
-                const isToday= ds === todayStr;
-                const isWknd = new Date(ds).getDay()===0||new Date(ds).getDay()===6;
-                const ss     = isToday
+                const ds      = formatDay(day);
+                const rec     = statusMap[ds];
+                const rawCode = rec?.code;
+                const isToday = ds === todayStr;
+                const isPast  = ds < todayStr;
+                const isWknd  = new Date(ds).getDay()===0||new Date(ds).getDay()===6;
+                // Late present = amber cell
+                const isLate  = rawCode === 'P' && (rec?.lateMin || 0) > 0;
+                // Past working day with no biometric record = inferred absent
+                const isNoPunch = !rawCode && !isWknd && isPast;
+                const code    = isLate ? 'PL' : isNoPunch ? 'A' : rawCode;
+                const ss      = isToday
                   ? { bg:'linear-gradient(135deg,#059669,#06B6D4)', fg:'#fff', bdr:'transparent' }
                   : code && STATUS_STYLE[code]
                   ? { bg:STATUS_STYLE[code].bg, fg:STATUS_STYLE[code].fg, bdr:STATUS_STYLE[code].bdr }
                   : isWknd
                   ? { bg:'rgba(0,0,0,.03)', fg:'#CBD5E1', bdr:'transparent' }
                   : { bg:'rgba(0,0,0,.01)', fg:'#94A3B8', bdr:'transparent' };
+                const titleTxt = isNoPunch ? `${ds}: No punch recorded`
+                  : rec ? `${rawCode}${rec.inTime?' – In: '+String(rec.inTime).slice(0,5):''}${rec.lateMin?' – Late: '+rec.lateMin+'m':''}` : undefined;
                 return (
-                  <div key={day}
-                    title={rec?`${code}${rec.inTime?' – In: '+String(rec.inTime).slice(0,5):''}${rec.lateMin?' – Late: '+rec.lateMin+'m':''}`:undefined}
+                  <div key={day} title={titleTxt}
                     style={{ borderRadius:10,padding:'6px 5px 7px',minHeight:58,display:'flex',flexDirection:'column',gap:2,background:ss.bg,border:`1px solid ${ss.bdr||'transparent'}`,cursor:'default',transition:'.1s' }}
                     onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 2px 8px rgba(0,0,0,.1)';}}
                     onMouseLeave={e=>{e.currentTarget.style.boxShadow='';}}
@@ -1501,15 +1518,19 @@ function AttendanceTab({ leaveTypes }) {
                     <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between' }}>
                       <span style={{ fontSize:11.5,fontWeight:700,color:ss.fg,lineHeight:1 }}>{day}</span>
                       {isToday && <span style={{ fontSize:6.5,fontWeight:800,background:'rgba(255,255,255,.25)',color:'#fff',padding:'1px 4px',borderRadius:3,letterSpacing:'.04em' }}>NOW</span>}
+                      {isLate && !isToday && <span style={{ fontSize:6,fontWeight:800,background:'rgba(180,83,9,.15)',color:'#B45309',padding:'1px 4px',borderRadius:3,letterSpacing:'.03em' }}>LATE</span>}
                     </div>
-                    {code && <span style={{ fontSize:8.5,fontWeight:700,color:isToday?'rgba(255,255,255,.9)':ss.fg }}>{code}</span>}
+                    {code && <span style={{ fontSize:8.5,fontWeight:700,color:isToday?'rgba(255,255,255,.9)':ss.fg }}>{isLate?'P':code}</span>}
                     {rec?.inTime && (
                       <span style={{ fontSize:7.5,color:isToday?'rgba(255,255,255,.75)':ss.fg,opacity:isToday?1:.8,marginTop:'auto',fontVariantNumeric:'tabular-nums' }}>
                         {String(rec.inTime).slice(0,5)}
                       </span>
                     )}
-                    {rec?.lateMin>0 && !isToday && (
+                    {isLate && !isToday && (
                       <span style={{ fontSize:7,color:'#B45309',fontWeight:700 }}>+{rec.lateMin}m</span>
+                    )}
+                    {isNoPunch && (
+                      <span style={{ fontSize:7,color:'#DC2626',fontWeight:600,marginTop:'auto',opacity:.75 }}>No punch</span>
                     )}
                   </div>
                 );
