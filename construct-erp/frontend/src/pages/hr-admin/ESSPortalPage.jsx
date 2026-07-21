@@ -1285,20 +1285,21 @@ function ProfileTab({ profile, balances }) {
    ATTENDANCE TAB
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function AttendanceTab({ leaveTypes }) {
-  const qc = useQueryClient();
+  const qc  = useQueryClient();
   const now = new Date();
   const [calYear,  setCalYear]  = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [swipeDays, setSwipeDays] = useState(14);
-
-  const attendance  = useQuery({ queryKey: ['ess-attendance'],  queryFn: () => essAPI.attendance().then(unwrap) });
-  const corrections = useQuery({ queryKey: ['ess-corrections'], queryFn: () => essAPI.attendanceCorrections().then(unwrap) });
-  const swipes      = useQuery({ queryKey: ['ess-swipes', swipeDays], queryFn: () => essAPI.swipes({ days: swipeDays }).then(unwrap) });
-
   const [correction, setCorrection] = useState({
     attendance_date: today(), requested_status: 'present',
     requested_in_time: '09:30', requested_out_time: '18:00', reason: '',
   });
+
+  /* ── queries ── */
+  const attendance  = useQuery({ queryKey: ['ess-attendance'],  queryFn: () => essAPI.attendance().then(unwrap) });
+  const corrections = useQuery({ queryKey: ['ess-corrections'], queryFn: () => essAPI.attendanceCorrections().then(unwrap) });
+  const swipes      = useQuery({ queryKey: ['ess-swipes', swipeDays], queryFn: () => essAPI.swipes({ days: swipeDays }).then(unwrap) });
+  const balQ        = useQuery({ queryKey: ['ess-leave-balances'], queryFn: () => essAPI.leaveBalances().then(unwrap) });
 
   const refresh = () => ['ess-attendance','ess-corrections','ess-summary','ess-attendance-dash'].forEach(k => qc.invalidateQueries({ queryKey: [k] }));
   const createCorrection = useMutation({
@@ -1307,6 +1308,7 @@ function AttendanceTab({ leaveTypes }) {
     onError:   (e) => toast.error(e?.response?.data?.error || 'Failed to submit correction request'),
   });
 
+  /* ── derived ── */
   const statusMap = useMemo(() => {
     const m = {};
     for (const row of (attendance.data || [])) {
@@ -1328,145 +1330,214 @@ function AttendanceTab({ leaveTypes }) {
   const formatDay = (day) => `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   const todayStr  = today();
 
-  const balQ = useQuery({ queryKey: ['ess-leave-balances'], queryFn: () => essAPI.leaveBalances().then(unwrap) });
-
-  const C = {
-    P:  { bg:'rgba(16,185,129,.1)', fg:'#059669' },
-    A:  { bg:'rgba(239,68,68,.1)',  fg:'#DC2626' },
-    L:  { bg:'rgba(139,92,246,.1)',fg:'#7C3AED' },
-    HD: { bg:'rgba(245,158,11,.1)', fg:'#B45309' },
-    H:  { bg:'rgba(99,102,241,.1)',fg:'#4338CA' },
-    WO: { bg:'rgba(0,0,0,.03)',    fg:'#94A3B8' },
-  };
-  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
-  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
-
   const monthStats = useMemo(() => {
     const prefix = `${calYear}-${String(calMonth+1).padStart(2,'0')}-`;
-    let P=0, A=0, HD=0, L=0;
+    let P=0, A=0, HD=0, L=0, H=0;
     for (const [ds, rec] of Object.entries(statusMap)) {
       if (!ds.startsWith(prefix)) continue;
       const dow = new Date(ds).getDay();
       if (dow===0||dow===6) continue;
       if (rec.code==='P') P++; else if (rec.code==='A') A++;
       else if (rec.code==='HD') HD++; else if (rec.code==='L') L++;
+      else if (rec.code==='H') H++;
     }
     const worked = P+A+HD+L;
-    return { P, A, HD, L, worked, pct: worked>0 ? Math.round((P/worked)*100) : 0 };
+    return { P, A, HD, L, H, worked, pct: worked>0 ? Math.round((P/worked)*100) : 0 };
   }, [statusMap, calYear, calMonth]);
 
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+  /* ── design tokens ── */
+  const T = {
+    bg:'#F0FDF9', card:'#FFFFFF', bdr:'#D1FAE5',
+    t1:'#064E3B', t2:'#065F46', t3:'#6B7280', t4:'#9CA3AF',
+    pri:'#059669', purp:'#7C3AED', blue:'#2563EB',
+    sh:'0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)',
+    shm:'0 4px 16px rgba(0,0,0,.07)',
+  };
+  const Cd = (ex={}) => ({ background:T.card, borderRadius:18, border:`1px solid ${T.bdr}`, boxShadow:T.sh, ...ex });
 
-      {/* Stat chips */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
-        {[
-          { label:'Present',      val:monthStats.P,      fg:'#059669', border:'#059669', sub:`${monthStats.pct}% attendance` },
-          { label:'Absent',       val:monthStats.A,      fg:'#DC2626', border:'#EF4444', sub: monthStats.A>0 ? `${monthStats.A} day${monthStats.A>1?'s':''} this month` : 'None this month' },
-          { label:'Half Day',     val:monthStats.HD,     fg:'#B45309', border:'#F59E0B', sub: monthStats.HD>0 ? `${monthStats.HD} day${monthStats.HD>1?'s':''} this month` : 'None this month' },
-          { label:'On Leave',     val:monthStats.L,      fg:'#7C3AED', border:'#8B5CF6', sub: monthStats.L>0 ? `${monthStats.L} day${monthStats.L>1?'s':''} this month` : 'None this month' },
-          { label:'Working Days', val:monthStats.worked, fg:ACCENT,    border:ACCENT,    sub:`${MONTH_NAMES[calMonth].slice(0,3)} ${calYear}` },
-        ].map(({ label, val, fg, border, sub }) => (
-          <div key={label} style={{ ...GCA, padding:'14px 16px', borderBottom:`3px solid ${border}` }}>
-            <span style={STA}>{label}</span>
-            <span style={{ fontSize:22, fontWeight:700, color:fg, lineHeight:1, display:'block' }}>{val}</span>
-            <span style={{ fontSize:10.5, color:'#94A3B8', marginTop:4, display:'block' }}>{sub}</span>
+  const STATUS_STYLE = {
+    P:  { bg:'rgba(16,185,129,.12)', fg:'#059669', bdr:'rgba(16,185,129,.25)',  label:'Present'  },
+    A:  { bg:'rgba(239,68,68,.1)',   fg:'#DC2626', bdr:'rgba(239,68,68,.22)',   label:'Absent'   },
+    HD: { bg:'rgba(245,158,11,.1)',  fg:'#B45309', bdr:'rgba(245,158,11,.22)',  label:'Half Day' },
+    L:  { bg:'rgba(139,92,246,.1)', fg:'#7C3AED', bdr:'rgba(139,92,246,.22)', label:'Leave'    },
+    H:  { bg:'rgba(99,102,241,.1)', fg:'#4338CA', bdr:'rgba(99,102,241,.22)', label:'Holiday'  },
+    WO: { bg:'rgba(0,0,0,.03)',     fg:'#94A3B8', bdr:'rgba(0,0,0,.07)',      label:'Week Off' },
+  };
+
+  /* attendance% ring */
+  const attPct  = monthStats.pct;
+  const circR   = 36;
+  const circLen = 2 * Math.PI * circR;
+  const fillLen = circLen * (attPct / 100);
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', background:T.bg, minHeight:'100%' }}>
+
+      {/* ── HERO BANNER ── */}
+      <div style={{ background:'linear-gradient(145deg,#022C22 0%,#064E3B 25%,#065F46 60%,#059669 100%)', position:'relative', overflow:'hidden', padding:'28px 28px 52px' }}>
+        <div style={{ position:'absolute',inset:0,pointerEvents:'none',background:'radial-gradient(ellipse 70% 60% at 70% 0%,rgba(16,185,129,.25),transparent),radial-gradient(ellipse 50% 80% at 100% 70%,rgba(52,211,153,.15),transparent)' }} />
+        <div style={{ position:'absolute',inset:0,pointerEvents:'none',backgroundImage:'radial-gradient(rgba(255,255,255,.055) 1px,transparent 1px)',backgroundSize:'24px 24px' }} />
+
+        <div style={{ position:'relative',zIndex:1,display:'flex',alignItems:'center',gap:24,flexWrap:'wrap' }}>
+          {/* Attendance ring */}
+          <div style={{ position:'relative',width:88,height:88,flexShrink:0 }}>
+            <svg width="88" height="88" viewBox="0 0 88 88" style={{ position:'absolute',inset:0 }}>
+              <circle cx="44" cy="44" r={circR} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="7"/>
+              <circle cx="44" cy="44" r={circR} fill="none" stroke="url(#attgrd)" strokeWidth="7"
+                strokeDasharray={`${fillLen} ${circLen}`} strokeLinecap="round" transform="rotate(-90 44 44)"/>
+              <defs>
+                <linearGradient id="attgrd" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#34D399"/>
+                  <stop offset="100%" stopColor="#06B6D4"/>
+                </linearGradient>
+              </defs>
+              <text x="44" y="47" textAnchor="middle" fontSize="14" fontWeight="900" fill="white">{attPct}%</text>
+            </svg>
           </div>
-        ))}
+
+          {/* Title + month */}
+          <div style={{ flex:1,minWidth:200 }}>
+            <div style={{ fontSize:10.5,fontWeight:700,color:'rgba(255,255,255,.55)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:6 }}>Attendance Summary</div>
+            <div style={{ fontSize:26,fontWeight:800,color:'#fff',letterSpacing:'-.03em',lineHeight:1.1,marginBottom:8 }}>{MONTH_NAMES[calMonth]} {calYear}</div>
+            <div style={{ display:'flex',flexWrap:'wrap',gap:'4px 18px',fontSize:12.5,color:'rgba(255,255,255,.6)' }}>
+              <span>{monthStats.P} Present</span>
+              <span>· {monthStats.A} Absent</span>
+              <span>· {monthStats.HD} Half Day</span>
+              <span>· {monthStats.L} On Leave</span>
+            </div>
+          </div>
+
+          {/* Month nav */}
+          <div style={{ display:'flex',alignItems:'center',gap:6,flexShrink:0 }}>
+            <button onClick={prevMonth} style={{ width:32,height:32,borderRadius:9,background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff' }}>
+              <ChevronLeft size={15}/>
+            </button>
+            <button onClick={() => { setCalMonth(now.getMonth()); setCalYear(now.getFullYear()); }}
+              style={{ fontSize:12,fontWeight:700,color:'rgba(255,255,255,.8)',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',borderRadius:9,padding:'5px 14px',cursor:'pointer' }}>
+              Today
+            </button>
+            <button onClick={nextMonth} style={{ width:32,height:32,borderRadius:9,background:'rgba(255,255,255,.15)',border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff' }}>
+              <ChevronRight size={15}/>
+            </button>
+          </div>
+        </div>
+
+        <svg style={{ position:'absolute',bottom:0,left:0,right:0,width:'100%',display:'block',pointerEvents:'none' }} viewBox="0 0 1440 36" preserveAspectRatio="none">
+          <path d="M0,18L60,15C120,12,240,6,360,8C480,10,600,20,720,21C840,23,960,17,1080,13C1200,9,1320,8,1380,8L1440,7V36H0Z" fill={T.bg}/>
+        </svg>
       </div>
 
-      {/* Two-column: Calendar | Side panel */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:16, alignItems:'start' }}>
-
-        {/* Calendar */}
-        <div style={{ ...GCA, padding:20 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <button onClick={prevMonth} style={{ background:'rgba(0,0,0,0.04)', border:'1px solid rgba(0,0,0,0.07)', borderRadius:8, padding:'4px 8px', cursor:'pointer', display:'flex', alignItems:'center' }}>
-                <ChevronLeft size={15} color="#64748B" />
-              </button>
-              <span style={{ fontSize:15, fontWeight:700, color:'#1E293B', minWidth:140, textAlign:'center' }}>{MONTH_NAMES[calMonth]} {calYear}</span>
-              <button onClick={nextMonth} style={{ background:'rgba(0,0,0,0.04)', border:'1px solid rgba(0,0,0,0.07)', borderRadius:8, padding:'4px 8px', cursor:'pointer', display:'flex', alignItems:'center' }}>
-                <ChevronRight size={15} color="#64748B" />
-              </button>
-              <button onClick={() => { setCalMonth(now.getMonth()); setCalYear(now.getFullYear()); }}
-                style={{ fontSize:11, fontWeight:600, color:ACCENT, background:'none', border:'none', cursor:'pointer', marginLeft:4 }}>
-                Today
-              </button>
+      {/* ── KPI STRIP ── */}
+      <div style={{ padding:'0 24px', marginTop:'-2px', position:'relative', zIndex:10 }}>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',background:T.card,borderRadius:16,border:`1px solid ${T.bdr}`,boxShadow:T.shm,overflow:'hidden' }}>
+          {[
+            { label:'Present',      val:monthStats.P,      clr:'#059669' },
+            { label:'Absent',       val:monthStats.A,      clr:'#DC2626' },
+            { label:'Half Day',     val:monthStats.HD,     clr:'#B45309' },
+            { label:'On Leave',     val:monthStats.L,      clr:'#7C3AED' },
+            { label:'Working Days', val:monthStats.worked, clr:T.blue    },
+            { label:'Attendance %', val:`${attPct}%`,      clr:attPct>=90?'#059669':attPct>=75?'#B45309':'#DC2626' },
+          ].map(({ label,val,clr },i)=>(
+            <div key={label} style={{ padding:'14px 16px',borderRight:i<5?`1px solid ${T.bdr}`:undefined,transition:'.15s' }}
+              onMouseEnter={e=>{e.currentTarget.style.background='rgba(5,150,105,.04)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='';}}
+            >
+              <div style={{ fontSize:10,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5 }}>{label}</div>
+              <div style={{ fontSize:22,fontWeight:800,color:clr,letterSpacing:'-.02em',lineHeight:1 }}>{val}</div>
             </div>
-            <div style={{ display:'flex', gap:10 }}>
-              {[['P','Present','#10B981'],['A','Absent','#EF4444'],['HD','Half Day','#F59E0B'],['L','Leave','#8B5CF6'],['H','Holiday','#6366F1']].map(([code,name,color]) => (
-                <span key={code} style={{ display:'flex', alignItems:'center', gap:3, fontSize:10.5, color:'#94A3B8' }}>
-                  <span style={{ width:8, height:8, borderRadius:2, background:color, display:'inline-block' }} />{name}
+          ))}
+        </div>
+      </div>
+
+      {/* ── MAIN GRID: Calendar + Right Panel ── */}
+      <div style={{ padding:'20px 24px', display:'grid', gridTemplateColumns:'1fr 300px', gap:18, alignItems:'start' }}>
+
+        {/* CALENDAR */}
+        <div style={{ ...Cd() }}>
+          <div style={{ padding:'16px 18px', borderBottom:`1px solid ${T.bdr}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+            <div style={{ fontSize:14,fontWeight:700,color:T.t1 }}>{MONTH_NAMES[calMonth]} {calYear} — Attendance</div>
+            <div style={{ display:'flex',gap:'6px 12px',flexWrap:'wrap' }}>
+              {[['P','Present','#059669'],['A','Absent','#DC2626'],['HD','Half Day','#B45309'],['L','Leave','#7C3AED'],['H','Holiday','#4338CA'],['WO','Week Off','#94A3B8']].map(([code,name,color])=>(
+                <span key={code} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10.5,color:'#64748B' }}>
+                  <span style={{ width:8,height:8,borderRadius:2,background:color,display:'inline-block',flexShrink:0 }}/>{name}
                 </span>
               ))}
             </div>
           </div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginBottom:3 }}>
-            {DAYS_OF_WEEK.map(d => (
-              <div key={d} style={{ textAlign:'center', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', color:'#94A3B8', padding:'3px 0' }}>{d}</div>
-            ))}
-          </div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3 }}>
-            {cells.map((day, idx) => {
-              if (!day) return <div key={`e-${idx}`} />;
-              const ds      = formatDay(day);
-              const rec     = statusMap[ds];
-              const code    = rec?.code;
-              const isToday = ds === todayStr;
-              const isWknd  = new Date(ds).getDay()===0 || new Date(ds).getDay()===6;
-              const cs      = isToday ? { bg:ACCENT, fg:'#fff' } :
-                              code && C[code] ? { bg:C[code].bg, fg:C[code].fg } :
-                              isWknd ? { bg:'rgba(0,0,0,0.03)', fg:'#CBD5E1' } :
-                              { bg:'rgba(0,0,0,0.01)', fg:'#94A3B8' };
-              return (
-                <div key={day}
-                  title={rec ? `${code}${rec.inTime ? ' – In: '+String(rec.inTime).slice(0,5) : ''}${rec.lateMin ? ' – Late: '+rec.lateMin+'m' : ''}` : undefined}
-                  style={{ borderRadius:8, padding:'5px 5px 6px', minHeight:60, display:'flex', flexDirection:'column', gap:2, background:cs.bg }}
-                >
-                  <div style={{ display:'flex', alignItems:'center', justifyContent: isToday ? 'space-between' : 'flex-start' }}>
-                    <span style={{ fontSize:11, fontWeight:700, color:cs.fg, lineHeight:1 }}>{day}</span>
-                    {isToday && <span style={{ fontSize:7.5, fontWeight:800, background:'rgba(255,255,255,0.25)', color:'#fff', padding:'1px 4px', borderRadius:3, letterSpacing:'0.04em' }}>TODAY</span>}
+          <div style={{ padding:'14px 16px' }}>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3,marginBottom:4 }}>
+              {DAYS_OF_WEEK.map(d=>(
+                <div key={d} style={{ textAlign:'center',fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'.07em',color:T.t4,padding:'3px 0' }}>{d}</div>
+              ))}
+            </div>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3 }}>
+              {cells.map((day,idx)=>{
+                if (!day) return <div key={`e-${idx}`} />;
+                const ds     = formatDay(day);
+                const rec    = statusMap[ds];
+                const code   = rec?.code;
+                const isToday= ds === todayStr;
+                const isWknd = new Date(ds).getDay()===0||new Date(ds).getDay()===6;
+                const ss     = isToday
+                  ? { bg:'linear-gradient(135deg,#059669,#06B6D4)', fg:'#fff', bdr:'transparent' }
+                  : code && STATUS_STYLE[code]
+                  ? { bg:STATUS_STYLE[code].bg, fg:STATUS_STYLE[code].fg, bdr:STATUS_STYLE[code].bdr }
+                  : isWknd
+                  ? { bg:'rgba(0,0,0,.03)', fg:'#CBD5E1', bdr:'transparent' }
+                  : { bg:'rgba(0,0,0,.01)', fg:'#94A3B8', bdr:'transparent' };
+                return (
+                  <div key={day}
+                    title={rec?`${code}${rec.inTime?' – In: '+String(rec.inTime).slice(0,5):''}${rec.lateMin?' – Late: '+rec.lateMin+'m':''}`:undefined}
+                    style={{ borderRadius:10,padding:'6px 5px 7px',minHeight:58,display:'flex',flexDirection:'column',gap:2,background:ss.bg,border:`1px solid ${ss.bdr||'transparent'}`,cursor:'default',transition:'.1s' }}
+                    onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 2px 8px rgba(0,0,0,.1)';}}
+                    onMouseLeave={e=>{e.currentTarget.style.boxShadow='';}}
+                  >
+                    <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+                      <span style={{ fontSize:11.5,fontWeight:700,color:ss.fg,lineHeight:1 }}>{day}</span>
+                      {isToday && <span style={{ fontSize:6.5,fontWeight:800,background:'rgba(255,255,255,.25)',color:'#fff',padding:'1px 4px',borderRadius:3,letterSpacing:'.04em' }}>NOW</span>}
+                    </div>
+                    {code && <span style={{ fontSize:8.5,fontWeight:700,color:isToday?'rgba(255,255,255,.9)':ss.fg }}>{code}</span>}
+                    {rec?.inTime && (
+                      <span style={{ fontSize:7.5,color:isToday?'rgba(255,255,255,.75)':ss.fg,opacity:isToday?1:.8,marginTop:'auto',fontVariantNumeric:'tabular-nums' }}>
+                        {String(rec.inTime).slice(0,5)}
+                      </span>
+                    )}
+                    {rec?.lateMin>0 && !isToday && (
+                      <span style={{ fontSize:7,color:'#B45309',fontWeight:700 }}>+{rec.lateMin}m</span>
+                    )}
                   </div>
-                  {code && <span style={{ fontSize:8.5, fontWeight:700, color: isToday ? 'rgba(255,255,255,0.9)' : cs.fg }}>{code}</span>}
-                  {rec?.inTime && (
-                    <span style={{ fontSize:8, color: isToday ? 'rgba(255,255,255,0.75)' : cs.fg, opacity: isToday?1:0.7, marginTop:'auto', fontVariantNumeric:'tabular-nums' }}>
-                      {String(rec.inTime).slice(0,5)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Right side panel */}
-        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {/* RIGHT PANEL */}
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-          {/* Leave Balance */}
-          <div style={{ ...GCA, padding:16 }}>
-            <span style={STA}>Leave Balance</span>
+          {/* Leave Balances */}
+          <div style={{ ...Cd(), padding:'16px 18px' }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12 }}>Leave Balances</div>
             {!(balQ.data||[]).length ? (
-              <p style={{ fontSize:12, color:'#94A3B8' }}>No balance data</p>
+              <div style={{ fontSize:12,color:T.t4,textAlign:'center',padding:'8px 0' }}>No balance data</div>
             ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-                {(balQ.data||[]).map((b,i) => {
+              <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+                {(balQ.data||[]).map((b,i)=>{
                   const bal  = Number(b.closing_balance??0);
-                  const max  = Number(b.total_entitlement||b.closing_balance||20);
-                  const pct  = max>0 ? Math.min(100,Math.round((bal/max)*100)) : 0;
-                  const cols = ['#8B5CF6','#2F6FED','#10B981','#F59E0B','#EF4444'];
+                  const max  = Number(b.total_entitlement||b.closing_balance||20)||1;
+                  const pct  = Math.min(100,Math.round((bal/max)*100));
+                  const cols = ['#059669','#2563EB','#7C3AED','#F59E0B','#EF4444'];
                   const col  = cols[i%cols.length];
                   return (
-                    <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                      <span style={{ fontSize:11.5, color:'#475569', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.leave_type_name}</span>
-                      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
-                        <div style={{ width:56, height:3, background:'rgba(0,0,0,0.07)', borderRadius:99, overflow:'hidden' }}>
-                          <div style={{ width:`${pct}%`, height:'100%', background:col, borderRadius:99 }} />
-                        </div>
-                        <span style={{ fontSize:12, fontWeight:700, color:'#1E293B', fontVariantNumeric:'tabular-nums', minWidth:24, textAlign:'right' }}>{bal.toFixed(1)}</span>
+                    <div key={i}>
+                      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4 }}>
+                        <span style={{ fontSize:12,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1 }}>{b.leave_type_name}</span>
+                        <span style={{ fontSize:13,fontWeight:800,color:col,flexShrink:0,marginLeft:8 }}>{bal.toFixed(1)}<span style={{ fontSize:9,fontWeight:600,color:T.t4 }}> days</span></span>
                       </div>
+                      <div style={{ height:5,background:'rgba(0,0,0,.06)',borderRadius:99 }}>
+                        <div style={{ height:5,borderRadius:99,width:`${pct}%`,background:col,transition:'width .5s ease' }} />
+                      </div>
+                      <div style={{ fontSize:9.5,color:T.t4,marginTop:2,textAlign:'right' }}>{Number(b.taken??0).toFixed(1)} taken · {Number(b.accrued??0).toFixed(1)} accrued</div>
                     </div>
                   );
                 })}
@@ -1475,47 +1546,55 @@ function AttendanceTab({ leaveTypes }) {
           </div>
 
           {/* Correction Form */}
-          <div style={{ ...GCA, padding:16 }}>
-            <span style={STA}>Attendance Correction</span>
-            <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Missed punch or wrong status — raise a correction request.</p>
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ ...Cd(), padding:'16px 18px' }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4 }}>Attendance Correction</div>
+            <p style={{ fontSize:11.5,color:T.t3,marginBottom:12 }}>Missed punch or wrong status? Raise a correction.</p>
+            <div style={{ display:'flex',flexDirection:'column',gap:9 }}>
               <div>
-                <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Date</label>
-                <input type="date" className={inputCls} value={correction.attendance_date}
-                  onChange={e => setCorrection({ ...correction, attendance_date: e.target.value })} style={{ width:'100%' }} />
+                <label style={{ fontSize:10.5,fontWeight:700,color:T.t4,display:'block',marginBottom:4 }}>Date</label>
+                <input type="date" value={correction.attendance_date}
+                  onChange={e=>setCorrection({...correction, attendance_date:e.target.value})}
+                  style={{ width:'100%',borderRadius:10,border:`1px solid ${T.bdr}`,padding:'8px 12px',fontSize:13,color:T.t1,outline:'none',background:'#F0FDF9',boxSizing:'border-box' }}
+                />
               </div>
               <div>
-                <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Status</label>
-                <select className={inputCls} value={correction.requested_status}
-                  onChange={e => setCorrection({ ...correction, requested_status: e.target.value })} style={{ width:'100%' }}>
+                <label style={{ fontSize:10.5,fontWeight:700,color:T.t4,display:'block',marginBottom:4 }}>Requested Status</label>
+                <select value={correction.requested_status}
+                  onChange={e=>setCorrection({...correction, requested_status:e.target.value})}
+                  style={{ width:'100%',borderRadius:10,border:`1px solid ${T.bdr}`,padding:'8px 12px',fontSize:13,color:T.t1,outline:'none',background:'#F0FDF9',cursor:'pointer',boxSizing:'border-box' }}>
                   <option value="present">Present</option>
                   <option value="half_day">Half Day</option>
                   <option value="on_duty">On Duty</option>
                 </select>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8 }}>
                 <div>
-                  <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>In Time</label>
-                  <input type="time" className={inputCls} value={correction.requested_in_time}
-                    onChange={e => setCorrection({ ...correction, requested_in_time: e.target.value })} style={{ width:'100%' }} />
+                  <label style={{ fontSize:10.5,fontWeight:700,color:T.t4,display:'block',marginBottom:4 }}>In Time</label>
+                  <input type="time" value={correction.requested_in_time}
+                    onChange={e=>setCorrection({...correction,requested_in_time:e.target.value})}
+                    style={{ width:'100%',borderRadius:10,border:`1px solid ${T.bdr}`,padding:'8px 10px',fontSize:13,color:T.t1,outline:'none',background:'#F0FDF9',boxSizing:'border-box' }}/>
                 </div>
                 <div>
-                  <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Out Time</label>
-                  <input type="time" className={inputCls} value={correction.requested_out_time}
-                    onChange={e => setCorrection({ ...correction, requested_out_time: e.target.value })} style={{ width:'100%' }} />
+                  <label style={{ fontSize:10.5,fontWeight:700,color:T.t4,display:'block',marginBottom:4 }}>Out Time</label>
+                  <input type="time" value={correction.requested_out_time}
+                    onChange={e=>setCorrection({...correction,requested_out_time:e.target.value})}
+                    style={{ width:'100%',borderRadius:10,border:`1px solid ${T.bdr}`,padding:'8px 10px',fontSize:13,color:T.t1,outline:'none',background:'#F0FDF9',boxSizing:'border-box' }}/>
                 </div>
               </div>
               <div>
-                <label style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600, display:'block', marginBottom:4 }}>Reason</label>
-                <input className={inputCls} value={correction.reason} placeholder="Reason for correction"
-                  onChange={e => setCorrection({ ...correction, reason: e.target.value })} style={{ width:'100%' }} />
+                <label style={{ fontSize:10.5,fontWeight:700,color:T.t4,display:'block',marginBottom:4 }}>Reason</label>
+                <input value={correction.reason} placeholder="Brief reason for correction"
+                  onChange={e=>setCorrection({...correction,reason:e.target.value})}
+                  style={{ width:'100%',borderRadius:10,border:`1px solid ${T.bdr}`,padding:'8px 12px',fontSize:13,color:T.t1,outline:'none',background:'#F0FDF9',boxSizing:'border-box' }}/>
               </div>
               <button
-                disabled={!correction.reason || createCorrection.isPending}
-                onClick={() => createCorrection.mutate(correction)}
-                style={{ marginTop:4, width:'100%', padding:'9px', borderRadius:10, border:'none', cursor: correction.reason ? 'pointer' : 'not-allowed', background: correction.reason ? ACCENT : 'rgba(0,0,0,0.06)', color: correction.reason ? '#fff' : '#94A3B8', fontSize:12.5, fontWeight:700 }}
-              >
-                {createCorrection.isPending ? 'Submitting…' : 'Submit Correction'}
+                disabled={!correction.reason||createCorrection.isPending}
+                onClick={()=>createCorrection.mutate(correction)}
+                style={{ padding:'10px',borderRadius:11,border:'none',cursor:correction.reason?'pointer':'not-allowed',
+                  background:correction.reason?'linear-gradient(135deg,#059669,#0D9488)':'rgba(0,0,0,.06)',
+                  color:correction.reason?'#fff':'#94A3B8',fontSize:13,fontWeight:700,
+                  boxShadow:correction.reason?'0 4px 14px rgba(5,150,105,.35)':undefined,transition:'.15s' }}>
+                {createCorrection.isPending ? 'Submitting…' : 'Submit Correction Request'}
               </button>
             </div>
           </div>
@@ -1523,89 +1602,129 @@ function AttendanceTab({ leaveTypes }) {
         </div>
       </div>
 
-      {/* Correction History */}
-      <div style={{ ...GCA, padding:20 }}>
-        <span style={{ fontSize:14, fontWeight:700, color:'#1E293B', marginBottom:14, display:'block' }}>My Correction Requests</span>
-        <Table
-          columns={[
-            { key: 'attendance_date',  label: 'Date',    render: r => String(r.attendance_date||'').slice(0,10) },
-            { key: 'requested_status', label: 'Status'  },
-            { key: 'reason',           label: 'Reason'  },
-            { key: 'status',           label: 'Approval', render: r => <StatusBadge value={r.status} /> },
-          ]}
-          rows={corrections.data || []}
-        />
+      {/* ── CORRECTION HISTORY ── */}
+      <div style={{ padding:'0 24px 16px' }}>
+        <div style={{ ...Cd(), padding:'16px 20px' }}>
+          <div style={{ fontSize:13,fontWeight:700,color:T.t1,marginBottom:14 }}>My Correction Requests</div>
+          {!(corrections.data||[]).length ? (
+            <div style={{ textAlign:'center',padding:'16px 0',color:T.t4,fontSize:12 }}>No correction requests yet</div>
+          ) : (
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%',borderCollapse:'collapse',fontSize:12.5 }}>
+                <thead>
+                  <tr style={{ background:'#F0FDF9' }}>
+                    {['Date','Requested Status','Reason','Approval'].map(h=>(
+                      <th key={h} style={{ padding:'8px 12px',textAlign:'left',fontSize:10,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',borderBottom:`1px solid ${T.bdr}`,whiteSpace:'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(corrections.data||[]).map((r,i)=>(
+                    <tr key={r.id||i} style={{ borderBottom:`1px solid ${T.bdr}` }}
+                      onMouseEnter={e=>{e.currentTarget.style.background='rgba(5,150,105,.03)';}}
+                      onMouseLeave={e=>{e.currentTarget.style.background='';}}
+                    >
+                      <td style={{ padding:'10px 12px',fontWeight:600,color:T.t1,fontVariantNumeric:'tabular-nums' }}>{String(r.attendance_date||'').slice(0,10)}</td>
+                      <td style={{ padding:'10px 12px',color:T.t2 }}>{r.requested_status}</td>
+                      <td style={{ padding:'10px 12px',color:T.t3,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{r.reason}</td>
+                      <td style={{ padding:'10px 12px' }}><StatusBadge value={r.status}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Biometric Swipe Logs */}
-      <div style={{ ...GCA, padding:20 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-          <div>
-            <span style={{ fontSize:14, fontWeight:700, color:'#1E293B' }}>Biometric Swipe Logs</span>
-            <p style={{ fontSize:11.5, color:'#94A3B8', marginTop:2 }}>All punches recorded by the ESSL device for your card</p>
+      {/* ── BIOMETRIC SWIPE LOGS ── */}
+      <div style={{ padding:'0 24px 32px' }}>
+        <div style={{ ...Cd(), overflow:'hidden' }}>
+          <div style={{ padding:'16px 20px', borderBottom:`1px solid ${T.bdr}`, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+            <div>
+              <div style={{ fontSize:13,fontWeight:700,color:T.t1 }}>Biometric Swipe Logs</div>
+              <div style={{ fontSize:11.5,color:T.t4,marginTop:1 }}>All punches recorded by the ESSL device</div>
+            </div>
+            <div style={{ display:'flex',alignItems:'center',gap:6 }}>
+              <span style={{ fontSize:10.5,color:T.t4,fontWeight:600 }}>Last</span>
+              {[7,14,30,60].map(d=>(
+                <button key={d} onClick={()=>setSwipeDays(d)}
+                  style={{ fontSize:11.5,fontWeight:700,padding:'4px 12px',borderRadius:20,border:'1px solid',cursor:'pointer',transition:'.15s',
+                    background:swipeDays===d?'linear-gradient(135deg,#059669,#0D9488)':'transparent',
+                    color:swipeDays===d?'#fff':'#64748B',
+                    borderColor:swipeDays===d?'#059669':'#D1D5DB',
+                    boxShadow:swipeDays===d?'0 2px 8px rgba(5,150,105,.3)':undefined }}>
+                  {d}d
+                </button>
+              ))}
+            </div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:10.5, color:'#94A3B8', fontWeight:600 }}>Show last</span>
-            {[7,14,30,60].map(d => (
-              <button key={d} onClick={() => setSwipeDays(d)}
-                style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:20, border:'1px solid', cursor:'pointer',
-                  background: swipeDays===d ? ACCENT : 'transparent',
-                  color:      swipeDays===d ? '#fff'  : '#64748B',
-                  borderColor:swipeDays===d ? ACCENT  : '#d1d5db' }}
-              >{d}d</button>
-            ))}
+
+          <div style={{ padding:'14px 20px' }}>
+            {swipes.isLoading ? (
+              <div style={{ textAlign:'center',padding:'24px 0',color:T.t4,fontSize:12 }}>Loading swipes…</div>
+            ) : !(swipes.data||[]).length ? (
+              <div style={{ textAlign:'center',padding:'24px 0' }}>
+                <div style={{ fontSize:13,color:T.t4,fontWeight:600 }}>No swipe records for the last {swipeDays} days</div>
+                <div style={{ fontSize:11,color:T.t4,marginTop:4 }}>Biometric data syncs automatically from the ESSL device</div>
+              </div>
+            ) : (
+              <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+                {groupByDate(swipes.data||[]).map(([date,daySwipes])=>{
+                  const d        = new Date(date+'T00:00:00');
+                  const dayLabel = d.toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+                  const isIn     = s=>String(s.direction||'').toLowerCase().includes('in') ||s.direction==='0';
+                  const isOut    = s=>String(s.direction||'').toLowerCase().includes('out')||s.direction==='1';
+                  const firstIn  = daySwipes.find(isIn);
+                  const lastOut  = [...daySwipes].reverse().find(isOut);
+                  const isToday2 = date === todayStr;
+                  return (
+                    <div key={date} style={{ borderRadius:14,overflow:'hidden',border:`1px solid ${T.bdr}` }}>
+                      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 16px',background:isToday2?'linear-gradient(135deg,#059669,#0D9488)':'linear-gradient(135deg,#022C22,#064E3B)' }}>
+                        <span style={{ fontSize:12.5,fontWeight:700,color:'#fff' }}>{dayLabel}</span>
+                        <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+                          {firstIn && (
+                            <span style={{ fontSize:11,color:'rgba(255,255,255,.7)' }}>
+                              In: <strong style={{ color:'#fff',fontVariantNumeric:'tabular-nums' }}>{(()=>{const t=esslTime(firstIn.swipe_time);return fmt12(t.h,t.m);})()}</strong>
+                            </span>
+                          )}
+                          {lastOut && (
+                            <span style={{ fontSize:11,color:'rgba(255,255,255,.7)' }}>
+                              Out: <strong style={{ color:'#fff',fontVariantNumeric:'tabular-nums' }}>{(()=>{const t=esslTime(lastOut.swipe_time);return fmt12(t.h,t.m);})()}</strong>
+                            </span>
+                          )}
+                          <span style={{ fontSize:10.5,background:'rgba(255,255,255,.18)',color:'#fff',borderRadius:10,padding:'2px 9px',fontWeight:700 }}>{daySwipes.length} punch{daySwipes.length!==1?'es':''}</span>
+                        </div>
+                      </div>
+                      <div>
+                        {daySwipes.map((s,i)=>{
+                          const et=esslTime(s.swipe_time);
+                          return (
+                            <div key={i} style={{ display:'flex',alignItems:'center',gap:12,padding:'9px 16px',borderBottom:i<daySwipes.length-1?`1px solid ${T.bdr}`:undefined,background:i%2===0?'#fff':'#F9FEF9',transition:'.1s' }}
+                              onMouseEnter={e=>{e.currentTarget.style.background='rgba(5,150,105,.05)';}}
+                              onMouseLeave={e=>{e.currentTarget.style.background=i%2===0?'#fff':'#F9FEF9';}}
+                            >
+                              <span style={{ width:22,textAlign:'center',fontSize:10.5,fontWeight:700,color:T.t4 }}>{i+1}</span>
+                              <SwipeDir direction={s.direction}/>
+                              <span style={{ fontSize:13.5,fontWeight:700,color:T.t1,fontVariantNumeric:'tabular-nums' }}>{fmt12(et.h,et.m,et.s)}</span>
+                              {s.source && <span style={{ marginLeft:'auto',fontSize:10,color:T.t4,textTransform:'uppercase',letterSpacing:'.06em' }}>{s.source}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
-
-        {swipes.isLoading ? (
-          <p style={{ fontSize:12, color:'#94A3B8', textAlign:'center', padding:'20px 0' }}>Loading swipes…</p>
-        ) : !(swipes.data||[]).length ? (
-          <div style={{ padding:'24px 0', textAlign:'center' }}>
-            <p style={{ fontSize:13, color:'#94A3B8', fontWeight:600 }}>No swipe records for the last {swipeDays} days</p>
-            <p style={{ fontSize:11, color:'#CBD5E1', marginTop:4 }}>Biometric data syncs automatically from the ESSL device</p>
-          </div>
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {groupByDate(swipes.data||[]).map(([date, daySwipes]) => {
-              const d        = new Date(date+'T00:00:00');
-              const dayLabel = d.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
-              const isIn     = s => String(s.direction||'').toLowerCase().includes('in')  || s.direction==='0';
-              const isOut    = s => String(s.direction||'').toLowerCase().includes('out') || s.direction==='1';
-              const firstIn  = daySwipes.find(isIn);
-              const lastOut  = [...daySwipes].reverse().find(isOut);
-              return (
-                <div key={date} style={{ borderRadius:12, overflow:'hidden', border:'1px solid rgba(0,0,0,0.07)' }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 14px', background:DARK }}>
-                    <span style={{ fontSize:12, fontWeight:700, color:'#fff' }}>{dayLabel}</span>
-                    <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                      {firstIn && <span style={{ fontSize:11, color:'rgba(255,255,255,0.65)' }}>In: <strong style={{ color:'#fff' }}>{(() => { const t=esslTime(firstIn.swipe_time); return fmt12(t.h,t.m); })()}</strong></span>}
-                      {lastOut && <span style={{ fontSize:11, color:'rgba(255,255,255,0.65)' }}>Out: <strong style={{ color:'#fff' }}>{(() => { const t=esslTime(lastOut.swipe_time); return fmt12(t.h,t.m); })()}</strong></span>}
-                      <span style={{ fontSize:10.5, background:'rgba(255,255,255,0.2)', color:'#fff', borderRadius:10, padding:'1px 8px', fontWeight:700 }}>{daySwipes.length} punch{daySwipes.length!==1?'es':''}</span>
-                    </div>
-                  </div>
-                  <div style={{ background:'rgba(255,255,255,0.6)' }}>
-                    {daySwipes.map((s,i) => {
-                      const et = esslTime(s.swipe_time);
-                      return (
-                        <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 14px', borderBottom: i<daySwipes.length-1?'1px solid rgba(0,0,0,0.05)':undefined }}>
-                          <span style={{ width:24, textAlign:'center', fontSize:10.5, fontWeight:700, color:'#CBD5E1' }}>{i+1}</span>
-                          <SwipeDir direction={s.direction} />
-                          <span style={{ fontSize:13, fontWeight:700, color:'#1E293B', fontVariantNumeric:'tabular-nums' }}>{fmt12(et.h,et.m,et.s)}</span>
-                          {s.source && <span style={{ marginLeft:'auto', fontSize:10, color:'#CBD5E1', textTransform:'uppercase', letterSpacing:'0.06em' }}>{s.source}</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
     </div>
   );
 }
+
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    LEAVE TAB
