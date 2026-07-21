@@ -960,102 +960,326 @@ function ProfilePhotoAvatar({ profile, size = 80, editable = false }) {
 }
 
 function ProfileTab({ profile, balances }) {
-  const name = profile?.name || 'Employee';
   const p = profile || {};
-  const GCA = { background:'rgba(255,255,255,0.88)', border:'1px solid rgba(255,255,255,0.95)', borderRadius:16, boxShadow:'0 2px 16px rgba(0,0,0,.055),0 1px 3px rgba(0,0,0,.04)' };
-  const STA = { fontSize:10.5, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:8, display:'block' };
+  const [activeTab, setActiveTab] = useState('overview');
 
-  const fmtDate = (d) => d
-    ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : null;
-  const cap = (s) => s ? String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : null;
+  /* ── tokens ── */
+  const T = {
+    bg:'#F1F5F9', card:'#FFFFFF', bdr:'#E2E8F0',
+    t1:'#0F172A', t2:'#334155', t3:'#64748B', t4:'#94A3B8',
+    pri:'#2563EB', purp:'#7C3AED', cyan:'#06B6D4',
+    suc:'#22C55E', warn:'#F59E0B', dan:'#EF4444',
+    sh:'0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)',
+    shm:'0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04)',
+  };
+  const Cd = (ex={}) => ({ background:T.card, borderRadius:20, border:`1px solid ${T.bdr}`, boxShadow:T.sh, ...ex });
 
-  const InfoGrid = ({ fields }) => {
-    const rows = fields.filter(([, v]) => v !== null && v !== undefined && v !== '');
-    if (!rows.length) return <p style={{ fontSize:13, color:'#94A3B8' }}>Not yet on file. Contact HR to update.</p>;
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN',{ day:'2-digit', month:'short', year:'numeric' }) : null;
+  const capStr  = (s) => s ? String(s).replace(/_/g,' ').replace(/\b\w/g, c=>c.toUpperCase()) : null;
+
+  /* profile completion */
+  const completionFields = [
+    ['Name',         p.name],
+    ['Email',        p.email],
+    ['Phone',        p.phone],
+    ['DOB',          p.date_of_birth],
+    ['Bank',         p.bank_name],
+    ['PAN',          p.pan_number],
+    ['Photo',        p.profile_photo_url],
+    ['Address',      p.current_address],
+  ];
+  const filled    = completionFields.filter(([, v]) => v).length;
+  const pct       = Math.round((filled / completionFields.length) * 100);
+  const circ      = 2 * Math.PI * 38;
+  const filledLen = circ * (pct / 100);
+
+  const initials = (p.name || 'E').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
+  /* experience */
+  const joined    = p.date_of_joining ? new Date(p.date_of_joining) : null;
+  const now2      = new Date();
+  const diffMs    = joined ? now2 - joined : 0;
+  const expYears  = Math.floor(diffMs / (365.25 * 24 * 3600 * 1000));
+  const expMonths = Math.floor((diffMs % (365.25 * 24 * 3600 * 1000)) / (30.44 * 24 * 3600 * 1000));
+  const expStr    = joined ? (expYears > 0 ? `${expYears}y ${expMonths}m` : `${expMonths}m`) : '--';
+
+  /* total leave balance */
+  const totalLeave = (balances||[]).reduce((s,b)=>s+Number(b.closing_balance??0),0);
+
+  const TABS = [
+    { id:'overview',  label:'Overview'       },
+    { id:'contact',   label:'Contact & Bank' },
+    { id:'leave',     label:'Leave Balances' },
+    { id:'statutory', label:'Statutory'      },
+  ];
+
+  /* ── InfoRow helper ── */
+  const InfoRow = ({ label, value, mono=false, blur=false }) => {
+    const [show, setShow] = useState(false);
+    if (!value) return null;
     return (
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'14px 24px' }}>
-        {rows.map(([lbl, val]) => (
-          <div key={lbl}>
-            <p style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'0.07em', color:'#94A3B8', fontWeight:600 }}>{lbl}</p>
-            <p style={{ marginTop:3, fontSize:13, fontWeight:600, color:'#1E293B', wordBreak:'break-words' }}>{val}</p>
-          </div>
-        ))}
+      <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+        <span style={{ fontSize:10,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em' }}>{label}</span>
+        <div style={{ display:'flex',alignItems:'center',gap:6 }}>
+          <span style={{ fontSize:13,fontWeight:600,color:T.t1,fontFamily:mono?'ui-monospace,monospace':undefined,
+            filter:blur&&!show?'blur(5px)':'none',userSelect:blur&&!show?'none':'auto',transition:'filter .2s' }}>
+            {value}
+          </span>
+          {blur && <button onClick={()=>setShow(s=>!s)} style={{ fontSize:10.5,color:T.pri,background:'none',border:'none',cursor:'pointer',flexShrink:0,fontWeight:600 }}>{show?'Hide':'Show'}</button>}
+        </div>
       </div>
     );
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-      {/* Header card */}
-      <div style={{ ...GCA, overflow:'hidden' }}>
-        <div style={{ height:80, background:`linear-gradient(120deg, ${ACCENT}, ${TEAL})` }} />
-        <div style={{ padding:'0 24px 24px' }}>
-          <div style={{ marginTop:-40, display:'flex', flexWrap:'wrap', gap:16, alignItems:'flex-end', justifyContent:'space-between' }}>
-            <div style={{ display:'flex', alignItems:'flex-end', gap:16 }}>
-              <div style={{ background:'#fff', padding:4, borderRadius:'50%', boxShadow:'0 2px 8px rgba(0,0,0,0.14)' }}>
-                <ProfilePhotoAvatar profile={profile} size={84} editable />
-              </div>
-              <div style={{ paddingBottom:4 }}>
-                <p style={{ fontSize:20, fontWeight:800, color:'#0F172A', margin:0 }}>{name}</p>
-                <p style={{ fontSize:13, color:'#64748B', margin:0 }}>{p.designation_name || cap(p.role) || '—'}</p>
-              </div>
+    <div style={{ display:'flex', flexDirection:'column', background:T.bg, minHeight:'100%' }}>
+
+      {/* HERO */}
+      <div style={{ background:'linear-gradient(145deg,#020617 0%,#0F172A 25%,#1E1B4B 60%,#1D4ED8 100%)', position:'relative', overflow:'hidden', padding:'32px 28px 56px' }}>
+        <div style={{ position:'absolute',inset:0,pointerEvents:'none',background:'radial-gradient(ellipse 70% 60% at 70% 0%,rgba(99,102,241,.22),transparent),radial-gradient(ellipse 50% 80% at 100% 70%,rgba(139,92,246,.15),transparent),radial-gradient(ellipse 60% 40% at 0% 90%,rgba(29,78,216,.18),transparent)' }} />
+        <div style={{ position:'absolute',inset:0,pointerEvents:'none',backgroundImage:'radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px)',backgroundSize:'24px 24px' }} />
+
+        <div style={{ position:'relative',zIndex:1,display:'flex',alignItems:'flex-start',gap:24,flexWrap:'wrap' }}>
+
+          {/* Spinning avatar ring */}
+          <div style={{ position:'relative',width:96,height:96,flexShrink:0 }}>
+            <div style={{ position:'absolute',inset:-5,borderRadius:'50%',background:'conic-gradient(from 0deg,#7C3AED,#2563EB,#06B6D4,#7C3AED)',animation:'ess-spin 6s linear infinite' }} />
+            <div style={{ position:'absolute',inset:2,borderRadius:'50%',background:'#0F172A' }} />
+            {p.profile_photo_url
+              ? <img src={p.profile_photo_url} alt="" style={{ position:'absolute',inset:7,borderRadius:'50%',objectFit:'cover',width:'calc(100% - 14px)',height:'calc(100% - 14px)' }} />
+              : <div style={{ position:'absolute',inset:7,borderRadius:'50%',background:'linear-gradient(135deg,#1E1B4B,#2563EB)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:900,color:'#fff' }}>{initials}</div>
+            }
+            <div style={{ position:'absolute',bottom:4,right:4,width:16,height:16,borderRadius:'50%',background:'#22C55E',border:'3px solid #0F172A',zIndex:2 }} />
+          </div>
+
+          {/* Name + meta */}
+          <div style={{ flex:1,minWidth:220 }}>
+            <div style={{ display:'flex',alignItems:'center',gap:7,marginBottom:8,flexWrap:'wrap' }}>
+              {p.employee_code && <span style={{ background:'rgba(255,255,255,.1)',color:'rgba(255,255,255,.8)',border:'1px solid rgba(255,255,255,.2)',fontSize:10.5,fontWeight:700,padding:'2px 10px',borderRadius:20,fontFamily:'ui-monospace,monospace' }}>{p.employee_code}</span>}
+              {p.employment_status && <span style={{ background:'rgba(34,197,94,.18)',color:'#4ADE80',border:'1px solid rgba(34,197,94,.3)',fontSize:10.5,fontWeight:700,padding:'2px 10px',borderRadius:20 }}>{capStr(p.employment_status)}</span>}
+              {p.employment_type && <span style={{ background:'rgba(255,255,255,.08)',color:'rgba(255,255,255,.6)',border:'1px solid rgba(255,255,255,.12)',fontSize:10.5,fontWeight:600,padding:'2px 10px',borderRadius:20 }}>{capStr(p.employment_type)}</span>}
             </div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:8, paddingBottom:4 }}>
-              {p.employee_code && <span style={{ background:'#EAF1FF', color:ACCENT, borderRadius:99, padding:'3px 12px', fontSize:11, fontWeight:700 }}>{p.employee_code}</span>}
-              {p.department_name && <span style={{ background:'#F1F5F9', color:'#475569', borderRadius:99, padding:'3px 12px', fontSize:11, fontWeight:600 }}>{p.department_name}</span>}
-              {p.employment_status && <span style={{ background:'#E1F5EE', color:'#0F6E56', borderRadius:99, padding:'3px 12px', fontSize:11, fontWeight:600 }}>{cap(p.employment_status)}</span>}
+            <div style={{ fontSize:28,fontWeight:800,color:'#fff',letterSpacing:'-.03em',lineHeight:1.1,marginBottom:6 }}>{p.name||'Employee'}</div>
+            <div style={{ display:'flex',flexWrap:'wrap',gap:'3px 16px',fontSize:12.5,color:'rgba(255,255,255,.6)',marginBottom:10 }}>
+              {p.designation_name && <span>{p.designation_name}</span>}
+              {p.department_name  && <span>· {p.department_name}</span>}
+              {p.work_location    && <span>· {p.work_location}</span>}
+            </div>
+            <div style={{ display:'flex',flexWrap:'wrap',gap:6 }}>
+              {p.email && <span style={{ fontSize:11.5,color:'rgba(255,255,255,.5)' }}>{p.email}</span>}
+              {p.phone && <span style={{ fontSize:11.5,color:'rgba(255,255,255,.4)' }}>· {p.phone}</span>}
             </div>
           </div>
-        </div>
-      </div>
 
-      <div style={{ ...GCA, padding:20 }}>
-        <span style={STA}>Personal Information</span>
-        <InfoGrid fields={[['Full Name',name],['Date of Birth',fmtDate(p.date_of_birth)],['Gender',cap(p.gender)],['Blood Group',p.blood_group],['Marital Status',cap(p.marital_status)],['Nationality',p.nationality],[`Father's Name`,p.father_name]]} />
-      </div>
-
-      <div style={{ ...GCA, padding:20 }}>
-        <span style={STA}>Contact Details</span>
-        <InfoGrid fields={[['Email',p.email],['Phone',p.phone],['Current Address',p.current_address],['Permanent Address',p.permanent_address],['Emergency Contact',p.emergency_contact_name],['Emergency Phone',p.emergency_contact_phone]]} />
-      </div>
-
-      <div style={{ ...GCA, padding:20 }}>
-        <span style={STA}>Employment</span>
-        <InfoGrid fields={[['Designation',p.designation_name],['Department',p.department_name],['Reporting Manager',p.reporting_manager_name],['Work Location',p.work_location],['Employee Category',cap(p.employee_category)],['Employment Type',cap(p.employment_type)],['Date of Joining',fmtDate(p.date_of_joining)],['Date of Confirmation',fmtDate(p.date_of_confirmation)]]} />
-      </div>
-
-      <div style={{ ...GCA, padding:20 }}>
-        <span style={STA}>Bank & Statutory</span>
-        <p style={{ fontSize:11.5, color:'#64748B', marginBottom:12 }}>Sensitive details are partially masked</p>
-        <InfoGrid fields={[['Bank',p.bank_name],['Account No.',p.bank_account_last4?`â€¢â€¢â€¢â€¢ ${p.bank_account_last4}`:null],['IFSC',p.bank_ifsc],['PAN',p.pan_number],['UAN',p.uan_number],['PF Account',p.pf_account_number],['ESI No.',p.esi_number]]} />
-      </div>
-
-      {(balances || []).length > 0 && (
-        <div style={{ ...GCA, padding:20 }}>
-          <span style={STA}>Leave Balances</span>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:12 }}>
-            {(balances || []).map((b) => {
-              const taken = Number(b.taken??0), accrued = Number(b.accrued??0), avail = Number(b.closing_balance??0);
-              const pct = accrued > 0 ? Math.min(100, Math.round((taken/accrued)*100)) : 0;
-              return (
-                <div key={b.leave_type_id} style={{ minWidth:150, background:'rgba(47,111,237,0.04)', border:'1px solid rgba(47,111,237,0.12)', borderRadius:12, padding:16 }}>
-                  <p style={{ fontSize:11.5, fontWeight:600, color:'#64748B', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.leave_type_name}</p>
-                  <p style={{ marginTop:8, fontSize:28, fontWeight:800, color:ACCENT, lineHeight:1 }}>{avail.toFixed(1)}</p>
-                  <p style={{ fontSize:10.5, color:'#94A3B8' }}>Available</p>
-                  <div style={{ marginTop:8, height:4, background:'rgba(0,0,0,0.06)', borderRadius:99 }}>
-                    <div style={{ height:4, borderRadius:99, width:`${pct}%`, background:ACCENT }} />
-                  </div>
-                  <p style={{ marginTop:4, fontSize:10, color:'#94A3B8' }}>{taken} taken / {accrued} accrued</p>
+          {/* Profile completion ring */}
+          <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:6,flexShrink:0 }}>
+            <svg width="88" height="88" viewBox="0 0 88 88">
+              <circle cx="44" cy="44" r="38" fill="none" stroke="rgba(255,255,255,.1)" strokeWidth="7"/>
+              <circle cx="44" cy="44" r="38" fill="none" stroke="url(#pgrd)" strokeWidth="7"
+                strokeDasharray={`${filledLen} ${circ}`} strokeLinecap="round" transform="rotate(-90 44 44)"/>
+              <defs>
+                <linearGradient id="pgrd" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#7C3AED"/>
+                  <stop offset="100%" stopColor="#06B6D4"/>
+                </linearGradient>
+              </defs>
+              <text x="44" y="48" textAnchor="middle" fontSize="16" fontWeight="800" fill="white">{pct}%</text>
+            </svg>
+            <span style={{ fontSize:10.5,color:'rgba(255,255,255,.5)',fontWeight:600 }}>Profile Complete</span>
+            <div style={{ display:'flex',flexDirection:'column',gap:3,marginTop:2 }}>
+              {completionFields.map(([label,val])=>(
+                <div key={label} style={{ display:'flex',alignItems:'center',gap:5,fontSize:10,color:'rgba(255,255,255,.45)' }}>
+                  <div style={{ width:7,height:7,borderRadius:'50%',background:val?'#22C55E':'rgba(255,255,255,.2)',flexShrink:0 }} />
+                  {label}
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
-      )}
+
+        <svg style={{ position:'absolute',bottom:0,left:0,right:0,width:'100%',display:'block',pointerEvents:'none' }} viewBox="0 0 1440 36" preserveAspectRatio="none">
+          <path d="M0,18L60,15C120,12,240,6,360,8C480,10,600,20,720,21C840,23,960,17,1080,13C1200,9,1320,8,1380,8L1440,7V36H0Z" fill={T.bg}/>
+        </svg>
+      </div>
+
+      {/* KPI STRIP */}
+      <div style={{ padding:'0 24px', marginTop:'-2px', position:'relative', zIndex:10 }}>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',background:T.card,borderRadius:16,border:`1px solid ${T.bdr}`,boxShadow:T.shm,overflow:'hidden' }}>
+          {[
+            { label:'Employee ID',   val:p.employee_code||'--',                mono:true,  clr:T.t1  },
+            { label:'Department',    val:p.department_name||'--',               mono:false, clr:T.t2  },
+            { label:'Joined',        val:fmtDate(p.date_of_joining)||'--',      mono:false, clr:'#059669' },
+            { label:'Experience',    val:expStr,                                mono:false, clr:T.pri },
+            { label:'Leave Balance', val:`${totalLeave.toFixed(1)}d`,           mono:false, clr:'#7C3AED' },
+            { label:'Status',        val:capStr(p.employment_status)||'--',     mono:false, clr:p.employment_status==='active'?'#059669':T.t3 },
+          ].map(({ label,val,mono,clr },i)=>(
+            <div key={label} style={{ padding:'14px 16px',borderRight:i<5?`1px solid ${T.bdr}`:undefined,transition:'.15s',cursor:'default' }}
+              onMouseEnter={e=>{e.currentTarget.style.background='rgba(37,99,235,.03)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='';}}
+            >
+              <div style={{ fontSize:10,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5 }}>{label}</div>
+              <div style={{ fontSize:mono?12:17,fontWeight:800,color:clr,fontFamily:mono?'ui-monospace,monospace':undefined,letterSpacing:'-.01em',lineHeight:1 }}>{val}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* TAB BAR */}
+      <div style={{ padding:'16px 24px 0',display:'flex',gap:4 }}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setActiveTab(t.id)}
+            style={{ padding:'9px 18px',borderRadius:12,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,transition:'.15s',
+              background:activeTab===t.id?T.pri:'transparent',
+              color:activeTab===t.id?'#fff':T.t3,
+              boxShadow:activeTab===t.id?'0 4px 12px rgba(37,99,235,.3)':undefined,
+            }}
+            onMouseEnter={e=>{if(activeTab!==t.id){e.currentTarget.style.background='rgba(37,99,235,.06)';e.currentTarget.style.color=T.t1;}}}
+            onMouseLeave={e=>{if(activeTab!==t.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color=T.t3;}}}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      {/* TAB CONTENT */}
+      <div style={{ padding:'16px 24px 32px',display:'flex',flexDirection:'column',gap:16 }}>
+
+        {/* OVERVIEW TAB */}
+        {activeTab==='overview' && (
+          <>
+            <div style={{ ...Cd(), padding:'20px 24px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:16 }}>Personal Information</div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px 28px' }}>
+                <InfoRow label="Full Name"      value={p.name} />
+                <InfoRow label="Date of Birth"  value={fmtDate(p.date_of_birth)} />
+                <InfoRow label="Gender"         value={capStr(p.gender)} />
+                <InfoRow label="Blood Group"    value={p.blood_group} />
+                <InfoRow label="Marital Status" value={capStr(p.marital_status)} />
+                <InfoRow label="Nationality"    value={p.nationality} />
+                <InfoRow label="Father's Name"  value={p.father_name} />
+              </div>
+            </div>
+
+            <div style={{ ...Cd(), padding:'20px 24px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:16 }}>Employment Details</div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px 28px' }}>
+                <InfoRow label="Designation"         value={p.designation_name} />
+                <InfoRow label="Department"          value={p.department_name} />
+                <InfoRow label="Reporting Manager"   value={p.reporting_manager_name} />
+                <InfoRow label="Work Location"       value={p.work_location} />
+                <InfoRow label="Employee Category"   value={capStr(p.employee_category)} />
+                <InfoRow label="Employment Type"     value={capStr(p.employment_type)} />
+                <InfoRow label="Date of Joining"     value={fmtDate(p.date_of_joining)} />
+                <InfoRow label="Date of Confirmation" value={fmtDate(p.date_of_confirmation)} />
+                <InfoRow label="Employment Status"   value={capStr(p.employment_status)} />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* CONTACT & BANK TAB */}
+        {activeTab==='contact' && (
+          <>
+            <div style={{ ...Cd(), padding:'20px 24px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:16 }}>Contact Details</div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px 28px' }}>
+                <InfoRow label="Work Email"    value={p.email} />
+                <InfoRow label="Phone"         value={p.phone} />
+                <InfoRow label="Current Address"   value={p.current_address} />
+                <InfoRow label="Permanent Address" value={p.permanent_address} />
+              </div>
+            </div>
+            {(p.emergency_contact_name||p.emergency_contact_phone) && (
+              <div style={{ ...Cd(), padding:'20px 24px' }}>
+                <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:16 }}>Emergency Contact</div>
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px 28px' }}>
+                  <InfoRow label="Name"  value={p.emergency_contact_name} />
+                  <InfoRow label="Phone" value={p.emergency_contact_phone} />
+                </div>
+              </div>
+            )}
+            <div style={{ ...Cd(), padding:'20px 24px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4 }}>Bank Details</div>
+              <p style={{ fontSize:11.5,color:T.t4,marginBottom:16 }}>Sensitive fields are blurred — click Show to reveal.</p>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px 28px' }}>
+                <InfoRow label="Bank Name"   value={p.bank_name} />
+                <InfoRow label="Account No." value={p.bank_account_last4?`•••• ${p.bank_account_last4}`:null} blur />
+                <InfoRow label="IFSC Code"   value={p.bank_ifsc} mono />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* LEAVE BALANCES TAB */}
+        {activeTab==='leave' && (
+          <>
+            <div style={{ ...Cd(), padding:'20px 24px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:16 }}>Leave Balance Summary</div>
+              {(balances||[]).length ? (
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12 }}>
+                  {(balances||[]).map((b,i)=>{
+                    const cols=[T.pri,'#06B6D4','#22C55E','#F59E0B','#7C3AED','#EF4444'];
+                    const c=cols[i%cols.length];
+                    const avail=Number(b.closing_balance??0);
+                    const taken=Number(b.taken??0);
+                    const accrued=Number(b.accrued??0);
+                    const pct2=accrued>0?Math.min(100,Math.round((taken/accrued)*100)):0;
+                    const circ2=2*Math.PI*30;
+                    const fill2=circ2*(pct2/100);
+                    return (
+                      <div key={b.leave_type_id} style={{ ...Cd({border:`1px solid ${c}22`,background:`${c}05`}), padding:'18px 20px' }}>
+                        <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+                          <svg width="64" height="64" viewBox="0 0 64 64" style={{ flexShrink:0 }}>
+                            <circle cx="32" cy="32" r="30" fill="none" stroke={`${c}1A`} strokeWidth="5"/>
+                            <circle cx="32" cy="32" r="30" fill="none" stroke={c} strokeWidth="5"
+                              strokeDasharray={`${fill2} ${circ2}`} strokeLinecap="round" transform="rotate(-90 32 32)"/>
+                            <text x="32" y="37" textAnchor="middle" fontSize="14" fontWeight="800" fill={c}>{avail.toFixed(0)}</text>
+                          </svg>
+                          <div>
+                            <div style={{ fontSize:13,fontWeight:700,color:T.t1,lineHeight:1.3 }}>{b.leave_type_name}</div>
+                            <div style={{ fontSize:11,color:T.t4,marginTop:4 }}>{avail.toFixed(1)} available</div>
+                            <div style={{ fontSize:10.5,color:T.t4,marginTop:2 }}>{taken} taken · {accrued} accrued</div>
+                          </div>
+                        </div>
+                        <div style={{ marginTop:12,height:4,background:T.bg,borderRadius:99 }}>
+                          <div style={{ height:4,borderRadius:99,width:`${pct2}%`,background:c,transition:'width .6s ease' }} />
+                        </div>
+                        <div style={{ display:'flex',justifyContent:'space-between',marginTop:4 }}>
+                          <span style={{ fontSize:10,color:T.t4 }}>{pct2}% utilised</span>
+                          <span style={{ fontSize:10,color:c,fontWeight:700 }}>{avail.toFixed(1)}d left</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ textAlign:'center',padding:'32px 0',color:T.t4 }}>
+                  <div style={{ fontSize:13 }}>No leave balance data available</div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* STATUTORY TAB */}
+        {activeTab==='statutory' && (
+          <div style={{ ...Cd(), padding:'20px 24px' }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:4 }}>Statutory & Compliance</div>
+            <p style={{ fontSize:11.5,color:T.t4,marginBottom:16 }}>Sensitive identifiers are blurred — click Show to reveal.</p>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'16px 28px' }}>
+              <InfoRow label="PAN Number"    value={p.pan_number}        mono blur />
+              <InfoRow label="UAN Number"    value={p.uan_number}        mono blur />
+              <InfoRow label="PF Account"    value={p.pf_account_number} mono blur />
+              <InfoRow label="ESI Number"    value={p.esi_number}        mono blur />
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      <style>{`@keyframes ess-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
+
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ATTENDANCE TAB
