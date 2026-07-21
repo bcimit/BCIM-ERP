@@ -435,375 +435,437 @@ function DashboardTab({ summary, balances, serviceRequests, notifications, profi
     },
   ];
 
+  /* ── design tokens (dashboard only) ── */
+  const T = {
+    bg:'#F8FAFC', card:'#FFFFFF', bdr:'#E5E7EB',
+    t1:'#0F172A', t2:'#334155', t3:'#64748B', t4:'#94A3B8',
+    pri:'#2563EB', purp:'#7C3AED', cyan:'#06B6D4',
+    suc:'#22C55E', warn:'#F59E0B', dan:'#EF4444',
+    sh:'0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)',
+    shm:'0 4px 16px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04)',
+  };
+  const Card = (extra={}) => ({
+    background:T.card, borderRadius:20, border:`1px solid ${T.bdr}`,
+    boxShadow:T.sh, ...extra,
+  });
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+    <div style={{ display:'flex', flexDirection:'column', background:T.bg, minHeight:'100%' }}>
 
-      {/* â”€â”€ Row 1: Hero + Leave Donut â”€â”€ */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 220px', gap:12 }}>
+      {/* HERO BANNER */}
+      <div style={{ background:'linear-gradient(145deg,#0A0F1E 0%,#0F172A 20%,#1E1B4B 55%,#1D4ED8 100%)', position:'relative', overflow:'hidden', padding:'28px 28px 48px' }}>
+        {/* Aurora mesh overlay */}
+        <div style={{ position:'absolute',inset:0,pointerEvents:'none',background:'radial-gradient(ellipse 70% 60% at 60% 0%,rgba(99,102,241,.22),transparent),radial-gradient(ellipse 50% 70% at 100% 60%,rgba(139,92,246,.16),transparent),radial-gradient(ellipse 60% 50% at 0% 80%,rgba(29,78,216,.18),transparent)' }} />
+        {/* Dot grid */}
+        <div style={{ position:'absolute',inset:0,pointerEvents:'none',backgroundImage:'radial-gradient(rgba(255,255,255,.055) 1px,transparent 1px)',backgroundSize:'24px 24px' }} />
 
-        {/* Hero */}
-        <div style={{ ...GC, padding:'20px 26px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:16,
-          borderTop:'2px solid transparent',
-          backgroundImage:'linear-gradient(white,white),linear-gradient(90deg,#4F46E5,#06B6D4)',
-          backgroundOrigin:'border-box', backgroundClip:'padding-box,border-box' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+        <div style={{ position:'relative',zIndex:1,display:'flex',alignItems:'center',gap:20,flexWrap:'wrap' }}>
+          {/* Spinning avatar ring */}
+          <div style={{ position:'relative',width:76,height:76,flexShrink:0 }}>
+            <div style={{ position:'absolute',inset:-4,borderRadius:'50%',background:'conic-gradient(from 0deg,#7C3AED,#2563EB,#06B6D4,#7C3AED)',animation:'ess-spin 6s linear infinite' }} />
+            <div style={{ position:'absolute',inset:2,borderRadius:'50%',background:'#0F172A' }} />
             {profile?.profile_photo_url
-              ? <img src={profile.profile_photo_url} alt={profile?.name||''} style={{ width:50,height:50,borderRadius:'50%',objectFit:'cover',boxShadow:'0 0 0 3px rgba(79,70,229,.15)',flexShrink:0 }} />
-              : <div style={{ width:50,height:50,borderRadius:'50%',background:'linear-gradient(135deg,#4F46E5,#06B6D4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,fontWeight:700,color:'#fff',boxShadow:'0 0 0 3px rgba(79,70,229,.15),0 4px 14px rgba(79,70,229,.2)',flexShrink:0 }}>{initials}</div>
+              ? <img src={profile.profile_photo_url} alt="" style={{ position:'absolute',inset:6,borderRadius:'50%',objectFit:'cover',width:'calc(100% - 12px)',height:'calc(100% - 12px)' }} />
+              : <div style={{ position:'absolute',inset:6,borderRadius:'50%',background:'linear-gradient(135deg,#1E1B4B,#2563EB)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:900,color:'#fff' }}>{initials}</div>
             }
-            <div>
-              <div style={{ fontSize:10.5,color:'#94A3B8',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:2 }}>{greeting}</div>
-              <div style={{ fontSize:20,fontWeight:600,letterSpacing:'-0.02em',color:'#0F172A' }}>{profile?.name?.split(' ')[0]||'Employee'} </div>
-              <div style={{ fontSize:11.5,color:'#94A3B8',marginTop:3,display:'flex',alignItems:'center',gap:5 }}>
-                <div style={{ width:6,height:6,borderRadius:'50%',background:'#10B981',flexShrink:0 }} />
-                {profile?.work_location||'Head Office'} · {now.toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short'})}
-              </div>
+            <div style={{ position:'absolute',bottom:3,right:3,width:14,height:14,borderRadius:'50%',background:'#22C55E',border:'2.5px solid #0F172A',zIndex:2 }} />
+          </div>
+
+          {/* Name + meta */}
+          <div style={{ flex:1,minWidth:200 }}>
+            <div style={{ display:'flex',alignItems:'center',gap:7,marginBottom:6,flexWrap:'wrap' }}>
+              <span style={{ fontSize:10.5,fontWeight:700,color:'rgba(255,255,255,.5)',textTransform:'uppercase',letterSpacing:'.08em' }}>{greeting}</span>
+              <span style={{ background:'rgba(34,197,94,.18)',color:'#4ADE80',border:'1px solid rgba(34,197,94,.3)',fontSize:10.5,fontWeight:700,padding:'2px 9px',borderRadius:20 }}>Active</span>
+              {profile?.employee_id && <span style={{ background:'rgba(255,255,255,.1)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.15)',fontSize:10.5,fontWeight:700,padding:'2px 9px',borderRadius:20,fontFamily:'ui-monospace,monospace' }}>{profile.employee_id}</span>}
+            </div>
+            <div style={{ fontSize:26,fontWeight:800,color:'#fff',letterSpacing:'-.03em',lineHeight:1.1,marginBottom:6 }}>{profile?.name||'Employee'}</div>
+            <div style={{ display:'flex',flexWrap:'wrap',gap:'3px 14px',fontSize:12,color:'rgba(255,255,255,.55)' }}>
+              {profile?.designation && <span>Role: {profile.designation}</span>}
+              {profile?.department_name && <span>Dept: {profile.department_name}</span>}
+              {profile?.work_location && <span>Location: {profile.work_location}</span>}
+              <span>{now.toLocaleDateString('en-IN',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</span>
             </div>
           </div>
 
           {/* Week strip */}
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ display:'flex',alignItems:'center',gap:6,flexShrink:0 }}>
             {weekDays.map(({ name, ds, isToday, isWknd, rec }) => {
               const code = rec?.code;
               const inTime = rec?.inTime ? String(rec.inTime).slice(0,5) : null;
-              const boxBg  = code ? `${dotColorMap[code]}18` : isToday ? 'rgba(245,158,11,0.1)' : 'rgba(0,0,0,0.03)';
-              const boxBdr = code ? `1px solid ${dotBorderMap[code]}` : isToday ? '1px solid rgba(245,158,11,0.3)' : '1px solid rgba(0,0,0,0.07)';
-              const boxClr = code ? dotColorMap[code] : isToday ? '#D97706' : '#CBD5E1';
-              const label  = code==='P'?'✓':code==='A'?'✗':code==='H'?'H':code==='L'?'L':code==='HD'?'½':isToday?'—':'';
+              const CM = { P:'#10B981',A:'#EF4444',HD:'#F59E0B',L:'#8B5CF6',H:'#6366F1',WO:'rgba(255,255,255,.15)' };
+              const boxBg = code ? `${CM[code]}22` : isToday ? 'rgba(245,158,11,.15)' : 'rgba(255,255,255,.06)';
+              const boxBdr = code ? `1px solid ${CM[code]}44` : isToday ? '1px solid rgba(245,158,11,.4)' : '1px solid rgba(255,255,255,.12)';
+              const boxClr = code ? CM[code] : isToday ? '#F59E0B' : 'rgba(255,255,255,.35)';
+              const label = code==='P'?'v':code==='A'?'x':code==='H'?'H':code==='L'?'L':code==='HD'?'h':isToday?'-':'';
               return (
                 <div key={ds} style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:4 }}>
-                  <div style={{ fontSize:8.5,color:'#94A3B8',textTransform:'uppercase',letterSpacing:'0.05em' }}>{name}</div>
-                  <div style={{ width:34,height:34,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:600,background:boxBg,border:boxBdr,color:boxClr }}>{label}</div>
-                  <div style={{ fontSize:8.5,color:code==='P'?'#10B981':isToday?'#F59E0B':'#CBD5E1' }}>{inTime||(isToday?'Today':isWknd?'Off':'—')}</div>
+                  <div style={{ fontSize:9,color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:'.04em' }}>{name}</div>
+                  <div style={{ width:36,height:36,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,background:boxBg,border:boxBdr,color:boxClr }}>{label}</div>
+                  <div style={{ fontSize:8.5,color:code==='P'?'#4ADE80':isToday?'#F59E0B':'rgba(255,255,255,.25)' }}>{inTime||(isToday?'Today':isWknd?'Off':'--')}</div>
                 </div>
               );
             })}
           </div>
 
-          {/* CTA */}
-          <div style={{ display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8,flexShrink:0 }}>
-            {!todayRec?.code && <div style={{ background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.2)',color:'#B45309',fontSize:11,padding:'4px 11px',borderRadius:20 }}>⚠ Not marked today</div>}
-            <button onClick={() => setActive('attendance')} style={{ background:'linear-gradient(135deg,#4F46E5,#06B6D4)',color:'#fff',fontSize:12.5,fontWeight:700,padding:'9px 18px',borderRadius:9,border:'none',cursor:'pointer',boxShadow:'0 4px 14px rgba(79,70,229,.3)',whiteSpace:'nowrap' }}>
-              {todayRec?.code ? `Marked · ${todayInTime||todayStatusLabel[todayRec.code]||''} ↗` : 'Mark Attendance →'}
+          {/* Hero CTAs */}
+          <div style={{ display:'flex',flexDirection:'column',gap:8,flexShrink:0 }}>
+            {!todayRec?.code && <div style={{ background:'rgba(245,158,11,.15)',border:'1px solid rgba(245,158,11,.3)',color:'#F59E0B',fontSize:11,fontWeight:600,padding:'4px 12px',borderRadius:20,textAlign:'center' }}>Not marked today</div>}
+            <button onClick={() => setActive('attendance')}
+              style={{ background:'linear-gradient(135deg,#7C3AED,#2563EB)',color:'#fff',fontSize:13,fontWeight:700,padding:'10px 20px',borderRadius:10,border:'none',cursor:'pointer',boxShadow:'0 4px 16px rgba(37,99,235,.4)',whiteSpace:'nowrap',transition:'.2s' }}
+              onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 6px 20px rgba(37,99,235,.5)';}}
+              onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 4px 16px rgba(37,99,235,.4)';}}>
+              {todayRec?.code ? `Marked · ${todayInTime||todayStatusLabel[todayRec.code]||''} ->` : 'View Attendance ->'}
+            </button>
+            <button onClick={() => setActive('leave')}
+              style={{ background:'rgba(255,255,255,.1)',color:'rgba(255,255,255,.8)',border:'1px solid rgba(255,255,255,.2)',fontSize:12,fontWeight:600,padding:'8px 18px',borderRadius:10,cursor:'pointer',whiteSpace:'nowrap',transition:'.15s' }}
+              onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.18)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.1)';}}>
+              Apply Leave
             </button>
           </div>
         </div>
 
-        {/* Leave Donut */}
-        <div style={{ ...GC, padding:'18px 16px', display:'flex', flexDirection:'column', gap:14 }}>
-          <span style={ST}>Leave Balance</span>
-          <div style={{ display:'flex',flexDirection:'column',alignItems:'center',position:'relative' }}>
-            <svg width="120" height="120" viewBox="0 0 120 120">
-              <defs>
-                <linearGradient id="lgd" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#4F46E5"/><stop offset="100%" stopColor="#06B6D4"/>
-                </linearGradient>
-              </defs>
-              <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(0,0,0,0.07)" strokeWidth="10"/>
-              <circle cx="60" cy="60" r="46" fill="none" stroke="url(#lgd)" strokeWidth="10"
-                strokeDasharray={2*Math.PI*46}
-                strokeDashoffset={2*Math.PI*46*(1-Math.min(1,totalBalance/25))}
-                strokeLinecap="round" transform="rotate(-90 60 60)"/>
-            </svg>
-            <div style={{ position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center' }}>
-              <div style={{ fontSize:24,fontWeight:700,letterSpacing:'-0.03em',color:'#0F172A' }}>{Number(totalBalance).toFixed(1)}</div>
-              <div style={{ fontSize:9.5,color:'#94A3B8' }}>of 25 days</div>
-            </div>
-          </div>
-          <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
-            {[casualBal>0&&['#4F46E5','Casual',casualBal],earnedBal>0&&['#06B6D4','Earned',earnedBal]].filter(Boolean).map(([clr,lbl,val]) => (
-              <div key={lbl} style={{ display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12 }}>
-                <div style={{ color:'#64748B',display:'flex',alignItems:'center',gap:6 }}><div style={{ width:7,height:7,borderRadius:'50%',background:clr }} />{lbl}</div>
-                <div style={{ fontWeight:600,color:'#0F172A' }}>{Number(val).toFixed(1)}</div>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => setActive('leave')} style={{ fontSize:11.5,fontWeight:600,color:ACCENT,background:'none',border:'none',cursor:'pointer',textAlign:'left',padding:0 }}>View Leave Balance →</button>
-        </div>
+        {/* Wave divider into page bg */}
+        <svg style={{ position:'absolute',bottom:0,left:0,right:0,width:'100%',display:'block',pointerEvents:'none' }} viewBox="0 0 1440 36" preserveAspectRatio="none">
+          <path d="M0,18L60,15C120,12,240,6,360,8C480,10,600,20,720,21C840,23,960,17,1080,13C1200,9,1320,8,1380,8L1440,7V36H0Z" fill="#F8FAFC"/>
+        </svg>
       </div>
 
-      {/* â”€â”€ Row 2: 4 Stat cards â”€â”€ */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
-        {statCards.map((c) => (
-          <div key={c.label} style={{ ...GC, padding:'16px 18px', display:'flex', alignItems:'center', gap:13 }}>
-            <div style={{ width:42,height:42,borderRadius:11,background:c.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,border:`1px solid ${c.fg}28` }}>
-              <c.Icon size={18} style={{ color:c.fg }} />
-            </div>
-            <div style={{ minWidth:0 }}>
-              {c.body}
-              <div style={{ fontSize:11,color:'#64748B',marginTop:3 }}>{c.label}</div>
-              {c.sub && <div style={{ fontSize:10.5,color:'#94A3B8',marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c.sub}</div>}
-              {c.cta && <button onClick={c.cta.onClick} style={{ fontSize:10.5,fontWeight:600,color:ACCENT,background:'none',border:'none',cursor:'pointer',marginTop:4,padding:0 }}>{c.cta.label} →</button>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* â”€â”€ Row 3: Monthly dots | Recent Leave | Quick Actions + Pending â”€â”€ */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
-
-        {/* Monthly attendance dot grid */}
-        <div style={{ ...GC, padding:'18px 20px' }}>
-          <span style={ST}>{MONTH_NAMES[now.getMonth()]} {now.getFullYear()} — Attendance</span>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:12 }}>
-            {[
-              { label:'Present', val:attendance.present??0,   color:'#059669' },
-              { label:'Absent',  val:attendance.absent??0,    color:'#DC2626' },
-              { label:'Half Day',val:attendance.half_day??0,  color:'#D97706' },
-              { label:'Holiday', val:(attQ.data||[]).filter(r=>normaliseStatus(r.status)==='H').length, color:'#4F46E5' },
-            ].map(({ label,val,color }) => (
-              <div key={label} style={{ textAlign:'center',padding:'8px 4px',background:'rgba(0,0,0,0.03)',borderRadius:9,border:'1px solid rgba(0,0,0,0.06)' }}>
-                <div style={{ fontSize:16,fontWeight:700,color,lineHeight:1 }}>{val}</div>
-                <div style={{ fontSize:9,color:'#94A3B8',marginTop:2 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(11,1fr)',gap:4,marginBottom:10 }}>
-            {monthlyDots.map(({ ds,code,isWknd,isToday }) => {
-              const bg  = code ? `${dotColorMap[code]}22` : 'rgba(0,0,0,0.04)';
-              const bdr = code ? `1px solid ${dotBorderMap[code]}` : '1px solid rgba(0,0,0,0.07)';
-              return <div key={ds} title={`${ds}: ${code||(isWknd?'WO':'—')}`} style={{ aspectRatio:'1',borderRadius:4,background:bg,border:bdr,outline:isToday?`2px solid ${ACCENT}`:undefined,outlineOffset:isToday?1:undefined }} />;
-            })}
-          </div>
-          <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
-            {[['Present','#10B981'],['Absent','#EF4444'],['Leave','#8B5CF6'],['Holiday','#6366F1'],['Half Day','#F59E0B']].map(([l,c]) => (
-              <div key={l} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10,color:'#64748B' }}>
-                <div style={{ width:8,height:8,borderRadius:3,background:c }} />{l}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Requests */}
-        <div style={{ ...GC, padding:'18px 20px' }}>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12 }}>
-            <span style={{ ...ST, marginBottom:0 }}>Recent Leave Requests</span>
-            <button onClick={() => setActive('leave')} style={{ fontSize:10.5,fontWeight:600,color:ACCENT,background:'none',border:'none',cursor:'pointer' }}>View All →</button>
-          </div>
-          <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-            {(leavesQ.data||[]).slice(0,4).length ? (leavesQ.data||[]).slice(0,4).map((r,i) => (
-              <div key={r.id||i} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 11px',background:'rgba(0,0,0,0.025)',border:'1px solid rgba(0,0,0,0.06)',borderRadius:10 }}>
-                <div style={{ width:30,height:30,borderRadius:8,background:'#EAF1FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-                  <CalendarOff size={13} style={{ color:ACCENT }} />
-                </div>
-                <div style={{ flex:1,minWidth:0 }}>
-                  <div style={{ fontSize:12,fontWeight:500,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{r.leave_type_name||'Leave'}</div>
-                  <div style={{ fontSize:10.5,color:'#94A3B8',marginTop:1 }}>{String(r.from_date||'').slice(0,10)} → {String(r.to_date||'').slice(0,10)}</div>
-                </div>
-                <StatusBadge value={r.status} />
-              </div>
-            )) : (
-              <div style={{ textAlign:'center',padding:'20px 0',color:'#94A3B8',fontSize:12 }}>No leave requests</div>
-            )}
-          </div>
-          {(serviceRequests||[]).slice(0,2).map((r,i) => (
-            <div key={r.id||i} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 11px',background:'rgba(0,0,0,0.025)',border:'1px solid rgba(0,0,0,0.06)',borderRadius:10,marginTop:6 }}>
-              <div style={{ width:30,height:30,borderRadius:8,background:'#F3E8FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-                <FolderUp size={13} style={{ color:'#7C3AED' }} />
-              </div>
-              <div style={{ flex:1,minWidth:0 }}>
-                <div style={{ fontSize:12,fontWeight:500,color:'#1E293B',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{r.subject||r.request_type||'Request'}</div>
-                <div style={{ fontSize:10.5,color:'#94A3B8',marginTop:1 }}>{r.request_type||''}</div>
-              </div>
-              <StatusBadge value={r.status} />
+      {/* KPI STRIP */}
+      <div style={{ padding:'0 24px', position:'relative', zIndex:10, marginTop:'-2px' }}>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',background:T.card,borderRadius:16,border:`1px solid ${T.bdr}`,boxShadow:'0 4px 20px rgba(0,0,0,.07),0 2px 6px rgba(0,0,0,.04)',overflow:'hidden' }}>
+          {[
+            { icon:'ID', label:'Employee ID',   val:profile?.employee_id||'--',  sub:'',                                                  mono:true,  clr:T.t1 },
+            { icon:'%',  label:'Attendance',    val:`${attPct}%`,                 sub:`${presentDays}/${workDays} days`,                    mono:false, clr:'#059669' },
+            { icon:'L',  label:'Leave Balance', val:`${Number(totalBalance).toFixed(1)}d`, sub:'Casual + Earned',                          mono:false, clr:'#7C3AED' },
+            { icon:'Rs', label:'Net Pay',       val:payroll?.net_pay?`Rs.${Number(payroll.net_pay).toLocaleString('en-IN')}`:'--',          sub:payroll?.month?`${MONTH_NAMES[(payroll.month||1)-1]} ${payroll.year}`:'Not processed', mono:false, clr:'#D97706' },
+            { icon:'!',  label:'Pending',       val:pendingTotal,                 sub:`${pendingLeave} leave · ${pendingCorr} reg.`,         mono:false, clr:pendingTotal>0?'#EF4444':'#059669' },
+            { icon:'D',  label:'Work Days',     val:attendance.working_days??'--', sub:`${presentDays} present`,                            mono:false, clr:'#2563EB' },
+          ].map(({ icon,label,val,sub,mono,clr },i) => (
+            <div key={label} style={{ padding:'14px 16px',borderRight:i<5?`1px solid ${T.bdr}`:undefined,transition:'.15s',cursor:'default' }}
+              onMouseEnter={e=>{e.currentTarget.style.background='rgba(37,99,235,.03)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='';}}
+            >
+              <div style={{ fontSize:10.5,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5 }}>{label}</div>
+              <div style={{ fontSize:mono?13:20,fontWeight:800,color:clr,letterSpacing:'-.02em',fontVariantNumeric:'tabular-nums',fontFamily:mono?'ui-monospace,monospace':undefined,lineHeight:1 }}>{val}</div>
+              {sub && <div style={{ fontSize:11,color:T.t3,marginTop:3 }}>{sub}</div>}
             </div>
           ))}
         </div>
-
-        {/* Quick Actions + Pending Actions */}
-        <div style={{ ...GC, padding:'18px 20px', display:'flex', flexDirection:'column', gap:14 }}>
-          <span style={ST}>Quick Actions</span>
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:6 }}>
-            {quickActions.slice(0,6).map(({ label,Icon,tab,bg,fg }) => (
-              <button key={label} onClick={() => tab && setActive(tab)}
-                style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 10px',background:'rgba(0,0,0,0.03)',border:'1px solid rgba(0,0,0,0.06)',borderRadius:10,cursor:'pointer',textAlign:'left' }}>
-                <div style={{ width:26,height:26,borderRadius:7,background:bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-                  <Icon size={13} style={{ color:fg }} />
-                </div>
-                <span style={{ fontSize:11.5,color:'#334155',lineHeight:1.2 }}>{label}</span>
-              </button>
-            ))}
-          </div>
-          <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)',paddingTop:12 }}>
-            <span style={{ ...ST, marginBottom:8 }}>Pending Actions</span>
-            <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-              {!todayRec?.code && (
-                <div style={{ display:'flex',alignItems:'center',gap:9,padding:'9px 12px',borderRadius:10,border:'1px solid rgba(245,158,11,0.2)',background:'rgba(245,158,11,0.05)' }}>
-                  <span>⚠ï¸</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:11.5,fontWeight:500,color:'#1E293B' }}>Mark today's attendance</div>
-                    <div style={{ fontSize:10,color:'#94A3B8',marginTop:1 }}>Not yet checked in</div>
-                  </div>
-                  <button onClick={() => setActive('attendance')} style={{ fontSize:10.5,fontWeight:600,color:'#D97706',background:'none',border:'none',cursor:'pointer' }}>Mark →</button>
-                </div>
-              )}
-              {pendingCorr > 0 && (
-                <div style={{ display:'flex',alignItems:'center',gap:9,padding:'9px 12px',borderRadius:10,border:`1px solid ${ACCENT}22`,background:`${ACCENT}08` }}>
-                  <span>ðŸ“</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:11.5,fontWeight:500,color:'#1E293B' }}>{pendingCorr} regularization{pendingCorr>1?'s':''} pending</div>
-                    <div style={{ fontSize:10,color:'#94A3B8',marginTop:1 }}>Awaiting approval</div>
-                  </div>
-                  <button onClick={() => setActive('attendance')} style={{ fontSize:10.5,fontWeight:600,color:ACCENT,background:'none',border:'none',cursor:'pointer' }}>View →</button>
-                </div>
-              )}
-              {pendingLeave > 0 && (
-                <div style={{ display:'flex',alignItems:'center',gap:9,padding:'9px 12px',borderRadius:10,border:'1px solid rgba(139,92,246,0.2)',background:'rgba(139,92,246,0.05)' }}>
-                  <span>ðŸ–</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:11.5,fontWeight:500,color:'#1E293B' }}>{pendingLeave} leave request{pendingLeave>1?'s':''} pending</div>
-                    <div style={{ fontSize:10,color:'#94A3B8',marginTop:1 }}>Awaiting manager approval</div>
-                  </div>
-                  <button onClick={() => setActive('leave')} style={{ fontSize:10.5,fontWeight:600,color:'#7C3AED',background:'none',border:'none',cursor:'pointer' }}>View →</button>
-                </div>
-              )}
-              {todayRec?.code && pendingCorr===0 && pendingLeave===0 && (
-                <div style={{ textAlign:'center',padding:'12px 0',color:'#94A3B8',fontSize:11.5 }}>All clear — no pending actions ✓</div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* â”€â”€ Row 4: Calendar | Announcements | Team + Holiday â”€â”€ */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+      {/* MAIN CONTENT GRID */}
+      <div style={{ padding:'20px 24px 32px', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16 }}>
 
-        {/* Calendar */}
-        <div style={{ ...GC, padding:'18px 20px' }}>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14 }}>
-            <div>
-              <div style={{ fontSize:13.5,fontWeight:600,color:'#0F172A' }}>My Calendar</div>
-              <div style={{ fontSize:10.5,color:'#94A3B8',marginTop:1 }}>{MONTH_NAMES[calMonth]} {calYear}</div>
+        {/* LEFT COLUMN */}
+        <div style={{ display:'flex',flexDirection:'column',gap:16 }}>
+
+          {/* Mini Calendar */}
+          <div style={{ ...Card(), overflow:'hidden' }}>
+            <div style={{ padding:'14px 18px',borderBottom:`1px solid ${T.bdr}`,display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+              <div>
+                <div style={{ fontSize:14,fontWeight:700,color:T.t1 }}>Calendar</div>
+                <div style={{ fontSize:11,color:T.t4,marginTop:1 }}>{MONTH_NAMES[calMonth]} {calYear}</div>
+              </div>
+              <div style={{ display:'flex',gap:4,alignItems:'center' }}>
+                <button onClick={prevMonth} style={{ width:26,height:26,borderRadius:7,border:`1px solid ${T.bdr}`,background:T.card,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}><ChevronLeft size={12} /></button>
+                <button onClick={nextMonth} style={{ width:26,height:26,borderRadius:7,border:`1px solid ${T.bdr}`,background:T.card,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}><ChevronRight size={12} /></button>
+                <button onClick={() => { setCalMonth(now.getMonth()); setCalYear(now.getFullYear()); }} style={{ fontSize:10.5,fontWeight:600,color:T.pri,background:'none',border:'none',cursor:'pointer',padding:'0 4px' }}>Today</button>
+              </div>
             </div>
-            <div style={{ display:'flex',gap:4,alignItems:'center' }}>
-              <button onClick={prevMonth} style={{ width:26,height:26,borderRadius:7,background:'#fff',border:'1px solid rgba(0,0,0,0.09)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}><ChevronLeft size={13} /></button>
-              <button onClick={nextMonth} style={{ width:26,height:26,borderRadius:7,background:'#fff',border:'1px solid rgba(0,0,0,0.09)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}><ChevronRight size={13} /></button>
-              <button onClick={() => { setCalMonth(now.getMonth()); setCalYear(now.getFullYear()); }} style={{ fontSize:10.5,fontWeight:600,color:ACCENT,background:'none',border:'none',cursor:'pointer' }}>Today</button>
-            </div>
-          </div>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:4 }}>
-            {DAYS_OF_WEEK.map(d => <div key={d} style={{ fontSize:9.5,color:'#94A3B8',textAlign:'center',padding:'3px 0',fontWeight:600,textTransform:'uppercase' }}>{d}</div>)}
-          </div>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2 }}>
-            {cells.map((day,idx) => {
-              if (!day) return <div key={`e-${idx}`} />;
-              const ds = fmtCell(day);
-              const rec = statusMap[ds];
-              const code = rec?.code;
-              const isToday = ds === todayStr;
-              const isWknd = new Date(ds).getDay()===0||new Date(ds).getDay()===6;
-              const dotColor = code ? calDotColor(code) : (isWknd ? '#d1d5db' : null);
-              return (
-                <div key={day} style={{ display:'flex',flexDirection:'column',alignItems:'center',padding:'3px 2px' }}>
-                  <div style={{ width:24,height:24,borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11.5,fontWeight:isToday?700:400,background:isToday?`linear-gradient(135deg,${ACCENT},#06B6D4)`:'transparent',color:isToday?'#fff':isWknd?'#9ca3af':'#475569',boxShadow:isToday?`0 3px 10px ${ACCENT}50`:undefined }}>
-                    {day}
+            <div style={{ padding:'12px 14px' }}>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1,marginBottom:4 }}>
+                {DAYS_OF_WEEK.map(d => <div key={d} style={{ fontSize:9.5,color:T.t4,textAlign:'center',fontWeight:700,textTransform:'uppercase',padding:'3px 0' }}>{d}</div>)}
+              </div>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1 }}>
+                {cells.map((day,idx) => {
+                  if (!day) return <div key={`e-${idx}`} />;
+                  const ds = fmtCell(day);
+                  const code = statusMap[ds]?.code;
+                  const isToday = ds === todayStr;
+                  const isWknd = new Date(ds).getDay()===0||new Date(ds).getDay()===6;
+                  const dotCal = { P:'#2563EB',A:'#EF4444',HD:'#F59E0B',L:'#8B5CF6',H:'#22C55E' };
+                  return (
+                    <div key={day} style={{ display:'flex',flexDirection:'column',alignItems:'center',padding:'2px 0' }}>
+                      <div style={{ width:26,height:26,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11.5,fontWeight:isToday?700:400,background:isToday?'linear-gradient(135deg,#7C3AED,#2563EB)':'transparent',color:isToday?'#fff':isWknd?'#D1D5DB':T.t2,boxShadow:isToday?'0 3px 10px rgba(37,99,235,.4)':undefined }}>
+                        {day}
+                      </div>
+                      {code && !isWknd && <div style={{ width:3,height:3,borderRadius:'50%',background:dotCal[code]||T.t4,marginTop:1 }} />}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display:'flex',flexWrap:'wrap',gap:'5px 10px',marginTop:10 }}>
+                {[['Present','#2563EB'],['Absent','#EF4444'],['Leave','#8B5CF6'],['Holiday','#22C55E']].map(([l,c]) => (
+                  <div key={l} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10,color:T.t3 }}>
+                    <div style={{ width:6,height:6,borderRadius:'50%',background:c }} />{l}
                   </div>
-                  {dotColor && <div style={{ width:3,height:3,borderRadius:'50%',background:dotColor,marginTop:2 }} />}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ marginTop:10,display:'flex',flexWrap:'wrap',gap:'8px 12px' }}>
-            {[['Present',ACCENT],['Leave','#8b5cf6'],['Holiday','#22c55e'],['Weekend','#d1d5db']].map(([l,c]) => (
-              <div key={l} style={{ display:'flex',alignItems:'center',gap:4,fontSize:10,color:'#64748B' }}>
-                <div style={{ width:6,height:6,borderRadius:'50%',background:c }} />{l}
+                ))}
               </div>
-            ))}
+            </div>
+          </div>
+
+          {/* Monthly attendance heat grid */}
+          <div style={{ ...Card(), padding:'16px 18px' }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10 }}>{MONTH_NAMES[now.getMonth()]} {now.getFullYear()} Attendance</div>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:10 }}>
+              {[
+                { label:'Present', val:attendance.present??0,   color:'#059669' },
+                { label:'Absent',  val:attendance.absent??0,    color:'#DC2626' },
+                { label:'Half Day',val:attendance.half_day??0,  color:'#D97706' },
+                { label:'Holiday', val:(attQ.data||[]).filter(r=>normaliseStatus(r.status)==='H').length, color:'#4F46E5' },
+              ].map(({ label,val,color }) => (
+                <div key={label} style={{ textAlign:'center',padding:'8px 4px',background:T.bg,borderRadius:10,border:`1px solid ${T.bdr}` }}>
+                  <div style={{ fontSize:18,fontWeight:800,color,lineHeight:1 }}>{val}</div>
+                  <div style={{ fontSize:9.5,color:T.t4,marginTop:2 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(11,1fr)',gap:3 }}>
+              {monthlyDots.map(({ ds,code,isWknd,isToday }) => {
+                const BG = { P:'rgba(37,99,235,.15)',A:'rgba(239,68,68,.12)',L:'rgba(139,92,246,.12)',H:'rgba(34,197,94,.12)',HD:'rgba(245,158,11,.12)',WO:'rgba(0,0,0,.04)' };
+                const BD = { P:'rgba(37,99,235,.35)',A:'rgba(239,68,68,.3)',L:'rgba(139,92,246,.3)',H:'rgba(34,197,94,.3)',HD:'rgba(245,158,11,.3)',WO:'rgba(0,0,0,.07)' };
+                return <div key={ds} title={`${ds}: ${code||(isWknd?'WO':'--')}`} style={{ aspectRatio:'1',borderRadius:4,background:BG[code]||'rgba(0,0,0,.04)',border:`1px solid ${BD[code]||'rgba(0,0,0,.06)'}`,outline:isToday?`2px solid ${T.pri}`:undefined,outlineOffset:isToday?1:undefined }} />;
+              })}
+            </div>
+          </div>
+
+        </div>
+
+        {/* CENTER COLUMN */}
+        <div style={{ display:'flex',flexDirection:'column',gap:16 }}>
+
+          {/* Quick Actions */}
+          <div style={{ ...Card(), padding:'16px 18px' }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:12 }}>Quick Actions</div>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8 }}>
+              {quickActions.slice(0,6).map(({ label,Icon,tab,bg,fg }) => (
+                <button key={label} onClick={() => tab && setActive(tab)}
+                  style={{ display:'flex',alignItems:'center',gap:9,padding:'11px 12px',background:T.bg,border:`1px solid ${T.bdr}`,borderRadius:12,cursor:'pointer',textAlign:'left',transition:'.15s' }}
+                  onMouseEnter={e=>{e.currentTarget.style.background='rgba(37,99,235,.04)';e.currentTarget.style.borderColor='rgba(37,99,235,.25)';e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow=T.shm;}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=T.bg;e.currentTarget.style.borderColor=T.bdr;e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}
+                >
+                  <div style={{ width:30,height:30,borderRadius:8,background:bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,border:`1px solid ${fg}28` }}>
+                    <Icon size={14} style={{ color:fg }} />
+                  </div>
+                  <span style={{ fontSize:12,fontWeight:600,color:T.t2,lineHeight:1.2 }}>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Pending Actions */}
+          {(!todayRec?.code || pendingCorr > 0 || pendingLeave > 0) && (
+            <div style={{ ...Card(), padding:'16px 18px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10 }}>Pending Actions</div>
+              <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
+                {!todayRec?.code && (
+                  <div style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,border:'1px solid rgba(245,158,11,.25)',background:'rgba(245,158,11,.05)' }}>
+                    <span style={{ fontSize:16 }}>!</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12.5,fontWeight:600,color:T.t1 }}>Mark today&apos;s attendance</div>
+                      <div style={{ fontSize:11,color:T.t4,marginTop:1 }}>Not yet checked in</div>
+                    </div>
+                    <button onClick={() => setActive('attendance')} style={{ fontSize:11,fontWeight:700,color:'#D97706',background:'none',border:'none',cursor:'pointer' }}>Mark</button>
+                  </div>
+                )}
+                {pendingCorr > 0 && (
+                  <div style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,border:`1px solid ${T.pri}22`,background:`${T.pri}06` }}>
+                    <span style={{ fontSize:16 }}>R</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12.5,fontWeight:600,color:T.t1 }}>{pendingCorr} regularization{pendingCorr>1?'s':''} pending</div>
+                      <div style={{ fontSize:11,color:T.t4,marginTop:1 }}>Awaiting approval</div>
+                    </div>
+                    <button onClick={() => setActive('attendance')} style={{ fontSize:11,fontWeight:700,color:T.pri,background:'none',border:'none',cursor:'pointer' }}>View</button>
+                  </div>
+                )}
+                {pendingLeave > 0 && (
+                  <div style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,border:'1px solid rgba(139,92,246,.2)',background:'rgba(139,92,246,.04)' }}>
+                    <span style={{ fontSize:16 }}>L</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12.5,fontWeight:600,color:T.t1 }}>{pendingLeave} leave request{pendingLeave>1?'s':''} pending</div>
+                      <div style={{ fontSize:11,color:T.t4,marginTop:1 }}>Awaiting manager approval</div>
+                    </div>
+                    <button onClick={() => setActive('leave')} style={{ fontSize:11,fontWeight:700,color:'#7C3AED',background:'none',border:'none',cursor:'pointer' }}>View</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Leave Balance Radials */}
+          <div style={{ ...Card(), padding:'16px 18px' }}>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14 }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em' }}>Leave Balance</div>
+              <button onClick={() => setActive('leave')} style={{ fontSize:11,fontWeight:600,color:T.pri,background:'none',border:'none',cursor:'pointer' }}>Apply Leave</button>
+            </div>
+            <div style={{ display:'flex',justifyContent:'space-around',flexWrap:'wrap',gap:8 }}>
+              {(balances||[]).slice(0,4).map((b,i) => {
+                const cols = [T.pri,'#06B6D4','#22C55E','#F59E0B'];
+                const val = Number(b.closing_balance||0);
+                const circ = 2*Math.PI*28;
+                const fill = circ * Math.min(1, val / 20);
+                const c = cols[i] || T.pri;
+                return (
+                  <div key={b.leave_type_name} style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:4 }}>
+                    <svg width="64" height="64" viewBox="0 0 64 64">
+                      <circle cx="32" cy="32" r="28" fill="none" stroke={`${c}1A`} strokeWidth="6"/>
+                      <circle cx="32" cy="32" r="28" fill="none" stroke={c} strokeWidth="6"
+                        strokeDasharray={`${fill} ${circ}`} strokeLinecap="round" transform="rotate(-90 32 32)"/>
+                      <text x="32" y="37" textAnchor="middle" fontSize="13" fontWeight="800" fill={c}>{Number(val).toFixed(0)}</text>
+                    </svg>
+                    <div style={{ fontSize:10,fontWeight:600,color:T.t3,textAlign:'center',maxWidth:56,lineHeight:1.2 }}>{(b.leave_type_name||'').replace('Leave','').trim()}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Recent Leave Requests */}
+          <div style={{ ...Card(), padding:'16px 18px' }}>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12 }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em' }}>Recent Leave Requests</div>
+              <button onClick={() => setActive('leave')} style={{ fontSize:11,fontWeight:600,color:T.pri,background:'none',border:'none',cursor:'pointer' }}>View All</button>
+            </div>
+            <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
+              {(leavesQ.data||[]).slice(0,4).length ? (leavesQ.data||[]).slice(0,4).map((r,i) => (
+                <div key={r.id||i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:T.bg,border:`1px solid ${T.bdr}`,borderRadius:12,transition:'.15s' }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(37,99,235,.25)';e.currentTarget.style.background='rgba(37,99,235,.02)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=T.bdr;e.currentTarget.style.background=T.bg;}}
+                >
+                  <div style={{ width:32,height:32,borderRadius:9,background:'#EAF1FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+                    <CalendarOff size={14} style={{ color:T.pri }} />
+                  </div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:12.5,fontWeight:600,color:T.t1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{r.leave_type_name||'Leave'}</div>
+                    <div style={{ fontSize:11,color:T.t4,marginTop:1 }}>{String(r.from_date||'').slice(0,10)} to {String(r.to_date||'').slice(0,10)}</div>
+                  </div>
+                  <StatusBadge value={r.status} />
+                </div>
+              )) : (
+                <div style={{ textAlign:'center',padding:'16px 0',color:T.t4,fontSize:12 }}>No leave requests yet</div>
+              )}
+              {(serviceRequests||[]).slice(0,2).map((r,i) => (
+                <div key={r.id||i} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:T.bg,border:`1px solid ${T.bdr}`,borderRadius:12,marginTop:6 }}>
+                  <div style={{ width:32,height:32,borderRadius:9,background:'#F3E8FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+                    <FolderUp size={14} style={{ color:'#7C3AED' }} />
+                  </div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:12.5,fontWeight:600,color:T.t1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{r.subject||r.request_type||'Request'}</div>
+                    <div style={{ fontSize:11,color:T.t4,marginTop:1 }}>{r.request_type||''}</div>
+                  </div>
+                  <StatusBadge value={r.status} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Announcements */}
-        <div style={{ ...GC, padding:'18px 20px', display:'flex', flexDirection:'column' }}>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12 }}>
-            <span style={{ ...ST,marginBottom:0 }}>Announcements</span>
-            <button style={{ fontSize:10.5,fontWeight:600,color:ACCENT,background:'none',border:'none',cursor:'pointer' }}>View All</button>
-          </div>
-          <div style={{ flex:1,display:'flex',flexDirection:'column',gap:0,overflowY:'auto' }}>
-            {announcements.length ? announcements.map((n,i) => (
-              <div key={n.id||i} style={{ display:'flex',alignItems:'flex-start',gap:9,paddingBottom:10,marginBottom:10,borderBottom:i<announcements.length-1?'1px solid rgba(0,0,0,0.05)':undefined }}>
-                <div style={{ width:30,height:30,borderRadius:8,background:'#FEF3D6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-                  <Bell size={13} style={{ color:'#B45309' }} />
-                </div>
-                <div style={{ flex:1,minWidth:0 }}>
-                  <div style={{ fontSize:12,fontWeight:500,color:'#1E293B' }}>{n.title||(n.message||'').slice(0,40)||'Notification'}</div>
-                  <div style={{ fontSize:10.5,color:'#94A3B8',marginTop:2,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' }}>{n.message}</div>
-                  <div style={{ fontSize:10,color:'#CBD5E1',marginTop:3 }}>{n.created_at?new Date(n.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}):''}</div>
-                </div>
-              </div>
-            )) : (
-              <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,padding:'24px 0',color:'#94A3B8' }}>
-                <Bell size={24} style={{ color:'#D1D5DB' }} />
-                <div style={{ fontSize:12 }}>No announcements</div>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* RIGHT COLUMN */}
+        <div style={{ display:'flex',flexDirection:'column',gap:16 }}>
 
-        {/* Holiday + Team */}
-        <div style={{ ...GC, padding:'18px 20px', display:'flex', flexDirection:'column', gap:14 }}>
-          {/* Next holiday */}
-          <div style={{ padding:'14px 16px',borderRadius:12,background:'#FAEEDA',border:'1px solid #FAC775' }}>
-            <div style={{ fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'#854F0B',marginBottom:6 }}>Upcoming Holiday</div>
+          {/* Upcoming Holiday */}
+          <div style={{ background:'linear-gradient(135deg,#FEF3C7,#FDE68A)',borderRadius:20,border:'1px solid #FCD34D',padding:'16px 18px',boxShadow:T.sh }}>
+            <div style={{ fontSize:10.5,fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',color:'#92400E',marginBottom:8 }}>Upcoming Holiday</div>
             {nextHoliday ? (
               <>
-                <div style={{ fontSize:14,fontWeight:700,color:'#663905' }}>{nextHoliday.name}</div>
-                <div style={{ fontSize:11,color:'#854F0B',marginTop:3 }}>{new Date(nextHoliday.holiday_date).toLocaleDateString('en-IN',{weekday:'long',day:'2-digit',month:'long'})}</div>
+                <div style={{ fontSize:15,fontWeight:800,color:'#78350F',marginBottom:4 }}>{nextHoliday.name}</div>
+                <div style={{ fontSize:12,color:'#92400E' }}>{new Date(nextHoliday.holiday_date).toLocaleDateString('en-IN',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</div>
               </>
             ) : <div style={{ fontSize:12,color:'#B45309' }}>No upcoming holidays</div>}
           </div>
 
+          {/* Birthdays Today */}
           {birthdaysToday.length > 0 && (
-            <div>
-              <span style={ST}>Birthdays Today ðŸŽ‚</span>
-              {birthdaysToday.slice(0,3).map((p,i) => (
-                <div key={i} style={{ display:'flex',alignItems:'center',gap:9,padding:'7px 0',borderBottom:i<birthdaysToday.length-1?'1px solid rgba(0,0,0,0.05)':undefined }}>
-                  <div style={{ width:30,height:30,borderRadius:'50%',background:`linear-gradient(135deg,${ACCENT},${TEAL})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#fff',flexShrink:0 }}>
-                    {(p.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+            <div style={{ ...Card(), padding:'16px 18px' }}>
+              <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10 }}>Birthdays Today</div>
+              <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
+                {birthdaysToday.slice(0,3).map((p,i) => (
+                  <div key={i} style={{ display:'flex',alignItems:'center',gap:10 }}>
+                    <div style={{ width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#EC4899,#7C3AED)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff',flexShrink:0 }}>
+                      {(p.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:13,fontWeight:600,color:T.t1 }}>{p.name}</div>
+                      {p.designation && <div style={{ fontSize:11,color:T.t4 }}>{p.designation}</div>}
+                    </div>
                   </div>
-                  <span style={{ fontSize:12.5,color:'#1E293B' }}>{p.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {isHrView && onLeaveToday.length > 0 && (
-            <div>
-              <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
-                <span style={{ ...ST,marginBottom:0 }}>On Leave Today</span>
-                <span style={{ background:'#EAF1FF',color:ACCENT,fontSize:10,padding:'1px 7px',borderRadius:10,fontWeight:700 }}>{onLeaveToday.length}</span>
+                ))}
               </div>
-              {onLeaveToday.slice(0,4).map((p,i) => (
-                <div key={i} style={{ display:'flex',alignItems:'center',gap:9,padding:'6px 0',borderBottom:i<Math.min(3,onLeaveToday.length-1)?'1px solid rgba(0,0,0,0.05)':undefined }}>
-                  <div style={{ width:28,height:28,borderRadius:'50%',background:`linear-gradient(135deg,${ACCENT},${TEAL})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'#fff',flexShrink:0 }}>
-                    {(p.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
-                  </div>
-                  <span style={{ fontSize:12,color:'#1E293B',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{p.name}</span>
-                  <span style={{ fontSize:10.5,color:'#94A3B8',flexShrink:0 }}>{p.leave_type||'Leave'}</span>
-                </div>
-              ))}
             </div>
           )}
 
-          <div style={{ borderTop:'1px solid rgba(0,0,0,0.06)',paddingTop:12 }}>
-            <span style={ST}>Month Summary</span>
-            <div style={{ display:'flex',gap:6 }}>
+          {/* Team on Leave (HR view only) */}
+          {isHrView && onLeaveToday.length > 0 && (
+            <div style={{ ...Card(), padding:'16px 18px' }}>
+              <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10 }}>
+                <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em' }}>On Leave Today</div>
+                <span style={{ background:'#EAF1FF',color:T.pri,fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:10 }}>{onLeaveToday.length}</span>
+              </div>
+              <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
+                {onLeaveToday.slice(0,4).map((p,i) => (
+                  <div key={i} style={{ display:'flex',alignItems:'center',gap:9 }}>
+                    <div style={{ width:30,height:30,borderRadius:'50%',background:`linear-gradient(135deg,${T.pri},${T.cyan})`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'#fff',flexShrink:0 }}>
+                      {(p.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+                    </div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:12.5,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{p.name}</div>
+                    </div>
+                    <div style={{ fontSize:10.5,color:T.t4,flexShrink:0 }}>{p.leave_type||'Leave'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Announcements */}
+          <div style={{ ...Card(), padding:'16px 18px', flex:1 }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:12 }}>Announcements</div>
+            <div style={{ display:'flex',flexDirection:'column' }}>
+              {announcements.length ? announcements.map((n,i) => (
+                <div key={n.id||i} style={{ display:'flex',alignItems:'flex-start',gap:10,padding:'10px 0',borderBottom:i<announcements.length-1?`1px solid ${T.bg}`:undefined }}>
+                  <div style={{ width:32,height:32,borderRadius:9,background:'#FEF3D6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+                    <Bell size={14} style={{ color:'#D97706' }} />
+                  </div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:12.5,fontWeight:600,color:T.t1,lineHeight:1.3 }}>{n.title||(n.message||'').slice(0,40)||'Notification'}</div>
+                    <div style={{ fontSize:11,color:T.t4,marginTop:2,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' }}>{n.message}</div>
+                    <div style={{ fontSize:10,color:T.bdr,marginTop:3 }}>{n.created_at?new Date(n.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}):''}</div>
+                  </div>
+                </div>
+              )) : (
+                <div style={{ textAlign:'center',padding:'24px 0',color:T.t4 }}>
+                  <Bell size={24} style={{ color:T.bdr,display:'block',margin:'0 auto 6px' }} />
+                  <div style={{ fontSize:12 }}>No announcements</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Month Summary */}
+          <div style={{ background:'linear-gradient(135deg,rgba(37,99,235,.06),rgba(6,182,212,.04))',borderRadius:20,border:'1px solid rgba(37,99,235,.12)',padding:'14px 16px',boxShadow:T.sh }}>
+            <div style={{ fontSize:11,fontWeight:700,color:T.t4,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10 }}>Month Summary</div>
+            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6 }}>
               {[
-                { label:'Working',val:attendance.working_days??'—',color:'#64748B' },
-                { label:'Present', val:attendance.present??0,     color:'#059669' },
-                { label:'Absent',  val:attendance.absent??0,      color:'#DC2626' },
+                { label:'Working', val:attendance.working_days??'--', color:T.t3 },
+                { label:'Present', val:attendance.present??0,         color:'#059669' },
+                { label:'Absent',  val:attendance.absent??0,          color:'#DC2626' },
               ].map(({ label,val,color }) => (
-                <div key={label} style={{ flex:1,textAlign:'center',padding:'8px 4px',background:'rgba(0,0,0,0.03)',borderRadius:9,border:'1px solid rgba(0,0,0,0.06)' }}>
-                  <div style={{ fontSize:16,fontWeight:700,color }}>{val}</div>
-                  <div style={{ fontSize:9,color:'#94A3B8',marginTop:2 }}>{label}</div>
+                <div key={label} style={{ textAlign:'center',padding:'10px 4px',background:'rgba(255,255,255,.75)',borderRadius:12,border:'1px solid rgba(255,255,255,.9)' }}>
+                  <div style={{ fontSize:20,fontWeight:800,color,letterSpacing:'-.02em' }}>{val}</div>
+                  <div style={{ fontSize:9.5,color:T.t4,marginTop:2 }}>{label}</div>
                 </div>
               ))}
             </div>
           </div>
+
         </div>
       </div>
 
+      <style>{`@keyframes ess-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
+
 }
 
 function fileToAvatarDataUri(file, size = 256) {
